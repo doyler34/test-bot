@@ -225,3 +225,4 @@ def load_bot_config(config_file: Path, registry: CapabilityRegistry,
     except Exception as e:
         logger.exception(f"Error loading bot config from {config_file.name}: {e}")
         return None
+

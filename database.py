@@ -313,3 +313,4 @@ class Database:
                 VALUES (?, ?, ?, ?)
             """, (user_id, bot_name, capability_id, permission_level))
             conn.commit()
+

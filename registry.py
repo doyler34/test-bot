@@ -197,3 +197,4 @@ class CapabilityRegistry:
                 cap.get('parameters', {}),
                 cap.get('permissions_required', [])
             )
+

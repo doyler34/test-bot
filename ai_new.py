@@ -22,27 +22,22 @@ class AICommandGenerator:
         
         Args:
             registry: CapabilityRegistry instance
-            api_key: Optional API key for LLM service (defaults to Google Gemini)
+            api_key: Optional API key for LLM service (defaults to Gemini if available)
         """
         self.registry = registry
         self.api_key = api_key or os.getenv('GEMINI_API_KEY')
         self._setup_llm()
     
     def _setup_llm(self):
-        """Set up the LLM client (Google Gemini)."""
+        """Set up the LLM client (Gemini by default, can be extended for other providers)."""
         try:
-            import google.generativeai as genai
-            if self.api_key:
-                genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel('gemini-pro')
-                self.use_gemini = True
-            else:
-                self.model = None
-                self.use_gemini = False
+            import google.generativeai
+            self.model = google.generativeai.Gemini(api_key=self.api_key) if self.api_key else None
+            self.use_google.generativeai = True
         except ImportError:
             self.model = None
-            self.use_gemini = False
-            print("Warning: Google Generative AI library not installed. Install with: pip install google-generativeai")
+            self.use_google.generativeai = False
+            print("Warning: Gemini library not installed. AI features will be limited.")
     
     def generate_command_from_natural_language(self, instruction: str, user_id: str) -> Dict:
         """Convert natural language instruction into a structured command.
@@ -72,8 +67,8 @@ class AICommandGenerator:
         capability_context = self._build_capability_context(capabilities)
         
         # Generate structured command using LLM
-        if self.use_gemini and self.model:
-            return self._generate_with_gemini(instruction, capability_context, user_id)
+        if self.use_google.generativeai and self.model:
+            return self._generate_with_google.generativeai(instruction, capability_context, user_id)
         else:
             # Fallback: simple pattern matching (for development/testing)
             return self._generate_fallback(instruction, capabilities)
@@ -102,8 +97,8 @@ class AICommandGenerator:
         
         return "\n".join(context_parts)
     
-    def _generate_with_gemini(self, instruction: str, capability_context: str, user_id: str) -> Dict:
-        """Generate command using Google Gemini API."""
+    def _generate_with_google.generativeai(self, instruction: str, capability_context: str, user_id: str) -> Dict:
+        """Generate command using Gemini API."""
         prompt = f"""You are a command generator for a Discord bot orchestrator. Your task is to convert natural language instructions into structured JSON command definitions.
 
 {capability_context}
@@ -133,15 +128,17 @@ Rules:
 JSON:"""
         
         try:
-            response = self.model.generate_content(
-                prompt,
-                generation_config={
-                    'temperature': 0.3,
-                    'max_output_tokens': 1000,
-                }
+            response = self.model.chat.completions.create(
+                model="gpt-4o-mini",  # or "gpt-4" for better accuracy
+                messages=[
+                    {"role": "system", "content": "You are a command generator that outputs only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=1000
             )
             
-            response_text = response.text.strip()
+            response_text = response.choices[0].message.content.strip()
             # Extract JSON from response (in case there's markdown code blocks)
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0].strip()
@@ -199,7 +196,7 @@ JSON:"""
         if not matched_steps:
             return {
                 'success': False,
-                'error': 'Could not match instruction to any capabilities. Gemini API required for complex commands.'
+                'error': 'Could not match instruction to any capabilities. LLM API required for complex commands.'
             }
         
         # Generate a simple command name
@@ -241,17 +238,19 @@ Generate an updated command definition as JSON. Keep the same structure but upda
 
 JSON:"""
         
-        if self.use_gemini and self.model:
+        if self.use_google.generativeai and self.model:
             try:
-                response = self.model.generate_content(
-                    prompt,
-                    generation_config={
-                        'temperature': 0.3,
-                        'max_output_tokens': 1000,
-                    }
+                response = self.model.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You refine commands by outputting only valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=1000
                 )
                 
-                response_text = response.text.strip()
+                response_text = response.choices[0].message.content.strip()
                 if "```json" in response_text:
                     response_text = response_text.split("```json")[1].split("```")[0].strip()
                 elif "```" in response_text:
@@ -273,4 +272,4 @@ JSON:"""
             except Exception as e:
                 return {'success': False, 'error': str(e)}
         else:
-            return {'success': False, 'error': 'Gemini API required for command refinement'}
+            return {'success': False, 'error': 'LLM API required for command refinement'}

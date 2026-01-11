@@ -196,3 +196,4 @@ def create_handler(bot_name: str, handler_type: str, config: Optional[Dict] = No
         handler_class = MockBotHandler
     
     return handler_class(bot_name, config)
+

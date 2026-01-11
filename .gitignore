@@ -50,3 +50,4 @@ Thumbs.db
 # Config
 config/*.json
 !config/*.example.json
+
