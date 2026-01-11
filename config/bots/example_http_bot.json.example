@@ -1,0 +1,7 @@
+{
+    "_comment": "Simple format for HTTP bots - capabilities are auto-discovered from GET /capabilities endpoint",
+    "bot_name": "example_http_bot",
+    "base_url": "http://localhost:8000/api",
+    "api_key": "your_api_key_here",
+    "timeout": 10
+}

@@ -1,0 +1,18 @@
+{
+    "bot_name": "music_bot",
+    "handler": {
+        "type": "mock",
+        "config": {}
+    },
+    "capabilities": [
+        {
+            "capability_id": "play_song",
+            "description": "Plays a song in a voice channel",
+            "parameters": {
+                "song_url": "string",
+                "channel_id": "string"
+            },
+            "permissions_required": ["execute"]
+        }
+    ]
+}

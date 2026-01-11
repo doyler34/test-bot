@@ -1,0 +1,17 @@
+{
+    "bot_name": "utility_bot",
+    "handler": {
+        "type": "mock",
+        "config": {}
+    },
+    "capabilities": [
+        {
+            "capability_id": "get_user_info",
+            "description": "Gets information about a Discord user",
+            "parameters": {
+                "user_id": "string"
+            },
+            "permissions_required": ["read"]
+        }
+    ]
+}

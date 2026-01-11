@@ -1,0 +1,18 @@
+{
+    "bot_name": "moderation_bot",
+    "handler": {
+        "type": "mock",
+        "config": {}
+    },
+    "capabilities": [
+        {
+            "capability_id": "kick_user",
+            "description": "Kicks a user from the server",
+            "parameters": {
+                "user_id": "string",
+                "reason": "string"
+            },
+            "permissions_required": ["admin"]
+        }
+    ]
+}

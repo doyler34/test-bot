@@ -1,0 +1,7 @@
+{
+    "_comment": "Simple format - just connection details. Capabilities are auto-discovered from the bot's /capabilities endpoint.",
+    "bot_name": "your_bot_name",
+    "base_url": "http://localhost:8000/api",
+    "api_key": "your_api_key_here",
+    "timeout": 10
+}

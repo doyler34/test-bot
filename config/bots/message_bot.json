@@ -1,0 +1,18 @@
+{
+    "bot_name": "message_bot",
+    "handler": {
+        "type": "mock",
+        "config": {}
+    },
+    "capabilities": [
+        {
+            "capability_id": "send_message",
+            "description": "Sends a message to a Discord channel",
+            "parameters": {
+                "channel_id": "string",
+                "message": "string"
+            },
+            "permissions_required": ["execute"]
+        }
+    ]
+}
