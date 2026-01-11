@@ -52,7 +52,7 @@ class GrandfatherBot(commands.Bot):
         self.registry = registry
         self.ai_generator = ai_generator
         self.executor = executor
-        self.tree = app_commands.CommandTree(self)
+        # self.tree already exists from Bot parent class
         
         # Setup commands
         self.setup_commands()
@@ -402,4 +402,3 @@ class GrandfatherBot(commands.Bot):
         """Called when the bot is ready."""
         logger.info(f'{self.user} has connected to Discord!')
         logger.info(f'Bot is in {len(self.guilds)} guilds')
-
