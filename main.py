@@ -1,50 +1,92 @@
 """
-A minimal Discord bot starter.
+Arma Reforger -> Discord voice-channel session timer.
 
-Set DISCORD_BOT_TOKEN in a .env file (see .env.example), then run:
-
-    python main.py
+Watches an (unmodded) Reforger dedicated server's shipped console.log for match
+start/end and drives a Discord bot into/out of a voice channel so the voice
+session reflects live match uptime. See README.md for details.
 """
 
-import os
+from __future__ import annotations
+
+import asyncio
 import logging
+import signal
 
-import discord
-from discord.ext import commands
-from dotenv import load_dotenv
+from config import ConfigError, load_config, setup_logging
+from reforger_monitor import ReforgerMonitor
+from timer_bot import TimerBot
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
-
-# discord.py needs the message content intent to read command text.
-intents = discord.Intents.default()
-intents.message_content = True
-
-bot = commands.Bot(command_prefix="!", intents=intents)
+logger = logging.getLogger("reforger.main")
 
 
-@bot.event
-async def on_ready():
-    logger.info("Logged in as %s (id: %s)", bot.user, bot.user.id)
+async def run() -> None:
+    config = load_config()
 
+    bot = TimerBot(
+        guild_id=config.guild_id,
+        voice_channel_id=config.voice_channel_id,
+        status_refresh_seconds=config.status_refresh_seconds,
+    )
 
-@bot.command()
-async def ping(ctx: commands.Context):
-    """Simple health-check command: replies with latency."""
-    await ctx.send(f"Pong! {round(bot.latency * 1000)}ms")
+    monitor = ReforgerMonitor(
+        log_dir=config.log_dir,
+        on_session_start=bot.handle_session_start,
+        on_session_end=bot.handle_session_end,
+        stale_seconds=config.session_stale_seconds,
+        a2s_host=config.a2s_host,
+        a2s_port=config.a2s_port,
+    )
 
+    async def run_monitor() -> None:
+        await bot.wait_until_ready()
+        await monitor.run()
 
-def main():
-    load_dotenv()
-    token = os.getenv("DISCORD_BOT_TOKEN")
-    if not token:
-        raise SystemExit(
-            "DISCORD_BOT_TOKEN not set. Copy .env.example to .env and add your token."
+    # Graceful shutdown on SIGINT/SIGTERM.
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:
+            pass  # e.g. Windows
+
+    async with bot:
+        monitor_task = asyncio.create_task(run_monitor(), name="monitor")
+        bot_task = asyncio.create_task(bot.start(config.discord_token), name="bot")
+        stop_task = asyncio.create_task(stop.wait(), name="stop")
+
+        done, _ = await asyncio.wait(
+            {monitor_task, bot_task, stop_task},
+            return_when=asyncio.FIRST_COMPLETED,
         )
-    bot.run(token)
+
+        if stop_task in done:
+            logger.info("Shutdown signal received")
+        else:
+            logger.warning("A core task exited; shutting down")
+
+        # Best-effort: leave the VC and clear the channel status on the way out.
+        try:
+            await asyncio.wait_for(bot.handle_session_end(), timeout=10)
+        except Exception:  # noqa: BLE001
+            logger.debug("Cleanup during shutdown failed", exc_info=True)
+
+        for task in (monitor_task, bot_task, stop_task):
+            task.cancel()
+        await asyncio.gather(monitor_task, bot_task, stop_task, return_exceptions=True)
+
+    logger.info("Shutdown complete")
+
+
+def main() -> None:
+    setup_logging()
+    try:
+        asyncio.run(run())
+    except ConfigError as exc:
+        logger.error("Configuration error: %s", exc)
+        raise SystemExit(1)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":
