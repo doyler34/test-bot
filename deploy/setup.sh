@@ -68,10 +68,10 @@ mkdir -p "$INSTALL_DIR/configs" "$INSTALL_DIR/profile"
 CONFIG="$INSTALL_DIR/configs/server.json"
 if [ ! -f "$CONFIG" ]; then
     log "Writing server config ($MAX_PLAYERS players, Conflict Everon)..."
-    PUBLIC_ADDRESS="$(curl -s --max-time 5 ifconfig.me || true)"
+    # publicAddress is intentionally omitted so the server auto-detects it.
+    # (A malformed value makes Reforger reject the config with "JSON is invalid".)
     ADMIN_PASSWORD="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 12)"
-    sed -e "s|@PUBLIC_ADDRESS@|${PUBLIC_ADDRESS}|g" \
-        -e "s|@SERVER_NAME@|${SERVER_NAME}|g" \
+    sed -e "s|@SERVER_NAME@|${SERVER_NAME}|g" \
         -e "s|@ADMIN_PASSWORD@|${ADMIN_PASSWORD}|g" \
         -e "s|@SCENARIO@|${SCENARIO}|g" \
         -e "s|@MAX_PLAYERS@|${MAX_PLAYERS}|g" \

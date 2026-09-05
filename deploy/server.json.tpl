@@ -1,7 +1,6 @@
 {
   "bindAddress": "0.0.0.0",
   "bindPort": 2001,
-  "publicAddress": "@PUBLIC_ADDRESS@",
   "publicPort": 2001,
   "a2s": {
     "address": "0.0.0.0",
