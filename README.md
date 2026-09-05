@@ -59,6 +59,11 @@ Bot requirements in the Discord Developer Portal / server:
 python main.py
 ```
 
+## Deploy on a VPS
+
+For a turnkey, one-command install on a fresh Debian/Ubuntu VPS (Reforger test server +
+bot + systemd services), see **[DEPLOY.md](DEPLOY.md)**.
+
 ## Configuration
 
 All configuration is via environment variables (see `.env.example`):
