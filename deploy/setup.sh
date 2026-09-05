@@ -35,24 +35,25 @@ die() { printf '\n\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 command -v apt-get >/dev/null 2>&1 || die "This installer supports Debian/Ubuntu (apt) only."
 
 # --- 1. system packages ------------------------------------------------------
-log "Installing system packages (SteamCMD, Python, git)..."
+# Distro-agnostic: SteamCMD is installed directly from Valve (below), so we only
+# need stock main-component libraries here. Works on Debian and Ubuntu alike.
+log "Installing system packages (Python, git, 32-bit libs for SteamCMD)..."
 $SUDO dpkg --add-architecture i386
 $SUDO apt-get update -y
-$SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common
-$SUDO add-apt-repository -y multiverse
-$SUDO apt-get update -y
-# Pre-accept the Steam license so the install is non-interactive.
-echo steam steam/question select "I AGREE" | $SUDO debconf-set-selections
-echo steam steam/license note '' | $SUDO debconf-set-selections
 $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    steamcmd python3-venv python3-pip git curl ca-certificates
+    lib32gcc-s1 lib32stdc++6 curl ca-certificates tar python3-venv python3-pip git
 
-STEAMCMD="$(command -v steamcmd || true)"
-[ -n "$STEAMCMD" ] || die "steamcmd not found after install."
+# --- 2. SteamCMD + Reforger dedicated server --------------------------------
+log "Installing SteamCMD (from Valve) into $INSTALL_DIR/steamcmd ..."
+mkdir -p "$INSTALL_DIR" "$INSTALL_DIR/steamcmd"
+if [ ! -x "$INSTALL_DIR/steamcmd/steamcmd.sh" ]; then
+    curl -sSL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" \
+        | tar -xzf - -C "$INSTALL_DIR/steamcmd"
+fi
+STEAMCMD="$INSTALL_DIR/steamcmd/steamcmd.sh"
+[ -x "$STEAMCMD" ] || die "SteamCMD download failed ($STEAMCMD missing)."
 
-# --- 2. Reforger dedicated server -------------------------------------------
 log "Installing/updating Arma Reforger dedicated server into $INSTALL_DIR ..."
-mkdir -p "$INSTALL_DIR"
 # Run twice: SteamCMD often self-updates on first run and exits.
 "$STEAMCMD" +force_install_dir "$INSTALL_DIR" +login anonymous \
     +app_update "$REFORGER_APPID" validate +quit || \
