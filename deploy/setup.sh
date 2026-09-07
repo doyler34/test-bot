@@ -1,156 +1,73 @@
 #!/usr/bin/env bash
-#
-# One-command setup for a test VPS (Debian/Ubuntu):
-#   * installs SteamCMD + the Arma Reforger dedicated server (app 1874900)
-#   * writes a minimal 2-player Conflict Everon config
-#   * installs the Discord timer bot (venv)
-#   * prompts for the 3 Discord values and writes .env
-#   * installs + starts both as systemd services
-#
-# Usage:  bash deploy/setup.sh
-#
-# Overridable via environment:
-#   INSTALL_DIR   (default: $HOME/reforger)     where the game server installs
-#   MAX_PLAYERS   (default: 2)
-#   SERVER_NAME   (default: "Bot Test Server")
-#   SCENARIO      (default: Conflict Everon)
-
+# Bot-only setup alongside existing Reforger servers (Debian/Ubuntu, Python 3.11+).
+set +x
 set -euo pipefail
-
-# --- resolve paths / privileges ----------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(dirname "$SCRIPT_DIR")"
-RUN_USER="$(id -un)"
-INSTALL_DIR="${INSTALL_DIR:-$HOME/reforger}"
-MAX_PLAYERS="${MAX_PLAYERS:-2}"
-SERVER_NAME="${SERVER_NAME:-Bot Test Server}"
-SCENARIO="${SCENARIO:-{ECC61978EDCC2B5A}Missions/23_Campaign.conf}"
-REFORGER_APPID=1874900
-
-if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
-
-log() { printf '\n\033[1;32m==>\033[0m %s\n' "$*"; }
-die() { printf '\n\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
-
-command -v apt-get >/dev/null 2>&1 || die "This installer supports Debian/Ubuntu (apt) only."
-
-# --- 1. system packages ------------------------------------------------------
-# Distro-agnostic: SteamCMD is installed directly from Valve (below), so we only
-# need stock main-component libraries here. Works on Debian and Ubuntu alike.
-log "Installing system packages (Python, git, 32-bit libs for SteamCMD)..."
-$SUDO dpkg --add-architecture i386
-$SUDO apt-get update -y
-$SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    lib32gcc-s1 lib32stdc++6 curl ca-certificates tar python3-venv python3-pip git
-
-# --- 2. SteamCMD + Reforger dedicated server --------------------------------
-log "Installing SteamCMD (from Valve) into $INSTALL_DIR/steamcmd ..."
-mkdir -p "$INSTALL_DIR" "$INSTALL_DIR/steamcmd"
-if [ ! -x "$INSTALL_DIR/steamcmd/steamcmd.sh" ]; then
-    curl -sSL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" \
-        | tar -xzf - -C "$INSTALL_DIR/steamcmd"
+umask 077
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname -- "$SCRIPT_DIR")"
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo bash "$SCRIPT_DIR/setup.sh"
 fi
-STEAMCMD="$INSTALL_DIR/steamcmd/steamcmd.sh"
-[ -x "$STEAMCMD" ] || die "SteamCMD download failed ($STEAMCMD missing)."
-
-log "Installing/updating Arma Reforger dedicated server into $INSTALL_DIR ..."
-# Run twice: SteamCMD often self-updates on first run and exits.
-"$STEAMCMD" +force_install_dir "$INSTALL_DIR" +login anonymous \
-    +app_update "$REFORGER_APPID" validate +quit || \
-"$STEAMCMD" +force_install_dir "$INSTALL_DIR" +login anonymous \
-    +app_update "$REFORGER_APPID" validate +quit
-
-[ -x "$INSTALL_DIR/ArmaReforgerServer" ] || \
-    die "ArmaReforgerServer binary missing in $INSTALL_DIR (SteamCMD download failed?)."
-
-# --- 3. server config --------------------------------------------------------
-mkdir -p "$INSTALL_DIR/configs" "$INSTALL_DIR/profile"
-CONFIG="$INSTALL_DIR/configs/server.json"
-if [ ! -f "$CONFIG" ]; then
-    log "Writing server config ($MAX_PLAYERS players, Conflict Everon)..."
-    # publicAddress is intentionally omitted so the server auto-detects it.
-    # (A malformed value makes Reforger reject the config with "JSON is invalid".)
-    ADMIN_PASSWORD="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 12)"
-    sed -e "s|@SERVER_NAME@|${SERVER_NAME}|g" \
-        -e "s|@ADMIN_PASSWORD@|${ADMIN_PASSWORD}|g" \
-        -e "s|@SCENARIO@|${SCENARIO}|g" \
-        -e "s|@MAX_PLAYERS@|${MAX_PLAYERS}|g" \
-        "$SCRIPT_DIR/server.json.tpl" > "$CONFIG"
-    echo "    Admin password: $ADMIN_PASSWORD   (saved in $CONFIG)"
+die() { printf 'Setup failed: %s\n' "$*" >&2; exit 1; }
+[ -t 0 ] || die "Run setup in an interactive VPS terminal. Token input must be hidden."
+command -v systemctl >/dev/null || die "systemd is required."
+[ -d /run/systemd/system ] || die "systemd is not running on this machine."
+command -v apt-get >/dev/null || die "Use Debian/Ubuntu with Python 3.11 or newer."
+SERVICE=reforger-timer.service
+LOAD="$(systemctl show "$SERVICE" -p LoadState --value)"
+if [ "$LOAD" = loaded ]; then
+    RUN_USER="$(systemctl show "$SERVICE" -p User --value)"
+    RUN_USER="${RUN_USER:-root}"
+    OLD_DIR="$(systemctl show "$SERVICE" -p WorkingDirectory --value)"
+    [ "$(realpath -m -- "$OLD_DIR")" = "$REPO_DIR" ] || die "Existing bot service uses $OLD_DIR. Run setup from that checkout to preserve its state."
 else
-    log "Keeping existing server config at $CONFIG"
+    RUN_USER="${SUDO_USER:-root}"
 fi
-
-# --- 4. bot venv -------------------------------------------------------------
-log "Setting up the bot Python environment..."
-python3 -m venv "$REPO_DIR/.venv"
-"$REPO_DIR/.venv/bin/pip" install --quiet --upgrade pip
-"$REPO_DIR/.venv/bin/pip" install --quiet -r "$REPO_DIR/requirements.txt"
-
-# --- 5. .env (prompt for Discord values) ------------------------------------
-ENV_FILE="$REPO_DIR/.env"
-if [ ! -f "$ENV_FILE" ]; then
-    log "Discord configuration (paste each value, press Enter):"
-    read -rp "  DISCORD_BOT_TOKEN: " DISCORD_BOT_TOKEN
-    read -rp "  GUILD_ID (server ID): " GUILD_ID
-    read -rp "  VOICE_CHANNEL_ID: " VOICE_CHANNEL_ID
-    umask 177
-    cat > "$ENV_FILE" <<EOF
-DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-GUILD_ID=${GUILD_ID}
-VOICE_CHANNEL_ID=${VOICE_CHANNEL_ID}
-REFORGER_LOG_DIR=${INSTALL_DIR}/profile/logs
-SESSION_STALE_SECONDS=120
-STATUS_REFRESH_SECONDS=60
-JOIN_VOICE_CHANNEL=false
-A2S_HOST=127.0.0.1
-A2S_PORT=17777
-EOF
-    umask 022
-    chmod 600 "$ENV_FILE"
-    echo "    Wrote $ENV_FILE (permissions 600)."
-else
-    log "Keeping existing $ENV_FILE"
+id "$RUN_USER" >/dev/null || die "Existing service user does not exist."
+as_bot() { runuser -u "$RUN_USER" -- "$@"; }
+as_bot test -w "$REPO_DIR" || die "Service user $RUN_USER needs access to the bot checkout. Fix ownership, then retry."
+printf 'Bot service account: %s\n' "$RUN_USER"
+printf 'Installing bot Python dependencies...\n'
+apt-get update -qq
+apt-get install -y python3 python3-venv python3-pip
+python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else "Python 3.11+ is required; upgrade the VPS Python before continuing.")'
+[ ! -L "$REPO_DIR/.venv" ] || die "Use a local .venv directory, not a symlink."
+as_bot python3 -m venv "$REPO_DIR/.venv"
+PY="$REPO_DIR/.venv/bin/python"
+as_bot "$PY" -m pip install -r "$REPO_DIR/requirements.txt"
+as_bot "$PY" -m pip check
+cd -- "$REPO_DIR"
+as_bot "$PY" "$SCRIPT_DIR/setup_config.py"
+STAGE="$(mktemp -d)"
+trap 'rm -f -- "$STAGE/reforger-timer.service" "$STAGE/oyb"; rmdir -- "$STAGE"' EXIT
+"$PY" "$SCRIPT_DIR/setup_config.py" --render-unit "$REPO_DIR" "$RUN_USER" > "$STAGE/reforger-timer.service"
+systemd-analyze verify "$STAGE/reforger-timer.service"
+if [ -f /etc/systemd/system/reforger-timer.service ]; then
+    cp -p /etc/systemd/system/reforger-timer.service "$REPO_DIR/.oyb-service-backup-$(date +%s)"
 fi
-
-# --- 6. systemd services -----------------------------------------------------
-render_unit() {
-    sed -e "s|@USER@|${RUN_USER}|g" \
-        -e "s|@INSTALL_DIR@|${INSTALL_DIR}|g" \
-        -e "s|@REPO_DIR@|${REPO_DIR}|g" "$1"
-}
-log "Installing systemd services..."
-render_unit "$SCRIPT_DIR/reforger-server.service.tpl" | \
-    $SUDO tee /etc/systemd/system/reforger-server.service >/dev/null
-render_unit "$SCRIPT_DIR/reforger-timer.service.tpl" | \
-    $SUDO tee /etc/systemd/system/reforger-timer.service >/dev/null
-$SUDO systemctl daemon-reload
-$SUDO systemctl enable --now reforger-server.service
-$SUDO systemctl enable --now reforger-timer.service
-
-# --- 7. firewall reminder ----------------------------------------------------
-if command -v ufw >/dev/null 2>&1 && $SUDO ufw status | grep -q "Status: active"; then
-    log "Opening game ports in ufw..."
-    $SUDO ufw allow 2001/udp || true
-    $SUDO ufw allow 17777/udp || true
+install -m 644 "$STAGE/reforger-timer.service" /etc/systemd/system/reforger-timer.service
+"$PY" "$SCRIPT_DIR/setup_config.py" --render-cli "$REPO_DIR" > "$STAGE/oyb"
+if [ -e /usr/local/bin/oyb ] && ! grep -q 'OYB management helper' /usr/local/bin/oyb; then
+    die "/usr/local/bin/oyb already belongs to another program; resolve the name before rerunning."
 fi
-
-# --- done --------------------------------------------------------------------
-cat <<EOF
-
-$(log "Done.")
-Reforger server : $INSTALL_DIR   (2001/udp game, 17777/udp query)
-Bot repo        : $REPO_DIR
-Logs watched by bot: $INSTALL_DIR/profile/logs
-
-Check status:
-  sudo systemctl status reforger-server reforger-timer
-Follow logs:
-  journalctl -u reforger-server -f
-  journalctl -u reforger-timer  -f
-
-If this VPS has a firewall/security group outside ufw, allow UDP 2001 and 17777.
-The Reforger server takes a minute or two to boot; the bot updates the voice
-channel status without joining once the match reaches the GAME state.
-Grant View Channel, Set Voice Channel Status, and Manage Channels on that channel.
-EOF
+install -m 755 "$STAGE/oyb" /usr/local/bin/oyb
+systemctl daemon-reload
+systemctl enable "$SERVICE"
+systemctl restart "$SERVICE"
+printf 'Waiting for Discord channels, ranks and playtime tracking to initialise...\n'
+READY=false
+for attempt in $(seq 1 45); do
+    sleep 2
+    INVOCATION="$(systemctl show "$SERVICE" -p InvocationID --value)"
+    if systemctl is-active --quiet "$SERVICE" && [ -n "$INVOCATION" ]; then
+        JOURNAL="$(journalctl "_SYSTEMD_INVOCATION_ID=$INVOCATION" --no-pager -o cat)"
+        if printf '%s' "$JOURNAL" | grep -q 'Ready: three read-only channels' &&
+           printf '%s' "$JOURNAL" | grep -q 'Test ranks ready:' &&
+           printf '%s' "$JOURNAL" | grep -q 'Playtime test tracker started'; then
+            READY=true
+            break
+        fi
+    fi
+done
+[ "$READY" = true ] || die "Bot did not complete startup within 90 seconds. Run oyb logs to check Discord access, token and role permissions. Saved configuration and state were retained."
+"$PY" "$SCRIPT_DIR/setup_config.py" --summary

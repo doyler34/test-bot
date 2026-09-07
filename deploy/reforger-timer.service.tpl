@@ -1,5 +1,5 @@
 [Unit]
-Description=Reforger Discord session timer bot
+Description=OYB Discord community bot
 After=network-online.target
 Wants=network-online.target
 
@@ -7,8 +7,10 @@ Wants=network-online.target
 Type=simple
 User=@USER@
 WorkingDirectory=@REPO_DIR@
-ExecStart=@REPO_DIR@/.venv/bin/python main.py
-Restart=always
+ExecStart=@PYTHON@ main.py
+Environment=PYTHONUNBUFFERED=1
+UMask=0077
+Restart=on-failure
 RestartSec=5
 
 [Install]

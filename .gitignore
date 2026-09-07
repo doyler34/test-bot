@@ -12,8 +12,9 @@ __pycache__/
 logs/
 *.log
 
-# Local configuration and durable state
+# Local server configuration and durable notification state
 servers.local.json
 data/
-*.sqlite3
-*.sqlite3-*
+.oyb-backups/
+.oyb-service-backup-*
+.oyb-validate-*/
