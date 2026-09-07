@@ -80,6 +80,13 @@ async def run_bot(config) -> None:
 
 
 async def run() -> None:
+    from dotenv import load_dotenv
+    load_dotenv()
+    if os.getenv("SERVERS_CONFIG"):
+        from notification_config import load_notification_config
+        from server_notifications import run_notifications
+        await run_notifications(load_notification_config())
+        return
     config = load_config()
     if os.getenv("PLAYTIME_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
         await run_bot(config)

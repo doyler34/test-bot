@@ -12,7 +12,8 @@ __pycache__/
 logs/
 *.log
 
-# Local playtime state
+# Local configuration and durable state
+servers.local.json
 data/
 *.sqlite3
 *.sqlite3-*
