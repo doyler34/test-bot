@@ -2,8 +2,8 @@
 Arma Reforger -> Discord voice-channel session timer.
 
 Watches an (unmodded) Reforger dedicated server's shipped console.log for match
-start/end and drives a Discord bot into/out of a voice channel so the voice
-session reflects live match uptime. See README.md for details.
+start/end and updates a voice channel's status with live match uptime.
+Optionally joins/leaves voice for clients that display connection timers. See README.md for details.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ async def run() -> None:
         guild_id=config.guild_id,
         voice_channel_id=config.voice_channel_id,
         status_refresh_seconds=config.status_refresh_seconds,
+        join_voice_channel=config.join_voice_channel,
     )
 
     monitor = ReforgerMonitor(

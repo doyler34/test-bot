@@ -1,11 +1,10 @@
 """
 Discord side of the session timer.
 
-On a match start the bot joins the configured voice channel (which starts
-Discord's own voice session — the per-user timer that AllCallTimers-style
-clients display) and sets the channel's native Voice Channel Status text so
-that *every* member sees a readout without any client plugin. On match end it
-clears the status and leaves, which resets the voice session.
+The bot updates the native Voice Channel Status without joining voice by
+default, so it never appears in the channel's participant list. Optional voice
+joining supports AllCallTimers-style clients. On match end it clears the
+status and, in voice mode, leaves the channel.
 """
 
 from __future__ import annotations
@@ -36,6 +35,7 @@ class TimerBot(discord.Client):
         guild_id: int,
         voice_channel_id: int,
         status_refresh_seconds: int = 60,
+        join_voice_channel: bool = False,
     ) -> None:
         intents = discord.Intents.default()
         intents.voice_states = True
@@ -44,6 +44,7 @@ class TimerBot(discord.Client):
         self.guild_id = guild_id
         self.voice_channel_id = voice_channel_id
         self.status_refresh_seconds = status_refresh_seconds
+        self.join_voice_channel = join_voice_channel
 
         self._desired_live = False
         self._match_start: Optional[float] = None
@@ -54,6 +55,7 @@ class TimerBot(discord.Client):
 
     async def on_ready(self) -> None:
         logger.info("Logged in as %s (id: %s)", self.user, self.user.id)
+        logger.info("Timer mode: %s", "voice + status" if self.join_voice_channel else "status only (no voice participant)")
         # Re-assert desired state after a (re)connect.
         if self._desired_live:
             await self._ensure_connected()
@@ -89,6 +91,8 @@ class TimerBot(discord.Client):
         return channel
 
     async def _ensure_connected(self) -> None:
+        if not self.join_voice_channel:
+            return
         channel = self._voice_channel()
         if channel is None:
             return
@@ -105,6 +109,8 @@ class TimerBot(discord.Client):
             logger.exception("Failed to join voice channel")
 
     async def _disconnect(self) -> None:
+        if not self.join_voice_channel:
+            return
         channel = self._voice_channel()
         guild = channel.guild if channel else self.get_guild(self.guild_id)
         vc = guild.voice_client if guild else None
@@ -119,8 +125,8 @@ class TimerBot(discord.Client):
         """Set the native Voice Channel Status via the raw REST route.
 
         Uses a raw Route for compatibility across discord.py versions. Requires
-        the 'Set Voice Channel Status' permission and the bot to be connected to
-        the channel.
+        'Set Voice Channel Status' permission, plus 'Manage Channels' when
+        operating without a voice connection.
         """
         try:
             route = Route(
@@ -129,6 +135,13 @@ class TimerBot(discord.Client):
                 channel_id=self.voice_channel_id,
             )
             await self.http.request(route, json={"status": text})
+        except discord.Forbidden:
+            logger.error(
+                "Cannot set voice channel status. Grant View Channel and "
+                "Set Voice Channel Status on channel %s; also grant Manage "
+                "Channels when the bot is not connected to voice.",
+                self.voice_channel_id,
+            )
         except Exception:  # noqa: BLE001
             logger.exception("Failed to set voice channel status")
 

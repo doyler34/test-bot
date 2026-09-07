@@ -26,16 +26,22 @@ It will:
    to auto-restart and start on boot.
 
 The game server takes a minute or two to boot; once the scenario reaches the `GAME` state the
-bot joins the voice channel and sets its status.
+bot sets the voice channel's status without joining it.
 
 ## Getting the Discord values
 
 - **Token:** [Developer Portal](https://discord.com/developers/applications) → your app →
   **Bot** → *Reset Token* → copy.
-- **Invite the bot** with **Connect** + **Set Voice Channel Status** (+ **View Channel**):
+- **Invite the bot** with **Manage Channels** + **Set Voice Channel Status** (+ **View Channel**):
   OAuth2 → URL Generator → scope `bot`, tick those permissions, open the URL.
 - **GUILD_ID / VOICE_CHANNEL_ID:** enable Discord *Settings → Advanced → Developer Mode*,
   then right-click the server / the voice channel → **Copy ID**.
+
+The default `JOIN_VOICE_CHANNEL=false` keeps the bot out of the voice participant
+list. Grant the above permissions on the target channel, including when updating
+an existing installation. For the original AllCallTimers connection timer, set
+`JOIN_VOICE_CHANNEL=true` in `.env` and grant **Connect**; the bot will be visible
+in voice again. Restart `reforger-timer` after changing its configuration.
 
 ## Check it's working
 

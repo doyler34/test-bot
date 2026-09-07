@@ -42,6 +42,19 @@ def _optional_int(name: str, default: int) -> int:
         raise ConfigError(f"{name} must be an integer, got {raw!r}.") from exc
 
 
+
+def _optional_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    value = raw.strip().lower()
+    if value in ("true", "1", "yes", "on"):
+        return True
+    if value in ("false", "0", "no", "off"):
+        return False
+    raise ConfigError(f"{name} must be true or false, got {raw!r}.")
+
+
 @dataclass(frozen=True)
 class Config:
     """Validated runtime configuration."""
@@ -61,6 +74,9 @@ class Config:
     # Optional A2S liveness fallback.
     a2s_host: str | None
     a2s_port: int | None
+
+    # Stay out of voice by default; publish the channel status via REST only.
+    join_voice_channel: bool = False
 
     @property
     def a2s_enabled(self) -> bool:
@@ -84,6 +100,7 @@ def load_config() -> Config:
         status_refresh_seconds=_optional_int("STATUS_REFRESH_SECONDS", 60),
         a2s_host=a2s_host,
         a2s_port=a2s_port,
+        join_voice_channel=_optional_bool("JOIN_VOICE_CHANNEL", False),
     )
 
 

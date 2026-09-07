@@ -1,9 +1,10 @@
 # Reforger → Discord session timer
 
 Turns a Discord voice channel (e.g. **SERVER TIME**) into a live match timer for an
-**unmodded** Arma Reforger dedicated server. When a match starts, a bot joins the voice
-channel; when it ends, crashes, or restarts, the bot leaves. The voice session therefore
-mirrors match uptime — no Reforger mod required.
+**unmodded** Arma Reforger dedicated server. When a match starts, the bot updates the
+channel's status with match uptime; when it ends, crashes, or restarts, it clears the
+status. By default it never joins voice, so it does not appear in the channel's
+participant list — no Reforger mod required.
 
 ## How it works
 
@@ -12,8 +13,8 @@ The bot watches the server's stock `console.log` and reacts to vanilla log lines
 
 | Signal | Log line | Action |
 | --- | --- | --- |
-| Session start | `SCR_BaseGameMode::OnGameStateChanged = GAME` | join VC, set status |
-| Session end | `SCR_BaseGameMode::OnGameStateChanged = POSTGAME` | clear status, leave VC |
+| Session start | `SCR_BaseGameMode::OnGameStateChanged = GAME` | set status (optionally join VC) |
+| Session end | `SCR_BaseGameMode::OnGameStateChanged = POSTGAME` | clear status (leave VC if enabled) |
 | Liveness | `FPS: .., Mem: .. kB, Player: ..,` | feed the staleness watchdog |
 | Restart/crash | a new `logs_*` session folder appears, or heartbeat goes stale | end session |
 
@@ -27,17 +28,33 @@ correctly each time.
 transition. Not merely process uptime; it resets on match end, server restart/crash, or a
 stale log stream.
 
-### About the Discord timer (important)
+### Voice visibility and the timer
 
-Vanilla Discord has **no** native, everyone-visible voice timer. The connection timer is
-per-user and only the connected user sees their own duration. So:
+The default `JOIN_VOICE_CHANNEL=false` updates the native **Voice Channel Status**
+(e.g. `🟢 Match live · 2h14m`) about once a minute without joining voice. The bot
+does not appear under the voice channel, but remains a member of the Discord server.
 
-- The bot **joining/leaving** the VC is the reliable on/off signal, and it drives the
-  per-second timer shown by the [AllCallTimers](https://github.com/Max-Herbold/AllCallTimersDiscordPlugin)
-  client plugin (Vencord/BetterDiscord) for members who run it.
-- For everyone else (no plugin), the bot also sets the channel's native **Voice Channel
-  Status** text (e.g. `🟢 Match live · 2h14m`), refreshed about once a minute. This is
-  visible to all members with no plugin and no channel renaming.
+Discord has no supported way to hide a connected voice participant. Setting a bot's
+presence to Invisible only changes its online status; it does not hide it in voice.
+
+Set `JOIN_VOICE_CHANNEL=true` to restore voice joining/leaving and connection timers
+for members running [AllCallTimers](https://github.com/Max-Herbold/AllCallTimersDiscordPlugin)
+(Vencord/BetterDiscord). In this mode the bot is visible in voice, muted and deafened.
+Without a voice connection, there is no bot connection timer for that plugin to show.
+Vanilla Discord has no native, everyone-visible per-second voice timer.
+
+### Three game servers
+
+This program monitors **one game server per running instance**. For three game servers,
+run three separate instances with their own `.env` files, log paths, voice-channel IDs,
+and optional A2S addresses. They can share a host if it can read all three sets of logs.
+The supplied installer creates one timer service; it does not provision three instances.
+
+With `JOIN_VOICE_CHANNEL=true`, three simultaneous voice channels in the **same Discord
+server** require three separate bot accounts/tokens: a bot has one voice connection per
+Discord server. Status-only mode avoids that voice limit, but this code still only
+configures one game server/channel per instance. Supporting all three in one bot process
+would require multi-server configuration and monitoring.
 
 ## Setup
 
@@ -49,8 +66,12 @@ cp .env.example .env           # then fill in the values
 ```
 
 Bot requirements in the Discord Developer Portal / server:
-- Invite with the **Connect** and **Set Voice Channel Status** permissions on the target
-  voice channel (plus **View Channel**).
+- Default status-only mode: grant **View Channel**, **Set Voice Channel Status**, and
+  **Manage Channels** on the target voice channel. Discord requires Manage Channels
+  to [set status while disconnected](https://docs.discord.com/developers/resources/channel#set-voice-channel-status).
+- Optional voice mode: grant **View Channel**, **Connect**, and **Set Voice Channel Status**.
+- Existing installations: grant **Manage Channels** before restarting with this update,
+  or set `JOIN_VOICE_CHANNEL=true` to keep the original behaviour.
 - No privileged gateway intents are required.
 
 ## Run
@@ -72,7 +93,8 @@ All configuration is via environment variables (see `.env.example`):
 | --- | --- | --- |
 | `DISCORD_BOT_TOKEN` | yes | Bot token |
 | `GUILD_ID` | yes | Server ID |
-| `VOICE_CHANNEL_ID` | yes | Voice channel to sit in |
+| `VOICE_CHANNEL_ID` | yes | Voice channel to display the timer in |
+| `JOIN_VOICE_CHANNEL` | no (false) | Join voice for connection timers; makes the bot visible in voice |
 | `REFORGER_LOG_DIR` | yes | Readable path to `profile/logs` (or a single session folder) |
 | `SESSION_STALE_SECONDS` | no (120) | End session if no heartbeat for this long |
 | `STATUS_REFRESH_SECONDS` | no (60) | Voice-status refresh cadence |
@@ -101,5 +123,5 @@ python tests/test_parser.py     # or: pytest
 - `= GAME` / `= POSTGAME` come from `SCR_BaseGameMode` (Conflict and most stock modes). A
   scenario using a different game-mode class may not emit them — verify against your
   scenario's `console.log`.
-- discord.py is used (over discord.js) to keep this a single lightweight Python service; it
-  holds a silent idle voice connection and auto-reconnects.
+- In optional voice mode, discord.py holds a silent idle voice connection and
+  auto-reconnects. Default status-only mode does not open a voice connection.

@@ -102,6 +102,7 @@ VOICE_CHANNEL_ID=${VOICE_CHANNEL_ID}
 REFORGER_LOG_DIR=${INSTALL_DIR}/profile/logs
 SESSION_STALE_SECONDS=120
 STATUS_REFRESH_SECONDS=60
+JOIN_VOICE_CHANNEL=false
 A2S_HOST=127.0.0.1
 A2S_PORT=17777
 EOF
@@ -149,6 +150,7 @@ Follow logs:
   journalctl -u reforger-timer  -f
 
 If this VPS has a firewall/security group outside ufw, allow UDP 2001 and 17777.
-The Reforger server takes a minute or two to boot; the bot joins the VC once the
-match reaches the GAME state.
+The Reforger server takes a minute or two to boot; the bot updates the voice
+channel status without joining once the match reaches the GAME state.
+Grant View Channel, Set Voice Channel Status, and Manage Channels on that channel.
 EOF
