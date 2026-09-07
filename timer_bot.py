@@ -24,9 +24,7 @@ def _format_elapsed(seconds: float) -> str:
     total = int(seconds)
     h, rem = divmod(total, 3600)
     m, _ = divmod(rem, 60)
-    if h:
-        return f"{h}h{m:02d}m"
-    return f"{m}m"
+    return f"{h:02d}h {m:02d}m"
 
 
 class TimerBot(discord.Client):
@@ -149,7 +147,7 @@ class TimerBot(discord.Client):
         if self._match_start is None:
             return
         elapsed = time.monotonic() - self._match_start
-        await self._set_status(f"🟢 Match live · {_format_elapsed(elapsed)}")
+        await self._set_status(f"🟢 LIVE · {_format_elapsed(elapsed)}")
 
     async def _clear_status(self) -> None:
         await self._set_status("")

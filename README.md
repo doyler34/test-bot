@@ -31,7 +31,7 @@ stale log stream.
 ### Voice visibility and the timer
 
 The default `JOIN_VOICE_CHANNEL=false` updates the native **Voice Channel Status**
-(e.g. `🟢 Match live · 2h14m`) about once a minute without joining voice. The bot
+(e.g. `🟢 LIVE · 02h 14m`) about once a minute without joining voice. The bot
 does not appear under the voice channel, but remains a member of the Discord server.
 
 Discord has no supported way to hide a connected voice participant. Setting a bot's

@@ -53,7 +53,7 @@ class TimerVisibilityTests(unittest.IsolatedAsyncioTestCase):
         try:
             await bot.handle_session_start()
             self.assertEqual(bot.http.request.await_args.kwargs["json"]["status"],
-                             "🟢 Match live · 0m")
+                             "🟢 LIVE · 00h 00m")
             await bot.on_ready()
             bot.http.request.side_effect = finish_refresh
             await asyncio.wait_for(bot._status_task, timeout=1)
