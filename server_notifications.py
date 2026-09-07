@@ -12,6 +12,7 @@ import discord
 from notification_store import NotificationStore
 from notification_roles import NotificationView, prepare_role
 from reforger_monitor import ReforgerMonitor
+from timer_bot import TimerBot
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -28,7 +29,7 @@ def information_embeds(server):
         name="Match notifications",
         value="Press **Toggle match notifications** below to get or remove this server's notification role. "
               "We mention that role when a match starts. "
-              "This channel is read-only. Start announcements disappear after 30 minutes. "
+              "This channel is read-only. Announcements expire 30 minutes after match start. "
               "Your Discord and device notification settings still apply.",
         inline=False,
     )
@@ -59,10 +60,11 @@ def owns_message(message, user_id, marker):
     )
 
 
-class NotificationBot(discord.Client):
+class NotificationBot(TimerBot):
     def __init__(self, config):
-        super().__init__(intents=discord.Intents.default(),
-                         allowed_mentions=discord.AllowedMentions.none())
+        super().__init__(config.guild_id, config.voice_channel_id,
+                         config.status_refresh_seconds, config.join_voice_channel)
+        self.allowed_mentions = discord.AllowedMentions.none()
         self.config = config
         self.store = NotificationStore(config.state_path)
         self.channels_by_server = {}
@@ -75,6 +77,8 @@ class NotificationBot(discord.Client):
         self._booted = False
 
     async def on_ready(self):
+        if self.voice_channel_id:
+            await super().on_ready()
         async with self._boot_lock:
             if self._booted:
                 return
@@ -96,6 +100,8 @@ class NotificationBot(discord.Client):
                     continue
 
                 async def started(elapsed, server=server):
+                    if self.voice_channel_id and server.id == self.config.voice_server_id:
+                        await self.handle_session_start(elapsed)
                     monitor = next(m for sid, m in self.monitors if sid == server.id)
                     # Recovered old matches must not trigger a fresh notification.
                     if elapsed >= ANNOUNCEMENT_TTL:
@@ -107,9 +113,9 @@ class NotificationBot(discord.Client):
                         server.name, now - elapsed, now,
                     )
 
-                async def ended():
-                    # The information card stays; each alert has its own expiry.
-                    pass
+                async def ended(server=server):
+                    if self.voice_channel_id and server.id == self.config.voice_server_id:
+                        await self.handle_session_end()
 
                 monitor = ReforgerMonitor(
                     log_dir=server.log_dir, on_session_start=started,
@@ -199,7 +205,7 @@ class NotificationBot(discord.Client):
         if not isinstance(channel, discord.TextChannel):
             raise RuntimeError("Announcement channel is not a text channel.")
         if row["message"] is not None:
-            if time.time() >= row["expires"]:
+            if time.time() >= row["started"] + ANNOUNCEMENT_TTL:
                 try:
                     await channel.get_partial_message(row["message"]).delete()
                 except discord.NotFound:
@@ -221,14 +227,15 @@ class NotificationBot(discord.Client):
                 message = candidate
                 break
         if message is None:
-            if time.time() - row["queued"] >= ANNOUNCEMENT_TTL:
+            if time.time() >= row["started"] + ANNOUNCEMENT_TTL:
                 self.store.finish(row)
                 return
             embed = discord.Embed(
                 title=f"🟢 {row['name']} — match started",
                 description=f"A new match is live. Join the server!\n"
                             f"Started <t:{int(row['started'])}:R>.\n\n"
-                            "This announcement will be removed after 30 minutes.",
+                            f"Expires <t:{int(row['started'] + ANNOUNCEMENT_TTL)}:R> "
+                            "(30 minutes after match start).",
                 colour=0x2ECC71,
             )
             embed.timestamp = datetime.fromtimestamp(int(row["started"]), timezone.utc)
@@ -238,7 +245,7 @@ class NotificationBot(discord.Client):
                                          allowed_mentions=discord.AllowedMentions(
                                              everyone=False, users=False, roles=[role], replied_user=False))
             logger.info("Discord accepted match announcement for %s", row["server"])
-        expires = message.created_at.timestamp() + ANNOUNCEMENT_TTL
+        expires = row["started"] + ANNOUNCEMENT_TTL
         self.store.sent(row, message.id, expires)
         if expires <= time.time():
             try:
@@ -252,6 +259,11 @@ class NotificationBot(discord.Client):
             task.cancel()
         if self._jobs:
             await asyncio.gather(*self._jobs, return_exceptions=True)
+        if self.voice_channel_id and self._desired_live:
+            try:
+                await asyncio.wait_for(self.handle_session_end(), timeout=10)
+            except Exception:
+                logger.exception("Could not clear voice timer during shutdown")
         await super().close()
         # The database stays open until the surrounding runner finishes callbacks.
 

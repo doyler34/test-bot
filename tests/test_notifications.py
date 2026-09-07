@@ -139,13 +139,13 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(kwargs["allowed_mentions"].users)
         self.assertIn("<t:970:R>", kwargs["embed"].description)
         sent = self.bot.store.pending()[0]
-        self.assertEqual(sent["expires"], 2800)
+        self.assertEqual(sent["expires"], 2770)
         deletion = AsyncMock()
         self.channel.get_partial_message.return_value = SimpleNamespace(delete=deletion)
-        with patch("server_notifications.time.time", return_value=2799):
+        with patch("server_notifications.time.time", return_value=2769):
             await self.bot.deliver_or_delete(sent)
         deletion.assert_not_awaited()
-        with patch("server_notifications.time.time", return_value=2801):
+        with patch("server_notifications.time.time", return_value=2771):
             await self.bot.deliver_or_delete(sent)
         deletion.assert_awaited_once()
         self.channel.get_partial_message.assert_called_once_with(100)
@@ -187,7 +187,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.deliver_or_delete(row)
         self.channel.send.assert_not_awaited()
         self.assertEqual(self.bot.store.pending()[0]["message"], 222)
-        self.assertEqual(self.bot.store.pending()[0]["expires"], 2800)
+        self.assertEqual(self.bot.store.pending()[0]["expires"], 2770)
 
     async def test_failed_delete_is_kept_for_retry(self):
         row = self.enqueue()
@@ -219,6 +219,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         with patch("server_notifications.ReforgerMonitor.run", new_callable=AsyncMock):
             await self.bot.on_ready()
         self.assertEqual(self.bot.prepare_channel.await_count, 3)
+
         self.assertEqual(len(self.bot.monitors), 1)
         monitor = self.bot.monitors[0][1]
         monitor.session_key = "test-match"
@@ -226,9 +227,45 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bot.store.pending(), [])
         await monitor.on_session_start(5)
         self.assertEqual(len(self.bot.store.pending()), 1)
-        # Gateway reconnect does not provision or launch everything a second time.
         await self.bot.on_ready()
         self.assertEqual(self.bot.prepare_channel.await_count, 3)
+
+    async def test_old_match_restores_voice_without_announcement(self):
+        from dataclasses import replace
+        self.bot.config = replace(self.config, voice_channel_id=123)
+        self.bot.voice_channel_id = 123
+        self.bot.get_guild = Mock(return_value=self.guild)
+        self.bot.prepare_channel = AsyncMock()
+        self.bot.channels_by_server = {"server-1": self.channel}
+        self.bot.handle_session_start = AsyncMock()
+        self.bot.handle_session_end = AsyncMock()
+        with patch("server_notifications.ReforgerMonitor.run", new_callable=AsyncMock):
+            await self.bot.on_ready()
+        monitor = self.bot.monitors[0][1]
+        monitor.session_key = "recovered"
+        await monitor.on_session_start(2100)
+        self.bot.handle_session_start.assert_awaited_once_with(2100)
+        self.assertEqual(self.bot.store.pending(), [])
+        await monitor.on_session_end()
+        self.bot.handle_session_end.assert_awaited_once()
+        await monitor.on_session_start(0)
+        self.assertEqual(len(self.bot.store.pending()), 1)
+
+    async def test_preupgrade_deadline_is_shortened(self):
+        row = self.enqueue()
+        self.bot.store.sent(row, 100, 2800)
+        deletion = AsyncMock()
+        self.channel.get_partial_message.return_value = SimpleNamespace(delete=deletion)
+        with patch("server_notifications.time.time", return_value=2771):
+            await self.bot.deliver_or_delete(self.bot.store.pending()[0])
+        deletion.assert_awaited_once()
+
+    async def test_delayed_queue_does_not_send_expired_match(self):
+        self.bot.store.enqueue("server-1", "old", 50, "Server 1", 100, 1890)
+        with patch("server_notifications.time.time", return_value=1901):
+            await self.bot.deliver_or_delete(self.bot.store.pending()[0])
+        self.channel.send.assert_not_awaited()
+        self.assertEqual(self.bot.store.pending(), [])
 
 
 if __name__ == "__main__":

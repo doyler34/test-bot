@@ -1,7 +1,9 @@
 # Three server notification channels
 
 This optional mode uses one Discord bot for three read-only text channels.
-It does not join voice or refresh a voice status every minute.
+It also maintains the existing voice status timer when VOICE_CHANNEL_ID is set.
+VOICE_TIMER_SERVER_ID selects its game server (default server-1). JOIN_VOICE_CHANNEL
+retains its existing meaning: false publishes status without joining voice.
 
 - **server-1-vanilla:** enabled; watches the existing REFORGER_LOG_DIR.
   Includes the supplied OYB in-game rules, condensed without changing their meaning.
@@ -11,7 +13,7 @@ It does not join voice or refresh a voice status every minute.
 
 Each channel has one permanent settings/rules message. A detected GAME transition
 posts a new match announcement with a relative start timestamp. The announcement
-is deleted 30 minutes after it was posted, normally within the worker's five-second
+is deleted 30 minutes after the match started, normally within the worker's five-second
 check interval. Discord rate limits and downtime can delay deletion.
 
 Members opt in or out with the **Toggle match notifications** button on each
@@ -71,7 +73,8 @@ database and Discord setup.
 An existing match less than 30 minutes old can be announced on first setup.
 Already-recorded matches are not announced again after a bot restart, even if
 their announcements have been deleted. Older recovered matches are not announced.
-An unsent announcement older than 30 minutes is discarded rather than sent late.
+An unsent announcement for a match already 30 minutes old is discarded rather than sent late.
+Previously posted alerts use this same match-start deadline after upgrading.
 
 The bot also checks its own channel history after an interrupted send to recover
 a message accepted before its ID could be saved. Pending deletions resume after a

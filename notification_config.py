@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 from dotenv import load_dotenv
-from config import ConfigError, _require, _require_int, _optional_int
+from config import ConfigError, _require, _require_int, _optional_int, _optional_bool
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,10 @@ class NotificationConfig:
     servers: tuple[Server, ...]
     state_path: str
     stale_seconds: int = 120
+    voice_channel_id: int = 0
+    status_refresh_seconds: int = 60
+    join_voice_channel: bool = False
+    voice_server_id: str = "server-1"
 
 
 def read_servers(path: str) -> tuple[Server, ...]:
@@ -91,4 +95,8 @@ def load_notification_config() -> NotificationConfig:
         servers=read_servers(_require("SERVERS_CONFIG")),
         state_path=os.getenv("NOTIFICATION_STATE_DB", "data/notifications.sqlite3"),
         stale_seconds=stale,
+        voice_channel_id=_optional_int("VOICE_CHANNEL_ID", 0),
+        status_refresh_seconds=max(15, _optional_int("STATUS_REFRESH_SECONDS", 60)),
+        join_voice_channel=_optional_bool("JOIN_VOICE_CHANNEL", False),
+        voice_server_id=os.getenv("VOICE_TIMER_SERVER_ID", "server-1"),
     )
