@@ -62,6 +62,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
             "token", 1, (self.server,), str(Path(self.tmp.name) / "state.sqlite3")
         )
         self.bot = NotificationBot(self.config)
+        self.bot._set_status = AsyncMock()
         self.bot._connection.user = SimpleNamespace(id=99)
         self.role = SimpleNamespace(id=77)
         self.bot.roles_by_server["server-1"] = self.role
@@ -259,6 +260,30 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         with patch("server_notifications.time.time", return_value=2771):
             await self.bot.deliver_or_delete(self.bot.store.pending()[0])
         deletion.assert_awaited_once()
+
+    async def test_sidebar_is_static_and_does_not_start_refresh_task(self):
+        await self.bot.handle_session_start(764)
+        self.bot._set_status.assert_awaited_once_with("🟢 Match live")
+        self.assertIsNone(self.bot._status_task)
+        await self.bot.handle_session_end()
+        self.assertEqual(self.bot._set_status.await_args.args, ("",))
+
+    async def test_permanent_card_keeps_match_time_and_buttons(self):
+        self.bot.store.save_channel("server-1", 50, 100)
+        self.bot.channels_by_server["server-1"] = self.channel
+        card = SimpleNamespace(edit=AsyncMock())
+        self.channel.get_partial_message.return_value = card
+        self.bot.match_times["server-1"] = (1000, 50)
+        self.bot._dirty_cards.add("server-1")
+        await self.bot.refresh_information(self.server)
+        fields = card.edit.await_args.kwargs["embeds"][0].fields
+        self.assertIn("<t:1000:R>", next(f.value for f in fields if f.name == "Current match"))
+        self.assertNotIn("view", card.edit.await_args.kwargs)
+        self.assertEqual(self.bot._dirty_cards, set())
+        self.bot.match_times.clear()
+        await self.bot.refresh_information(self.server)
+        fields = card.edit.await_args.kwargs["embeds"][0].fields
+        self.assertIn("No live match", next(f.value for f in fields if f.name == "Current match"))
 
     async def test_delayed_queue_does_not_send_expired_match(self):
         self.bot.store.enqueue("server-1", "old", 50, "Server 1", 100, 1890)

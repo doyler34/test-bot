@@ -1,9 +1,16 @@
 # Three server notification channels
 
 This optional mode uses one Discord bot for three read-only text channels.
-It also maintains the existing voice status timer when VOICE_CHANNEL_ID is set.
+It maintains a simple 'Match live' voice status when VOICE_CHANNEL_ID is set.
 VOICE_TIMER_SERVER_ID selects its game server (default server-1). JOIN_VOICE_CHANNEL
 retains its existing meaning: false publishes status without joining voice.
+
+The permanent information card shows the detected match's start time and a
+Discord relative timestamp, including matches older than the announcement's
+30-minute lifetime. Check match time gives a private hours/minutes/seconds
+reading as of the click, based on recovered log elapsed time. The sidebar no
+longer runs a minute-by-minute elapsed counter. Cards update on match start/end;
+the button and relative timestamp do not require periodic message edits.
 
 - **server-1-vanilla:** enabled; watches the existing REFORGER_LOG_DIR.
   Includes the supplied OYB in-game rules, condensed without changing their meaning.

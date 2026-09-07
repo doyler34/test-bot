@@ -18,13 +18,18 @@ logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
 
 
-def information_embeds(server):
+def information_embeds(server, started=None):
     about = discord.Embed(
         title=server.name,
         description="Server information" if server.enabled else "Coming soon — not active yet.",
         colour=0x2ECC71 if server.enabled else 0x95A5A6,
     )
     about.add_field(name="Settings", value=server.settings, inline=False)
+    if server.enabled:
+        match = (f"🟢 **Match live**\nStarted <t:{int(started)}:t> · <t:{int(started)}:R>\n"
+                 "Press **Check match time** for hours, minutes and seconds."
+                 if started is not None else "No live match currently detected.")
+        about.add_field(name="Current match", value=match, inline=False)
     about.add_field(
         name="Match notifications",
         value="Press **Toggle match notifications** below to get or remove this server's notification role. "
@@ -69,6 +74,9 @@ class NotificationBot(TimerBot):
         self.store = NotificationStore(config.state_path)
         self.channels_by_server = {}
         self.roles_by_server = {}
+        # Wall clock for Discord timestamps; monotonic time for precise elapsed.
+        self.match_times = {}
+        self._dirty_cards = set()
         self.notification_role_lock = asyncio.Lock()
         self.monitors = []
         self._jobs = []
@@ -79,6 +87,10 @@ class NotificationBot(TimerBot):
     async def on_ready(self):
         if self.voice_channel_id:
             await super().on_ready()
+            if self._desired_live:
+                await self._refresh_status()
+            else:
+                await self._clear_status()
         async with self._boot_lock:
             if self._booted:
                 return
@@ -100,6 +112,10 @@ class NotificationBot(TimerBot):
                     continue
 
                 async def started(elapsed, server=server):
+                    age = max(0.0, elapsed)
+                    self.match_times[server.id] = (time.time() - age, time.monotonic() - age)
+                    self._dirty_cards.add(server.id)
+                    await self.refresh_information(server)
                     if self.voice_channel_id and server.id == self.config.voice_server_id:
                         await self.handle_session_start(elapsed)
                     monitor = next(m for sid, m in self.monitors if sid == server.id)
@@ -114,6 +130,9 @@ class NotificationBot(TimerBot):
                     )
 
                 async def ended(server=server):
+                    self.match_times.pop(server.id, None)
+                    self._dirty_cards.add(server.id)
+                    await self.refresh_information(server)
                     if self.voice_channel_id and server.id == self.config.voice_server_id:
                         await self.handle_session_end()
 
@@ -175,7 +194,8 @@ class NotificationBot(TimerBot):
                 if owns_message(candidate, self.user.id, info_marker):
                     info = candidate
                     break
-        embeds = information_embeds(server)
+        match = self.match_times.get(server.id)
+        embeds = information_embeds(server, match[0] if match else None)
         view = NotificationView(self, server.id)
         if info is None:
             info = await channel.send(embeds=embeds, silent=True,
@@ -185,8 +205,34 @@ class NotificationBot(TimerBot):
             await info.edit(embeds=embeds, view=view, allowed_mentions=discord.AllowedMentions.none())
         self.store.save_channel(server.id, channel.id, info.id)
 
+    async def _refresh_status(self):
+        if self._desired_live:
+            await self._set_status("🟢 Match live")
+
+    def _start_status_loop(self):
+        # The sidebar changes only with match state or a gateway reconnect.
+        # Discord renders relative times in the permanent information card.
+        pass
+
+    async def refresh_information(self, server):
+        record = self.store.channel(server.id)
+        if not record or not record["info"]:
+            return
+        try:
+            channel = self.channels_by_server[server.id]
+            message = channel.get_partial_message(record["info"])
+            match = self.match_times.get(server.id)
+            await message.edit(embeds=information_embeds(server, match[0] if match else None),
+                               allowed_mentions=discord.AllowedMentions.none())
+            self._dirty_cards.discard(server.id)
+        except discord.HTTPException:
+            logger.exception("Could not refresh match information for %s; retry pending", server.id)
+
     async def delivery_loop(self):
         while not self.is_closed():
+            for server in self.config.servers:
+                if server.id in self._dirty_cards:
+                    await self.refresh_information(server)
             for row in self.store.pending():
                 try:
                     await self.deliver_or_delete(row)
