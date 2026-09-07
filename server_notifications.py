@@ -17,6 +17,7 @@ from timer_bot import TimerBot
 from category_timer import CategoryTimers
 from account_links import AccountLinks
 from join_oyb import prepare_join_channel
+from rank_sync import RankSync
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -86,6 +87,7 @@ class NotificationBot(TimerBot):
         self.monitors = []
         self._jobs = []
         self._trackers = []
+        self.rank_sync = RankSync(self)
         self._boot_lock = asyncio.Lock()
         self._booted = False
 
@@ -151,6 +153,7 @@ class NotificationBot(TimerBot):
                     self._jobs.append(asyncio.create_task(tracker.run()))
             self._jobs.append(asyncio.create_task(self.delivery_loop()))
             self._jobs.append(asyncio.create_task(self.category_timers.run()))
+            self._jobs.append(asyncio.create_task(self.rank_sync.run()))
             logger.info("Ready: three read-only channels; %s active game monitors",
                         len(self.monitors))
 

@@ -1,4 +1,4 @@
-"""Experimental, log-backed connected time. No Discord roles or XP are awarded."""
+"""Log-backed connected time, consumed separately by the Discord rank sync."""
 from __future__ import annotations
 
 import argparse
@@ -23,6 +23,8 @@ class Tracker:
         self.root = Path(log_dir).resolve()
         self.server = server
         self.max_gap = max_gap
+        self.initialized = False
+        self.caught_up = False
         Path(database).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(database, timeout=10)
         self.db.executescript('''
@@ -38,10 +40,12 @@ class Tracker:
         self.db.close()
 
     def tick(self):
+        self.caught_up = True
         paths = sorted(self.root.glob("logs_*/console.log"))
         if not paths and (self.root / "console.log").is_file():
             paths = [self.root / "console.log"]
         if not paths:
+            self.initialized = True
             return
         first = self.db.execute("SELECT MIN(path) FROM sources WHERE server=?",
                                 (self.server,)).fetchone()[0]
@@ -51,6 +55,7 @@ class Tracker:
         for path in paths:
             if str(path) >= first:
                 self.scan(path)
+        self.initialized = True
 
     def scan(self, path):
         # Cursor, parser state, and totals commit together. Concurrent readers
@@ -68,6 +73,7 @@ class Tracker:
                 stream.seek(max(0, position - 128))
                 old = stream.read(min(position, 128))
                 if size < position or (anchor and hashlib.sha256(old).hexdigest() != anchor):
+                    self.caught_up = False
                     LOG.error("Log rewritten/truncated; refusing replay to prevent duplicate time: %s", path)
                     return
                 stream.seek(position)
@@ -77,6 +83,10 @@ class Tracker:
                         break  # Leave partial writes for the next poll.
                     position = stream.tell()
                     self.consume(state, raw.decode("utf-8", "replace"))
+                stream.seek(position)
+                remaining = stream.readline()
+                if remaining.endswith(b"\n"):
+                    self.caught_up = False
                 stream.seek(max(0, position - 128))
                 anchor = hashlib.sha256(stream.read(min(position, 128))).hexdigest()
             self.db.execute("INSERT OR REPLACE INTO sources VALUES (?,?,?,?,?)",
@@ -130,6 +140,7 @@ class Tracker:
             try:
                 self.tick()
             except (OSError, sqlite3.Error):
+                self.caught_up = False
                 LOG.exception("Playtime scan failed; retrying")
             await asyncio.sleep(2)
 

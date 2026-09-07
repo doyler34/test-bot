@@ -64,6 +64,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot = NotificationBot(self.config)
         self.bot._set_status = AsyncMock()
         self.bot.category_timers.prepare = AsyncMock()
+        self.bot.rank_sync.run = AsyncMock()
         self.bot._connection.user = SimpleNamespace(id=99)
         self.role = SimpleNamespace(id=77)
         self.bot.roles_by_server["server-1"] = self.role

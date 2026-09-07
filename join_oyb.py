@@ -116,7 +116,10 @@ class JoinView(discord.ui.View):
 
     @discord.ui.button(label="My link status", custom_id="oyb:link-status")
     async def status(self, interaction, button):
-        await interaction.response.send_message(self.bot.account_links.status(interaction.guild_id, interaction.user.id), ephemeral=True)
+        text = self.bot.account_links.status(interaction.guild_id, interaction.user.id)
+        if self.bot.account_links.lookup(interaction.guild_id, interaction.user.id):
+            text += "\n" + self.bot.rank_sync.status(interaction.user.id)
+        await interaction.response.send_message(text, ephemeral=True)
 
     @discord.ui.button(label="Admin: review requests", custom_id="oyb:link-review")
     async def review(self, interaction, button):
@@ -161,12 +164,15 @@ async def prepare_join_channel(bot, guild, overwrites):
                 info = candidate
                 break
     embed = discord.Embed(title="Join OYB", colour=0x5865F2, description=(
-        "Link your Discord account to your Reforger player for community playtime tracking and future XP ranks.\n\n"
+        "Link your Discord account to your Reforger player for community XP ranks.\n\n"
         "**1.** Join an OYB game server so we can find your player.\n"
         "**2.** Press **Link Reforger account** and enter your exact in-game name.\n"
         "**3.** An admin checks ownership and approves your link.\n\n"
         "Your request and link status are private. We store your Discord ID and game identity so name changes won't lose your tracked time. "
-        "Linking does not grant gameplay perks or enable XP awards yet."))
+        "After approval you start as **OYB Recruit** with **0 XP**. "
+        "**Test mode:** earn **10 XP per completed tracked minute** after linking; each rank is **10 XP** apart. "
+        "Roles update automatically, usually within 15 seconds of recorded time. "
+        "Use **My link status** to see your XP. Ranks give no gameplay perks."))
     embed.set_footer(text=MARKER)
     if info is None:
         info = await channel.send(embed=embed, view=JoinView(bot), silent=True,
