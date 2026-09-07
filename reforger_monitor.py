@@ -112,6 +112,7 @@ class ReforgerMonitor:
 
     # internal state
     session_key: str = field(default="", init=False)
+    initialized: bool = field(default=False, init=False)
     _live: bool = field(default=False, init=False)
     _current_path: Optional[str] = field(default=None, init=False)
     _pos: int = field(default=0, init=False)
@@ -139,6 +140,7 @@ class ReforgerMonitor:
         while True:
             try:
                 await self._tick()
+                self.initialized = True
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001 - keep the monitor alive
@@ -152,6 +154,8 @@ class ReforgerMonitor:
             if self._live:
                 logger.warning("Log file disappeared; ending session")
                 await self._end()
+            # Re-read history if the same path returns after a wipe or a gap.
+            self._current_path = None
             return
 
         if path != self._current_path:

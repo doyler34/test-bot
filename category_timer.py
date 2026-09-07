@@ -42,6 +42,12 @@ class CategoryTimers:
 
     async def tick(self):
         for server in self.bot.config.servers:
+            monitor = next((m for sid, m in getattr(self.bot, "monitors", [])
+                            if sid == server.id), None)
+            if monitor is not None and not monitor.initialized:
+                # Do not spend the rename budget on WAITING while startup
+                # history is still being read and the match age is unknown.
+                continue
             category = self.channels.get(server.id)
             if category is None:
                 continue

@@ -72,6 +72,18 @@ overwrite them.
 
 ## Restart behaviour
 
+Category updates wait for the first monitor scan, so restarting the bot cannot
+spend its rename budget displaying WAITING before recovering the current match.
+The same log start record restores the same elapsed time and announcement key.
+A new game-server log session, or POSTGAME followed by GAME, starts a new clock.
+An empty/missing log clears detected match state until a new start is observed.
+The category may retain its old heading until the five-minute rename cooldown
+expires; the information card uses the new state as soon as detected.
+
+The bot only reads the game logs. It never changes game saves or performs wipes.
+If a game restart loads a saved campaign, the timer measures the new process's
+GAME session; it does not claim to measure that campaign's lifetime across saves.
+
 If PLAYTIME_ENABLED=true, each enabled server also runs the experimental
 playtime tracker using its JSON server id. The existing server-1 totals carry
 over when using the bundled configuration. Use the report command with
