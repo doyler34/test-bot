@@ -67,6 +67,17 @@ class TimerVisibilityTests(unittest.IsolatedAsyncioTestCase):
             bot._stop_status_loop()
             await bot.close()
 
+    async def test_recovered_age_is_displayed_immediately(self):
+        bot, channel = self.make_bot()
+        try:
+            await bot.handle_session_start(8040)
+            self.assertEqual(bot.http.request.await_args.kwargs["json"]["status"],
+                             "🟢 LIVE · 02h 14m")
+            channel.connect.assert_not_awaited()
+        finally:
+            bot._stop_status_loop()
+            await bot.close()
+
     async def test_voice_mode_still_joins_muted_and_leaves(self):
         bot, channel = self.make_bot(join_voice_channel=True)
         vc = Mock()

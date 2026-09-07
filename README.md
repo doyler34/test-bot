@@ -101,7 +101,10 @@ All configuration is via environment variables (see `.env.example`):
 | `A2S_HOST` / `A2S_PORT` | no | A2S liveness fallback when logs go stale |
 | `LOG_LEVEL` | no (INFO) | Logging verbosity |
 
-No database is used — session state is in-memory only.
+No database is used. On bot startup, the current match's elapsed time is recovered
+from the log timestamps rather than starting at zero. Historical finished matches
+are not replayed into Discord. Keep the current console.log history available;
+log shipping should preserve file modification times for accurate recovery.
 
 ## Deployment note (remote + shipped logs)
 

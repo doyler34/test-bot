@@ -60,10 +60,10 @@ class TimerBot(discord.Client):
 
     # --- Public API called by the monitor ------------------------------------
 
-    async def handle_session_start(self) -> None:
+    async def handle_session_start(self, elapsed_seconds: float = 0.0) -> None:
         async with self._lock:
             self._desired_live = True
-            self._match_start = time.monotonic()
+            self._match_start = time.monotonic() - max(0.0, elapsed_seconds)
             await self._ensure_connected()
             await self._refresh_status()
             self._start_status_loop()

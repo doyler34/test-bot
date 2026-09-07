@@ -96,12 +96,14 @@ def resolve_session_file(log_dir: str) -> Optional[str]:
 # --- Monitor ------------------------------------------------------------------
 
 Callback = Callable[[], Awaitable[None]]
+StartCallback = Callable[[float], Awaitable[None]]
+TIMESTAMP_RE = re.compile(r"^(\d{2}):(\d{2}):(\d{2})\.(\d{3})")
 
 
 @dataclass
 class ReforgerMonitor:
     log_dir: str
-    on_session_start: Callback
+    on_session_start: StartCallback
     on_session_end: Callback
     stale_seconds: int = 120
     poll_interval: float = 2.0
@@ -113,6 +115,22 @@ class ReforgerMonitor:
     _current_path: Optional[str] = field(default=None, init=False)
     _pos: int = field(default=0, init=False)
     _last_heartbeat: float = field(default=0.0, init=False)
+
+    _clock_day: float = field(default=0.0, init=False)
+    _last_clock: Optional[float] = field(default=None, init=False)
+    _log_clock: float = field(default=0.0, init=False)
+
+    def _advance_clock(self, line: str) -> float:
+        """Unwrap time-of-day stamps using every log line, including midnight."""
+        match = TIMESTAMP_RE.match(line)
+        if match:
+            h, m, s, ms = map(int, match.groups())
+            clock = h * 3600 + m * 60 + s + ms / 1000
+            if self._last_clock is not None and self._last_clock - clock > 43200:
+                self._clock_day += 86400
+            self._last_clock = clock
+            self._log_clock = max(self._log_clock, self._clock_day + clock)
+        return self._log_clock
 
     async def run(self) -> None:
         """Main loop. Runs until cancelled."""
@@ -150,6 +168,9 @@ class ReforgerMonitor:
                 await self._end()
         self._current_path = path
         self._pos = 0
+        self._clock_day = 0.0
+        self._last_clock = None
+        self._log_clock = 0.0
         # Establish current state from the existing file contents, then tail.
         await self._read_new_lines(initial=True)
 
@@ -162,47 +183,77 @@ class ReforgerMonitor:
         except OSError:
             return
         if size < self._pos:
-            # File was truncated/replaced under the same path.
-            logger.info("Log truncated; re-reading from start")
+            logger.info("Log truncated; rebuilding session from remaining history")
+            if self._live:
+                await self._end()
             self._pos = 0
+            self._clock_day = 0.0
+            self._last_clock = None
+            self._log_clock = 0.0
+            initial = True
         if size == self._pos:
             return
 
         loop = asyncio.get_running_loop()
-        chunk, new_pos = await loop.run_in_executor(None, self._read_from, path, self._pos)
+        chunk, new_pos, modified = await loop.run_in_executor(
+            None, self._read_from, path, self._pos
+        )
         self._pos = new_pos
-
+        events = []
         for line in chunk.splitlines():
+            clock = self._advance_clock(line)
             parsed = parse_line(line)
-            if parsed is None:
-                continue
-            if parsed.event is LineEvent.HEARTBEAT:
-                self._last_heartbeat = time.monotonic()
-                if not self._live:
-                    # Server is alive and past PREGAME but we joined mid-match:
-                    # a heartbeat alone does not prove GAME state, so we only
-                    # treat explicit GAME transitions as start. Heartbeat just
-                    # keeps the watchdog fed once live.
-                    pass
-            elif parsed.event is LineEvent.GAME_START:
-                self._last_heartbeat = time.monotonic()
-                if not self._live:
-                    await self._start()
-            elif parsed.event is LineEvent.GAME_END:
-                if self._live:
-                    await self._end()
+            if parsed is not None:
+                events.append((parsed.event, clock))
+
+        # Relative log times avoid dependence on the server's time zone.
+        # mtime supplies time since the last write; shipped logs should preserve it.
+        tail_age = max(0.0, time.time() - modified)
+        now = time.monotonic()
+
+        def age(clock: float) -> float:
+            return max(0.0, self._log_clock - clock + tail_age)
 
         if initial:
-            logger.info(
-                "Initial scan complete for %s (live=%s)", path, self._live
-            )
+            # Reduce history first. Do not replay old matches into Discord.
+            live_start = None
+            heartbeat = None
+            for event, clock in events:
+                if event is LineEvent.GAME_START:
+                    if live_start is None:
+                        live_start = clock
+                    heartbeat = clock
+                elif event is LineEvent.GAME_END:
+                    live_start = None
+                elif event is LineEvent.HEARTBEAT:
+                    heartbeat = clock
+            if heartbeat is not None:
+                self._last_heartbeat = now - age(heartbeat)
+            if live_start is not None:
+                stale = heartbeat is None or age(heartbeat) >= self.stale_seconds
+                if not stale or await self._server_alive_via_a2s():
+                    if stale:
+                        self._last_heartbeat = now
+                    await self._start(age(live_start))
+            logger.info("Initial scan complete for %s (live=%s)", path, self._live)
+            return
+
+        for event, clock in events:
+            if event is LineEvent.HEARTBEAT:
+                self._last_heartbeat = now - age(clock)
+            elif event is LineEvent.GAME_START:
+                self._last_heartbeat = now - age(clock)
+                if not self._live:
+                    await self._start(age(clock))
+            elif event is LineEvent.GAME_END and self._live:
+                await self._end()
 
     @staticmethod
-    def _read_from(path: str, pos: int) -> tuple[str, int]:
+    def _read_from(path: str, pos: int) -> tuple[str, int, float]:
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
             fh.seek(pos)
             data = fh.read()
-            return data, fh.tell()
+            return data, fh.tell(), os.fstat(fh.fileno()).st_mtime
 
     async def _check_staleness(self) -> None:
         if not self._live:
@@ -241,10 +292,10 @@ class ReforgerMonitor:
             logger.debug("A2S query failed: %s", exc)
             return False
 
-    async def _start(self) -> None:
+    async def _start(self, elapsed_seconds: float = 0.0) -> None:
         self._live = True
-        logger.info("Session START detected")
-        await self.on_session_start()
+        logger.info("Session START detected (recovered elapsed: %.0fs)", elapsed_seconds)
+        await self.on_session_start(elapsed_seconds)
 
     async def _end(self) -> None:
         self._live = False
