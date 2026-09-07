@@ -111,6 +111,7 @@ class ReforgerMonitor:
     a2s_port: Optional[int] = None
 
     # internal state
+    session_key: str = field(default="", init=False)
     _live: bool = field(default=False, init=False)
     _current_path: Optional[str] = field(default=None, init=False)
     _pos: int = field(default=0, init=False)
@@ -234,7 +235,7 @@ class ReforgerMonitor:
                 if not stale or await self._server_alive_via_a2s():
                     if stale:
                         self._last_heartbeat = now
-                    await self._start(age(live_start))
+                    await self._start(age(live_start), f"{path}:{live_start:.3f}")
             logger.info("Initial scan complete for %s (live=%s)", path, self._live)
             return
 
@@ -244,7 +245,7 @@ class ReforgerMonitor:
             elif event is LineEvent.GAME_START:
                 self._last_heartbeat = now - age(clock)
                 if not self._live:
-                    await self._start(age(clock))
+                    await self._start(age(clock), f"{path}:{clock:.3f}")
             elif event is LineEvent.GAME_END and self._live:
                 await self._end()
 
@@ -292,7 +293,8 @@ class ReforgerMonitor:
             logger.debug("A2S query failed: %s", exc)
             return False
 
-    async def _start(self, elapsed_seconds: float = 0.0) -> None:
+    async def _start(self, elapsed_seconds: float = 0.0, session_key: str = "") -> None:
+        self.session_key = session_key
         self._live = True
         logger.info("Session START detected (recovered elapsed: %.0fs)", elapsed_seconds)
         await self.on_session_start(elapsed_seconds)
