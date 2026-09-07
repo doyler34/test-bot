@@ -70,6 +70,9 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         role_patch = patch("server_notifications.prepare_role", new_callable=AsyncMock)
         role_patch.start()
         self.addCleanup(role_patch.stop)
+        join_patch = patch("server_notifications.prepare_join_channel", new_callable=AsyncMock)
+        join_patch.start()
+        self.addCleanup(join_patch.stop)
         self.channel = Mock(spec=discord.TextChannel)
         self.channel.id = 50
         self.channel.topic = "OYB • server-1 • Settings, rules and match notifications"
@@ -88,6 +91,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.bot.close()
         self.bot.store.close()
+        self.bot.account_links.close()
         self.tmp.cleanup()
 
     def enqueue(self):

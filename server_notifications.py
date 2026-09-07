@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import logging
 import os
 import time
+from pathlib import Path
 
 import discord
 
@@ -14,6 +15,8 @@ from notification_roles import NotificationView, prepare_role
 from reforger_monitor import ReforgerMonitor
 from timer_bot import TimerBot
 from category_timer import CategoryTimers
+from account_links import AccountLinks
+from join_oyb import prepare_join_channel
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -72,6 +75,7 @@ class NotificationBot(TimerBot):
         self.allowed_mentions = discord.AllowedMentions.none()
         self.config = config
         self.store = NotificationStore(config.state_path)
+        self.account_links = AccountLinks(os.getenv("ACCOUNT_LINKS_DB", str(Path(config.state_path).with_name("account_links.sqlite3"))))
         self.channels_by_server = {}
         self.roles_by_server = {}
         # Wall clock for Discord timestamps; monotonic time for precise elapsed.
@@ -100,6 +104,7 @@ class NotificationBot(TimerBot):
             try:
                 for server in self.config.servers:
                     await self.prepare_channel(guild, server)
+                await prepare_join_channel(self, guild, readonly_overwrites(guild))
             except Exception:
                 logger.exception("Channel setup failed. Check bot permissions.")
                 await self.close()
@@ -344,3 +349,4 @@ async def run_notifications(config):
         for tracker in bot._trackers:
             tracker.close()
         bot.store.close()
+        bot.account_links.close()
