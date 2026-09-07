@@ -31,6 +31,8 @@ class RankSync:
                 guild INTEGER, tier INTEGER, role INTEGER,
                 PRIMARY KEY(guild,tier));
         ''')
+        from rank_announcements import RankAnnouncements
+        self.announcements = RankAnnouncements(bot)
 
     async def prepare(self, guild):
         if not guild.me.guild_permissions.manage_roles:
@@ -123,12 +125,14 @@ class RankSync:
                     obsolete = [r for r in self.roles if r.id in current and r.id != target.id]
                     if obsolete:
                         await member.remove_roles(*obsolete, reason="OYB rank promotion", atomic=True)
+                    self.announcements.record(guild.id, member_id, tier, xp)
                     self.applied[member_id] = (target.id, time.monotonic())
                     LOG.info("Rank synced for Discord %s: %s (%s XP)", member_id, RANKS[tier], xp)
                 except discord.NotFound:
                     self.applied[member_id] = (self.roles[tier].id, time.monotonic())
                 except Exception:
                     LOG.exception("Rank update failed for %s; retrying", member_id)
+            await self.announcements.flush(guild)
 
     async def run(self):
         while not self.bot.is_closed():

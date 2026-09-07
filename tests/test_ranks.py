@@ -38,6 +38,7 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.bot = SimpleNamespace(account_links=self.links, config=SimpleNamespace(guild_id=1),
                                    _trackers=[self.tracker], get_guild=Mock(return_value=self.guild))
         self.sync = RankSync(self.bot)
+        self.sync.announcements.flush = AsyncMock()
         self.sync.roles = [role(i+100, name) for i, name in enumerate(RANKS)]
         self.guild.get_role = Mock(side_effect=lambda rid: next((r for r in self.sync.roles if r.id == rid), None))
         self.guild.me = SimpleNamespace(top_role=role(999, "Bot"))

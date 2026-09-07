@@ -16,6 +16,13 @@ completed tracked minute, summed across the playtime database's servers.
 | OYB Colonel | 70 |
 
 These deliberately fast thresholds are for testing. XP continues above Colonel.
+Promotions mention the member in the existing #log text channel with their new
+rank and XP. Recruit assignment is quiet. Existing ranks are not announced when
+this feature is installed. Restarts and role reconciliation do not repeat alerts.
+If several ranks are earned between checks, one alert shows the resulting rank.
+Set RANK_LOG_CHANNEL_ID in .env to select a specific channel if needed (required
+if there are multiple #log channels). The bot needs View Channel, Send Messages,
+Embed Links and Read Message History there. Unsent alerts persist and retry.
 Enable PLAYTIME_ENABLED=true and use notification mode (SERVERS_CONFIG).
 Give the bot Manage Roles and put its highest role above all OYB rank roles.
 Existing matching rank roles must have no permissions; setup rejects unsafe roles.
