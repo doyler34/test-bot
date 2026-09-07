@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -151,12 +153,25 @@ class SetupTests(unittest.TestCase):
 
     def test_unit_and_cli_use_checkout_not_development_paths(self):
         unit = render_unit("/opt/oyb bot", "oyb")
-        self.assertIn('WorkingDirectory="/opt/oyb bot"', unit)
+        self.assertIn('WorkingDirectory=/opt/oyb bot\n', unit)
         self.assertIn('ExecStart="/opt/oyb bot/.venv/bin/python" main.py', unit)
         self.assertIn("UMask=0077", unit)
         self.assertNotIn("reforger-server", unit)
         cli = render_cli("/opt/oyb bot")
         self.assertIn("'/opt/oyb bot/deploy/setup.sh'", cli)
+
+    @unittest.skipUnless(os.name == "posix" and shutil.which("systemd-analyze"), "Requires Linux systemd-analyze")
+    def test_generated_service_passes_real_systemd_verification(self):
+        import getpass
+        repo = self.root / "bot with spaces"
+        executable = repo / ".venv/bin/python"
+        executable.parent.mkdir(parents=True)
+        executable.write_text("#!/bin/sh\nexit 0\n")
+        executable.chmod(0o755)
+        unit = self.root / "oyb-setup-regression.service"
+        unit.write_text(render_unit(repo, getpass.getuser()))
+        result = subprocess.run(["systemd-analyze", "verify", str(unit)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_test_runner_does_not_inherit_production_secrets_or_database_paths(self):
         with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "secret", "ACCOUNT_LINKS_DB": "/production/links.db"}), patch("subprocess.run") as runner:

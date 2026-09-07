@@ -158,6 +158,9 @@ def env_text(values):
 def render_unit(repo, user):
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", user):
         raise ValueError("Unsupported systemd user name")
+    repo = str(repo)
+    if not PurePosixPath(repo).is_absolute() or repo != repo.rstrip() or repo.endswith("\\"):
+        raise ValueError("Checkout must be an absolute path without trailing whitespace or backslash")
     def quote(value, executable=False):
         if any(c in str(value) for c in ("\n", "\r", "\0")):
             raise ValueError("Unsupported checkout path")
@@ -165,7 +168,9 @@ def render_unit(repo, user):
         if executable:
             value = value.replace("$", "$$")
         return '"' + value + '"'
-    return (ROOT / "deploy/reforger-timer.service.tpl").read_text().replace("@USER@", user).replace("@REPO_DIR@", quote(repo)).replace("@PYTHON@", quote(PurePosixPath(repo) / ".venv/bin/python", True))
+    # WorkingDirectory is a literal path setting, not a shell argument. Only
+    # ExecStart uses argument quoting; both settings expand percent specifiers.
+    return (ROOT / "deploy/reforger-timer.service.tpl").read_text().replace("@USER@", user).replace("@REPO_DIR@", repo.replace("%", "%%")).replace("@PYTHON@", quote(PurePosixPath(repo) / ".venv/bin/python", True))
 
 
 def render_cli(repo):
