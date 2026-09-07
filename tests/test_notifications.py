@@ -63,6 +63,11 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.bot = NotificationBot(self.config)
         self.bot._connection.user = SimpleNamespace(id=99)
+        self.role = SimpleNamespace(id=77)
+        self.bot.roles_by_server["server-1"] = self.role
+        role_patch = patch("server_notifications.prepare_role", new_callable=AsyncMock)
+        role_patch.start()
+        self.addCleanup(role_patch.stop)
         self.channel = Mock(spec=discord.TextChannel)
         self.channel.id = 50
         self.channel.topic = "OYB • server-1 • Settings, rules and match notifications"
@@ -129,7 +134,8 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
             await self.bot.deliver_or_delete(row)
         kwargs = self.channel.send.await_args.kwargs
         self.assertFalse(kwargs["allowed_mentions"].everyone)
-        self.assertFalse(kwargs["allowed_mentions"].roles)
+        self.assertEqual(kwargs["allowed_mentions"].roles, [self.role])
+        self.assertEqual(kwargs["content"], "<@&77>")
         self.assertFalse(kwargs["allowed_mentions"].users)
         self.assertIn("<t:970:R>", kwargs["embed"].description)
         sent = self.bot.store.pending()[0]

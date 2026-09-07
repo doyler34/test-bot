@@ -10,6 +10,7 @@ import time
 import discord
 
 from notification_store import NotificationStore
+from notification_roles import NotificationView, prepare_role
 from reforger_monitor import ReforgerMonitor
 
 logger = logging.getLogger("reforger.notifications")
@@ -25,7 +26,8 @@ def information_embeds(server):
     about.add_field(name="Settings", value=server.settings, inline=False)
     about.add_field(
         name="Match notifications",
-        value="Open this channel's Notification Settings and choose **All Messages**. "
+        value="Press **Toggle match notifications** below to get or remove this server's notification role. "
+              "We mention that role when a match starts. "
               "This channel is read-only. Start announcements disappear after 30 minutes. "
               "Your Discord and device notification settings still apply.",
         inline=False,
@@ -64,6 +66,8 @@ class NotificationBot(discord.Client):
         self.config = config
         self.store = NotificationStore(config.state_path)
         self.channels_by_server = {}
+        self.roles_by_server = {}
+        self.notification_role_lock = asyncio.Lock()
         self.monitors = []
         self._jobs = []
         self._trackers = []
@@ -126,6 +130,7 @@ class NotificationBot(discord.Client):
                         len(self.monitors))
 
     async def prepare_channel(self, guild, server):
+        await prepare_role(self, guild, server)
         marker = f"OYB • {server.id} • Settings, rules and match notifications"
         record = self.store.channel(server.id)
         channel = guild.get_channel(record["channel"]) if record else None
@@ -165,11 +170,13 @@ class NotificationBot(discord.Client):
                     info = candidate
                     break
         embeds = information_embeds(server)
+        view = NotificationView(self, server.id)
         if info is None:
             info = await channel.send(embeds=embeds, silent=True,
+                                      view=view,
                                       allowed_mentions=discord.AllowedMentions.none())
         else:
-            await info.edit(embeds=embeds, allowed_mentions=discord.AllowedMentions.none())
+            await info.edit(embeds=embeds, view=view, allowed_mentions=discord.AllowedMentions.none())
         self.store.save_channel(server.id, channel.id, info.id)
 
     async def delivery_loop(self):
@@ -226,8 +233,10 @@ class NotificationBot(discord.Client):
             )
             embed.timestamp = datetime.fromtimestamp(int(row["started"]), timezone.utc)
             embed.set_footer(text="OYB • Match notifications")
-            message = await channel.send(embed=embed,
-                                         allowed_mentions=discord.AllowedMentions.none())
+            role = self.roles_by_server[row["server"]]
+            message = await channel.send(content=f"<@&{role.id}>", embed=embed,
+                                         allowed_mentions=discord.AllowedMentions(
+                                             everyone=False, users=False, roles=[role], replied_user=False))
             logger.info("Discord accepted match announcement for %s", row["server"])
         expires = message.created_at.timestamp() + ANNOUNCEMENT_TTL
         self.store.sent(row, message.id, expires)

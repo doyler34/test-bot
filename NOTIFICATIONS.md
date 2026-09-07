@@ -14,9 +14,20 @@ posts a new match announcement with a relative start timestamp. The announcement
 is deleted 30 minutes after it was posted, normally within the worker's five-second
 check interval. Discord rate limits and downtime can delay deletion.
 
-Members opt in using **Channel Notification Settings → All Messages**.
-No roles, @everyone or @here are mentioned. Delivery still depends on each member's
-server, Discord and device notification settings.
+Members opt in or out with the **Toggle match notifications** button on each
+information card. The bot creates Server One, Server Two and Server Three roles
+with no permissions. Announcements mention only the matching role; no everyone,
+here or user mentions are allowed. Confirmation is private to the clicking member.
+Buttons are restored on startup. Delivery still depends on each member's Discord
+and device settings, including suppression of role mentions.
+
+The bot's highest role must be above the notification roles. The roles are
+mentionable so the bot can ping them without broad Mention Everyone permission.
+Other members may also mention those roles wherever they can send messages.
+
+For an existing installation, run `.venv/bin/python update_server_rules.py`
+after pulling this update and before restarting the bot. This backs up the local
+JSON and changes only Server 1's rules to the shorter version.
 
 ## Enable on the existing VPS
 
