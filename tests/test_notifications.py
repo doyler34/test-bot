@@ -63,6 +63,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.bot = NotificationBot(self.config)
         self.bot._set_status = AsyncMock()
+        self.bot.category_timers.prepare = AsyncMock()
         self.bot._connection.user = SimpleNamespace(id=99)
         self.role = SimpleNamespace(id=77)
         self.bot.roles_by_server["server-1"] = self.role
@@ -231,7 +232,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_ready()
         self.assertEqual(self.bot.prepare_channel.await_count, 3)
 
-    async def test_old_match_restores_voice_without_announcement(self):
+    async def test_old_match_restores_card_without_voice_or_announcement(self):
         from dataclasses import replace
         self.bot.config = replace(self.config, voice_channel_id=123)
         self.bot.voice_channel_id = 123
@@ -245,10 +246,10 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         monitor = self.bot.monitors[0][1]
         monitor.session_key = "recovered"
         await monitor.on_session_start(2100)
-        self.bot.handle_session_start.assert_awaited_once_with(2100)
+        self.bot.handle_session_start.assert_not_awaited()
         self.assertEqual(self.bot.store.pending(), [])
         await monitor.on_session_end()
-        self.bot.handle_session_end.assert_awaited_once()
+        self.bot.handle_session_end.assert_not_awaited()
         await monitor.on_session_start(0)
         self.assertEqual(len(self.bot.store.pending()), 1)
 
@@ -263,7 +264,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_sidebar_is_static_and_does_not_start_refresh_task(self):
         await self.bot.handle_session_start(764)
-        self.bot._set_status.assert_awaited_once_with("🟢 Match live")
+        self.bot._set_status.assert_not_awaited()
         self.assertIsNone(self.bot._status_task)
         await self.bot.handle_session_end()
         self.assertEqual(self.bot._set_status.await_args.args, ("",))

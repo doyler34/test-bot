@@ -74,19 +74,8 @@ class RoleTests(unittest.IsolatedAsyncioTestCase):
         await NotificationView(self.bot, "server-1").toggle(interaction)
         self.assertIn("Could not update", interaction.followup.send.await_args.args[0])
 
-    async def test_match_time_button_is_private_and_precise(self):
-        self.bot.match_times = {"server-1": (1000, 100)}
+    async def test_only_notification_button_remains(self):
         view = NotificationView(self.bot, "server-1")
+        self.assertEqual(len(view.children), 1)
+        self.assertEqual(view.children[0].label, "Toggle match notifications")
         self.assertTrue(view.is_persistent())
-        self.assertEqual(view.children[1].custom_id, "oyb:match-time:server-1")
-        interaction = SimpleNamespace(guild_id=1,
-            response=SimpleNamespace(send_message=AsyncMock()))
-        with patch("notification_roles.time.monotonic", return_value=863):
-            await view.check_time(interaction)
-        args = interaction.response.send_message.await_args
-        self.assertIn("12m 43s", args.args[0])
-        self.assertTrue(args.kwargs["ephemeral"])
-        self.assertFalse(args.kwargs["allowed_mentions"].roles)
-        self.bot.match_times.clear()
-        await view.check_time(interaction)
-        self.assertIn("No live match", interaction.response.send_message.await_args.args[0])

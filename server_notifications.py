@@ -13,6 +13,7 @@ from notification_store import NotificationStore
 from notification_roles import NotificationView, prepare_role
 from reforger_monitor import ReforgerMonitor
 from timer_bot import TimerBot
+from category_timer import CategoryTimers
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -26,8 +27,7 @@ def information_embeds(server, started=None):
     )
     about.add_field(name="Settings", value=server.settings, inline=False)
     if server.enabled:
-        match = (f"🟢 **Match live**\nStarted <t:{int(started)}:t> · <t:{int(started)}:R>\n"
-                 "Press **Check match time** for hours, minutes and seconds."
+        match = (f"🟢 **Match live**\nStarted <t:{int(started)}:t> · <t:{int(started)}:R>"
                  if started is not None else "No live match currently detected.")
         about.add_field(name="Current match", value=match, inline=False)
     about.add_field(
@@ -76,6 +76,7 @@ class NotificationBot(TimerBot):
         self.roles_by_server = {}
         # Wall clock for Discord timestamps; monotonic time for precise elapsed.
         self.match_times = {}
+        self.category_timers = CategoryTimers(self)
         self._dirty_cards = set()
         self.notification_role_lock = asyncio.Lock()
         self.monitors = []
@@ -86,11 +87,8 @@ class NotificationBot(TimerBot):
 
     async def on_ready(self):
         if self.voice_channel_id:
-            await super().on_ready()
-            if self._desired_live:
-                await self._refresh_status()
-            else:
-                await self._clear_status()
+            await self._clear_status()
+            await self._disconnect()
         async with self._boot_lock:
             if self._booted:
                 return
@@ -116,8 +114,6 @@ class NotificationBot(TimerBot):
                     self.match_times[server.id] = (time.time() - age, time.monotonic() - age)
                     self._dirty_cards.add(server.id)
                     await self.refresh_information(server)
-                    if self.voice_channel_id and server.id == self.config.voice_server_id:
-                        await self.handle_session_start(elapsed)
                     monitor = next(m for sid, m in self.monitors if sid == server.id)
                     # Recovered old matches must not trigger a fresh notification.
                     if elapsed >= ANNOUNCEMENT_TTL:
@@ -133,8 +129,6 @@ class NotificationBot(TimerBot):
                     self.match_times.pop(server.id, None)
                     self._dirty_cards.add(server.id)
                     await self.refresh_information(server)
-                    if self.voice_channel_id and server.id == self.config.voice_server_id:
-                        await self.handle_session_end()
 
                 monitor = ReforgerMonitor(
                     log_dir=server.log_dir, on_session_start=started,
@@ -151,11 +145,13 @@ class NotificationBot(TimerBot):
                     self._trackers.append(tracker)
                     self._jobs.append(asyncio.create_task(tracker.run()))
             self._jobs.append(asyncio.create_task(self.delivery_loop()))
+            self._jobs.append(asyncio.create_task(self.category_timers.run()))
             logger.info("Ready: three read-only channels; %s active game monitors",
                         len(self.monitors))
 
     async def prepare_channel(self, guild, server):
         await prepare_role(self, guild, server)
+        category = await self.category_timers.prepare(guild, server)
         marker = f"OYB • {server.id} • Settings, rules and match notifications"
         record = self.store.channel(server.id)
         channel = guild.get_channel(record["channel"]) if record else None
@@ -171,13 +167,19 @@ class NotificationBot(TimerBot):
         overwrites = readonly_overwrites(guild)
         if channel is None:
             channel = await guild.create_text_channel(
-                server.channel_name, topic=marker, overwrites=overwrites,
+                server.channel_name, topic=marker, overwrites=overwrites, category=category,
                 reason="OYB read-only server information and match notifications",
             )
         else:
             await channel.edit(name=server.channel_name, overwrites=overwrites,
+                               category=category, sync_permissions=False,
                                reason="Restore read-only server channel permissions")
         self.channels_by_server[server.id] = channel
+        if self.voice_channel_id and server.id == self.config.voice_server_id:
+            voice = guild.get_channel(self.voice_channel_id)
+            if isinstance(voice, discord.VoiceChannel) and voice.category_id != category.id:
+                await voice.edit(category=category, sync_permissions=False,
+                                 reason="Group existing server voice channel under its category")
         info_id = record["info"] if record and record["channel"] == channel.id else None
         self.store.save_channel(server.id, channel.id, info_id)
         info = None
@@ -206,8 +208,7 @@ class NotificationBot(TimerBot):
         self.store.save_channel(server.id, channel.id, info.id)
 
     async def _refresh_status(self):
-        if self._desired_live:
-            await self._set_status("🟢 Match live")
+        pass  # Match time is displayed in the category and information card.
 
     def _start_status_loop(self):
         # The sidebar changes only with match state or a gateway reconnect.

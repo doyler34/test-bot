@@ -1,6 +1,5 @@
 """Persistent self-service notification roles; no gameplay permissions."""
 import discord
-import time
 
 NAMES = {"server-1": "Server One", "server-2": "Server Two", "server-3": "Server Three"}
 
@@ -43,26 +42,6 @@ class NotificationView(discord.ui.View):
                                    custom_id=f"oyb:match-notifications:{server_id}")
         button.callback = self.toggle
         self.add_item(button)
-        check = discord.ui.Button(label="Check match time", style=discord.ButtonStyle.secondary,
-                                  custom_id=f"oyb:match-time:{server_id}")
-        check.callback = self.check_time
-        self.add_item(check)
-
-    async def check_time(self, interaction):
-        if interaction.guild_id != self.bot.config.guild_id:
-            await interaction.response.send_message("Use this button in the OYB server.", ephemeral=True)
-            return
-        started = self.bot.match_times.get(self.server_id)
-        if started is None:
-            text = "No live match is currently detected for this server."
-        else:
-            seconds = max(0, int(time.monotonic() - started[1]))
-            hours, rest = divmod(seconds, 3600)
-            minutes, seconds = divmod(rest, 60)
-            elapsed = f"{hours}h {minutes:02d}m {seconds:02d}s" if hours else f"{minutes}m {seconds:02d}s"
-            text = f"🟢 **Match time: {elapsed}**\nAs of this check. Started <t:{int(started[0])}:t>."
-        await interaction.response.send_message(text, ephemeral=True,
-                                                allowed_mentions=discord.AllowedMentions.none())
 
     async def toggle(self, interaction):
         if interaction.guild_id != self.bot.config.guild_id:

@@ -1,16 +1,21 @@
 # Three server notification channels
 
 This optional mode uses one Discord bot for three read-only text channels.
-It maintains a simple 'Match live' voice status when VOICE_CHANNEL_ID is set.
-VOICE_TIMER_SERVER_ID selects its game server (default server-1). JOIN_VOICE_CHANNEL
-retains its existing meaning: false publishes status without joining voice.
+Each server gets a category such as `🟢 SERVER ONE · ~25 MIN`. Category IDs and
+last rename attempts are saved in the notification database. Updates are at least
+five minutes apart (checked every 30 seconds); Discord rate limits can delay them.
+This applies to start/end transitions too, so headings can briefly show old state.
+Inactive servers show COMING SOON; servers without a detected match show WAITING.
+The bot moves each managed information channel below its category. It also moves
+the existing VOICE_CHANNEL_ID beneath VOICE_TIMER_SERVER_ID (default server-1),
+preserving voice permissions. It clears the old voice status and no longer runs
+a timer there. Additional voice channels can be moved under the category manually.
 
 The permanent information card shows the detected match's start time and a
 Discord relative timestamp, including matches older than the announcement's
-30-minute lifetime. Check match time gives a private hours/minutes/seconds
-reading as of the click, based on recovered log elapsed time. The sidebar no
-longer runs a minute-by-minute elapsed counter. Cards update on match start/end;
-the button and relative timestamp do not require periodic message edits.
+30-minute lifetime. Cards update on match start/end; relative timestamps do not
+require periodic message edits. Only Toggle match notifications remains as a
+button; Check match time has been removed.
 
 - **server-1-vanilla:** enabled; watches the existing REFORGER_LOG_DIR.
   Includes the supplied OYB in-game rules, condensed without changing their meaning.
