@@ -48,6 +48,23 @@ class CategoryTests(unittest.IsolatedAsyncioTestCase):
         self.server.enabled = False
         self.assertEqual(category_name(self.server, (0, 0), 999), "SERVER ONE · COMING SOON")
 
+    async def test_reinstall_reuses_existing_voice_category_over_saved_duplicate(self):
+        older = Mock(spec=discord.CategoryChannel)
+        older.id, older.name, older.voice_channels = 5, "🟢 SERVER ONE · ~351 MIN", [object()]
+        self.category.voice_channels = []
+        self.guild.categories = [self.category, older]
+        with self.store.db:
+            self.store.db.execute("INSERT INTO category_timers VALUES ('server-1',10,0)")
+        selected = await self.manager.prepare(self.guild, self.server)
+        self.assertEqual(selected.id, 5)
+        self.guild.create_category.assert_not_awaited()
+
+    async def test_reinstall_without_saved_state_reuses_empty_category(self):
+        self.category.voice_channels = []
+        self.guild.categories = [self.category]
+        await self.manager.prepare(self.guild, self.server)
+        self.guild.create_category.assert_not_awaited()
+
     async def test_rate_limit_error_does_not_retry_immediately(self):
         await self.manager.prepare(self.guild, self.server)
         self.category.edit.side_effect = discord.HTTPException(SimpleNamespace(status=429, reason="Rate limited"), "retry")

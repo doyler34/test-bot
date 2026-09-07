@@ -5,6 +5,14 @@ It reads local game logs for match monitoring, categories, notifications and
 playtime. Approved account links connect that playtime to Discord rank roles.
 XP combines tracked time across all servers for the same Reforger IdentityId.
 
+One read-only **#servers** channel contains three permanent server-information
+messages, each with its own notification button. Match alerts also appear there
+and expire normally. Timer categories reuse existing OYB categories after a
+reinstall, preferring the one containing voice channels. Migration removes old
+bot-only information channels and empty duplicate timer categories. Channels
+with other messages/threads or pending alerts are retained; cleanup retries
+after pending alerts expire. Join OYB and promotion logging remain separate.
+
 ## Production setup
 
 On the actual Debian/Ubuntu VPS (systemd, Python 3.11+), from this branch's checkout:

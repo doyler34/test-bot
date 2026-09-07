@@ -2,10 +2,17 @@
 import asyncio
 import logging
 import time
+import re
 import discord
 
 LOG = logging.getLogger("reforger.categories")
 BASES = {"server-1": "SERVER ONE", "server-2": "SERVER TWO", "server-3": "SERVER THREE"}
+
+
+def matches_category(category, server):
+    base = BASES.get(server.id, server.name.upper())[:65]
+    return isinstance(category, discord.CategoryChannel) and bool(re.fullmatch(
+        rf"(?:🟢 )?{re.escape(base)} · (?:WAITING|COMING SOON|~\d+ MIN)", category.name))
 
 
 def category_name(server, match, now):
@@ -31,9 +38,16 @@ class CategoryTimers:
         category = guild.get_channel(row[0]) if row else None
         if category is not None and not isinstance(category, discord.CategoryChannel):
             raise RuntimeError("Saved category is no longer a category")
+        matches = [c for c in getattr(guild, "categories", []) if matches_category(c, server)]
+        with_voice = [c for c in matches if c.voice_channels]
+        if with_voice:
+            category = min(with_voice, key=lambda c: c.id)
+        elif category is None and matches:
+            category = min(matches, key=lambda c: c.id)
         if category is None:
             category = await guild.create_category(category_name(server, None, 0),
                                                     reason="OYB server grouping and approximate match time")
+        if row is None or row[0] != category.id:
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO category_timers VALUES (?,?,0)",
                                 (server.id, category.id))

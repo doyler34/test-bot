@@ -76,7 +76,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(join_patch.stop)
         self.channel = Mock(spec=discord.TextChannel)
         self.channel.id = 50
-        self.channel.topic = "OYB • server-1 • Settings, rules and match notifications"
+        self.channel.topic = "OYB • Servers • Settings, rules and match notifications"
         self.channel.history = Mock(side_effect=lambda **kwargs: history([]))
         self.channel.send = AsyncMock(return_value=message(100))
         self.channel.edit = AsyncMock()
@@ -86,6 +86,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.guild.default_role = Mock()
         self.guild.me = Mock()
         self.guild.text_channels = []
+        self.guild.fetch_channels = AsyncMock(return_value=[])
         self.guild.get_channel = Mock(return_value=self.channel)
         self.guild.create_text_channel = AsyncMock(return_value=self.channel)
 
@@ -127,6 +128,34 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.guild.create_text_channel.assert_not_awaited()
         self.channel.send.assert_not_awaited()
         self.assertEqual(self.bot.store.channel("server-1")["info"], 101)
+
+    async def test_three_cards_share_one_channel_with_distinct_buttons(self):
+        from dataclasses import replace
+        servers = [replace(self.server, id=f"server-{i}", name=f"Server {i}") for i in range(1, 4)]
+        self.channel.send.side_effect = [message(100+i) for i in range(3)]
+        for server in servers:
+            await self.bot.prepare_channel(self.guild, server)
+        self.guild.create_text_channel.assert_awaited_once()
+        self.assertEqual(self.guild.create_text_channel.await_args.args, ("servers",))
+        self.assertEqual(self.channel.send.await_count, 3)
+        buttons = []
+        for call in self.channel.send.await_args_list:
+            view = call.kwargs["view"]
+            self.assertEqual(len(view.children), 1)
+            buttons.append(view.children[0].custom_id)
+        self.assertEqual(len(set(buttons)), 3)
+        self.assertEqual({self.bot.store.channel(s.id)["channel"] for s in servers}, {50})
+
+    async def test_legacy_record_creates_shared_card_in_new_channel(self):
+        legacy = Mock(spec=discord.TextChannel)
+        legacy.id = 40
+        legacy.topic = "OYB • server-1 • Settings, rules and match notifications"
+        self.guild.get_channel.return_value = legacy
+        self.guild.text_channels = [legacy]
+        self.bot.store.save_channel("server-1", 40, 77)
+        await self.bot.prepare_channel(self.guild, self.server)
+        self.assertEqual(self.bot.store.channel("server-1")["channel"], 50)
+        self.channel.fetch_message.assert_not_awaited()
 
     async def test_never_repurposes_unrelated_saved_channel(self):
         self.bot.store.save_channel("server-1", 50, 100)

@@ -21,6 +21,7 @@ from rank_sync import RankSync
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
+SERVERS_MARKER = "OYB • Servers • Settings, rules and match notifications"
 
 
 def information_embeds(server, started=None):
@@ -78,6 +79,7 @@ class NotificationBot(TimerBot):
         self.store = NotificationStore(config.state_path)
         self.account_links = AccountLinks(os.getenv("ACCOUNT_LINKS_DB", str(Path(config.state_path).with_name("account_links.sqlite3"))))
         self.channels_by_server = {}
+        self._server_channel = None
         self.roles_by_server = {}
         # Wall clock for Discord timestamps; monotonic time for precise elapsed.
         self.match_times = {}
@@ -107,6 +109,8 @@ class NotificationBot(TimerBot):
                 for server in self.config.servers:
                     await self.prepare_channel(guild, server)
                 await prepare_join_channel(self, guild, readonly_overwrites(guild))
+                from server_layout import cleanup_legacy_layout
+                await cleanup_legacy_layout(self, guild)
             except Exception:
                 logger.exception("Channel setup failed. Check bot permissions.")
                 await self.close()
@@ -154,7 +158,7 @@ class NotificationBot(TimerBot):
             self._jobs.append(asyncio.create_task(self.delivery_loop()))
             self._jobs.append(asyncio.create_task(self.category_timers.run()))
             self._jobs.append(asyncio.create_task(self.rank_sync.run()))
-            logger.info("Ready: three read-only channels; %s active game monitors",
+            logger.info("Ready: shared servers channel with three cards; %s active game monitors",
                         len(self.monitors))
 
     async def prepare_channel(self, guild, server):
@@ -162,26 +166,28 @@ class NotificationBot(TimerBot):
         category = await self.category_timers.prepare(guild, server)
         marker = f"OYB • {server.id} • Settings, rules and match notifications"
         record = self.store.channel(server.id)
-        channel = guild.get_channel(record["channel"]) if record else None
-        if channel is not None and (
-            not isinstance(channel, discord.TextChannel) or channel.topic != marker
+        saved = guild.get_channel(record["channel"]) if record else None
+        if saved is not None and (
+            not isinstance(saved, discord.TextChannel) or saved.topic not in (marker, SERVERS_MARKER)
         ):
             raise RuntimeError(f"Saved channel for {server.id} is no longer bot-managed.")
+        channel = self._server_channel
         if channel is None:
-            matches = [c for c in guild.text_channels if c.topic == marker]
+            matches = [c for c in guild.text_channels if c.topic == SERVERS_MARKER]
             if len(matches) > 1:
-                raise RuntimeError(f"Multiple managed channels for {server.id}; resolve duplicates.")
-            channel = matches[0] if matches else None
+                raise RuntimeError("Multiple managed #servers channels; resolve duplicates.")
+            channel = matches[0] if matches else (saved if saved and saved.topic == SERVERS_MARKER else None)
         overwrites = readonly_overwrites(guild)
         if channel is None:
             channel = await guild.create_text_channel(
-                server.channel_name, topic=marker, overwrites=overwrites, category=category,
+                "servers", topic=SERVERS_MARKER, overwrites=overwrites,
                 reason="OYB read-only server information and match notifications",
             )
-        else:
-            await channel.edit(name=server.channel_name, overwrites=overwrites,
-                               category=category, sync_permissions=False,
+        elif self._server_channel is None:
+            await channel.edit(name="servers", overwrites=overwrites,
+                               category=None, sync_permissions=False,
                                reason="Restore read-only server channel permissions")
+        self._server_channel = channel
         self.channels_by_server[server.id] = channel
         if self.voice_channel_id and server.id == self.config.voice_server_id:
             voice = guild.get_channel(self.voice_channel_id)
@@ -238,6 +244,7 @@ class NotificationBot(TimerBot):
             logger.exception("Could not refresh match information for %s; retry pending", server.id)
 
     async def delivery_loop(self):
+        cleaned = 0
         while not self.is_closed():
             for server in self.config.servers:
                 if server.id in self._dirty_cards:
@@ -247,6 +254,12 @@ class NotificationBot(TimerBot):
                     await self.deliver_or_delete(row)
                 except Exception:
                     logger.exception("Announcement retry pending for %s", row["server"])
+            if time.monotonic() - cleaned >= 300:
+                from server_layout import cleanup_legacy_layout
+                guild = self.get_guild(self.config.guild_id)
+                if guild:
+                    await cleanup_legacy_layout(self, guild)
+                cleaned = time.monotonic()
             await asyncio.sleep(5)
 
     async def deliver_or_delete(self, row):
