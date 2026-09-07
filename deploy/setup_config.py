@@ -188,7 +188,7 @@ esac
 def summary():
     values = dotenv_values(ROOT / ".env", interpolate=False)
     with environment(values):
-        config = load_notification_config()
+        config = load_notification_config(load_env_file=False)
     print("\n================================\nOYB BOT SETUP COMPLETE\n================================")
     for name in ("Bot service: Running", "Playtime tracking", "XP / ranks", "Account linking", "Notifications"):
         print(f"  ✓ {name}")
@@ -199,7 +199,7 @@ def summary():
 
 def validate(values, config_path):
     with environment({**values, "SERVERS_CONFIG": str(config_path)}):
-        config = load_notification_config()
+        config = load_notification_config(load_env_file=False)
         used = set()
         for server in config.servers:
             if server.enabled:
@@ -257,8 +257,13 @@ def run_tests():
     # Do not let exported production database paths reach fixture constructors.
     clean = {k: v for k, v in os.environ.items() if k in (
         "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT")}
-    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests"],
-                   cwd=ROOT, env=clean, check=True)
+    result = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests"],
+                            cwd=ROOT, env=clean, capture_output=True, text=True)
+    if result.returncode:
+        print(result.stdout, end="")
+        print(result.stderr, end="", file=sys.stderr)
+        result.check_returncode()
+    print("Unit test suite passed.")
 
 
 def main():

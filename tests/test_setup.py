@@ -160,7 +160,37 @@ class SetupTests(unittest.TestCase):
 
     def test_test_runner_does_not_inherit_production_secrets_or_database_paths(self):
         with patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "secret", "ACCOUNT_LINKS_DB": "/production/links.db"}), patch("subprocess.run") as runner:
+            runner.return_value.returncode = 0
             run_tests()
         env = runner.call_args.kwargs["env"]
         self.assertNotIn("ACCOUNT_LINKS_DB", env)
         self.assertNotIn("DISCORD_BOT_TOKEN", env)
+
+    def test_validation_ignores_existing_env_file(self):
+        from dotenv import load_dotenv
+        saved = self.root / ".env"
+        saved.write_text("VOICE_CHANNEL_ID=1545897772442583141\nJOIN_VOICE_CHANNEL=true\nSESSION_STALE_SECONDS=999\n")
+        original = saved.read_bytes()
+        servers = self.config(1)
+        with patch("notification_config.load_dotenv", side_effect=lambda: load_dotenv(saved)) as loader:
+            loaded = self.check(servers)
+        loader.assert_not_called()
+        self.assertEqual(loaded.voice_channel_id, 0)
+        self.assertFalse(loaded.join_voice_channel)
+        self.assertEqual(loaded.stale_seconds, 120)
+        self.assertEqual(saved.read_bytes(), original)
+
+    def test_normal_startup_still_loads_env_file(self):
+        from dotenv import load_dotenv
+        from notification_config import load_notification_config
+        from deploy.setup_config import environment
+        servers = self.config(1)
+        path = self.root / "servers.json"
+        path.write_text(json.dumps(servers))
+        saved = self.root / ".env"
+        saved.write_text("VOICE_CHANNEL_ID=1234\n")
+        with environment({**self.values, "SERVERS_CONFIG": str(path)}):
+            with patch("notification_config.load_dotenv", side_effect=lambda: load_dotenv(saved)) as loader:
+                config = load_notification_config()
+        loader.assert_called_once()
+        self.assertEqual(config.voice_channel_id, 1234)

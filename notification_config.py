@@ -85,8 +85,9 @@ def read_servers(path: str) -> tuple[Server, ...]:
     return tuple(servers)
 
 
-def load_notification_config() -> NotificationConfig:
-    load_dotenv()
+def load_notification_config(*, load_env_file: bool = True) -> NotificationConfig:
+    if load_env_file:
+        load_dotenv()
     stale = _optional_int("SESSION_STALE_SECONDS", 120)
     if stale < 1:
         raise ConfigError("SESSION_STALE_SECONDS must be positive.")
