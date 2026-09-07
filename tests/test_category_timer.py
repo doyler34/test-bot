@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, AsyncMock, patch
 import discord
-from category_timer import CategoryTimers, category_name
+from category_timer import CategoryTimers, category_name, matches_category
 from notification_store import NotificationStore
 
 
@@ -47,6 +47,14 @@ class CategoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(category_name(self.server, None, 0), "SERVER ONE · WAITING")
         self.server.enabled = False
         self.assertEqual(category_name(self.server, (0, 0), 999), "SERVER ONE · COMING SOON")
+
+    async def test_long_timers_format_and_remain_discoverable_after_reinstall(self):
+        for minutes, expected in [(59, "59 MIN"), (60, "1h 00m"), (351, "5h 51m"), (1440, "24h 00m")]:
+            self.category.name = category_name(self.server, (0, 0), minutes * 60)
+            self.assertEqual(self.category.name, f"🟢 SERVER ONE · ~{expected}")
+            self.assertTrue(matches_category(self.category, self.server))
+        self.category.name = "🟢 SERVER ONE · ~351 MIN"
+        self.assertTrue(matches_category(self.category, self.server))
 
     async def test_reinstall_reuses_existing_voice_category_over_saved_duplicate(self):
         older = Mock(spec=discord.CategoryChannel)

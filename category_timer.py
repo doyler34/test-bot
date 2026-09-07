@@ -12,7 +12,7 @@ BASES = {"server-1": "SERVER ONE", "server-2": "SERVER TWO", "server-3": "SERVER
 def matches_category(category, server):
     base = BASES.get(server.id, server.name.upper())[:65]
     return isinstance(category, discord.CategoryChannel) and bool(re.fullmatch(
-        rf"(?:🟢 )?{re.escape(base)} · (?:WAITING|COMING SOON|~\d+ MIN)", category.name))
+        rf"(?:🟢 )?{re.escape(base)} · (?:WAITING|COMING SOON|~\d+ MIN|~\d+h \d{{2}}m)", category.name))
 
 
 def category_name(server, match, now):
@@ -22,7 +22,9 @@ def category_name(server, match, now):
     if match is None:
         return f"{base} · WAITING"
     minutes = max(0, int((now - match[1]) // 60))
-    return f"🟢 {base} · ~{minutes} MIN"
+    hours, remainder = divmod(minutes, 60)
+    elapsed = f"{hours}h {remainder:02d}m" if hours else f"{minutes} MIN"
+    return f"🟢 {base} · ~{elapsed}"
 
 
 class CategoryTimers:
