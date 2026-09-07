@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 
 from config import ConfigError, load_config, setup_logging
@@ -19,8 +20,7 @@ from timer_bot import TimerBot
 logger = logging.getLogger("reforger.main")
 
 
-async def run() -> None:
-    config = load_config()
+async def run_bot(config) -> None:
 
     bot = TimerBot(
         guild_id=config.guild_id,
@@ -77,6 +77,28 @@ async def run() -> None:
         await asyncio.gather(monitor_task, bot_task, stop_task, return_exceptions=True)
 
     logger.info("Shutdown complete")
+
+
+async def run() -> None:
+    config = load_config()
+    if os.getenv("PLAYTIME_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
+        await run_bot(config)
+        return
+    from playtime_tracker import Tracker
+    tracker = Tracker(config.log_dir, os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"),
+                      os.getenv("PLAYTIME_SERVER_ID", "server-1"))
+    bot_task = asyncio.create_task(run_bot(config), name="timer")
+    tracker_task = asyncio.create_task(tracker.run(), name="playtime")
+    try:
+        done, _ = await asyncio.wait(
+            {bot_task, tracker_task}, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            task.result()
+    finally:
+        for task in (bot_task, tracker_task):
+            task.cancel()
+        await asyncio.gather(bot_task, tracker_task, return_exceptions=True)
+        tracker.close()
 
 
 def main() -> None:

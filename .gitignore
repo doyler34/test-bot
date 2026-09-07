@@ -11,3 +11,8 @@ __pycache__/
 # Logs
 logs/
 *.log
+
+# Local playtime state
+data/
+*.sqlite3
+*.sqlite3-*
