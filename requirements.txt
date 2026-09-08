@@ -1,4 +1,4 @@
-discord.py[voice]>=2.4   # [voice] pulls the voice backend (davey on 2.7+, PyNaCl on older)
+discord.py[voice]>=2.7,<3  # Persistent UI and current Pin Messages permission
 python-dotenv>=1.0
 python-a2s>=1.4          # optional: A2S liveness fallback when logs go stale
 Pillow>=11.3,<13        # in-memory rank cards and bundled fonts

@@ -7,7 +7,7 @@ import uuid
 import discord
 from account_links import AccountLinks
 from combat_store import migrate
-from leaderboard_command import LeaderboardCommand, LeaderboardView, leaderboard_embed, standings
+from leaderboard_command import LeaderboardCommand, leaderboard_embed, standings
 from rank_command import RankCommand
 
 
@@ -78,77 +78,13 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Éowyn 玩家',embed.description)
         self.assertEqual(len(embed.description.splitlines()),5)
 
-    async def test_navigation_boundaries_snapshot_and_owner(self):
-        rows=players(31)
-        view=LeaderboardView(10,rows)
-        rows.clear()
-        try:
-            self.assertFalse(await view.interaction_check(interaction(user=11)))
-            self.assertTrue(await view.interaction_check(interaction()))
-            with patch('leaderboard_command.time.monotonic',side_effect=[0,2,4,6,8,10]):
-                for step,expected in [(1,1),(1,2),(1,2),(-1,1),(-1,0),(-1,0)]:
-                    await view.change_page(interaction(),step)
-                    self.assertEqual(view.page,expected)
-                    self.assertEqual(view.previous.disabled,expected==0)
-                    self.assertEqual(view.next.disabled,expected==2)
-        finally:
-            view.stop()
-
-    async def test_rapid_click(self):
-        view=LeaderboardView(10,players(31))
-        try:
-            i=interaction()
-            with patch('leaderboard_command.time.monotonic',side_effect=[0,0.1]):
-                await view.change_page(i,1)
-                await view.change_page(i,1)
-            self.assertEqual(view.page,1)
-            i.response.defer.assert_awaited_once()
-        finally:
-            view.stop()
-
-    async def test_failed_edit_rolls_back_and_timeout_disables(self):
-        view=LeaderboardView(10,players(16))
-        try:
-            i=interaction()
-            i.response.edit_message.side_effect=RuntimeError('temporary')
-            with self.assertRaises(RuntimeError):
-                await view.change_page(i,1)
-            self.assertEqual(view.page,0)
-            self.assertTrue(view.previous.disabled)
-            view.message=SimpleNamespace(edit=AsyncMock())
-            await view.on_timeout()
-            self.assertTrue(all(button.disabled for button in view.children))
-            view.message.edit.assert_awaited_once()
-        finally:
-            view.stop()
-
-    async def test_command_registration_empty_and_permissions(self):
-        self.assertIsNotNone(self.bot.rank_command.tree.get_command('leaderboard',guild=discord.Object(id=1)))
-        i=interaction(guild=2)
+    async def test_command_only_redirects_privately(self):
+        self.bot.store=SimpleNamespace(leaderboard=Mock(return_value={'channel':123}))
+        i=interaction()
         await self.command.show(i)
+        self.assertIn('<#123>',i.response.send_message.await_args.args[0])
+        self.assertTrue(i.response.send_message.await_args.kwargs['ephemeral'])
         i.followup.send.assert_not_awaited()
-        i=interaction()
-        i.app_permissions.embed_links=False
+        self.bot.store.leaderboard.side_effect=RuntimeError('database locked')
         await self.command.show(i)
-        i.followup.send.assert_not_awaited()
-        i=interaction()
-        await self.command.show(i)
-        sent=i.followup.send.await_args.kwargs
-        self.assertNotIn('view',sent)  # Webhook.send rejects view=None.
-        self.assertIn('No linked players',sent['embed'].description)
-
-    async def test_command_fifteen_and_sixteen_players(self):
-        for member in range(1,16):
-            self.add(member,member,1,name=f'Game {member}')
-        i=interaction()
-        await self.command.show(i)
-        self.assertNotIn('view',i.followup.send.await_args.kwargs)
-        self.add(16,16,1,name='Latest Name')
-        await self.command.show(i)
-        view=i.followup.send.await_args.kwargs['view']
-        try:
-            self.assertEqual(view.rows[0],('Latest Name',16,1))
-            self.assertIs(view.message,i.followup.send.return_value)
-            self.assertFalse(i.followup.send.await_args.kwargs['allowed_mentions'].everyone)
-        finally:
-            view.stop()
+        self.assertTrue(i.response.send_message.await_args.kwargs['ephemeral'])

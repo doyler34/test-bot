@@ -5,20 +5,22 @@
 workflow and stable UUID are reused; display names and temporary playerID values
 are never database keys. No new player database or gameplay mod is introduced.
 
-## Leaderboard
+## Permanent leaderboard
 
-`/leaderboard` displays position, name, player kills and deaths in a compact table.
-Pages contain 15 players (1–15, 16–30, etc.), ordered by kills descending, then
-deaths ascending, then Discord ID for stable ties. It combines available combat
-totals across servers for approved members of this guild with recorded data.
-Names use the approved Reforger linking request, falling back to a cached Discord
-display name or member ID. The list is a snapshot; rerun the command for fresh totals.
+The bot creates or adopts `===OYB-LeaderBoard===` on startup (Discord may display
+its normalized lowercase spelling). One pinned message shows position, approved
+Reforger name, player kills and deaths. The original query and table renderer are
+reused: 15 players per page, kills descending, deaths ascending, Discord ID for
+stable ties. Approved linked players with recorded combat data are included.
+No XP column or new XP behavior is added; XP-only changes cannot change this
+combat table. All combat totals still combine the available server logs.
 
-Previous/Next buttons appear for multiple pages and are usable by the person who
-opened that leaderboard. Others can run their own command. Buttons expire after
-five minutes of inactivity; rerun the command after expiry or a bot restart.
-No new database tables or XP changes are needed. Player kills exclude teamkills
-and AI victims, matching /stats. No-data accounts are not assigned invented zeros.
+Everyone can use the shared Previous / Page indicator / Next buttons. Controls
+have stable custom IDs and no expiry, and are registered once during setup.
+The selected page survives restart and refresh, clamping to the final page if
+players disappear. `/leaderboard` now responds privately with a channel link;
+it never creates another public leaderboard. See [LEADERBOARD.md](LEADERBOARD.md)
+for storage, recovery, permissions, rate limiting and deployment checks.
 
 ## Confirmed source and limits
 

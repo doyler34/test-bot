@@ -1,7 +1,5 @@
 """Paged, read-only combat standings from existing approved OYB links."""
-import asyncio
 import logging
-import time
 import unicodedata
 
 import discord
@@ -48,84 +46,14 @@ def leaderboard_embed(rows, page):
     else:
         embed.description = 'No linked players have recorded combat stats yet. Link your account in **#join-oyb** to appear once combat is recorded.'
     embed.set_footer(text=f'Page {page + 1}/{pages} • {len(rows)} players • All servers\n'
-                          'Player kills ↓ · deaths ↑ • Snapshot; run /leaderboard to refresh')
+                          'Player kills ↓ · deaths ↑ • Updates automatically')
     return embed
-
-
-class LeaderboardView(discord.ui.View):
-    def __init__(self, owner, rows):
-        super().__init__(timeout=300)
-        self.owner = owner
-        self.rows = tuple(rows)
-        self.page = 0
-        self.message = None
-        self.lock = asyncio.Lock()
-        self.last_click = float('-inf')
-        self.update_buttons()
-
-    def update_buttons(self):
-        self.previous.disabled = self.page == 0
-        self.next.disabled = (self.page + 1) * PAGE_SIZE >= len(self.rows)
-
-    async def interaction_check(self, interaction):
-        if interaction.user.id != self.owner:
-            await interaction.response.send_message('Run **/leaderboard** to browse your own pages.', ephemeral=True)
-            return False
-        return True
-
-    async def change_page(self, interaction, step):
-        async with self.lock:
-            if self.is_finished():
-                await interaction.response.send_message('Run **/leaderboard** again to refresh these pages.', ephemeral=True)
-                return
-            now = time.monotonic()
-            if now - self.last_click < 1:
-                await interaction.response.defer()
-                return
-            self.last_click = now
-            old = self.page
-            last = max(0, (len(self.rows) - 1) // PAGE_SIZE)
-            self.page = max(0, min(old + step, last))
-            self.update_buttons()
-            try:
-                await interaction.response.edit_message(embed=leaderboard_embed(self.rows, self.page), view=self,
-                                                        allowed_mentions=discord.AllowedMentions.none())
-            except Exception:
-                self.page = old
-                self.update_buttons()
-                raise
-
-    @discord.ui.button(label='Previous', style=discord.ButtonStyle.secondary)
-    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.change_page(interaction, -1)
-
-    @discord.ui.button(label='Next', style=discord.ButtonStyle.primary)
-    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.change_page(interaction, 1)
-
-    async def on_timeout(self):
-        async with self.lock:
-            for button in self.children:
-                button.disabled = True
-            if self.message:
-                try:
-                    await self.message.edit(view=self)
-                except discord.HTTPException:
-                    LOG.debug('Could not disable expired leaderboard buttons', exc_info=True)
-
-    async def on_error(self, interaction, error, item):
-        LOG.error('Leaderboard page failed', exc_info=(type(error), error, error.__traceback__))
-        message = 'That page could not be loaded. Try again or run **/leaderboard**.'
-        if interaction.response.is_done():
-            await interaction.followup.send(message, ephemeral=True)
-        else:
-            await interaction.response.send_message(message, ephemeral=True)
 
 
 class LeaderboardCommand:
     def __init__(self, bot):
         self.bot = bot
-        self.command = app_commands.Command(name='leaderboard', description='Browse OYB kills and deaths, 15 players per page', callback=self.show)
+        self.command = app_commands.Command(name='leaderboard', description='Find the permanent OYB leaderboard', callback=self.show)
         app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id, i.user.id))(self.command)
         self.command.error(self.error)
         bot.rank_command.tree.add_command(self.command, guild=bot.rank_command.guild)
@@ -145,22 +73,11 @@ class LeaderboardCommand:
         if interaction.guild_id != self.bot.config.guild_id:
             await interaction.response.send_message('Use /leaderboard in the OYB Discord server.', ephemeral=True)
             return
-        if not interaction.app_permissions.embed_links:
-            await interaction.response.send_message('The bot needs **Embed Links** permission in this channel.', ephemeral=True)
-            return
-        await interaction.response.defer(thinking=True)
-        rows = []
-        for member_id, kills, deaths, name in standings(self.bot.account_links.db, interaction.guild_id):
-            member = interaction.guild.get_member(member_id) if interaction.guild else None
-            rows.append((name or (member.display_name if member else f'Member {member_id}'), kills, deaths))
-        view = LeaderboardView(interaction.user.id, rows) if len(rows) > PAGE_SIZE else None
         try:
-            message = await interaction.followup.send(embed=leaderboard_embed(rows, 0),
-                                                     allowed_mentions=discord.AllowedMentions.none(), wait=True,
-                                                     **({'view': view} if view else {}))
+            saved = self.bot.store.leaderboard(interaction.guild_id)
+            target = f"<#{saved['channel']}>" if saved['channel'] else '**===OYB-LeaderBoard===** (being prepared)'
+            text = f'View the permanent leaderboard in {target}. Use its Previous/Next buttons to browse.'
         except Exception:
-            if view:
-                view.stop()
-            raise
-        if view:
-            view.message = message
+            LOG.exception('Could not read leaderboard channel state')
+            text = 'The leaderboard is temporarily unavailable; please try again shortly.'
+        await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())

@@ -19,10 +19,24 @@ class NotificationStore:
                 message INTEGER, expires REAL, done INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (server, session)
             );
+            CREATE TABLE IF NOT EXISTS leaderboard_display (
+                guild INTEGER PRIMARY KEY, channel INTEGER, message INTEGER,
+                page INTEGER NOT NULL DEFAULT 0, retry_at REAL NOT NULL DEFAULT 0
+            );
         """)
 
     def channel(self, server):
         return self.db.execute("SELECT * FROM channels WHERE server=?", (server,)).fetchone()
+
+    def leaderboard(self, guild):
+        row = self.db.execute('SELECT * FROM leaderboard_display WHERE guild=?', (guild,)).fetchone()
+        return dict(row) if row else dict(guild=guild, channel=None, message=None, page=0, retry_at=0)
+
+    def save_leaderboard(self, state):
+        with self.db:
+            self.db.execute('''INSERT INTO leaderboard_display VALUES (:guild,:channel,:message,:page,:retry_at)
+                ON CONFLICT(guild) DO UPDATE SET channel=excluded.channel,
+                message=excluded.message,page=excluded.page,retry_at=excluded.retry_at''', state)
 
     def save_channel(self, server, channel, info=None):
         with self.db:
