@@ -5,7 +5,7 @@ import os
 import time
 
 import discord
-from rank_sync import RANKS
+from rank_rules import RANKS
 
 LOG = logging.getLogger("reforger.ranks")
 
@@ -13,32 +13,25 @@ LOG = logging.getLogger("reforger.ranks")
 class RankAnnouncements:
     def __init__(self, bot):
         self.bot, self.db = bot, bot.account_links.db
-        # Seed existing progress only when this feature is first installed.
-        exists = self.db.execute("SELECT 1 FROM sqlite_master WHERE name='rank_announced'").fetchone()
         self.db.executescript('''
-            CREATE TABLE IF NOT EXISTS rank_announced (
+            CREATE TABLE IF NOT EXISTS rank_announced_v2 (
                 guild INTEGER, member INTEGER, tier INTEGER, PRIMARY KEY(guild,member));
-            CREATE TABLE IF NOT EXISTS rank_alerts (
+            CREATE TABLE IF NOT EXISTS rank_alerts_v2 (
                 guild INTEGER, member INTEGER, tier INTEGER, xp INTEGER,
                 queued REAL, channel INTEGER, message INTEGER,
                 PRIMARY KEY(guild,member,tier));
         ''')
-        if not exists:
-            with self.db:
-                self.db.execute('''INSERT INTO rank_announced
-                    SELECT guild,member,MIN(CAST(seconds / 60 AS INTEGER),?) FROM rank_progress''',
-                    (len(RANKS)-1,))
 
     def record(self, guild, member, tier, xp):
         """Called only after the desired role was successfully reconciled."""
         with self.db:
-            row = self.db.execute("SELECT tier FROM rank_announced WHERE guild=? AND member=?",
+            row = self.db.execute("SELECT tier FROM rank_announced_v2 WHERE guild=? AND member=?",
                                   (guild, member)).fetchone()
-            previous = row[0] if row else 0
+            previous = row[0] if row else tier
             if tier > previous:
-                self.db.execute("INSERT OR IGNORE INTO rank_alerts VALUES (?,?,?,?,?,NULL,NULL)",
+                self.db.execute("INSERT OR IGNORE INTO rank_alerts_v2 VALUES (?,?,?,?,?,NULL,NULL)",
                                 (guild, member, tier, xp, time.time()))
-            self.db.execute("INSERT OR REPLACE INTO rank_announced VALUES (?,?,?)",
+            self.db.execute("INSERT OR REPLACE INTO rank_announced_v2 VALUES (?,?,?)",
                             (guild, member, max(previous, tier)))
 
     def channel(self, guild, saved):
@@ -55,15 +48,15 @@ class RankAnnouncements:
         return channel
 
     async def flush(self, guild):
-        rows = self.db.execute("SELECT member,tier,xp,queued,channel FROM rank_alerts WHERE guild=? AND message IS NULL ORDER BY queued",
+        rows = self.db.execute("SELECT member,tier,xp,queued,channel FROM rank_alerts_v2 WHERE guild=? AND message IS NULL ORDER BY queued",
                                (guild.id,)).fetchall()
         for member, tier, xp, queued, saved in rows:
             try:
                 channel = self.channel(guild, saved)
                 with self.db:
-                    self.db.execute("UPDATE rank_alerts SET channel=? WHERE guild=? AND member=? AND tier=?",
+                    self.db.execute("UPDATE rank_alerts_v2 SET channel=? WHERE guild=? AND member=? AND tier=?",
                                     (channel.id, guild.id, member, tier))
-                marker = f"OYB • Promotion • {guild.id}:{member}:{tier}"
+                marker = f"OYB • Promotion v2 • {guild.id}:{member}:{tier}"
                 sent = None
                 # Recover a send accepted by Discord just before a crash/timeout.
                 async for message in channel.history(limit=None, after=datetime.fromtimestamp(queued-5, timezone.utc)):
@@ -72,13 +65,13 @@ class RankAnnouncements:
                         break
                 if sent is None:
                     embed = discord.Embed(title="🎉 OYB rank up!", colour=0x2ECC71,
-                        description=f"You've reached **{RANKS[tier]}**!\n**{xp} XP** earned playing on OYB. Keep it up!")
+                        description=f"You've reached **{RANKS[tier].role_name}**!\n**{xp} XP** earned playing on OYB. Keep it up!")
                     embed.set_footer(text=marker)
                     sent = await channel.send(content=f"🎉 Congratulations <@{member}>!", embed=embed,
                         allowed_mentions=discord.AllowedMentions(everyone=False, roles=False,
                             users=[discord.Object(id=member)], replied_user=False))
                 with self.db:
-                    self.db.execute("UPDATE rank_alerts SET message=? WHERE guild=? AND member=? AND tier=?",
+                    self.db.execute("UPDATE rank_alerts_v2 SET message=? WHERE guild=? AND member=? AND tier=?",
                                     (sent.id, guild.id, member, tier))
             except Exception:
                 LOG.exception("Promotion announcement pending; check #log permissions (View Channel, Send Messages, Embed Links, Read Message History)")

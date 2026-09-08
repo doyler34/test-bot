@@ -62,7 +62,7 @@ for attempt in $(seq 1 45); do
     if systemctl is-active --quiet "$SERVICE" && [ -n "$INVOCATION" ]; then
         JOURNAL="$(journalctl "_SYSTEMD_INVOCATION_ID=$INVOCATION" --no-pager -o cat)"
         if printf '%s' "$JOURNAL" | grep -q 'Ready: shared servers channel with three cards' &&
-           printf '%s' "$JOURNAL" | grep -q 'Test ranks ready:' &&
+           printf '%s' "$JOURNAL" | grep -q 'OYB ranks ready:' &&
            printf '%s' "$JOURNAL" | grep -q 'Playtime test tracker started'; then
             READY=true
             break

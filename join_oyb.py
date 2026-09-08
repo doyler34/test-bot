@@ -169,10 +169,10 @@ async def prepare_join_channel(bot, guild, overwrites):
         "**2.** Press **Link Reforger account** and enter your exact in-game name.\n"
         "**3.** An admin checks ownership and approves your link.\n\n"
         "Your request and link status are private. We store your Discord ID and game identity so name changes won't lose your tracked time. "
-        "After approval you start as **OYB Recruit** with **0 XP**. "
-        "**Test mode:** earn **10 XP per completed tracked minute** after linking; each rank is **10 XP** apart. "
+        "Ranks begin at **OYB Renegade**. Earn **1 XP per 10 tracked minutes** across OYB servers; partial time is saved. "
+        "Previously earned XP is retained. "
         "Roles update automatically, usually within 15 seconds of recorded time. "
-        "Use **My link status** to see your XP. Ranks give no gameplay perks."))
+        "Use **/rank** to see your card or **My link status** for your XP. Ranks give no gameplay perks."))
     embed.set_footer(text=MARKER)
     if info is None:
         info = await channel.send(embed=embed, view=JoinView(bot), silent=True,

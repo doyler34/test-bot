@@ -30,6 +30,10 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.source.execute("CREATE TABLE totals (server TEXT, identity TEXT, seconds REAL)")
         self.source.execute("INSERT INTO totals VALUES ('server-1',?,1200)", (IDENTITY,))
         self.source.commit()
+        self.source.execute('CREATE TABLE global_time(identity TEXT PRIMARY KEY, milliseconds INTEGER)')
+        self.source.execute('CREATE TABLE global_time_legacy(identity TEXT PRIMARY KEY, milliseconds INTEGER)')
+        self.source.execute('INSERT INTO global_time VALUES (?,0)', (IDENTITY,))
+        self.source.commit()
         self.env = patch.dict("os.environ", {"PLAYTIME_DB": str(self.root / "playtime.db")})
         self.env.start()
         self.member = SimpleNamespace(roles=[], add_roles=AsyncMock(), remove_roles=AsyncMock())
@@ -52,8 +56,9 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
     def advance(self, seconds):
         with self.source:
             self.source.execute("UPDATE totals SET seconds=seconds+?", (seconds,))
+            self.source.execute("UPDATE global_time SET milliseconds=milliseconds+?", (round(seconds*1000),))
 
-    async def test_pending_gets_nothing_approved_starts_recruit(self):
+    async def test_pending_gets_nothing_approved_starts_renegade(self):
         token = self.links.submit(1, 10, IDENTITY, "Player")
         await self.sync.tick()
         self.guild.fetch_member.assert_not_awaited()
@@ -67,22 +72,22 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.links.verified_link(1, 10, IDENTITY, "admin:22")
         await self.sync.tick()
         self.member.roles = [self.sync.roles[0], role(77, "Server One"), role(88, "Admin")]
-        self.advance(59)
+        self.advance(59999)
         await self.sync.tick()
         self.assertEqual(self.member.add_roles.await_count, 1)
         self.advance(1)
         await self.sync.tick()
-        self.member.add_roles.assert_awaited_with(self.sync.roles[1], reason="OYB rank: 10 XP", atomic=True)
+        self.member.add_roles.assert_awaited_with(self.sync.roles[1], reason="OYB rank: 100 XP", atomic=True)
         self.member.remove_roles.assert_awaited_once_with(self.sync.roles[0], reason="OYB rank promotion", atomic=True)
         self.member.roles = [self.sync.roles[1]]
-        self.advance(60)
+        self.advance(60000)
         await self.sync.tick()
-        self.assertIn("OYB Corporal", self.sync.status(10))
+        self.assertIn("OYB Private", self.sync.status(10))
 
     async def test_restart_offline_time_and_source_reset_do_not_reset_xp(self):
         self.links.verified_link(1, 10, IDENTITY, "admin:22")
         await self.sync.tick()
-        self.advance(120)
+        self.advance(12000)
         await self.sync.tick()
         self.links.close()
         self.links = AccountLinks(self.root / "links.db")
@@ -92,9 +97,10 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restarted.progress(10, IDENTITY), 20)
         with self.source:
             self.source.execute("UPDATE totals SET seconds=0")
+            self.source.execute("UPDATE global_time SET milliseconds=0")
         self.assertEqual(restarted.progress(10, IDENTITY), 20)
 
-    async def test_historical_import_and_missing_database_defer_baseline(self):
+    async def test_historical_import_waits_and_missing_database_keeps_balance(self):
         self.links.verified_link(1, 10, IDENTITY, "admin:22")
         self.tracker.caught_up = False
         await self.sync.tick()
@@ -102,9 +108,9 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.tracker.caught_up = True
         with patch.dict("os.environ", {"PLAYTIME_DB": str(self.root / "missing.db")}):
             self.assertEqual(self.sync.progress(10, IDENTITY), 0)
-        self.assertEqual(self.sync.progress(10, IDENTITY), 0)
-        self.advance(60)
-        self.assertEqual(self.sync.progress(10, IDENTITY), 10)
+        self.assertEqual(self.sync.progress(10, IDENTITY), 16)
+        self.advance(200)
+        self.assertEqual(self.sync.progress(10, IDENTITY), 17)
 
     async def test_failed_role_change_retries_without_duplicate_xp(self):
         self.links.verified_link(1, 10, IDENTITY, "admin:22")

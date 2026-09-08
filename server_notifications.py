@@ -18,6 +18,7 @@ from category_timer import CategoryTimers
 from account_links import AccountLinks
 from join_oyb import prepare_join_channel
 from rank_sync import RankSync
+from rank_command import RankCommand
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -90,8 +91,12 @@ class NotificationBot(TimerBot):
         self._jobs = []
         self._trackers = []
         self.rank_sync = RankSync(self)
+        self.rank_command = RankCommand(self)
         self._boot_lock = asyncio.Lock()
         self._booted = False
+
+    async def setup_hook(self):
+        self._jobs.append(asyncio.create_task(self.rank_command.register()))
 
     async def on_ready(self):
         if self.voice_channel_id:

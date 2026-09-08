@@ -53,8 +53,8 @@ Preserve `data/notifications.sqlite3`, `data/playtime.sqlite3` and
 `data/account_links.sqlite3` (or your configured equivalents) across updates.
 Setup backs up replaced config, but never clears or replaces these databases.
 
-Ranks retain their current testing pace: 10 XP per recorded minute, one rank per
-10 XP. See [RANKS.md](RANKS.md). Promotions mention the member in the existing
+Use `/rank` for an original OYB card. Earn 1 XP per 10 connected minutes, combined
+across servers; existing XP is retained. See [RANKS.md](RANKS.md). Promotions mention the member in the existing
 `#log` text channel. Optional `RANK_LOG_CHANNEL_ID` selects a specific log channel.
 
 ## Match monitoring

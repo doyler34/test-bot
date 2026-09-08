@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from datetime import datetime, timezone
+from rank_persistence import migrate_time, record_interval
 
 LOG = logging.getLogger("reforger.playtime")
 STAMP = re.compile(r"^(\d{2}):(\d{2}):(\d{2})\.(\d{3})")
@@ -35,6 +37,7 @@ class Tracker:
                 server TEXT, path TEXT, position INTEGER, state TEXT, anchor TEXT,
                 PRIMARY KEY(server, path));
         ''')
+        migrate_time(self.db)
 
     def close(self):
         self.db.close()
@@ -67,6 +70,13 @@ class Tracker:
                 (self.server, str(path))).fetchone()
             position, state, anchor = (row[0], json.loads(row[1]), row[2]) if row else (
                 0, {"clock": None, "day": 0, "last": None, "active": {}}, "")
+            date = re.search(r"logs_(\d{4}-\d{2}-\d{2})", str(path.parent.name))
+            if "epoch" not in state:
+                # Persist the anchor for bare console.log paths, including restarts.
+                day = (datetime.strptime(date[1], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                       if date else datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0))
+                state["epoch"] = day.timestamp()
+            self._epoch = state["epoch"]
             with path.open("rb") as stream:
                 stream.seek(0, 2)
                 size = stream.tell()
@@ -98,6 +108,8 @@ class Tracker:
             return
         h, m, s, ms = map(int, match.groups())
         clock = h * 3600 + m * 60 + s + ms / 1000
+        if state["clock"] is not None and 0 < state["clock"] - clock <= 43200:
+            return  # Late/duplicated lifecycle messages must not reopen old sessions.
         if state["clock"] is not None and state["clock"] - clock > 43200:
             state["day"] += 86400
         state["clock"] = clock
@@ -119,6 +131,8 @@ class Tracker:
             for identity in set(active.values()):
                 self.db.execute("UPDATE totals SET seconds=seconds+? WHERE server=? AND identity=?",
                                 (delta, self.server, identity))
+                if self._epoch is not None:
+                    record_interval(self.db, identity, self._epoch + last, self._epoch + now)
         elif delta > self.max_gap:
             LOG.warning("Skipping %.0fs gap without player evidence", delta)
             active.clear()
