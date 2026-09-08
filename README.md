@@ -69,6 +69,13 @@ Match alerts mention the opt-in server notification role and expire 30 minutes
 after match start. Historical expired matches do not generate fresh alerts.
 Scenarios must emit the expected game-state/player lines for accurate tracking.
 
+## Combat statistics
+
+Use `/stats` or `/stats user:@Member` for linked players' recorded combat stats.
+Vanilla kill logs supply player kills, deaths and teamkills; AI kills are explicitly
+unavailable because this logger skips AI victims. See [STATS.md](STATS.md) for source
+coverage, migration, duplicate prevention and live verification requirements.
+
 ## Tests
 
 ```bash

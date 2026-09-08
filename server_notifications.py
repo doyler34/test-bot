@@ -19,6 +19,9 @@ from account_links import AccountLinks
 from join_oyb import prepare_join_channel
 from rank_sync import RankSync
 from rank_command import RankCommand
+from combat_store import migrate as migrate_combat
+from combat_ingestor import CombatIngestor
+from stats_command import StatsCommand
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -92,6 +95,9 @@ class NotificationBot(TimerBot):
         self._trackers = []
         self.rank_sync = RankSync(self)
         self.rank_command = RankCommand(self)
+        migrate_combat(self.account_links.db)
+        self.stats_command = StatsCommand(self)
+        self.combat_ingestor = CombatIngestor(self)
         self._boot_lock = asyncio.Lock()
         self._booted = False
 
@@ -163,6 +169,7 @@ class NotificationBot(TimerBot):
             self._jobs.append(asyncio.create_task(self.delivery_loop()))
             self._jobs.append(asyncio.create_task(self.category_timers.run()))
             self._jobs.append(asyncio.create_task(self.rank_sync.run()))
+            self._jobs.append(asyncio.create_task(self.combat_ingestor.run()))
             logger.info("Ready: shared servers channel with three cards; %s active game monitors",
                         len(self.monitors))
 
