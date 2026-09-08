@@ -22,6 +22,7 @@ from rank_command import RankCommand
 from combat_store import migrate as migrate_combat
 from combat_ingestor import CombatIngestor
 from stats_command import StatsCommand
+from leaderboard_command import LeaderboardCommand
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -97,6 +98,7 @@ class NotificationBot(TimerBot):
         self.rank_command = RankCommand(self)
         migrate_combat(self.account_links.db)
         self.stats_command = StatsCommand(self)
+        self.leaderboard_command = LeaderboardCommand(self)
         self.combat_ingestor = CombatIngestor(self)
         self._boot_lock = asyncio.Lock()
         self._booted = False

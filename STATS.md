@@ -5,6 +5,21 @@
 workflow and stable UUID are reused; display names and temporary playerID values
 are never database keys. No new player database or gameplay mod is introduced.
 
+## Leaderboard
+
+`/leaderboard` displays position, name, player kills and deaths in a compact table.
+Pages contain 15 players (1–15, 16–30, etc.), ordered by kills descending, then
+deaths ascending, then Discord ID for stable ties. It combines available combat
+totals across servers for approved members of this guild with recorded data.
+Names use the approved Reforger linking request, falling back to a cached Discord
+display name or member ID. The list is a snapshot; rerun the command for fresh totals.
+
+Previous/Next buttons appear for multiple pages and are usable by the person who
+opened that leaderboard. Others can run their own command. Buttons expire after
+five minutes of inactivity; rerun the command after expiry or a bot restart.
+No new database tables or XP changes are needed. Player kills exclude teamkills
+and AI victims, matching /stats. No-data accounts are not assigned invented zeros.
+
 ## Confirmed source and limits
 
 The supplied VPS output contains timestamped vanilla kill records in:
