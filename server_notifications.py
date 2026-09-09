@@ -24,6 +24,7 @@ from combat_ingestor import CombatIngestor
 from stats_command import StatsCommand
 from leaderboard_command import LeaderboardCommand
 from leaderboard_display import LeaderboardDisplay
+from message_xp import award_message
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -108,6 +109,9 @@ class NotificationBot(TimerBot):
     async def setup_hook(self):
         self.leaderboard_display.register()
         self._jobs.append(asyncio.create_task(self.rank_command.register()))
+
+    async def on_message(self, message):
+        await award_message(self, message)
 
     async def on_ready(self):
         if self.voice_channel_id:

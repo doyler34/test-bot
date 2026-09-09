@@ -23,7 +23,12 @@ but XP continues to accumulate. Progress is through the current rank: 347 XP
 is Corporal, 47% toward Sergeant, with 53 XP remaining. Major has a full bar
 and MAX RANK, without a next rank or remaining XP.
 
-One XP is earned per 600 connected seconds. Integer milliseconds retain partial
+Total XP combines retained legacy credit, playtime XP, and **1 XP per new Discord
+post** from an approved linked member. Posting rules and durable message-ID
+deduplication are described in [POST_XP.md](POST_XP.md). Existing rank thresholds
+remain unchanged; `XP_PER_POST` controls future post awards.
+
+One playtime XP is earned per 600 connected seconds. Integer milliseconds retain partial
 time across disconnects and restarts. All enabled servers share one balance.
 Confirmed connection intervals are merged by IdentityId, so simultaneous
 connections on two servers count once. Disabled servers contribute nothing new.

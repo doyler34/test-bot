@@ -169,7 +169,8 @@ async def prepare_join_channel(bot, guild, overwrites):
         "**2.** Press **Link Reforger account** and enter your exact in-game name.\n"
         "**3.** An admin checks ownership and approves your link.\n\n"
         "Your request and link status are private. We store your Discord ID and game identity so name changes won't lose your tracked time. "
-        "Ranks begin at **OYB Renegade**. Earn **1 XP per 10 tracked minutes** across OYB servers; partial time is saved. "
+        "Ranks begin at **OYB Renegade**. Earn **1 XP per 10 tracked minutes** across OYB servers "
+        "plus **1 XP per new Discord post** after your link is approved. Partial playtime is saved. "
         "Previously earned XP is retained. "
         "Roles update automatically, usually within 15 seconds of recorded time. "
         "Use **/rank** to see your card or **My link status** for your XP. Ranks give no gameplay perks."))

@@ -49,7 +49,7 @@ class RankSync:
                                 (guild.id, tier, role.id))
             prepared.append(role)
         self.roles = prepared
-        LOG.info("OYB ranks ready: Renegade to Major; 1 XP per 600 connected seconds")
+        LOG.info("OYB ranks ready: Renegade to Major; playtime XP plus Discord post XP")
 
     def progress(self, member, identity):
         ready = bool(self.bot._trackers) and all(t.initialized and t.caught_up for t in self.bot._trackers)

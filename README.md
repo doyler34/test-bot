@@ -54,7 +54,8 @@ Preserve `data/notifications.sqlite3`, `data/playtime.sqlite3` and
 Setup backs up replaced config, but never clears or replaces these databases.
 
 Use `/rank` for an original OYB card. Earn 1 XP per 10 connected minutes, combined
-across servers; existing XP is retained. See [RANKS.md](RANKS.md). Promotions mention the member in the existing
+across servers, plus 1 XP per new Discord post after account-link approval.
+Existing XP is retained. See [RANKS.md](RANKS.md) and [POST_XP.md](POST_XP.md). Promotions mention the member in the existing
 `#log` text channel. Optional `RANK_LOG_CHANNEL_ID` selects a specific log channel.
 
 ## Match monitoring

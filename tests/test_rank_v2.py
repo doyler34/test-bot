@@ -65,7 +65,7 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual(wallet.read(1,2,'player',self.root/'time.db',True),21)
         self.assertEqual(wallet.read(1,2,'player',self.root/'missing.db',True),21)
         self.assertEqual(self.db.execute('SELECT seconds FROM rank_progress').fetchone()[0],179)
-        self.assertEqual(len(list(self.root.glob('*.before-*.sqlite3'))),2)
+        self.assertEqual(len(list(self.root.glob('*.before-*.sqlite3'))),3)
         with closing(sqlite3.connect(self.root/'links.db.before-rank-v2.sqlite3')) as old:
             self.assertEqual(old.execute('SELECT seconds FROM rank_progress').fetchone()[0],179)
 

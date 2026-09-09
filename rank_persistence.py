@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 import sqlite3
 import time
-from rank_rules import xp_from_seconds
+from rank_rules import xp_from_seconds, XP_PER_POST
 
 
 def backup_before(db, version):
@@ -54,6 +54,7 @@ def record_interval(db, identity, start, end):
 class XPStore:
     def __init__(self, db):
         self.db = db
+        self._migrate_posts()
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='rank_wallet_v2'").fetchone():
             return
         backup_before(db, "rank-v2")
@@ -86,8 +87,48 @@ class XPStore:
                 pass  # Keep the last durable balance when tracking is unavailable.
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO rank_wallet_v2 VALUES (?,?,?,?,?,?)", (guild, member, identity, credit, baseline, earned))
-        return credit + xp_from_seconds(earned / 1000)
+        return credit + xp_from_seconds(earned / 1000) + self.post_xp(guild, member)
 
     def cached(self, guild, member):
         row = self.db.execute("SELECT credit,milliseconds FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
-        return row[0] + xp_from_seconds(row[1]/1000) if row else 0
+        return (row[0] + xp_from_seconds(row[1]/1000) if row else 0) + self.post_xp(guild, member)
+
+    def _migrate_posts(self):
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='discord_post_events'").fetchone():
+            return
+        backup_before(self.db, 'discord-post-xp-v1')
+        with self.db:
+            self.db.execute('BEGIN IMMEDIATE')
+            self.db.execute('''CREATE TABLE discord_post_events (
+                message INTEGER PRIMARY KEY, guild INTEGER NOT NULL, member INTEGER NOT NULL,
+                identity TEXT NOT NULL, xp INTEGER NOT NULL, created REAL NOT NULL)''')
+            self.db.execute('''CREATE TABLE discord_post_totals (
+                guild INTEGER, member INTEGER, identity TEXT NOT NULL, xp INTEGER NOT NULL,
+                PRIMARY KEY(guild,member))''')
+
+    def post_xp(self, guild, member):
+        row = self.db.execute('SELECT xp FROM discord_post_totals WHERE guild=? AND member=?',
+                              (guild,member)).fetchone()
+        return row[0] if row else 0
+
+    def award_post(self, guild, member, message, created):
+        """Credit a newly observed post once, in the existing account-links DB."""
+        with self.db:
+            self.db.execute('BEGIN IMMEDIATE')
+            link = self.db.execute('SELECT identity,linked_at FROM account_links WHERE guild=? AND discord_id=?',
+                                   (guild,member)).fetchone()
+            if not link or created < link[1]:
+                return 0
+            identity = link[0]
+            previous = self.db.execute('SELECT identity FROM discord_post_totals WHERE guild=? AND member=?',
+                                       (guild,member)).fetchone()
+            if previous and previous[0] != identity:
+                raise ValueError('Linked identity changed; admin review required')
+            inserted = self.db.execute('INSERT OR IGNORE INTO discord_post_events VALUES (?,?,?,?,?,?)',
+                                        (message,guild,member,identity,XP_PER_POST,created))
+            if not inserted.rowcount:
+                return 0
+            self.db.execute('''INSERT INTO discord_post_totals VALUES (?,?,?,?)
+                ON CONFLICT(guild,member) DO UPDATE SET xp=xp+excluded.xp''',
+                (guild,member,identity,XP_PER_POST))
+        return XP_PER_POST

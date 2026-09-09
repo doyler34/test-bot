@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 
 SECONDS_PER_XP = 600
+XP_PER_POST = 1
 
 
 @dataclass(frozen=True)

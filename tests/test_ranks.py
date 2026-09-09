@@ -84,6 +84,18 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         await self.sync.tick()
         self.assertIn("OYB Private", self.sync.status(10))
 
+    async def test_post_plus_playtime_promotes_existing_role_and_announces(self):
+        import time
+        self.links.verified_link(1,10,IDENTITY,'admin:22')
+        self.advance(59400)  # 99 playtime XP.
+        await self.sync.tick()
+        self.member.roles=[self.sync.roles[0]]
+        self.sync.wallet.award_post(1,10,123,time.time()+1)
+        await self.sync.tick()
+        self.member.add_roles.assert_awaited_with(self.sync.roles[1],reason='OYB rank: 100 XP',atomic=True)
+        self.assertIn('100 XP',self.sync.status(10))
+        self.assertEqual(self.links.db.execute('SELECT xp FROM rank_alerts_v2').fetchone()[0],100)
+
     async def test_restart_offline_time_and_source_reset_do_not_reset_xp(self):
         self.links.verified_link(1, 10, IDENTITY, "admin:22")
         await self.sync.tick()
