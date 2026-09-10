@@ -37,6 +37,12 @@ TRUTHY = ("1", "true", "yes", "on")
 LABELS = {"server-1": "Classic", "server-2": "3x Everon", "server-3": "Arland"}
 
 
+def label_for(server):
+    """Friendly server label shared by the stat tiles and the #servers card."""
+    return os.getenv(f"STAT_LABEL_{server.id.replace('-', '_').upper()}", "").strip() \
+        or LABELS.get(server.id, server.name)
+
+
 def stat_overwrites(guild):
     # Visible to everyone, joinable by no one: a display-only counter.
     return {
@@ -125,8 +131,7 @@ class ServerStats:
         return counts
 
     def _label(self, server):
-        return os.getenv(f"STAT_LABEL_{server.id.replace('-', '_').upper()}", "").strip() \
-            or LABELS.get(server.id, server.name)
+        return label_for(server)
 
     def _server_status(self, server):
         # The live match counter that used to live on the old server categories,

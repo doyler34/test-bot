@@ -33,6 +33,34 @@ async def prepare_role(bot, guild, server):
     return role
 
 
+async def toggle_notification(bot, interaction, server_id):
+    if interaction.guild_id != bot.config.guild_id:
+        await interaction.response.send_message("Use this button in the OYB server.", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    # Serialize clicks and read fresh member roles so repeated clicks toggle
+    # predictably without needing the privileged members gateway intent.
+    async with bot.notification_role_lock:
+        guild = interaction.guild
+        role = bot.roles_by_server.get(server_id)
+        role = guild.get_role(role.id) if role is not None else None
+        if not safe_role(role, guild):
+            await interaction.followup.send("An admin needs to put the bot role above the notification role and check its permissions.", ephemeral=True)
+            return
+        try:
+            member = await guild.fetch_member(interaction.user.id)
+            subscribed = any(r.id == role.id for r in member.roles)
+            if subscribed:
+                await member.remove_roles(role, reason="Member opted out of match alerts")
+            else:
+                await member.add_roles(role, reason="Member opted in to match alerts")
+            state = "off" if subscribed else "on"
+            await interaction.followup.send(f"Match notifications for {role.name}: **{state}**.",
+                                            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        except discord.HTTPException:
+            await interaction.followup.send("Could not update your notification role. Please try again; an admin may need to check Manage Roles and the bot's role position.", ephemeral=True)
+
+
 class NotificationView(discord.ui.View):
     def __init__(self, bot, server_id):
         super().__init__(timeout=None)
@@ -44,28 +72,25 @@ class NotificationView(discord.ui.View):
         self.add_item(button)
 
     async def toggle(self, interaction):
-        if interaction.guild_id != self.bot.config.guild_id:
-            await interaction.response.send_message("Use this button in the OYB server.", ephemeral=True)
-            return
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        # Serialize clicks and read fresh member roles so repeated clicks toggle
-        # predictably without needing the privileged members gateway intent.
-        async with self.bot.notification_role_lock:
-            guild = interaction.guild
-            role = self.bot.roles_by_server.get(self.server_id)
-            role = guild.get_role(role.id) if role is not None else None
-            if not safe_role(role, guild):
-                await interaction.followup.send("An admin needs to put the bot role above the notification role and check its permissions.", ephemeral=True)
-                return
-            try:
-                member = await guild.fetch_member(interaction.user.id)
-                subscribed = any(r.id == role.id for r in member.roles)
-                if subscribed:
-                    await member.remove_roles(role, reason="Member opted out of match alerts")
-                else:
-                    await member.add_roles(role, reason="Member opted in to match alerts")
-                state = "off" if subscribed else "on"
-                await interaction.followup.send(f"Match notifications for {role.name}: **{state}**.",
-                                                ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
-            except discord.HTTPException:
-                await interaction.followup.send("Could not update your notification role. Please try again; an admin may need to check Manage Roles and the bot's role position.", ephemeral=True)
+        await toggle_notification(self.bot, interaction, self.server_id)
+
+
+class ServersNotificationView(discord.ui.View):
+    """One combined card: a match-notification toggle button per enabled server."""
+    def __init__(self, bot):
+        super().__init__(timeout=None)
+        self.bot = bot
+        from server_stats import label_for
+        for server in bot.config.servers:
+            if not server.enabled:
+                continue
+            button = discord.ui.Button(
+                label=f"🔔 {label_for(server)}"[:80], style=discord.ButtonStyle.primary,
+                custom_id=f"oyb:match-notifications:{server.id}")
+            button.callback = self._toggle(server.id)
+            self.add_item(button)
+
+    def _toggle(self, server_id):
+        async def handler(interaction):
+            await toggle_notification(self.bot, interaction, server_id)
+        return handler

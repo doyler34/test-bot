@@ -11,7 +11,8 @@ from pathlib import Path
 import discord
 
 from notification_store import NotificationStore
-from notification_roles import NotificationView, prepare_role
+from notification_roles import NotificationView, ServersNotificationView, prepare_role
+from server_stats import label_for
 from reforger_monitor import ReforgerMonitor
 from timer_bot import TimerBot
 from category_timer import CategoryTimers
@@ -31,31 +32,34 @@ from server_stats import ServerStats
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
 SERVERS_MARKER = "OYB • Servers • Settings, rules and match notifications"
+SERVERS_CARD_MARKER = "OYB • Servers overview"
+ANNOUNCE_MARKER = "OYB • Match announcements"
 
 
-def information_embeds(server, started=None):
-    about = discord.Embed(
-        title=server.name,
-        description="Server information" if server.enabled else "Coming soon — not active yet.",
-        colour=0x2ECC71 if server.enabled else 0x95A5A6,
-    )
-    about.add_field(name="Settings", value=server.settings, inline=False)
-    if server.enabled:
-        match = (f"🟢 **Match live**\nStarted <t:{int(started)}:t> · <t:{int(started)}:R>"
-                 if started is not None else "No live match currently detected.")
-        about.add_field(name="Current match", value=match, inline=False)
-    about.add_field(
-        name="Match notifications",
-        value="Press **Toggle match notifications** below to get or remove this server's notification role. "
-              "We mention that role when a match starts. "
-              "This channel is read-only. Announcements expire 30 minutes after match start. "
-              "Your Discord and device notification settings still apply.",
-        inline=False,
-    )
-    rules = discord.Embed(title="🎮 OYB · In-game rules", description=server.rules,
-                          colour=0x5865F2)
-    rules.set_footer(text=f"OYB • {server.id.replace('-', ' ').title()} • In-game rules")
-    return [about, rules]
+def server_status_line(bot, server):
+    if not server.enabled:
+        return "⚫ Coming soon — not active yet."
+    match = getattr(bot, "match_times", {}).get(server.id)
+    if match is not None:
+        return f"🟢 **Match live** — started <t:{int(match[0])}:t> · <t:{int(match[0])}:R>"
+    monitor = next((m for sid, m in getattr(bot, "monitors", []) if sid == server.id), None)
+    if monitor is not None and getattr(monitor, "online", False):
+        return "🟡 Online — waiting for a match to start."
+    return "🔴 Offline — server is not running."
+
+
+def servers_embed(bot):
+    """One combined card: every server's live status, settings and notify buttons."""
+    embed = discord.Embed(
+        title="🎮 OYB Servers",
+        description="Live status for all OYB servers. Use the buttons below to get pinged "
+                    "when a server's match starts. This channel is read-only.",
+        colour=0x2ECC71)
+    for server in bot.config.servers:
+        value = f"{server_status_line(bot, server)}\n**Settings:** {server.settings}"
+        embed.add_field(name=label_for(server), value=value[:1024], inline=False)
+    embed.set_footer(text=SERVERS_CARD_MARKER)
+    return embed
 
 
 def readonly_overwrites(guild):
@@ -89,6 +93,8 @@ class NotificationBot(TimerBot):
         self.account_links = AccountLinks(os.getenv("ACCOUNT_LINKS_DB", str(Path(config.state_path).with_name("account_links.sqlite3"))))
         self.channels_by_server = {}
         self._server_channel = None
+        self._servers_card_id = None
+        self.announce_channel = None
         self.roles_by_server = {}
         # Wall clock for Discord timestamps; monotonic time for precise elapsed.
         self.match_times = {}
@@ -115,6 +121,7 @@ class NotificationBot(TimerBot):
         from link_review import AlertsControlView, ReviewButtons
         self.add_view(AlertsControlView(self))
         self.add_view(ReviewButtons(self))
+        self.add_view(ServersNotificationView(self))
         self._jobs.append(asyncio.create_task(self.rank_command.register()))
 
     async def on_message(self, message):
@@ -133,8 +140,8 @@ class NotificationBot(TimerBot):
                 await self.close()
                 return
             try:
-                for server in self.config.servers:
-                    await self.prepare_channel(guild, server)
+                await self.prepare_servers(guild)
+                await self.prepare_announcement_channel(guild)
                 await prepare_join_channel(self, guild, readonly_overwrites(guild))
                 try:
                     from link_review import prepare_review_channel
@@ -163,22 +170,24 @@ class NotificationBot(TimerBot):
                     age = max(0.0, elapsed)
                     self.match_times[server.id] = (time.time() - age, time.monotonic() - age)
                     self._dirty_cards.add(server.id)
-                    await self.refresh_information(server)
+                    await self.refresh_servers()
                     monitor = next(m for sid, m in self.monitors if sid == server.id)
                     # Recovered old matches must not trigger a fresh notification.
                     if elapsed >= ANNOUNCEMENT_TTL:
                         return
                     now = time.time()
+                    channel = self.announce_channel or self.channels_by_server.get(server.id)
+                    if channel is None:
+                        return
                     self.store.enqueue(
-                        server.id, monitor.session_key,
-                        self.channels_by_server[server.id].id,
+                        server.id, monitor.session_key, channel.id,
                         server.name, now - elapsed, now,
                     )
 
                 async def ended(server=server):
                     self.match_times.pop(server.id, None)
                     self._dirty_cards.add(server.id)
-                    await self.refresh_information(server)
+                    await self.refresh_servers()
 
                 monitor = ReforgerMonitor(
                     log_dir=server.log_dir, on_session_start=started,
@@ -200,70 +209,85 @@ class NotificationBot(TimerBot):
             self._jobs.append(asyncio.create_task(self.leaderboard_display.run()))
             self._jobs.append(asyncio.create_task(self.server_stats.run()))
             self._jobs.append(asyncio.create_task(self.maintenance.run()))
-            logger.info("Ready: shared servers channel with three cards; %s active game monitors",
+            logger.info("Ready: one combined servers card + announcements channel; %s active game monitors",
                         len(self.monitors))
 
-    async def prepare_channel(self, guild, server):
-        await prepare_role(self, guild, server)
-        # The old per-server timer categories are replaced by the SERVER STATS
-        # channels; the live match counter now lives there instead.
-        category = None
-        marker = f"OYB • {server.id} • Settings, rules and match notifications"
-        record = self.store.channel(server.id)
-        saved = guild.get_channel(record["channel"]) if record else None
-        if saved is not None and (
-            not isinstance(saved, discord.TextChannel) or saved.topic not in (marker, SERVERS_MARKER)
-        ):
-            raise RuntimeError(f"Saved channel for {server.id} is no longer bot-managed.")
-        channel = self._server_channel
+    async def _servers_channel(self, guild):
+        matches = [c for c in guild.text_channels if c.topic == SERVERS_MARKER]
+        if len(matches) > 1:
+            raise RuntimeError("Multiple managed #servers channels; resolve duplicates.")
+        channel = matches[0] if matches else None
         if channel is None:
-            matches = [c for c in guild.text_channels if c.topic == SERVERS_MARKER]
-            if len(matches) > 1:
-                raise RuntimeError("Multiple managed #servers channels; resolve duplicates.")
-            channel = matches[0] if matches else (saved if saved and saved.topic == SERVERS_MARKER else None)
+            record = self.store.channel("servers")
+            saved = guild.get_channel(record["channel"]) if record else None
+            if isinstance(saved, discord.TextChannel) and saved.topic == SERVERS_MARKER:
+                channel = saved
         overwrites = readonly_overwrites(guild)
         if channel is None:
             channel = await guild.create_text_channel(
                 "servers", topic=SERVERS_MARKER, overwrites=overwrites,
-                reason="OYB read-only server information and match notifications",
-            )
-        elif self._server_channel is None:
-            await channel.edit(name="servers", overwrites=overwrites,
-                               category=None, sync_permissions=False,
-                               reason="Restore read-only server channel permissions")
+                reason="OYB read-only server information and match notifications")
+        else:
+            await channel.edit(name="servers", overwrites=overwrites, category=None,
+                               sync_permissions=False, reason="Restore read-only server channel permissions")
+        return channel
+
+    async def prepare_servers(self, guild):
+        """One combined #servers card with every server's live status and notify buttons."""
+        for server in self.config.servers:
+            await prepare_role(self, guild, server)
+        channel = await self._servers_channel(guild)
         self._server_channel = channel
-        self.channels_by_server[server.id] = channel
-        if self.voice_channel_id and category is not None and server.id == self.config.voice_server_id:
-            voice = guild.get_channel(self.voice_channel_id)
-            if isinstance(voice, discord.VoiceChannel) and voice.category_id != category.id:
-                await voice.edit(category=category, sync_permissions=False,
-                                 reason="Group existing server voice channel under its category")
-        info_id = record["info"] if record and record["channel"] == channel.id else None
-        self.store.save_channel(server.id, channel.id, info_id)
-        info = None
-        info_marker = f"OYB • {server.id.replace('-', ' ').title()} • In-game rules"
-        if info_id:
+        for server in self.config.servers:
+            self.channels_by_server[server.id] = channel
+        record = self.store.channel("servers")
+        card = None
+        if record and record["channel"] == channel.id and record["info"]:
             try:
-                candidate = await channel.fetch_message(info_id)
-                if owns_message(candidate, self.user.id, info_marker):
-                    info = candidate
+                candidate = await channel.fetch_message(record["info"])
+                if owns_message(candidate, self.user.id, SERVERS_CARD_MARKER):
+                    card = candidate
             except discord.NotFound:
                 pass
-        if info is None:
-            async for candidate in channel.history(limit=None):
-                if owns_message(candidate, self.user.id, info_marker):
-                    info = candidate
+        if card is None:
+            async for candidate in channel.history(limit=50):
+                if owns_message(candidate, self.user.id, SERVERS_CARD_MARKER):
+                    card = candidate
                     break
-        match = self.match_times.get(server.id)
-        embeds = information_embeds(server, match[0] if match else None)
-        view = NotificationView(self, server.id)
-        if info is None:
-            info = await channel.send(embeds=embeds, silent=True,
-                                      view=view,
+        embed = servers_embed(self)
+        view = ServersNotificationView(self)
+        if card is None:
+            card = await channel.send(embed=embed, view=view, silent=True,
                                       allowed_mentions=discord.AllowedMentions.none())
         else:
-            await info.edit(embeds=embeds, view=view, allowed_mentions=discord.AllowedMentions.none())
-        self.store.save_channel(server.id, channel.id, info.id)
+            await card.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+        self._servers_card_id = card.id
+        self.store.save_channel("servers", channel.id, card.id)
+        # Remove the retired per-server cards (each carried an 'In-game rules' embed).
+        async for old in channel.history(limit=50):
+            if old.id != card.id and old.author.id == self.user.id and any(
+                    e.footer and e.footer.text and "In-game rules" in e.footer.text for e in old.embeds):
+                try:
+                    await old.delete()
+                except discord.NotFound:
+                    pass
+
+    async def prepare_announcement_channel(self, guild):
+        """Reuse an existing announcements channel, else create a read-only one."""
+        record = self.store.channel("__announce__")
+        channel = guild.get_channel(record["channel"]) if record else None
+        if not isinstance(channel, discord.TextChannel):
+            channel = None
+        if channel is None:
+            existing = [c for c in guild.text_channels if "announcement" in c.name.casefold()]
+            channel = existing[0] if existing else None
+        if channel is None:
+            channel = await guild.create_text_channel(
+                "announcements", topic=ANNOUNCE_MARKER, overwrites=readonly_overwrites(guild),
+                reason="OYB match-start announcements")
+        self.announce_channel = channel
+        self.store.save_channel("__announce__", channel.id)
+        return channel
 
     async def _refresh_status(self):
         pass  # Match time is displayed in the category and information card.
@@ -273,26 +297,22 @@ class NotificationBot(TimerBot):
         # Discord renders relative times in the permanent information card.
         pass
 
-    async def refresh_information(self, server):
-        record = self.store.channel(server.id)
-        if not record or not record["info"]:
+    async def refresh_servers(self):
+        record = self.store.channel("servers")
+        if not record or not record["info"] or self._server_channel is None:
             return
         try:
-            channel = self.channels_by_server[server.id]
-            message = channel.get_partial_message(record["info"])
-            match = self.match_times.get(server.id)
-            await message.edit(embeds=information_embeds(server, match[0] if match else None),
-                               allowed_mentions=discord.AllowedMentions.none())
-            self._dirty_cards.discard(server.id)
+            message = self._server_channel.get_partial_message(record["info"])
+            await message.edit(embed=servers_embed(self), allowed_mentions=discord.AllowedMentions.none())
+            self._dirty_cards.clear()
         except discord.HTTPException:
-            logger.exception("Could not refresh match information for %s; retry pending", server.id)
+            logger.exception("Could not refresh the servers card; retry pending")
 
     async def delivery_loop(self):
         cleaned = 0
         while not self.is_closed():
-            for server in self.config.servers:
-                if server.id in self._dirty_cards:
-                    await self.refresh_information(server)
+            if self._dirty_cards:
+                await self.refresh_servers()
             for row in self.store.pending():
                 try:
                     await self.deliver_or_delete(row)

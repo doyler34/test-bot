@@ -12,7 +12,8 @@ import discord
 
 from config import ConfigError
 from notification_config import NotificationConfig, Server, read_servers
-from server_notifications import NotificationBot, information_embeds, readonly_overwrites
+from server_notifications import (NotificationBot, readonly_overwrites, servers_embed,
+                                  SERVERS_CARD_MARKER, ANNOUNCE_MARKER)
 
 
 async def history(messages):
@@ -37,7 +38,9 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(servers[0].log_dir, "/real/logs")
         self.assertIn("400", servers[0].rules)
         self.assertIn("6 supply", servers[0].rules)
-        self.assertLess(sum(len(e) for e in information_embeds(servers[0])), 6000)
+        # The combined card fits Discord's 6000-char embed budget for all three.
+        bot = SimpleNamespace(config=SimpleNamespace(servers=servers), match_times={}, monitors=[])
+        self.assertLess(len(servers_embed(bot)), 6000)
 
     def test_rejects_duplicate_ids_and_missing_active_paths(self):
         data = json.loads((Path(__file__).parents[1] / "servers.example.json").read_text(encoding="utf-8"))
@@ -82,6 +85,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.channel.edit = AsyncMock()
         self.channel.fetch_message = AsyncMock()
         self.bot.get_channel = Mock(return_value=self.channel)
+        self.bot.announce_channel = self.channel  # match alerts go here
         self.guild = Mock()
         self.guild.default_role = Mock()
         self.guild.me = Mock()
@@ -100,69 +104,69 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot.store.enqueue("server-1", "session-1", 50, "Server 1", 970, 1000)
         return self.bot.store.pending()[0]
 
-    async def test_create_readonly_channel_and_keep_information_on_restart(self):
-        await self.bot.prepare_channel(self.guild, self.server)
+    async def test_creates_one_readonly_card_and_reuses_it_on_restart(self):
+        await self.bot.prepare_servers(self.guild)
         self.guild.create_text_channel.assert_awaited_once()
         kwargs = self.guild.create_text_channel.await_args.kwargs
         everyone = kwargs["overwrites"][self.guild.default_role]
         self.assertFalse(everyone.send_messages)
         self.assertFalse(everyone.create_public_threads)
-        self.assertFalse(everyone.create_private_threads)
-        self.assertFalse(everyone.send_messages_in_threads)
         self.assertTrue(everyone.view_channel)
         self.assertTrue(kwargs["overwrites"][self.guild.me].send_messages)
         self.assertTrue(self.channel.send.await_args.kwargs["silent"])
-        info = message(100, information_embeds(self.server))
-        self.channel.fetch_message.return_value = info
-        await self.bot.prepare_channel(self.guild, self.server)
+        self.assertEqual(self.bot.store.channel("servers")["info"], 100)
+        # Restart: the saved card is edited in place, not recreated.
+        card = message(100, [servers_embed(self.bot)])
+        self.channel.fetch_message.return_value = card
+        await self.bot.prepare_servers(self.guild)
         self.channel.send.assert_awaited_once()
-        info.edit.assert_awaited_once()
-        self.assertEqual(self.bot.store.pending(), [])
-        info.delete.assert_not_awaited()
+        card.edit.assert_awaited_once()
 
-    async def test_recovers_managed_channel_and_card_without_database_record(self):
+    async def test_recovers_card_from_history_without_database_record(self):
         self.guild.text_channels = [self.channel]
-        info = message(101, information_embeds(self.server))
-        self.channel.history.side_effect = lambda **kwargs: history([info])
-        await self.bot.prepare_channel(self.guild, self.server)
+        card = message(101, [servers_embed(self.bot)])
+        self.channel.history.side_effect = lambda **kwargs: history([card])
+        await self.bot.prepare_servers(self.guild)
         self.guild.create_text_channel.assert_not_awaited()
         self.channel.send.assert_not_awaited()
-        self.assertEqual(self.bot.store.channel("server-1")["info"], 101)
+        self.assertEqual(self.bot.store.channel("servers")["info"], 101)
 
-    async def test_three_cards_share_one_channel_with_distinct_buttons(self):
+    async def test_single_card_has_one_button_per_enabled_server(self):
         from dataclasses import replace
-        servers = [replace(self.server, id=f"server-{i}", name=f"Server {i}") for i in range(1, 4)]
-        self.channel.send.side_effect = [message(100+i) for i in range(3)]
-        for server in servers:
-            await self.bot.prepare_channel(self.guild, server)
+        servers = tuple(replace(self.server, id=f"server-{i}", name=f"Server {i}") for i in range(1, 4))
+        self.bot.config = replace(self.config, servers=servers)
+        await self.bot.prepare_servers(self.guild)
+        self.channel.send.assert_awaited_once()
+        view = self.channel.send.await_args.kwargs["view"]
+        self.assertEqual(len(view.children), 3)
+        self.assertEqual(len({c.custom_id for c in view.children}), 3)
+        self.assertEqual(len(self.channel.send.await_args.kwargs["embed"].fields), 3)
+
+    async def test_removes_retired_per_server_cards(self):
+        rules = discord.Embed().set_footer(text="OYB • Server 1 • In-game rules")
+        old = message(90, [rules])
+        card = message(100, [servers_embed(self.bot)])
+        self.channel.send.return_value = card
+        self.channel.history.side_effect = lambda **kwargs: history([old])
+        await self.bot.prepare_servers(self.guild)
+        old.delete.assert_awaited_once()
+
+    async def test_announcement_channel_reuses_existing_else_creates(self):
+        existing = Mock(spec=discord.TextChannel)
+        existing.id, existing.name = 71, "announcements"
+        self.guild.text_channels = [existing]
+        await self.bot.prepare_announcement_channel(self.guild)
+        self.guild.create_text_channel.assert_not_awaited()
+        self.assertIs(self.bot.announce_channel, existing)
+        self.assertEqual(self.bot.store.channel("__announce__")["channel"], 71)
+        # None present -> one is created with the announce marker.
+        self.guild.text_channels = []
+        self.bot.store.db.execute("DELETE FROM channels WHERE server='__announce__'")
+        self.bot.store.db.commit()
+        self.guild.get_channel.return_value = None
+        await self.bot.prepare_announcement_channel(self.guild)
         self.guild.create_text_channel.assert_awaited_once()
-        self.assertEqual(self.guild.create_text_channel.await_args.args, ("servers",))
-        self.assertEqual(self.channel.send.await_count, 3)
-        buttons = []
-        for call in self.channel.send.await_args_list:
-            view = call.kwargs["view"]
-            self.assertEqual(len(view.children), 1)
-            buttons.append(view.children[0].custom_id)
-        self.assertEqual(len(set(buttons)), 3)
-        self.assertEqual({self.bot.store.channel(s.id)["channel"] for s in servers}, {50})
-
-    async def test_legacy_record_creates_shared_card_in_new_channel(self):
-        legacy = Mock(spec=discord.TextChannel)
-        legacy.id = 40
-        legacy.topic = "OYB • server-1 • Settings, rules and match notifications"
-        self.guild.get_channel.return_value = legacy
-        self.guild.text_channels = [legacy]
-        self.bot.store.save_channel("server-1", 40, 77)
-        await self.bot.prepare_channel(self.guild, self.server)
-        self.assertEqual(self.bot.store.channel("server-1")["channel"], 50)
-        self.channel.fetch_message.assert_not_awaited()
-
-    async def test_never_repurposes_unrelated_saved_channel(self):
-        self.bot.store.save_channel("server-1", 50, 100)
-        self.channel.topic = "A community chat"
-        with self.assertRaises(RuntimeError):
-            await self.bot.prepare_channel(self.guild, self.server)
-        self.channel.edit.assert_not_awaited()
+        self.assertEqual(self.guild.create_text_channel.await_args.kwargs["topic"], ANNOUNCE_MARKER)
 
     async def test_send_and_delete_after_30_minutes_not_before(self):
         row = self.enqueue()
@@ -250,11 +254,12 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
             replace(self.server, id="server-3", enabled=False),
         ))
         self.bot.get_guild = Mock(return_value=self.guild)
-        self.bot.prepare_channel = AsyncMock()
+        self.bot.prepare_servers = AsyncMock()
+        self.bot.prepare_announcement_channel = AsyncMock()
         self.bot.channels_by_server = {"server-1": self.channel}
         with patch("server_notifications.ReforgerMonitor.run", new_callable=AsyncMock):
             await self.bot.on_ready()
-        self.assertEqual(self.bot.prepare_channel.await_count, 3)
+        self.bot.prepare_servers.assert_awaited_once()
 
         self.assertEqual(len(self.bot.monitors), 1)
         monitor = self.bot.monitors[0][1]
@@ -263,15 +268,16 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bot.store.pending(), [])
         await monitor.on_session_start(5)
         self.assertEqual(len(self.bot.store.pending()), 1)
-        await self.bot.on_ready()
-        self.assertEqual(self.bot.prepare_channel.await_count, 3)
+        await self.bot.on_ready()  # already booted -> no re-prepare
+        self.bot.prepare_servers.assert_awaited_once()
 
     async def test_old_match_restores_card_without_voice_or_announcement(self):
         from dataclasses import replace
         self.bot.config = replace(self.config, voice_channel_id=123)
         self.bot.voice_channel_id = 123
         self.bot.get_guild = Mock(return_value=self.guild)
-        self.bot.prepare_channel = AsyncMock()
+        self.bot.prepare_servers = AsyncMock()
+        self.bot.prepare_announcement_channel = AsyncMock()
         self.bot.channels_by_server = {"server-1": self.channel}
         self.bot.handle_session_start = AsyncMock()
         self.bot.handle_session_end = AsyncMock()
@@ -303,22 +309,22 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.handle_session_end()
         self.assertEqual(self.bot._set_status.await_args.args, ("",))
 
-    async def test_permanent_card_keeps_match_time_and_buttons(self):
-        self.bot.store.save_channel("server-1", 50, 100)
-        self.bot.channels_by_server["server-1"] = self.channel
+    async def test_card_reflects_live_and_offline_state(self):
+        self.bot._server_channel = self.channel
+        self.bot.store.save_channel("servers", 50, 100)
         card = SimpleNamespace(edit=AsyncMock())
         self.channel.get_partial_message.return_value = card
         self.bot.match_times["server-1"] = (1000, 50)
         self.bot._dirty_cards.add("server-1")
-        await self.bot.refresh_information(self.server)
-        fields = card.edit.await_args.kwargs["embeds"][0].fields
-        self.assertIn("<t:1000:R>", next(f.value for f in fields if f.name == "Current match"))
-        self.assertNotIn("view", card.edit.await_args.kwargs)
+        await self.bot.refresh_servers()
+        embed = card.edit.await_args.kwargs["embed"]
+        self.assertIn("<t:1000:R>", embed.fields[0].value)
+        self.assertNotIn("view", card.edit.await_args.kwargs)  # buttons untouched on refresh
         self.assertEqual(self.bot._dirty_cards, set())
         self.bot.match_times.clear()
-        await self.bot.refresh_information(self.server)
-        fields = card.edit.await_args.kwargs["embeds"][0].fields
-        self.assertIn("No live match", next(f.value for f in fields if f.name == "Current match"))
+        await self.bot.refresh_servers()
+        embed = card.edit.await_args.kwargs["embed"]
+        self.assertIn("Offline", embed.fields[0].value)
 
     async def test_delayed_queue_does_not_send_expired_match(self):
         self.bot.store.enqueue("server-1", "old", 50, "Server 1", 100, 1890)
