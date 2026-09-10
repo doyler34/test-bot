@@ -28,6 +28,8 @@ class Tracker:
         self.max_gap = max_gap
         self.initialized = False
         self.caught_up = False
+        # Identities connected on the current log, for live stat display.
+        self.active_identities = set()
         Path(database).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(database, timeout=10)
         configure_connection(self.db)
@@ -51,6 +53,7 @@ class Tracker:
             paths = [self.root / "console.log"]
         if not paths:
             self.initialized = True
+            self.active_identities = set()
             return
         first = self.db.execute("SELECT MIN(path) FROM sources WHERE server=?",
                                 (self.server,)).fetchone()[0]
@@ -60,7 +63,19 @@ class Tracker:
         for path in paths:
             if str(path) >= first:
                 self.scan(path)
+        self.active_identities = self._current_active(str(paths[-1]))
         self.initialized = True
+
+    def _current_active(self, path):
+        # The newest log's persisted 'active' map holds the players connected now.
+        row = self.db.execute("SELECT state FROM sources WHERE server=? AND path=?",
+                              (self.server, path)).fetchone()
+        if not row:
+            return set()
+        try:
+            return set(json.loads(row[0]).get("active", {}).values())
+        except (ValueError, TypeError):
+            return set()
 
     def scan(self, path):
         # Cursor, parser state, and totals commit together. Concurrent readers

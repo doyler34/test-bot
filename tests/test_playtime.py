@@ -91,6 +91,12 @@ class PlaytimeTests(unittest.TestCase):
         self.tracker.tick()
         self.assertEqual(self.seconds(), 30)
 
+    def test_active_identities_reflect_current_connections(self):
+        self.append(join("13:00:00") + heartbeat("13:00:30"))
+        self.assertEqual(self.tracker.active_identities, {UID})
+        self.append(leave("13:01:00") + heartbeat("13:01:30", 0))
+        self.assertEqual(self.tracker.active_identities, set())
+
     def test_one_tracker_failure_does_not_affect_others(self):
         # Two independent trackers share one combined database. The one whose
         # log directory is absent must not stop the other from recording time.

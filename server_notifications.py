@@ -26,6 +26,7 @@ from leaderboard_command import LeaderboardCommand
 from leaderboard_display import LeaderboardDisplay
 from message_xp import award_message
 from maintenance import Maintenance
+from server_stats import ServerStats
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -104,6 +105,7 @@ class NotificationBot(TimerBot):
         self.leaderboard_command = LeaderboardCommand(self)
         self.leaderboard_display = LeaderboardDisplay(self)
         self.combat_ingestor = CombatIngestor(self)
+        self.server_stats = ServerStats(self)
         self.maintenance = Maintenance(self)
         self._boot_lock = asyncio.Lock()
         self._booted = False
@@ -133,6 +135,10 @@ class NotificationBot(TimerBot):
                 await prepare_join_channel(self, guild, readonly_overwrites(guild))
                 from server_layout import cleanup_legacy_layout
                 await cleanup_legacy_layout(self, guild)
+                try:
+                    await self.server_stats.prepare(guild)
+                except Exception:
+                    logger.exception("Live server-stats channels unavailable; check Manage Channels")
             except Exception:
                 logger.exception("Channel setup failed. Check bot permissions.")
                 await self.close()
@@ -182,6 +188,7 @@ class NotificationBot(TimerBot):
             self._jobs.append(asyncio.create_task(self.rank_sync.run()))
             self._jobs.append(asyncio.create_task(self.combat_ingestor.run()))
             self._jobs.append(asyncio.create_task(self.leaderboard_display.run()))
+            self._jobs.append(asyncio.create_task(self.server_stats.run()))
             self._jobs.append(asyncio.create_task(self.maintenance.run()))
             logger.info("Ready: shared servers channel with three cards; %s active game monitors",
                         len(self.monitors))

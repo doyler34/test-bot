@@ -37,6 +37,15 @@ class TimerBot(discord.Client):
     ) -> None:
         intents = discord.Intents.default()
         intents.voice_states = True
+        # Optional privileged intents for the live "Admins" stat. Only requested
+        # when the operator has also enabled them in the Developer Portal, so the
+        # bot never fails to log in by default.
+        import os
+        truthy = ("1", "true", "yes", "on")
+        if os.getenv("ENABLE_MEMBERS_INTENT", "").strip().lower() in truthy:
+            intents.members = True
+        if os.getenv("ENABLE_PRESENCE_INTENT", "").strip().lower() in truthy:
+            intents.presences = True
         super().__init__(intents=intents)
 
         self.guild_id = guild_id
