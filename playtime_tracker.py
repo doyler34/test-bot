@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import sqlite3
 from datetime import datetime, timezone
+from config import configure_connection
 from rank_persistence import migrate_time, record_interval
 
 LOG = logging.getLogger("reforger.playtime")
@@ -29,6 +30,7 @@ class Tracker:
         self.caught_up = False
         Path(database).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(database, timeout=10)
+        configure_connection(self.db)
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS totals (
                 server TEXT, identity TEXT, name TEXT, seconds REAL NOT NULL,

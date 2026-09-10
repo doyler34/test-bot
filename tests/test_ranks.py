@@ -156,6 +156,35 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(call.kwargs["permissions"].value, 0)
             self.assertFalse(call.kwargs["mentionable"])
 
+    async def test_stable_rank_does_no_wallet_writes(self):
+        self.links.verified_link(1, 10, IDENTITY, "admin:22")
+        await self.sync.tick()  # establishes the wallet row, role and announcement
+        before = self.links.db.total_changes
+        await self.sync.tick()
+        await self.sync.tick()
+        self.assertEqual(self.links.db.total_changes, before)  # nothing changed -> no writes
+        self.advance(600)  # +1 XP of tracked time
+        await self.sync.tick()
+        self.assertGreater(self.links.db.total_changes, before)  # a real change is persisted
+
+    async def test_tick_reads_playtime_once_not_per_member(self):
+        for member, uid in ((10, IDENTITY), (11, "22222222-2222-3333-4444-555555555555")):
+            self.source.execute("INSERT OR IGNORE INTO global_time VALUES (?,0)", (uid,))
+            self.links.verified_link(1, member, uid, "admin:22")
+        self.source.commit()
+        import rank_persistence
+        real_connect = rank_persistence.sqlite3.connect
+        calls = []
+
+        def counting(*args, **kwargs):
+            calls.append(args)
+            return real_connect(*args, **kwargs)
+
+        with patch.object(rank_persistence.sqlite3, "connect", side_effect=counting):
+            await self.sync.tick()
+        # One batched read-only load for the whole tick, not one per linked member.
+        self.assertEqual(len(calls), 1)
+
     async def test_import_must_finish_before_baseline(self):
         from playtime_tracker import Tracker
         log = self.root / "logs_2026-09-07_13-00-00"

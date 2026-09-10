@@ -141,14 +141,23 @@ class LeaderboardDisplay:
         return result
 
     async def channel(self, guild, state):
-        # REST inventory avoids duplicate creation when the gateway cache lags.
-        channels = [c for c in await guild.fetch_channels() if isinstance(c, discord.TextChannel)]
-        channel = next((c for c in channels if c.id == state['channel']), None)
+        # Steady state: the saved channel is in the gateway cache, so resolve it
+        # without a REST channel-list call every refresh.
+        channel = None
+        if state['channel']:
+            cached = guild.get_channel(state['channel'])
+            if isinstance(cached, discord.TextChannel):
+                channel = cached
         if channel is None:
-            matches = [c for c in channels if c.topic == MARKER or c.name.casefold() == CHANNEL_NAME.casefold()]
-            channel = min(matches, key=lambda c: c.id) if matches else None
-            if channel:
-                LOG.info('Leaderboard channel found: %s', channel.id)
+            # Cache miss/first run: REST inventory avoids duplicate creation when
+            # the gateway cache lags.
+            channels = [c for c in await guild.fetch_channels() if isinstance(c, discord.TextChannel)]
+            channel = next((c for c in channels if c.id == state['channel']), None)
+            if channel is None:
+                matches = [c for c in channels if c.topic == MARKER or c.name.casefold() == CHANNEL_NAME.casefold()]
+                channel = min(matches, key=lambda c: c.id) if matches else None
+                if channel:
+                    LOG.info('Leaderboard channel found: %s', channel.id)
         if channel is None:
             channel = await guild.create_text_channel(CHANNEL_NAME, topic=MARKER,
                 overwrites=overwrites(guild), reason='OYB permanent leaderboard')
@@ -172,9 +181,10 @@ class LeaderboardDisplay:
                     message = candidate
             except discord.NotFound:
                 LOG.info('Leaderboard recovery after deleted message %s', state['message'])
-        # Scan before sending, including unpinned messages from an interrupted setup.
+        # Full-channel scan is recovery only (the known message is missing);
+        # a routine reconcile with a live message re-asserts it without the scan.
         history = []
-        if message is None or reconcile:
+        if message is None:
             history = [m async for m in channel.history(limit=None)]
         old_boards = [m for m in history if owned(m, self.bot.user.id)]
         if message is None and old_boards:

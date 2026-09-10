@@ -10,6 +10,7 @@ LOG = logging.getLogger("reforger.ranks")
 from rank_rules import RANKS as DEFINITIONS, rank_for_xp
 from rank_persistence import XPStore
 RANKS = tuple(rank.role_name for rank in DEFINITIONS)
+_NO_SNAPSHOT = object()
 
 
 class RankSync:
@@ -51,10 +52,18 @@ class RankSync:
         self.roles = prepared
         LOG.info("OYB ranks ready: Renegade to Major; playtime XP plus Discord post XP")
 
-    def progress(self, member, identity):
-        ready = bool(self.bot._trackers) and all(t.initialized and t.caught_up for t in self.bot._trackers)
-        return self.wallet.read(self.bot.config.guild_id, member, identity,
-                                os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"), ready)
+    def _ready(self):
+        return bool(self.bot._trackers) and all(t.initialized and t.caught_up for t in self.bot._trackers)
+
+    def progress(self, member, identity, snapshot=_NO_SNAPSHOT):
+        # snapshot is the per-tick batched playtime read. When omitted (direct
+        # reads/tests) read() opens its own connection for backward compatibility;
+        # an explicit dict (or None, when the batch failed) is forwarded so a
+        # tick never opens one connection per player.
+        path = os.getenv("PLAYTIME_DB", "data/playtime.sqlite3")
+        if snapshot is _NO_SNAPSHOT:
+            return self.wallet.read(self.bot.config.guild_id, member, identity, path, self._ready())
+        return self.wallet.read(self.bot.config.guild_id, member, identity, path, self._ready(), snapshot=snapshot)
 
     def status(self, member):
         xp = self.wallet.cached(self.bot.config.guild_id, member)
@@ -69,9 +78,12 @@ class RankSync:
                 await self.prepare(guild)
             rows = self.db.execute("SELECT discord_id,identity FROM account_links WHERE guild=?",
                                    (guild.id,)).fetchall()
+            # One batched read-only load of playtime for the whole tick, instead
+            # of opening a connection per linked member.
+            snapshot = self.wallet.snapshot(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3")) if self._ready() else None
             for member_id, identity in rows:
                 try:
-                    xp = self.progress(member_id, identity)
+                    xp = self.progress(member_id, identity, snapshot)
                     tier = rank_for_xp(xp).tier
                     target = self.roles[tier]
                     previous = self.applied.get(member_id)

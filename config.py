@@ -17,6 +17,22 @@ class ConfigError(Exception):
     """Raised when required configuration is missing or invalid."""
 
 
+def configure_connection(db, *, busy_timeout_ms: int = 10000, wal: bool = True) -> None:
+    """Apply shared SQLite pragmas so the many subsystems contend less.
+
+    WAL lets readers and writers proceed concurrently (the event loop and the
+    combat worker thread share the account-links file); ``synchronous=NORMAL``
+    is durable under WAL with far fewer fsyncs; ``busy_timeout`` makes a
+    transient writer lock wait and retry instead of failing immediately. The
+    journal mode persists in the file header, so setting it on any one
+    connection is enough, but applying it everywhere is harmless and explicit.
+    """
+    if wal:
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA synchronous=NORMAL")
+    db.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
+
+
 def _require(name: str) -> str:
     value = os.getenv(name)
     if not value:

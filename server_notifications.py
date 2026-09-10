@@ -25,6 +25,7 @@ from stats_command import StatsCommand
 from leaderboard_command import LeaderboardCommand
 from leaderboard_display import LeaderboardDisplay
 from message_xp import award_message
+from maintenance import Maintenance
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -103,6 +104,7 @@ class NotificationBot(TimerBot):
         self.leaderboard_command = LeaderboardCommand(self)
         self.leaderboard_display = LeaderboardDisplay(self)
         self.combat_ingestor = CombatIngestor(self)
+        self.maintenance = Maintenance(self)
         self._boot_lock = asyncio.Lock()
         self._booted = False
 
@@ -180,6 +182,7 @@ class NotificationBot(TimerBot):
             self._jobs.append(asyncio.create_task(self.rank_sync.run()))
             self._jobs.append(asyncio.create_task(self.combat_ingestor.run()))
             self._jobs.append(asyncio.create_task(self.leaderboard_display.run()))
+            self._jobs.append(asyncio.create_task(self.maintenance.run()))
             logger.info("Ready: shared servers channel with three cards; %s active game monitors",
                         len(self.monitors))
 

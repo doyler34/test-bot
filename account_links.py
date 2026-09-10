@@ -4,6 +4,8 @@ import time
 import uuid
 from pathlib import Path
 
+from config import configure_connection
+
 
 class LinkConflict(ValueError):
     pass
@@ -13,6 +15,7 @@ class AccountLinks:
     def __init__(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path, timeout=10)
+        configure_connection(self.db)
         self.db.execute('''CREATE TABLE IF NOT EXISTS account_links (
             guild INTEGER NOT NULL, discord_id INTEGER NOT NULL,
             identity TEXT NOT NULL, linked_at REAL NOT NULL,

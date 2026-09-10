@@ -68,6 +68,7 @@ class Channel:
         self.messages = []
         self.sends = 0
         self.edits = 0
+        self.scans = 0
 
     async def edit(self, **kwargs):
         self.overwrites = kwargs['overwrites']
@@ -88,6 +89,7 @@ class Channel:
         raise missing()
 
     async def history(self, **kwargs):
+        self.scans += 1
         for m in list(reversed(self.messages)):
             yield m
 
@@ -108,7 +110,11 @@ class Guild:
     def get_member(self, id):
         return None
 
+    def get_channel(self, id):
+        return next((c for c in self.channels if c.id == id), None)
+
     async def fetch_channels(self):
+        self.fetches = getattr(self, 'fetches', 0) + 1
         return list(self.channels)
 
     async def create_text_channel(self, name, **kwargs):
@@ -216,6 +222,16 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
         await self.display.tick()
         self.assertEqual(message.edits,1)
         self.assertEqual(message.channel.sends,1)
+
+    async def test_reconcile_without_change_skips_scan_edit_and_channel_list(self):
+        message = await self.initial()
+        channel = message.channel
+        scans_before, fetches_before = channel.scans, getattr(self.guild, 'fetches', 0)
+        self.now += 300  # force a routine reconcile
+        await self.display.tick()
+        self.assertEqual(message.edits, 0)             # unchanged -> no Discord edit
+        self.assertEqual(channel.scans, scans_before)  # recovery-only full history scan
+        self.assertEqual(getattr(self.guild, 'fetches', 0), fetches_before)  # cached channel, no REST list
 
     async def test_missing_message_and_channel_recovery(self):
         message = await self.initial()

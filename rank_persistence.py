@@ -6,6 +6,8 @@ import sqlite3
 import time
 from rank_rules import xp_from_seconds, XP_PER_POST
 
+_UNSET = object()
+
 
 def backup_before(db, version):
     raw = db.execute("PRAGMA database_list").fetchone()[2]
@@ -69,24 +71,59 @@ class XPStore:
                     CAST(seconds/60 AS INTEGER)*10,NULL,CAST(ROUND((seconds-CAST(seconds/60 AS INTEGER)*60)*1000) AS INTEGER)
                     FROM rank_progress''')
 
-    def read(self, guild, member, identity, path, ready):
+    def snapshot(self, path):
+        """One batched read-only load of every identity's tracked/legacy time.
+
+        The rank sync builds this once per tick and passes it to read(), so a
+        tick makes a single read-only connection instead of one per player.
+        Returns None when tracking is unavailable, so callers keep the last
+        durable balance exactly as read()'s per-connection fallback does.
+        """
+        try:
+            uri = Path(path).resolve().as_uri() + "?mode=ro"
+            with closing(sqlite3.connect(uri, uri=True, timeout=5)) as source:
+                source.execute("PRAGMA busy_timeout=5000")
+                total = dict(source.execute("SELECT identity,milliseconds FROM global_time").fetchall())
+                try:
+                    legacy = dict(source.execute("SELECT identity,milliseconds FROM global_time_legacy").fetchall())
+                except sqlite3.Error:
+                    legacy = {}
+        except sqlite3.Error:
+            return None
+        return {identity: (ms, legacy.get(identity)) for identity, ms in total.items()}
+
+    def read(self, guild, member, identity, path, ready, snapshot=_UNSET):
         row = self.db.execute("SELECT identity,credit,baseline,milliseconds FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
         if row and row[0] != identity:
             raise ValueError("Linked identity changed; admin review required")
         credit, baseline, earned = (row[1], row[2], row[3]) if row else (0, 0, 0)
         if ready:
-            try:
-                with closing(sqlite3.connect(Path(path).resolve().as_uri()+"?mode=ro", uri=True)) as source:
-                    total = source.execute("SELECT milliseconds FROM global_time WHERE identity=?", (identity,)).fetchone()
-                    legacy = source.execute("SELECT milliseconds FROM global_time_legacy WHERE identity=?", (identity,)).fetchone() if baseline is None else None
-                if total:
-                    if baseline is None:
-                        baseline = (legacy[0] if legacy else 0) - earned
-                    earned = max(earned, total[0]-baseline)
-            except sqlite3.Error:
-                pass  # Keep the last durable balance when tracking is unavailable.
-        with self.db:
-            self.db.execute("INSERT OR REPLACE INTO rank_wallet_v2 VALUES (?,?,?,?,?,?)", (guild, member, identity, credit, baseline, earned))
+            total_ms = legacy_ms = None
+            if snapshot is _UNSET:
+                # No batch supplied (a direct/status read): open one connection here.
+                try:
+                    with closing(sqlite3.connect(Path(path).resolve().as_uri()+"?mode=ro", uri=True)) as source:
+                        total = source.execute("SELECT milliseconds FROM global_time WHERE identity=?", (identity,)).fetchone()
+                        total_ms = total[0] if total else None
+                        if baseline is None:
+                            legacy = source.execute("SELECT milliseconds FROM global_time_legacy WHERE identity=?", (identity,)).fetchone()
+                            legacy_ms = legacy[0] if legacy else None
+                except sqlite3.Error:
+                    total_ms = None  # Keep the last durable balance when tracking is unavailable.
+            elif snapshot is not None:
+                data = snapshot.get(identity)
+                if data is not None:
+                    total_ms, legacy_ms = data
+            # snapshot is None -> tracking unavailable this tick; keep the balance.
+            if total_ms is not None:
+                if baseline is None:
+                    baseline = (legacy_ms if legacy_ms is not None else 0) - earned
+                earned = max(earned, total_ms - baseline)
+        # Write only when the durable values actually changed; a stable rank
+        # must not rewrite rank_wallet_v2 on every sync.
+        if (None if row is None else (row[1], row[2], row[3])) != (credit, baseline, earned):
+            with self.db:
+                self.db.execute("INSERT OR REPLACE INTO rank_wallet_v2 VALUES (?,?,?,?,?,?)", (guild, member, identity, credit, baseline, earned))
         return credit + xp_from_seconds(earned / 1000) + self.post_xp(guild, member)
 
     def cached(self, guild, member):

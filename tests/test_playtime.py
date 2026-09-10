@@ -91,6 +91,28 @@ class PlaytimeTests(unittest.TestCase):
         self.tracker.tick()
         self.assertEqual(self.seconds(), 30)
 
+    def test_one_tracker_failure_does_not_affect_others(self):
+        # Two independent trackers share one combined database. The one whose
+        # log directory is absent must not stop the other from recording time.
+        healthy_root = self.root / "ok"
+        log = healthy_root / "logs_2026-09-07_13-00-00" / "console.log"
+        log.parent.mkdir(parents=True)
+        log.write_text(join("13:00:00") + heartbeat("13:01:00") + leave("13:02:00"))
+        healthy = Tracker(healthy_root, self.database, "ok")
+        broken = Tracker(self.root / "does-not-exist", self.database, "broken")
+        try:
+            broken.tick()  # no logs present; must return cleanly, not raise
+            self.assertTrue(broken.initialized)
+            healthy.tick()
+            recorded = healthy.db.execute(
+                "SELECT SUM(seconds) FROM totals WHERE server='ok'").fetchone()[0]
+            self.assertEqual(recorded, 120)
+            self.assertIsNone(
+                healthy.db.execute("SELECT SUM(seconds) FROM totals WHERE server='broken'").fetchone()[0])
+        finally:
+            healthy.close()
+            broken.close()
+
     def test_transaction_rollback_retries(self):
         self.append(join("13:00:00"))
         original = self.tracker.consume

@@ -2,11 +2,14 @@
 import sqlite3
 from pathlib import Path
 
+from config import configure_connection
+
 
 class NotificationStore:
     def __init__(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(path)
+        self.db = sqlite3.connect(path, timeout=10)
+        configure_connection(self.db)
         self.db.row_factory = sqlite3.Row
         self.db.executescript("""
             CREATE TABLE IF NOT EXISTS channels (
