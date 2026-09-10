@@ -13,7 +13,7 @@ import discord
 from config import ConfigError
 from notification_config import NotificationConfig, Server, read_servers
 from server_notifications import (NotificationBot, readonly_overwrites, servers_embed,
-                                  SERVERS_CARD_MARKER, ANNOUNCE_MARKER)
+                                  rules_embed, SERVERS_CARD_MARKER, ANNOUNCE_MARKER)
 
 
 async def history(messages):
@@ -38,9 +38,10 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(servers[0].log_dir, "/real/logs")
         self.assertIn("400", servers[0].rules)
         self.assertIn("6 supply", servers[0].rules)
-        # The combined card fits Discord's 6000-char embed budget for all three.
+        # The combined status + universal rules card fits the 6000-char budget.
         bot = SimpleNamespace(config=SimpleNamespace(servers=servers), match_times={}, monitors=[])
-        self.assertLess(len(servers_embed(bot)), 6000)
+        self.assertLess(len(servers_embed(bot)) + len(rules_embed(bot)), 6000)
+        self.assertIn("400", rules_embed(bot).description)  # rules are shown
 
     def test_rejects_duplicate_ids_and_missing_active_paths(self):
         data = json.loads((Path(__file__).parents[1] / "servers.example.json").read_text(encoding="utf-8"))
@@ -69,11 +70,6 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot.category_timers.prepare = AsyncMock()
         self.bot.rank_sync.run = AsyncMock()
         self.bot._connection.user = SimpleNamespace(id=99)
-        self.role = SimpleNamespace(id=77)
-        self.bot.roles_by_server["server-1"] = self.role
-        role_patch = patch("server_notifications.prepare_role", new_callable=AsyncMock)
-        role_patch.start()
-        self.addCleanup(role_patch.stop)
         join_patch = patch("server_notifications.prepare_join_channel", new_callable=AsyncMock)
         join_patch.start()
         self.addCleanup(join_patch.stop)
@@ -114,6 +110,10 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(everyone.view_channel)
         self.assertTrue(kwargs["overwrites"][self.guild.me].send_messages)
         self.assertTrue(self.channel.send.await_args.kwargs["silent"])
+        # Status embed + universal rules embed, no notification buttons.
+        embeds = self.channel.send.await_args.kwargs["embeds"]
+        self.assertEqual(len(embeds), 2)
+        self.assertNotIn("view", self.channel.send.await_args.kwargs)
         self.assertEqual(self.bot.store.channel("servers")["info"], 100)
         # Restart: the saved card is edited in place, not recreated.
         card = message(100, [servers_embed(self.bot)])
@@ -131,16 +131,17 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.channel.send.assert_not_awaited()
         self.assertEqual(self.bot.store.channel("servers")["info"], 101)
 
-    async def test_single_card_has_one_button_per_enabled_server(self):
+    async def test_single_card_lists_every_server_with_rules_and_no_buttons(self):
         from dataclasses import replace
         servers = tuple(replace(self.server, id=f"server-{i}", name=f"Server {i}") for i in range(1, 4))
         self.bot.config = replace(self.config, servers=servers)
         await self.bot.prepare_servers(self.guild)
         self.channel.send.assert_awaited_once()
-        view = self.channel.send.await_args.kwargs["view"]
-        self.assertEqual(len(view.children), 3)
-        self.assertEqual(len({c.custom_id for c in view.children}), 3)
-        self.assertEqual(len(self.channel.send.await_args.kwargs["embed"].fields), 3)
+        kwargs = self.channel.send.await_args.kwargs
+        self.assertNotIn("view", kwargs)  # roles scrapped -> no buttons
+        status, rules = kwargs["embeds"]
+        self.assertEqual(len(status.fields), 3)  # one status row per server
+        self.assertIn("In-game rules", rules.title)
 
     async def test_removes_retired_per_server_cards(self):
         rules = discord.Embed().set_footer(text="OYB • Server 1 • In-game rules")
@@ -173,9 +174,8 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         with patch("server_notifications.time.time", return_value=1000):
             await self.bot.deliver_or_delete(row)
         kwargs = self.channel.send.await_args.kwargs
-        self.assertFalse(kwargs["allowed_mentions"].everyone)
-        self.assertEqual(kwargs["allowed_mentions"].roles, [self.role])
-        self.assertEqual(kwargs["content"], "<@&77>")
+        self.assertTrue(kwargs["allowed_mentions"].everyone)
+        self.assertEqual(kwargs["content"], "@everyone")
         self.assertFalse(kwargs["allowed_mentions"].users)
         self.assertIn("<t:970:R>", kwargs["embed"].description)
         sent = self.bot.store.pending()[0]
@@ -317,14 +317,15 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot.match_times["server-1"] = (1000, 50)
         self.bot._dirty_cards.add("server-1")
         await self.bot.refresh_servers()
-        embed = card.edit.await_args.kwargs["embed"]
-        self.assertIn("<t:1000:R>", embed.fields[0].value)
-        self.assertNotIn("view", card.edit.await_args.kwargs)  # buttons untouched on refresh
+        embeds = card.edit.await_args.kwargs["embeds"]
+        self.assertIn("<t:1000:R>", embeds[0].fields[0].value)
+        self.assertIn("In-game rules", embeds[1].title)  # rules stay on the card
+        self.assertNotIn("view", card.edit.await_args.kwargs)
         self.assertEqual(self.bot._dirty_cards, set())
         self.bot.match_times.clear()
         await self.bot.refresh_servers()
-        embed = card.edit.await_args.kwargs["embed"]
-        self.assertIn("Offline", embed.fields[0].value)
+        embeds = card.edit.await_args.kwargs["embeds"]
+        self.assertIn("Offline", embeds[0].fields[0].value)
 
     async def test_delayed_queue_does_not_send_expired_match(self):
         self.bot.store.enqueue("server-1", "old", 50, "Server 1", 100, 1890)

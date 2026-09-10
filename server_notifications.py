@@ -11,7 +11,6 @@ from pathlib import Path
 import discord
 
 from notification_store import NotificationStore
-from notification_roles import NotificationView, ServersNotificationView, prepare_role
 from server_stats import label_for
 from reforger_monitor import ReforgerMonitor
 from timer_bot import TimerBot
@@ -33,6 +32,7 @@ logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
 SERVERS_MARKER = "OYB • Servers • Settings, rules and match notifications"
 SERVERS_CARD_MARKER = "OYB • Servers overview"
+RULES_MARKER = "OYB • In-game rules"
 ANNOUNCE_MARKER = "OYB • Match announcements"
 
 
@@ -49,16 +49,26 @@ def server_status_line(bot, server):
 
 
 def servers_embed(bot):
-    """One combined card: every server's live status, settings and notify buttons."""
+    """One combined card: every server's live status and settings."""
     embed = discord.Embed(
         title="🎮 OYB Servers",
-        description="Live status for all OYB servers. Use the buttons below to get pinged "
-                    "when a server's match starts. This channel is read-only.",
+        description="Live status for all OYB servers. **@everyone** is pinged in the "
+                    "announcements channel when a match starts. This channel is read-only.",
         colour=0x2ECC71)
     for server in bot.config.servers:
         value = f"{server_status_line(bot, server)}\n**Settings:** {server.settings}"
         embed.add_field(name=label_for(server), value=value[:1024], inline=False)
     embed.set_footer(text=SERVERS_CARD_MARKER)
+    return embed
+
+
+def rules_embed(bot):
+    """Universal in-game rules (identical across all servers), like the old cards."""
+    rules = next((s.rules for s in bot.config.servers if s.enabled),
+                 bot.config.servers[0].rules)
+    embed = discord.Embed(title="🎮 OYB · In-game rules", description=rules[:4096],
+                          colour=0x5865F2)
+    embed.set_footer(text=RULES_MARKER)
     return embed
 
 
@@ -121,7 +131,6 @@ class NotificationBot(TimerBot):
         from link_review import AlertsControlView, ReviewButtons
         self.add_view(AlertsControlView(self))
         self.add_view(ReviewButtons(self))
-        self.add_view(ServersNotificationView(self))
         self._jobs.append(asyncio.create_task(self.rank_command.register()))
 
     async def on_message(self, message):
@@ -233,9 +242,7 @@ class NotificationBot(TimerBot):
         return channel
 
     async def prepare_servers(self, guild):
-        """One combined #servers card with every server's live status and notify buttons."""
-        for server in self.config.servers:
-            await prepare_role(self, guild, server)
+        """One combined #servers card: every server's live status, settings and rules."""
         channel = await self._servers_channel(guild)
         self._server_channel = channel
         for server in self.config.servers:
@@ -254,13 +261,12 @@ class NotificationBot(TimerBot):
                 if owns_message(candidate, self.user.id, SERVERS_CARD_MARKER):
                     card = candidate
                     break
-        embed = servers_embed(self)
-        view = ServersNotificationView(self)
+        embeds = [servers_embed(self), rules_embed(self)]
         if card is None:
-            card = await channel.send(embed=embed, view=view, silent=True,
+            card = await channel.send(embeds=embeds, silent=True,
                                       allowed_mentions=discord.AllowedMentions.none())
         else:
-            await card.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+            await card.edit(embeds=embeds, allowed_mentions=discord.AllowedMentions.none())
         self._servers_card_id = card.id
         self.store.save_channel("servers", channel.id, card.id)
         # Remove the retired per-server cards (each carried an 'In-game rules' embed).
@@ -303,7 +309,8 @@ class NotificationBot(TimerBot):
             return
         try:
             message = self._server_channel.get_partial_message(record["info"])
-            await message.edit(embed=servers_embed(self), allowed_mentions=discord.AllowedMentions.none())
+            await message.edit(embeds=[servers_embed(self), rules_embed(self)],
+                               allowed_mentions=discord.AllowedMentions.none())
             self._dirty_cards.clear()
         except discord.HTTPException:
             logger.exception("Could not refresh the servers card; retry pending")
@@ -372,10 +379,9 @@ class NotificationBot(TimerBot):
             )
             embed.timestamp = datetime.fromtimestamp(int(row["started"]), timezone.utc)
             embed.set_footer(text="OYB • Match notifications")
-            role = self.roles_by_server[row["server"]]
-            message = await channel.send(content=f"<@&{role.id}>", embed=embed,
+            message = await channel.send(content="@everyone", embed=embed,
                                          allowed_mentions=discord.AllowedMentions(
-                                             everyone=False, users=False, roles=[role], replied_user=False))
+                                             everyone=True, users=False, roles=False, replied_user=False))
             logger.info("Discord accepted match announcement for %s", row["server"])
         expires = row["started"] + ANNOUNCEMENT_TTL
         self.store.sent(row, message.id, expires)
