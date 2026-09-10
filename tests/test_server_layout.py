@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 import discord
 from notification_store import NotificationStore
-from server_layout import cleanup_legacy_layout
+from server_layout import cleanup_legacy_layout, remove_timer_categories
 
 
 async def stream(items):
@@ -58,3 +58,14 @@ class LayoutTests(unittest.IsolatedAsyncioTestCase):
         await cleanup_legacy_layout(self.bot, self.guild)
         self.old.delete.assert_not_awaited()
         self.duplicate.delete.assert_not_awaited()
+
+    async def test_remove_timer_categories_ungroups_channels_then_deletes(self):
+        voice = Mock(spec=discord.VoiceChannel)
+        voice.id, voice.category_id, voice.edit = 40, 30, AsyncMock()
+        self.guild.fetch_channels = AsyncMock(return_value=[voice, self.duplicate])
+        await remove_timer_categories(self.bot, self.guild)
+        # The contained channel is ungrouped (category=None), never deleted.
+        voice.edit.assert_awaited_once()
+        self.assertIsNone(voice.edit.await_args.kwargs["category"])
+        # The retired category itself is removed.
+        self.duplicate.delete.assert_awaited_once()

@@ -133,8 +133,11 @@ class NotificationBot(TimerBot):
                 for server in self.config.servers:
                     await self.prepare_channel(guild, server)
                 await prepare_join_channel(self, guild, readonly_overwrites(guild))
-                from server_layout import cleanup_legacy_layout
+                from server_layout import cleanup_legacy_layout, remove_timer_categories
                 await cleanup_legacy_layout(self, guild)
+                # Remove the retired per-server timer categories; the SERVER STATS
+                # channels now carry the live match counter.
+                await remove_timer_categories(self, guild)
                 try:
                     await self.server_stats.prepare(guild)
                 except Exception:
@@ -184,7 +187,6 @@ class NotificationBot(TimerBot):
                     self._trackers.append(tracker)
                     self._jobs.append(asyncio.create_task(tracker.run()))
             self._jobs.append(asyncio.create_task(self.delivery_loop()))
-            self._jobs.append(asyncio.create_task(self.category_timers.run()))
             self._jobs.append(asyncio.create_task(self.rank_sync.run()))
             self._jobs.append(asyncio.create_task(self.combat_ingestor.run()))
             self._jobs.append(asyncio.create_task(self.leaderboard_display.run()))
@@ -195,7 +197,9 @@ class NotificationBot(TimerBot):
 
     async def prepare_channel(self, guild, server):
         await prepare_role(self, guild, server)
-        category = await self.category_timers.prepare(guild, server)
+        # The old per-server timer categories are replaced by the SERVER STATS
+        # channels; the live match counter now lives there instead.
+        category = None
         marker = f"OYB • {server.id} • Settings, rules and match notifications"
         record = self.store.channel(server.id)
         saved = guild.get_channel(record["channel"]) if record else None
@@ -221,7 +225,7 @@ class NotificationBot(TimerBot):
                                reason="Restore read-only server channel permissions")
         self._server_channel = channel
         self.channels_by_server[server.id] = channel
-        if self.voice_channel_id and server.id == self.config.voice_server_id:
+        if self.voice_channel_id and category is not None and server.id == self.config.voice_server_id:
             voice = guild.get_channel(self.voice_channel_id)
             if isinstance(voice, discord.VoiceChannel) and voice.category_id != category.id:
                 await voice.edit(category=category, sync_permissions=False,

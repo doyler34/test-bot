@@ -6,6 +6,34 @@ from category_timer import matches_category
 LOG = logging.getLogger("reforger.layout")
 
 
+async def remove_timer_categories(bot, guild):
+    """Delete the retired per-server timer categories (SERVER ONE/TWO/THREE).
+
+    Any channels inside them are moved out (ungrouped) first, never deleted, so
+    an operator's own voice channels survive. The live match counter now lives on
+    the SERVER STATS channels instead.
+    """
+    try:
+        channels = await guild.fetch_channels()
+    except discord.HTTPException:
+        LOG.exception("Retiring server categories deferred; check Manage Channels")
+        return
+    categories = [c for c in channels if isinstance(c, discord.CategoryChannel)
+                  and any(matches_category(c, server) for server in bot.config.servers)]
+    for category in categories:
+        for channel in [c for c in channels if getattr(c, "category_id", None) == category.id]:
+            try:
+                await channel.edit(category=None, sync_permissions=False,
+                                   reason="OYB SERVER STATS replaces per-server categories")
+            except discord.HTTPException:
+                LOG.warning("Could not ungroup channel %s from a retired category", channel.id)
+        try:
+            await category.delete(reason="Replaced by SERVER STATS live channels")
+            LOG.info("Removed retired server category %s", category.name)
+        except discord.HTTPException:
+            LOG.warning("Could not delete retired category %s; check Manage Channels", category.id)
+
+
 async def cleanup_legacy_layout(bot, guild):
     try:
         channels = await guild.fetch_channels()

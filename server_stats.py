@@ -126,14 +126,23 @@ class ServerStats:
         return os.getenv(f"STAT_LABEL_{server.id.replace('-', '_').upper()}", "").strip() \
             or LABELS.get(server.id, server.name)
 
+    def _server_status(self, server):
+        # The live match counter that used to live on the old server categories.
+        label = self._label(server)
+        if not server.enabled:
+            return f"🔴 {label} · Coming soon"
+        match = getattr(self.bot, "match_times", {}).get(server.id)
+        if match is None:
+            return f"⚪ {label} · Waiting"
+        minutes = max(0, int((time.monotonic() - match[1]) // 60))
+        hours, rem = divmod(minutes, 60)
+        elapsed = f"{hours}h {rem:02d}m" if hours else f"{minutes} min"
+        return f"🟢 {label} · {elapsed}"
+
     def _desired_name(self, guild, key, counts):
         if key in counts:
             server = next(s for s in self.bot.config.servers if s.id == key)
-            label = self._label(server)
-            if not server.enabled:
-                return self._cap(f"🔴 {label}: soon")
-            icon = "🟢" if key in getattr(self.bot, "match_times", {}) else "⚪"
-            return self._cap(f"{icon} {label}: {counts[key]}")
+            return self._cap(self._server_status(server))
         if key == "arma":
             return self._cap(f"🎮 Playing ArmA: {sum(counts.values())}")
         if key == "vc":

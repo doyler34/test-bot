@@ -1,4 +1,5 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -95,10 +96,12 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
                          SimpleNamespace(server="server-2", active_identities=set())]
         self.guild = FakeGuild()
         self.now = 1000.0
+        # server-1 has a live match started 65 seconds ago (real monotonic base).
+        self.base = time.monotonic()
         self.bot = SimpleNamespace(
             store=self.store, account_links=SimpleNamespace(db=self.links.db),
             config=SimpleNamespace(guild_id=1, servers=self.servers),
-            _trackers=self.trackers, match_times={"server-1": (0, 0)},
+            _trackers=self.trackers, match_times={"server-1": (self.now, self.base - 65)},
             get_guild=lambda i: self.guild)
         self.classes = patch.multiple(server_stats.discord, VoiceChannel=FakeVoice, CategoryChannel=FakeCategory)
         self.classes.start()
@@ -121,14 +124,14 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(self.stats.channels), {"server-1", "server-2", "server-3", "arma", "vc"})
         self.assertEqual(self.guild.creates, 5)
 
-    async def test_names_reflect_linked_players_in_game(self):
+    async def test_per_server_shows_live_match_timer_and_arma_total(self):
         counts = self.stats._in_game()
         self.assertEqual(counts, {"server-1": 2, "server-2": 0, "server-3": 0})
-        self.assertEqual(self.stats._desired_name(self.guild, "server-1", counts), "🟢 Classic: 2")
-        # Live match absent -> not green, count 0.
-        self.assertEqual(self.stats._desired_name(self.guild, "server-2", counts), "⚪ 3x Everon: 0")
-        # Disabled server.
-        self.assertEqual(self.stats._desired_name(self.guild, "server-3", counts), "🔴 Arland: soon")
+        # Per-server tiles carry the live match counter (replaces the old categories).
+        self.assertEqual(self.stats._desired_name(self.guild, "server-1", counts), "🟢 Classic · 1 min")
+        self.assertEqual(self.stats._desired_name(self.guild, "server-2", counts), "⚪ 3x Everon · Waiting")
+        self.assertEqual(self.stats._desired_name(self.guild, "server-3", counts), "🔴 Arland · Coming soon")
+        # Total linked players in-game stays on the Playing ArmA tile.
         self.assertEqual(self.stats._desired_name(self.guild, "arma", counts), "🎮 Playing ArmA: 2")
 
     async def test_users_in_vc_excludes_bots(self):
@@ -139,20 +142,20 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_rename_is_paced_and_only_on_change(self):
         await self.stats.prepare(self.guild)
-        server_one = self.stats.channels["server-1"]
-        self.assertEqual(server_one.name, "🟢 Classic: 2")  # created with the live value
-        # A player leaves; within the 5-minute window the rename is deferred.
-        self.trackers[0].active_identities = {A}
+        classic = self.stats.channels["server-1"]
+        self.assertEqual(classic.name, "🟢 Classic · 1 min")  # created with the live value
+        # The match ages by six minutes; within the 5-minute window the rename waits.
+        self.bot.match_times["server-1"] = (self.now, self.base - 65 - 6 * 60)
         await self.stats.tick()
-        self.assertEqual(server_one.edits, 0)
+        self.assertEqual(classic.edits, 0)
         # After the window it renames once, then not again while unchanged.
         self.now += 301
         await self.stats.tick()
-        self.assertEqual(server_one.name, "🟢 Classic: 1")
-        self.assertEqual(server_one.edits, 1)
+        self.assertEqual(classic.name, "🟢 Classic · 7 min")
+        self.assertEqual(classic.edits, 1)
         self.now += 301
         await self.stats.tick()
-        self.assertEqual(server_one.edits, 1)
+        self.assertEqual(classic.edits, 1)
 
     async def test_admins_tile_only_when_role_configured(self):
         self.assertNotIn("admins", self.stats.stat_keys())
