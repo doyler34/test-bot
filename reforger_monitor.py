@@ -134,6 +134,17 @@ class ReforgerMonitor:
             self._log_clock = max(self._log_clock, self._clock_day + clock)
         return self._log_clock
 
+    @property
+    def online(self) -> bool:
+        """True when the server has emitted a heartbeat within the stale window.
+
+        Distinguishes a server that is up but between matches (idle) from one
+        whose process is down / not shipping logs (offline).
+        """
+        if self._last_heartbeat == 0.0:
+            return False
+        return (time.monotonic() - self._last_heartbeat) < self.stale_seconds
+
     async def run(self) -> None:
         """Main loop. Runs until cancelled."""
         logger.info("Monitor starting; watching %s", self.log_dir)

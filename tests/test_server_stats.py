@@ -96,12 +96,16 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
                          SimpleNamespace(server="server-2", active_identities=set())]
         self.guild = FakeGuild()
         self.now = 1000.0
-        # server-1 has a live match started 65 seconds ago (real monotonic base).
+        # server-1 has a live match started 65 seconds ago (real monotonic base);
+        # server-2 is up but between matches (online, no match).
         self.base = time.monotonic()
+        self.monitors = [("server-1", SimpleNamespace(online=True)),
+                         ("server-2", SimpleNamespace(online=True))]
         self.bot = SimpleNamespace(
             store=self.store, account_links=SimpleNamespace(db=self.links.db),
             config=SimpleNamespace(guild_id=1, servers=self.servers),
-            _trackers=self.trackers, match_times={"server-1": (self.now, self.base - 65)},
+            _trackers=self.trackers, monitors=self.monitors,
+            match_times={"server-1": (self.now, self.base - 65)},
             get_guild=lambda i: self.guild)
         self.classes = patch.multiple(server_stats.discord, VoiceChannel=FakeVoice, CategoryChannel=FakeCategory)
         self.classes.start()
@@ -124,13 +128,18 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(self.stats.channels), {"server-1", "server-2", "server-3", "arma", "vc"})
         self.assertEqual(self.guild.creates, 5)
 
-    async def test_per_server_shows_live_match_timer_and_arma_total(self):
+    async def test_per_server_states_live_idle_offline_and_coming_soon(self):
         counts = self.stats._in_game()
         self.assertEqual(counts, {"server-1": 2, "server-2": 0, "server-3": 0})
-        # Per-server tiles carry the live match counter (replaces the old categories).
+        # Live match -> green timer.
         self.assertEqual(self.stats._desired_name(self.guild, "server-1", counts), "🟢 Classic · 1 min")
-        self.assertEqual(self.stats._desired_name(self.guild, "server-2", counts), "⚪ 3x Everon · Waiting")
-        self.assertEqual(self.stats._desired_name(self.guild, "server-3", counts), "🔴 Arland · Coming soon")
+        # Up but no match -> yellow, clearly not the same as offline.
+        self.assertEqual(self.stats._desired_name(self.guild, "server-2", counts), "🟡 3x Everon · Waiting for match")
+        # Disabled server -> coming soon.
+        self.assertEqual(self.stats._desired_name(self.guild, "server-3", counts), "⚫ Arland · Coming soon")
+        # An enabled server whose process is down reads Offline, not white/idle.
+        self.monitors[1] = ("server-2", SimpleNamespace(online=False))
+        self.assertEqual(self.stats._desired_name(self.guild, "server-2", counts), "🔴 3x Everon · Offline")
         # Total linked players in-game stays on the Playing ArmA tile.
         self.assertEqual(self.stats._desired_name(self.guild, "arma", counts), "🎮 Playing ArmA: 2")
 
@@ -144,18 +153,20 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
         await self.stats.prepare(self.guild)
         classic = self.stats.channels["server-1"]
         self.assertEqual(classic.name, "🟢 Classic · 1 min")  # created with the live value
-        # The match ages by six minutes; within the 5-minute window the rename waits.
+        # First real change applies right away (no prior rename to pace against).
         self.bot.match_times["server-1"] = (self.now, self.base - 65 - 6 * 60)
-        await self.stats.tick()
-        self.assertEqual(classic.edits, 0)
-        # After the window it renames once, then not again while unchanged.
-        self.now += 301
         await self.stats.tick()
         self.assertEqual(classic.name, "🟢 Classic · 7 min")
         self.assertEqual(classic.edits, 1)
-        self.now += 301
+        # A second change within the 5-minute window is deferred.
+        self.bot.match_times["server-1"] = (self.now, self.base - 65 - 12 * 60)
         await self.stats.tick()
         self.assertEqual(classic.edits, 1)
+        # After the window it applies once more.
+        self.now += 301
+        await self.stats.tick()
+        self.assertEqual(classic.name, "🟢 Classic · 13 min")
+        self.assertEqual(classic.edits, 2)
 
     async def test_admins_tile_only_when_role_configured(self):
         self.assertNotIn("admins", self.stats.stat_keys())
