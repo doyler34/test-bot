@@ -115,11 +115,11 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
     async def test_names_reflect_linked_players_in_game(self):
         counts = self.stats._in_game()
         self.assertEqual(counts, {"server-1": 2, "server-2": 0, "server-3": 0})
-        self.assertEqual(self.stats._desired_name(self.guild, "server-1", counts), "🟢 Server One: 2")
+        self.assertEqual(self.stats._desired_name(self.guild, "server-1", counts), "🟢 Classic: 2")
         # Live match absent -> not green, count 0.
-        self.assertEqual(self.stats._desired_name(self.guild, "server-2", counts), "⚪ Server Two: 0")
+        self.assertEqual(self.stats._desired_name(self.guild, "server-2", counts), "⚪ 3x Everon: 0")
         # Disabled server.
-        self.assertEqual(self.stats._desired_name(self.guild, "server-3", counts), "🔴 Server Three: soon")
+        self.assertEqual(self.stats._desired_name(self.guild, "server-3", counts), "🔴 Arland: soon")
         self.assertEqual(self.stats._desired_name(self.guild, "arma", counts), "🎮 Playing ArmA: 2")
 
     async def test_users_in_vc_excludes_bots(self):
@@ -131,7 +131,7 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
     async def test_rename_is_paced_and_only_on_change(self):
         await self.stats.prepare(self.guild)
         server_one = self.stats.channels["server-1"]
-        self.assertEqual(server_one.name, "🟢 Server One: 2")  # created with the live value
+        self.assertEqual(server_one.name, "🟢 Classic: 2")  # created with the live value
         # A player leaves; within the 5-minute window the rename is deferred.
         self.trackers[0].active_identities = {A}
         await self.stats.tick()
@@ -139,7 +139,7 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
         # After the window it renames once, then not again while unchanged.
         self.now += 301
         await self.stats.tick()
-        self.assertEqual(server_one.name, "🟢 Server One: 1")
+        self.assertEqual(server_one.name, "🟢 Classic: 1")
         self.assertEqual(server_one.edits, 1)
         self.now += 301
         await self.stats.tick()

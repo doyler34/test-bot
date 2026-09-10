@@ -32,6 +32,10 @@ RENAME_INTERVAL = 300  # Discord allows ~2 channel renames per 10 minutes each.
 POLL = 30
 TRUTHY = ("1", "true", "yes", "on")
 
+# Display labels for the per-server stat channels. Override any of them with
+# STAT_LABEL_SERVER_1 / _2 / _3; otherwise fall back to the configured name.
+LABELS = {"server-1": "Classic", "server-2": "3x Everon", "server-3": "Arland"}
+
 
 def stat_overwrites(guild):
     # Visible to everyone, joinable by no one: a display-only counter.
@@ -112,13 +116,18 @@ class ServerStats:
             counts[server.id] = len(active & linked)
         return counts
 
+    def _label(self, server):
+        return os.getenv(f"STAT_LABEL_{server.id.replace('-', '_').upper()}", "").strip() \
+            or LABELS.get(server.id, server.name)
+
     def _desired_name(self, guild, key, counts):
         if key in counts:
             server = next(s for s in self.bot.config.servers if s.id == key)
+            label = self._label(server)
             if not server.enabled:
-                return self._cap(f"🔴 {server.name}: soon")
+                return self._cap(f"🔴 {label}: soon")
             icon = "🟢" if key in getattr(self.bot, "match_times", {}) else "⚪"
-            return self._cap(f"{icon} {server.name}: {counts[key]}")
+            return self._cap(f"{icon} {label}: {counts[key]}")
         if key == "arma":
             return self._cap(f"🎮 Playing ArmA: {sum(counts.values())}")
         if key == "vc":
