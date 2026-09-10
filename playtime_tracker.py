@@ -166,7 +166,7 @@ class Tracker:
             LOG.info("Tracking player %s on %s", name, self.server)
 
     async def run(self):
-        LOG.info("Playtime test tracker started for %s; database checkpoints enabled", self.server)
+        LOG.info("Playtime tracker started for %s; database checkpoints enabled", self.server)
         while True:
             try:
                 self.tick()
@@ -196,7 +196,7 @@ def main():
             for name, seconds in rows:
                 print(f"{ascii(name)}: {int(seconds)//60}m {int(seconds)%60:02d}s")
             if not rows:
-                print("No timestamped player mappings found yet. Join the test server.")
+                print("No timestamped player mappings found yet. Join an OYB server.")
         finally:
             db.close()
         return
