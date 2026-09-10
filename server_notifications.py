@@ -112,6 +112,9 @@ class NotificationBot(TimerBot):
 
     async def setup_hook(self):
         self.leaderboard_display.register()
+        from link_review import AlertsControlView, ReviewButtons
+        self.add_view(AlertsControlView(self))
+        self.add_view(ReviewButtons(self))
         self._jobs.append(asyncio.create_task(self.rank_command.register()))
 
     async def on_message(self, message):
@@ -133,6 +136,11 @@ class NotificationBot(TimerBot):
                 for server in self.config.servers:
                     await self.prepare_channel(guild, server)
                 await prepare_join_channel(self, guild, readonly_overwrites(guild))
+                try:
+                    from link_review import prepare_review_channel
+                    await prepare_review_channel(self, guild)
+                except Exception:
+                    logger.exception("Link-request review channel unavailable; check Manage Channels/Roles")
                 from server_layout import cleanup_legacy_layout, remove_timer_categories
                 await cleanup_legacy_layout(self, guild)
                 # Remove the retired per-server timer categories; the SERVER STATS

@@ -28,6 +28,8 @@ class AccountLinks:
             created REAL NOT NULL, reviewer INTEGER);
             CREATE TABLE IF NOT EXISTS join_channel (
             guild INTEGER PRIMARY KEY, channel INTEGER NOT NULL, message INTEGER);
+            CREATE TABLE IF NOT EXISTS link_review (
+            guild INTEGER PRIMARY KEY, channel INTEGER, control INTEGER, reviewer_role INTEGER);
         ''')
 
     def lookup(self, guild, discord_id):
@@ -93,6 +95,27 @@ class AccountLinks:
             return "No linking request yet. Use Link Reforger account to submit your in-game name."
         return {"pending": "Your request is waiting for admin approval.",
                 "rejected": "Your request was rejected. Check with an admin before submitting again."}.get(row[0], "Submit a new linking request.")
+
+    def request(self, guild, token):
+        """One pending/handled request by token, for the staff review alert."""
+        return self.db.execute(
+            "SELECT discord_id,identity,name,status FROM link_requests WHERE guild=? AND token=?",
+            (guild, token)).fetchone()
+
+    def review_settings(self, guild):
+        row = self.db.execute("SELECT channel,control,reviewer_role FROM link_review WHERE guild=?",
+                              (guild,)).fetchone()
+        return dict(channel=row[0], control=row[1], reviewer_role=row[2]) if row else \
+            dict(channel=None, control=None, reviewer_role=None)
+
+    def save_review_settings(self, guild, channel=None, control=None, reviewer_role=None):
+        # COALESCE keeps existing values when a field is not being updated.
+        with self.db:
+            self.db.execute(
+                "INSERT INTO link_review(guild,channel,control,reviewer_role) VALUES(?,?,?,?) "
+                "ON CONFLICT(guild) DO UPDATE SET channel=COALESCE(?,channel),"
+                "control=COALESCE(?,control),reviewer_role=COALESCE(?,reviewer_role)",
+                (guild, channel, control, reviewer_role, channel, control, reviewer_role))
 
     def close(self):
         self.db.close()

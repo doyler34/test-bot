@@ -1,4 +1,5 @@
 """Read-only account-linking channel with private submissions and admin review."""
+import logging
 import os
 from pathlib import Path
 import sqlite3
@@ -6,6 +7,7 @@ from contextlib import closing
 import discord
 from account_links import LinkConflict
 
+LOG = logging.getLogger("reforger.join_oyb")
 MARKER = "OYB • Verified Reforger account linking"
 
 
@@ -42,7 +44,12 @@ class LinkModal(discord.ui.Modal, title="Link your Reforger account"):
         try:
             name = str(self.name_input).strip()
             identity = find_identity(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"), name)
-            self.bot.account_links.submit(interaction.guild_id, interaction.user.id, identity, name)
+            token = self.bot.account_links.submit(interaction.guild_id, interaction.user.id, identity, name)
+            try:
+                from link_review import post_request_alert
+                await post_request_alert(self.bot, interaction.guild, token)
+            except Exception:
+                LOG.exception("Could not post link-request alert for %s", interaction.user.id)
             text = "Request submitted for admin approval. Use My link status to check progress. Your tracked time is preserved."
         except (ValueError, LinkConflict) as exc:
             text = str(exc)
