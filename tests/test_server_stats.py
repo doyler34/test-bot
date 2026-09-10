@@ -27,8 +27,12 @@ class FakeVoice:
 
 
 class FakeCategory:
-    def __init__(self, guild, id, name):
-        self.guild, self.id, self.name = guild, id, name
+    def __init__(self, guild, id, name, position=5):
+        self.guild, self.id, self.name, self.position = guild, id, name, position
+
+    async def edit(self, **kwargs):
+        self.position = kwargs.get("position", self.position)
+        return self
 
 
 class Hashable:  # real Roles/Members are hashable; SimpleNamespace is not
@@ -54,7 +58,7 @@ class FakeGuild:
         return self.roles.get(id)
 
     async def create_category(self, name, **kwargs):
-        c = FakeCategory(self, self._next(), name)
+        c = FakeCategory(self, self._next(), name, position=kwargs.get("position", 5))
         self.categories.append(c)
         self._by_id[c.id] = c
         return c
@@ -108,6 +112,7 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
     async def test_prepare_creates_category_and_one_channel_per_stat(self):
         await self.stats.prepare(self.guild)
         self.assertEqual(len(self.guild.categories), 1)
+        self.assertEqual(self.guild.categories[0].position, 0)  # pinned to the top
         # 3 servers + arma + vc (no admin role configured).
         self.assertEqual(set(self.stats.channels), {"server-1", "server-2", "server-3", "arma", "vc"})
         self.assertEqual(self.guild.creates, 5)
