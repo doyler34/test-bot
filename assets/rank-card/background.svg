@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="320" viewBox="0 0 960 320">
+<defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#91a595" stroke-width=".5" opacity=".06"/></pattern></defs>
+<path d="M16 0H944L960 16V304L944 320H16L0 304V16Z" fill="#101513"/>
+<path d="M24 58H210V296H24Z" fill="#1b2420"/>
+<path d="M744 58H936V296H744Z" fill="#19211d"/>
+<path d="M24 58H936V296H24Z" fill="url(#grid)"/>
+<g stroke="#9cb6a0" stroke-width=".8" opacity=".08" fill="none"><path d="M650 0 L820 130 L760 220 L850 320"/><path d="M678 0 L848 130 L788 220 L878 320"/><path d="M706 0 L876 130 L816 220 L906 320"/><path d="M734 0 L904 130 L844 220 L934 320"/><path d="M762 0 L932 130 L872 220 L962 320"/><path d="M790 0 L960 130 L900 220 L990 320"/><path d="M818 0 L988 130 L928 220 L1018 320"/><path d="M846 0 L1016 130 L956 220 L1046 320"/><path d="M874 0 L1044 130 L984 220 L1074 320"/><path d="M902 0 L1072 130 L1012 220 L1102 320"/><path d="M930 0 L1100 130 L1040 220 L1130 320"/><path d="M958 0 L1128 130 L1068 220 L1158 320"/></g></svg>

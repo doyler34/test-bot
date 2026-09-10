@@ -1,0 +1,29 @@
+[
+  {
+    "id": "server-1",
+    "name": "Server 1 — Vanilla",
+    "channel_name": "server-1-vanilla",
+    "enabled": true,
+    "log_dir": "${REFORGER_LOG_DIR}",
+    "settings": "**Game:** Arma Reforger\n**Setup:** Vanilla / unmodded\nMap, player slots and other settings have not been supplied yet.",
+    "rules": "• No cheating, exploits, intentional teamkilling or griefing.\n• Do not steal or deliberately destroy friendly vehicles or equipment.\n• Stay **400 metres** from the enemy MOB. No firing into or out of MOBs; no AI or defensive weapons inside.\n• Maximum **6 supply crates per base**.\n• No abusive behaviour or radio spam. Respect **Clear Comms** and admin instructions."
+  },
+  {
+    "id": "server-2",
+    "name": "Server 2",
+    "channel_name": "server-2",
+    "enabled": false,
+    "log_dir": "",
+    "settings": "Coming soon. This game server is not active yet.",
+    "rules": "Rules will be published before this server launches."
+  },
+  {
+    "id": "server-3",
+    "name": "Server 3",
+    "channel_name": "server-3",
+    "enabled": false,
+    "log_dir": "",
+    "settings": "Coming soon. This game server is not active yet.",
+    "rules": "Rules will be published before this server launches."
+  }
+]

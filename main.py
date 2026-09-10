@@ -1,95 +1,123 @@
 """
-Main entry point for the Grandfather Discord Bot.
+Arma Reforger -> Discord voice-channel session timer.
 
-This script initializes all components and starts the Discord bot.
+Watches an (unmodded) Reforger dedicated server's shipped console.log for match
+start/end and updates a voice channel's status with live match uptime.
+Optionally joins/leaves voice for clients that display connection timers. See README.md for details.
 """
 
-import os
-import logging
+from __future__ import annotations
+
 import asyncio
-from dotenv import load_dotenv
-from database import Database
-from registry import CapabilityRegistry
-from ai import AICommandGenerator
-from executor import CommandExecutor
-from discord_integration import GrandfatherBot
-from bot_loader import load_bots_from_directory
+import logging
+import os
+import signal
+
+from config import ConfigError, load_config, setup_logging
+from reforger_monitor import ReforgerMonitor
+from timer_bot import TimerBot
+
+logger = logging.getLogger("reforger.main")
 
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/bot.log'),
-        logging.StreamHandler()
-    ]
-)
+async def run_bot(config) -> None:
 
-logger = logging.getLogger(__name__)
+    bot = TimerBot(
+        guild_id=config.guild_id,
+        voice_channel_id=config.voice_channel_id,
+        status_refresh_seconds=config.status_refresh_seconds,
+        join_voice_channel=config.join_voice_channel,
+    )
 
+    monitor = ReforgerMonitor(
+        log_dir=config.log_dir,
+        on_session_start=bot.handle_session_start,
+        on_session_end=bot.handle_session_end,
+        stale_seconds=config.session_stale_seconds,
+        a2s_host=config.a2s_host,
+        a2s_port=config.a2s_port,
+    )
 
-def create_directories():
-    """Create necessary directories if they don't exist."""
-    os.makedirs('logs', exist_ok=True)
-    os.makedirs('config', exist_ok=True)
+    async def run_monitor() -> None:
+        await bot.wait_until_ready()
+        await monitor.run()
 
+    # Graceful shutdown on SIGINT/SIGTERM.
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:
+            pass  # e.g. Windows
 
+    async with bot:
+        monitor_task = asyncio.create_task(run_monitor(), name="monitor")
+        bot_task = asyncio.create_task(bot.start(config.discord_token), name="bot")
+        stop_task = asyncio.create_task(stop.wait(), name="stop")
 
-
-async def main():
-    """Main function to initialize and run the bot."""
-    # Load environment variables
-    load_dotenv()
-    
-    # Create directories
-    create_directories()
-    
-    # Get Discord bot token
-    token = os.getenv('DISCORD_BOT_TOKEN')
-    if not token:
-        logger.error("DISCORD_BOT_TOKEN not found in environment variables!")
-        logger.error("Please create a .env file with DISCORD_BOT_TOKEN=your_token")
-        return
-    
-    # Initialize components
-    logger.info("Initializing database...")
-    database = Database()
-    
-    logger.info("Initializing capability registry...")
-    registry = CapabilityRegistry(database)
-    
-    logger.info("Initializing command executor...")
-    executor = CommandExecutor(database, registry)
-    
-    # Load all bots from config/bots/ directory
-    logger.info("Loading child bots from config/bots/...")
-    load_stats = load_bots_from_directory(registry, executor, bots_dir="config/bots")
-    
-    if load_stats['bots_loaded'] == 0:
-        logger.warning(
-            "No bots loaded! Add bot configuration files to config/bots/ directory. "
-            "See config/bots/example_http_bot.json.example for format."
+        done, _ = await asyncio.wait(
+            {monitor_task, bot_task, stop_task},
+            return_when=asyncio.FIRST_COMPLETED,
         )
-    
-    logger.info("Initializing AI command generator...")
-    ai_generator = AICommandGenerator(registry, api_key=os.getenv('GEMINI_API_KEY'))
-    
-    # Initialize Discord bot
-    logger.info("Initializing Discord bot...")
-    bot = GrandfatherBot(database, registry, ai_generator, executor)
-    
-    # Run the bot
+
+        if stop_task in done:
+            logger.info("Shutdown signal received")
+        else:
+            logger.warning("A core task exited; shutting down")
+
+        # Best-effort: leave the VC and clear the channel status on the way out.
+        try:
+            await asyncio.wait_for(bot.handle_session_end(), timeout=10)
+        except Exception:  # noqa: BLE001
+            logger.debug("Cleanup during shutdown failed", exc_info=True)
+
+        for task in (monitor_task, bot_task, stop_task):
+            task.cancel()
+        await asyncio.gather(monitor_task, bot_task, stop_task, return_exceptions=True)
+
+    logger.info("Shutdown complete")
+
+
+async def run() -> None:
+    from dotenv import load_dotenv
+    load_dotenv()
+    if os.getenv("SERVERS_CONFIG"):
+        from notification_config import load_notification_config
+        from server_notifications import run_notifications
+        await run_notifications(load_notification_config())
+        return
+    config = load_config()
+    if os.getenv("PLAYTIME_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
+        await run_bot(config)
+        return
+    from playtime_tracker import Tracker
+    tracker = Tracker(config.log_dir, os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"),
+                      os.getenv("PLAYTIME_SERVER_ID", "server-1"))
+    bot_task = asyncio.create_task(run_bot(config), name="timer")
+    tracker_task = asyncio.create_task(tracker.run(), name="playtime")
     try:
-        await bot.start(token)
-    except KeyboardInterrupt:
-        logger.info("Bot shutdown requested")
-    except Exception as e:
-        logger.exception(f"Bot error: {e}")
+        done, _ = await asyncio.wait(
+            {bot_task, tracker_task}, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            task.result()
     finally:
-        await bot.close()
-        logger.info("Bot disconnected")
+        for task in (bot_task, tracker_task):
+            task.cancel()
+        await asyncio.gather(bot_task, tracker_task, return_exceptions=True)
+        tracker.close()
 
 
-if __name__ == '__main__':
-    asyncio.run(main())
+def main() -> None:
+    setup_logging()
+    try:
+        asyncio.run(run())
+    except ConfigError as exc:
+        logger.error("Configuration error: %s", exc)
+        raise SystemExit(1)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

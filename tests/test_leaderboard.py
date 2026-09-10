@@ -1,0 +1,90 @@
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
+import unittest
+from unittest.mock import AsyncMock, Mock, patch
+import uuid
+import discord
+from account_links import AccountLinks
+from combat_store import migrate
+from leaderboard_command import LeaderboardCommand, leaderboard_embed, standings
+from rank_command import RankCommand
+
+
+def interaction(user=10, guild=1):
+    return SimpleNamespace(user=SimpleNamespace(id=user), guild_id=guild,
+        guild=SimpleNamespace(get_member=Mock(return_value=None)),
+        app_permissions=SimpleNamespace(embed_links=True),
+        response=SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock(), edit_message=AsyncMock(), is_done=Mock(return_value=False)),
+        followup=SimpleNamespace(send=AsyncMock()))
+
+
+def players(count):
+    return [(f'Player {i}', count-i, i) for i in range(count)]
+
+
+class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tmp=tempfile.TemporaryDirectory()
+        self.links=AccountLinks(Path(self.tmp.name)/'links.db')
+        migrate(self.links.db)
+        self.bot=discord.Client(intents=discord.Intents.default())
+        self.bot.config=SimpleNamespace(guild_id=1)
+        self.bot.account_links=self.links
+        self.bot.rank_command=RankCommand(self.bot)
+        self.command=LeaderboardCommand(self.bot)
+
+    async def asyncTearDown(self):
+        await self.bot.close()
+        self.links.close()
+        self.tmp.cleanup()
+
+    def add(self, member, kills=0, deaths=0, guild=1, name='Player', combat=True):
+        identity=str(uuid.UUID(int=member))
+        token=self.links.submit(guild,member,identity,name)
+        self.links.review(guild,token,999,True)
+        if combat:
+            with self.links.db:
+                self.links.db.execute('INSERT INTO combat_totals VALUES (?,?,?,?,?)',(identity,kills,deaths,0,'now'))
+
+    async def test_sort_scope_and_read_only(self):
+        for args in [(12,10,2),(11,10,2),(13,10,1),(14,11,9)]:
+            self.add(*args)
+        self.add(15,999,guild=2)
+        self.add(16,combat=False)
+        with self.links.db:
+            self.links.db.execute("INSERT INTO combat_totals VALUES ('unlinked',999,0,0,'now')")
+        before=list(self.links.db.iterdump())
+        self.assertEqual([row[0] for row in standings(self.links.db,1)],[14,13,11,12])
+        self.assertEqual(before,list(self.links.db.iterdump()))
+
+    async def test_page_sizes_and_numbering(self):
+        for count,pages in [(0,1),(1,1),(15,1),(16,2),(30,2),(31,3)]:
+            for page in range(pages):
+                embed=leaderboard_embed(players(count),page)
+                self.assertIn(f'Page {page+1}/{pages}',embed.footer.text)
+                if count:
+                    lines=embed.description.splitlines()[2:-1]
+                    self.assertEqual(len(lines),min(15,count-page*15))
+                    self.assertEqual(int(lines[0].split()[0]),page*15+1)
+                    self.assertLess(len(embed.description),4096)
+                else:
+                    self.assertIn('No linked players',embed.description)
+
+    async def test_names_cannot_escape_table(self):
+        embed=leaderboard_embed([('```\n@everyone\r\n\u202e'+'X'*200,4,3),('Éowyn 玩家',2,1)],0)
+        self.assertEqual(embed.description.count('```'),2)
+        self.assertNotIn('\u202e',embed.description)
+        self.assertIn('Éowyn 玩家',embed.description)
+        self.assertEqual(len(embed.description.splitlines()),5)
+
+    async def test_command_only_redirects_privately(self):
+        self.bot.store=SimpleNamespace(leaderboard=Mock(return_value={'channel':123}))
+        i=interaction()
+        await self.command.show(i)
+        self.assertIn('<#123>',i.response.send_message.await_args.args[0])
+        self.assertTrue(i.response.send_message.await_args.kwargs['ephemeral'])
+        i.followup.send.assert_not_awaited()
+        self.bot.store.leaderboard.side_effect=RuntimeError('database locked')
+        await self.command.show(i)
+        self.assertTrue(i.response.send_message.await_args.kwargs['ephemeral'])
