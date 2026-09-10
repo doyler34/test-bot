@@ -34,6 +34,10 @@ class FakeCategory:
         self.position = kwargs.get("position", self.position)
         return self
 
+    async def move(self, **kwargs):
+        if kwargs.get("beginning"):
+            self.position = 0
+
 
 class Hashable:  # real Roles/Members are hashable; SimpleNamespace is not
     def __init__(self, id):

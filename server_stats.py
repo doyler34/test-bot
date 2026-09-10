@@ -77,17 +77,16 @@ class ServerStats:
         if not isinstance(category, discord.CategoryChannel):
             category = next((c for c in guild.categories if c.name == CATEGORY_NAME), None)
         if category is None:
-            category = await guild.create_category(CATEGORY_NAME, position=0,
-                                                   reason="OYB live server stats")
+            category = await guild.create_category(CATEGORY_NAME, reason="OYB live server stats")
         if row is None or row[0] != category.id:
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO stat_channels VALUES ('category',?,0)", (category.id,))
-        # Keep the stats block pinned to the top of the channel list.
-        if getattr(category, "position", 0) != 0:
-            try:
-                category = await category.edit(position=0, reason="Keep OYB stats at the top")
-            except discord.HTTPException:
-                LOG.warning("Could not move SERVER STATS to the top; check Manage Channels")
+        # Pin the stats block to the top. move(beginning=True) is the reliable
+        # reorder; edit(position=0) does not dependably move a category.
+        try:
+            await category.move(beginning=True, reason="Keep OYB stats at the top")
+        except (discord.HTTPException, TypeError):
+            LOG.warning("Could not move SERVER STATS to the top; check Manage Channels and role position")
         return category
 
     async def _ensure_channel(self, guild, key):
