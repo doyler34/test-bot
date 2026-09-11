@@ -8,12 +8,12 @@ import unittest
 from unittest.mock import AsyncMock, patch
 import discord
 
-from account_links import AccountLinks
-from combat_parser import parse_kill
-from combat_store import migrate, totals
-from combat_ingestor import scan, ingest
-from stats_command import StatsCommand, stats_embed, kd
-from rank_command import RankCommand
+from bot.storage.account_links import AccountLinks
+from bot.tracking.combat_parser import parse_kill
+from bot.storage.combat_store import migrate, totals
+from bot.tracking.combat_ingestor import scan, ingest
+from bot.discord.stats_command import StatsCommand, stats_embed, kd
+from bot.discord.rank_command import RankCommand
 
 VICTIM='11111111-2222-3333-4444-555555555555'
 KILLER='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
@@ -105,11 +105,11 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(totals(self.db,VICTIM)['deaths'],1)
 
     def test_transaction_failure_retries_without_extra_credit(self):
-        from combat_store import record
+        from bot.storage.combat_store import record
         def fail(*args):
             record(*args)
             raise RuntimeError('interrupted commit')
-        with patch('combat_ingestor.record',side_effect=fail):
+        with patch('bot.tracking.combat_ingestor.record',side_effect=fail):
             with self.assertRaises(RuntimeError):
                 self.process(event())
         self.assertIsNone(totals(self.db,VICTIM))

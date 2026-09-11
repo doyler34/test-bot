@@ -26,7 +26,7 @@ the additive migration. Awarding the ledger entry and total is one transaction,
 so replayed events, retries and bot restarts cannot credit a message twice. No
 playtime rows or legacy balances are overwritten by message awarding.
 
-`XP_PER_POST = 1` in `rank_rules.py` sets the current rate. Future rate changes
+`XP_PER_POST = 1` in `bot/ranks/rank_rules.py` sets the current rate. Future rate changes
 apply to new awards; already awarded post XP remains intact. Playtime has its
 separate existing `SECONDS_PER_XP` setting.
 

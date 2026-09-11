@@ -21,7 +21,7 @@ No proprietary/system font is required. Pillow's default is an emergency fallbac
 
 Edit the SVGs to change the artwork. `dev/generate_rank_assets.py` reconstructs
 the original SVG masters (it overwrites these files). Layout, colours, text sizing
-and PNG composition live in `rank_card.py`; progression lives in `rank_rules.py`.
+and PNG composition live in `bot/ranks/rank_card.py`; progression lives in `bot/ranks/rank_rules.py`.
 Nothing here fetches external assets at runtime. The Discord command attempts to
 fetch the caller's Discord avatar, falling back to a local silhouette on failure.
 

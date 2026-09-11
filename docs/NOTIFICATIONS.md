@@ -39,7 +39,7 @@ The bot's highest role must be above the notification roles. The roles are
 mentionable so the bot can ping them without broad Mention Everyone permission.
 Other members may also mention those roles wherever they can send messages.
 
-For an existing installation, run `.venv/bin/python update_server_rules.py`
+For an existing installation, run `.venv/bin/python -m deploy.update_server_rules`
 after pulling this update and before restarting the bot. This backs up the local
 JSON and changes only Server 1's rules to the shorter version.
 

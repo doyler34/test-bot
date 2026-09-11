@@ -10,7 +10,7 @@ def main():
     load_dotenv()
     path = Path(os.getenv("SERVERS_CONFIG", "servers.local.json"))
     data = json.loads(path.read_text(encoding="utf-8"))
-    example = json.loads(Path(__file__).with_name("servers.example.json").read_text(encoding="utf-8"))
+    example = json.loads((Path(__file__).resolve().parents[1] / "servers.example.json").read_text(encoding="utf-8"))
     rules = next(s["rules"] for s in example if s["id"] == "server-1")
     server = next(s for s in data if s["id"] == "server-1")
     if server["rules"] == rules:

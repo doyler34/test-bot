@@ -7,10 +7,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from PIL import Image
-from rank_rules import rank_for_xp, xp_from_seconds
-from rank_persistence import XPStore, migrate_time, record_interval
-from rank_card import render_card
-from playtime_tracker import Tracker
+from bot.ranks.rank_rules import rank_for_xp, xp_from_seconds
+from bot.storage.rank_persistence import XPStore, migrate_time, record_interval
+from bot.ranks.rank_card import render_card
+from bot.tracking.playtime_tracker import Tracker
 from test_playtime import join, heartbeat, leave, UID
 
 
@@ -47,7 +47,7 @@ class PersistenceTests(unittest.TestCase):
     def test_legacy_credit_partial_and_new_time_survive_restart(self):
         self.source.execute("INSERT INTO totals VALUES ('one','player',2000)")
         self.source.commit()
-        with patch('rank_persistence.time.time', return_value=10000):
+        with patch('bot.storage.rank_persistence.time.time', return_value=10000):
             migrate_time(self.source)
         self.db.execute('CREATE TABLE rank_progress(guild, member, identity, baseline, seconds)')
         self.db.execute("INSERT INTO rank_progress VALUES(1,2,'player',0,179)")
@@ -129,12 +129,12 @@ class CardTests(unittest.TestCase):
             self.assertEqual('NEXT RANK' in labels,xp<700)
 
     def test_bad_avatar_and_missing_insignia(self):
-        from rank_card import vector
+        from bot.ranks.rank_card import vector
         def missing(path,*args):
             if path.parent.name == 'ranks':
                 raise ValueError('missing')
             return vector(path,*args)
-        with patch('rank_card.vector',side_effect=missing):
+        with patch('bot.ranks.rank_card.vector',side_effect=missing):
             self.assertTrue(render_card('Player',347,b'broken').startswith(b'\x89PNG'))
 
     def test_gif_avatar(self):
@@ -144,7 +144,7 @@ class CardTests(unittest.TestCase):
             self.assertEqual(card.getpixel((117,142)),(255,0,0))
 
     def test_missing_template_and_fonts_use_local_fallbacks(self):
-        import rank_card
+        import bot.ranks.rank_card as rank_card
         with tempfile.TemporaryDirectory() as directory:
             try:
                 with patch.object(rank_card,'ASSETS',Path(directory)):

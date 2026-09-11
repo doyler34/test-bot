@@ -5,9 +5,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import discord
-from account_links import AccountLinks
-import link_review
-from link_review import AlertsControlView, ReviewButtons, TOKEN_PREFIX, post_request_alert
+from bot.storage.account_links import AccountLinks
+import bot.discord.link_review as link_review
+from bot.discord.link_review import AlertsControlView, ReviewButtons, TOKEN_PREFIX, post_request_alert
 
 IDENT = "11111111-2222-3333-4444-555555555555"
 

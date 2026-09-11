@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-from reforger_monitor import ReforgerMonitor
+from bot.tracking.reforger_monitor import ReforgerMonitor
 
 
 def game(stamp):

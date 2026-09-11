@@ -6,9 +6,9 @@ import unicodedata
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 import resvg_py
-from rank_rules import rank_for_xp
+from bot.ranks.rank_rules import rank_for_xp
 
-ASSETS = Path(__file__).resolve().parent / 'assets/rank-card'
+ASSETS = Path(__file__).resolve().parents[2] / 'assets/rank-card'
 WIDTH, HEIGHT = 960, 320
 INK, MUTED, ACCENT = '#e9eee5', '#8b9c8d', '#c1d49f'
 

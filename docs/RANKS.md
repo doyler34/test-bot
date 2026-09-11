@@ -18,7 +18,7 @@ admin-approval workflow in #join-oyb.
 | OYB Captain | 600 |
 | OYB Major | 700 |
 
-`rank_rules.py` is the single canonical definition. Major is the maximum rank,
+`bot/ranks/rank_rules.py` is the single canonical definition. Major is the maximum rank,
 but XP continues to accumulate. Progress is through the current rank: 347 XP
 is Corporal, 47% toward Sergeant, with 53 XP remaining. Major has a full bar
 and MAX RANK, without a next rank or remaining XP.
@@ -107,7 +107,7 @@ the automated tests use mocked Discord responses and real image rendering.
 ## Design and validation
 
 Original SVG masters and font licenses live in assets/rank-card; see its README.
-Edit the SVGs for backgrounds/frames/insignias, and rank_card.py for layout.
+Edit the SVGs for backgrounds/frames/insignias, and bot/ranks/rank_card.py for layout.
 Progression does not depend on the artwork. Bundled open fonts cover Latin,
 Greek and Cyrillic; unsupported glyphs degrade to the font's placeholder.
 Long names shrink and then ellipsize. Invalid/missing avatars use a silhouette.

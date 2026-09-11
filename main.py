@@ -13,9 +13,9 @@ import logging
 import os
 import signal
 
-from config import ConfigError, load_config, setup_logging
-from reforger_monitor import ReforgerMonitor
-from timer_bot import TimerBot
+from bot.config import ConfigError, load_config, setup_logging
+from bot.tracking.reforger_monitor import ReforgerMonitor
+from bot.discord.timer_bot import TimerBot
 
 logger = logging.getLogger("reforger.main")
 
@@ -83,15 +83,15 @@ async def run() -> None:
     from dotenv import load_dotenv
     load_dotenv()
     if os.getenv("SERVERS_CONFIG"):
-        from notification_config import load_notification_config
-        from server_notifications import run_notifications
+        from bot.notification_config import load_notification_config
+        from bot.discord.server_notifications import run_notifications
         await run_notifications(load_notification_config())
         return
     config = load_config()
     if os.getenv("PLAYTIME_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
         await run_bot(config)
         return
-    from playtime_tracker import Tracker
+    from bot.tracking.playtime_tracker import Tracker
     tracker = Tracker(config.log_dir, os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"),
                       os.getenv("PLAYTIME_SERVER_ID", "server-1"))
     bot_task = asyncio.create_task(run_bot(config), name="timer")

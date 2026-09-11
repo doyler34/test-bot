@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, MagicMock, patch
 
 import discord
-from account_links import AccountLinks
-from rank_sync import RankSync, RANKS
+from bot.storage.account_links import AccountLinks
+from bot.ranks.rank_sync import RankSync, RANKS
 
 IDENTITY = "11111111-2222-3333-4444-555555555555"
 
@@ -172,7 +172,7 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
             self.source.execute("INSERT OR IGNORE INTO global_time VALUES (?,0)", (uid,))
             self.links.verified_link(1, member, uid, "admin:22")
         self.source.commit()
-        import rank_persistence
+        import bot.storage.rank_persistence as rank_persistence
         real_connect = rank_persistence.sqlite3.connect
         calls = []
 
@@ -186,7 +186,7 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(calls), 1)
 
     async def test_import_must_finish_before_baseline(self):
-        from playtime_tracker import Tracker
+        from bot.tracking.playtime_tracker import Tracker
         log = self.root / "logs_2026-09-07_13-00-00"
         log.mkdir()
         (log / "console.log").write_text("Unrelated line\n" * 5001)

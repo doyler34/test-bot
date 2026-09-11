@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 import hashlib
 import json
-from rank_persistence import backup_before
+from bot.storage.rank_persistence import backup_before
 
 
 def migrate(db):

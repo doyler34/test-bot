@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from playtime_tracker import Tracker
+from bot.tracking.playtime_tracker import Tracker
 
 UID = "11111111-2222-3333-4444-555555555555"
 

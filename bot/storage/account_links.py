@@ -4,7 +4,7 @@ import time
 import uuid
 from pathlib import Path
 
-from config import configure_connection
+from bot.config import configure_connection
 
 
 class LinkConflict(ValueError):

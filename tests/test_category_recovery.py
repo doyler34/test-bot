@@ -6,9 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from category_timer import CategoryTimers
-from notification_store import NotificationStore
-from reforger_monitor import ReforgerMonitor
+from bot.discord.category_timer import CategoryTimers
+from bot.storage.notification_store import NotificationStore
+from bot.tracking.reforger_monitor import ReforgerMonitor
 
 
 def log(start, tail):
@@ -48,7 +48,7 @@ class CategoryRecoveryTests(unittest.IsolatedAsyncioTestCase):
                 async def scan_and_show(m, wall):
                     await m._tick()
                     m.initialized = True
-                    with patch("category_timer.time.time", return_value=wall):
+                    with patch("bot.discord.category_timer.time.time", return_value=wall):
                         await categories.tick()
                     return category.edit.await_args.kwargs["name"]
 

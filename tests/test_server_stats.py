@@ -6,11 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import discord
-from account_links import AccountLinks
-from notification_config import Server
-from notification_store import NotificationStore
-import server_stats
-from server_stats import ServerStats
+from bot.storage.account_links import AccountLinks
+from bot.notification_config import Server
+from bot.storage.notification_store import NotificationStore
+import bot.discord.server_stats as server_stats
+from bot.discord.server_stats import ServerStats
 
 A = "11111111-2222-3333-4444-555555555555"
 B = "22222222-2222-3333-4444-555555555555"
@@ -109,7 +109,7 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
             get_guild=lambda i: self.guild)
         self.classes = patch.multiple(server_stats.discord, VoiceChannel=FakeVoice, CategoryChannel=FakeCategory)
         self.classes.start()
-        self.clock = patch("server_stats.time.time", side_effect=lambda: self.now)
+        self.clock = patch("bot.discord.server_stats.time.time", side_effect=lambda: self.now)
         self.clock.start()
         self.stats = ServerStats(self.bot)
 

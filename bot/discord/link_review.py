@@ -7,7 +7,7 @@ import logging
 
 import discord
 
-from account_links import LinkConflict
+from bot.storage.account_links import LinkConflict
 
 LOG = logging.getLogger("reforger.link_review")
 

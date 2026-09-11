@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 import sqlite3
 import time
-from rank_rules import xp_from_seconds, XP_PER_POST
+from bot.ranks.rank_rules import xp_from_seconds, XP_PER_POST
 
 _UNSET = object()
 

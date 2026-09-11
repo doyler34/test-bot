@@ -4,8 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, AsyncMock, patch
 import discord
-from category_timer import CategoryTimers, category_name, matches_category
-from notification_store import NotificationStore
+from bot.discord.category_timer import CategoryTimers, category_name, matches_category
+from bot.storage.notification_store import NotificationStore
 
 
 class CategoryTests(unittest.IsolatedAsyncioTestCase):
@@ -29,16 +29,16 @@ class CategoryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_create_reuse_and_five_minute_budget_survives_restart(self):
         await self.manager.prepare(self.guild, self.server)
-        with patch("category_timer.time.time", return_value=1000), patch("category_timer.time.monotonic", return_value=1600):
+        with patch("bot.discord.category_timer.time.time", return_value=1000), patch("bot.discord.category_timer.time.monotonic", return_value=1600):
             await self.manager.tick()
         self.category.edit.assert_awaited_once_with(name="🟢 SERVER ONE · ~25 MIN", reason="OYB approximate match time")
         restarted = CategoryTimers(self.bot)
         await restarted.prepare(self.guild, self.server)
         self.guild.create_category.assert_awaited_once()
-        with patch("category_timer.time.time", return_value=1299):
+        with patch("bot.discord.category_timer.time.time", return_value=1299):
             await restarted.tick()
         self.assertEqual(self.category.edit.await_count, 1)
-        with patch("category_timer.time.time", return_value=1300), patch("category_timer.time.monotonic", return_value=1900):
+        with patch("bot.discord.category_timer.time.time", return_value=1300), patch("bot.discord.category_timer.time.monotonic", return_value=1900):
             await restarted.tick()
         self.assertEqual(self.category.edit.await_count, 2)
         self.assertIn("~30 MIN", self.category.edit.await_args.kwargs["name"])
@@ -76,7 +76,7 @@ class CategoryTests(unittest.IsolatedAsyncioTestCase):
     async def test_rate_limit_error_does_not_retry_immediately(self):
         await self.manager.prepare(self.guild, self.server)
         self.category.edit.side_effect = discord.HTTPException(SimpleNamespace(status=429, reason="Rate limited"), "retry")
-        with patch("category_timer.time.time", return_value=1000), patch("category_timer.time.monotonic", return_value=1600):
+        with patch("bot.discord.category_timer.time.time", return_value=1000), patch("bot.discord.category_timer.time.monotonic", return_value=1600):
             await self.manager.tick()
             await self.manager.tick()
         self.assertEqual(self.category.edit.await_count, 1)

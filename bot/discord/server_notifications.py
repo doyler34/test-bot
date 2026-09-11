@@ -10,23 +10,23 @@ from pathlib import Path
 
 import discord
 
-from notification_store import NotificationStore
-from server_stats import label_for
-from reforger_monitor import ReforgerMonitor
-from timer_bot import TimerBot
-from category_timer import CategoryTimers
-from account_links import AccountLinks
-from join_oyb import prepare_join_channel
-from rank_sync import RankSync
-from rank_command import RankCommand
-from combat_store import migrate as migrate_combat
-from combat_ingestor import CombatIngestor
-from stats_command import StatsCommand
-from leaderboard_command import LeaderboardCommand
-from leaderboard_display import LeaderboardDisplay
-from message_xp import award_message
-from maintenance import Maintenance
-from server_stats import ServerStats
+from bot.storage.notification_store import NotificationStore
+from bot.discord.server_stats import label_for
+from bot.tracking.reforger_monitor import ReforgerMonitor
+from bot.discord.timer_bot import TimerBot
+from bot.discord.category_timer import CategoryTimers
+from bot.storage.account_links import AccountLinks
+from bot.discord.join_oyb import prepare_join_channel
+from bot.ranks.rank_sync import RankSync
+from bot.discord.rank_command import RankCommand
+from bot.storage.combat_store import migrate as migrate_combat
+from bot.tracking.combat_ingestor import CombatIngestor
+from bot.discord.stats_command import StatsCommand
+from bot.discord.leaderboard_command import LeaderboardCommand
+from bot.discord.leaderboard_display import LeaderboardDisplay
+from bot.ranks.message_xp import award_message
+from bot.storage.maintenance import Maintenance
+from bot.discord.server_stats import ServerStats
 
 logger = logging.getLogger("reforger.notifications")
 ANNOUNCEMENT_TTL = 30 * 60
@@ -128,7 +128,7 @@ class NotificationBot(TimerBot):
 
     async def setup_hook(self):
         self.leaderboard_display.register()
-        from link_review import AlertsControlView, ReviewButtons
+        from bot.discord.link_review import AlertsControlView, ReviewButtons
         self.add_view(AlertsControlView(self))
         self.add_view(ReviewButtons(self))
         self._jobs.append(asyncio.create_task(self.rank_command.register()))
@@ -156,11 +156,11 @@ class NotificationBot(TimerBot):
                     logger.exception("Announcements channel unavailable; alerts fall back to #servers")
                 await prepare_join_channel(self, guild, readonly_overwrites(guild))
                 try:
-                    from link_review import prepare_review_channel
+                    from bot.discord.link_review import prepare_review_channel
                     await prepare_review_channel(self, guild)
                 except Exception:
                     logger.exception("Link-request review channel unavailable; check Manage Channels/Roles")
-                from server_layout import cleanup_legacy_layout, remove_timer_categories
+                from bot.discord.server_layout import cleanup_legacy_layout, remove_timer_categories
                 await cleanup_legacy_layout(self, guild)
                 # Remove the retired per-server timer categories; the SERVER STATS
                 # channels now carry the live match counter.
@@ -211,7 +211,7 @@ class NotificationBot(TimerBot):
                 self.monitors.append((server.id, monitor))
                 self._jobs.append(asyncio.create_task(monitor.run()))
                 if os.getenv("PLAYTIME_ENABLED", "").strip().lower() in ("1", "true", "yes", "on"):
-                    from playtime_tracker import Tracker
+                    from bot.tracking.playtime_tracker import Tracker
                     tracker = Tracker(server.log_dir,
                                       os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"),
                                       server.id)
@@ -338,7 +338,7 @@ class NotificationBot(TimerBot):
                 except Exception:
                     logger.exception("Announcement retry pending for %s", row["server"])
             if time.monotonic() - cleaned >= 300:
-                from server_layout import cleanup_legacy_layout
+                from bot.discord.server_layout import cleanup_legacy_layout
                 guild = self.get_guild(self.config.guild_id)
                 if guild:
                     await cleanup_legacy_layout(self, guild)

@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import discord
 
-from config import ConfigError
-from notification_config import NotificationConfig, Server, read_servers
-from server_notifications import (NotificationBot, readonly_overwrites, servers_embed,
+from bot.config import ConfigError
+from bot.notification_config import NotificationConfig, Server, read_servers
+from bot.discord.server_notifications import (NotificationBot, readonly_overwrites, servers_embed,
                                   rules_embed, SERVERS_CARD_MARKER, ANNOUNCE_MARKER)
 
 
@@ -70,7 +70,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot.category_timers.prepare = AsyncMock()
         self.bot.rank_sync.run = AsyncMock()
         self.bot._connection.user = SimpleNamespace(id=99)
-        join_patch = patch("server_notifications.prepare_join_channel", new_callable=AsyncMock)
+        join_patch = patch("bot.discord.server_notifications.prepare_join_channel", new_callable=AsyncMock)
         join_patch.start()
         self.addCleanup(join_patch.stop)
         self.channel = Mock(spec=discord.TextChannel)
@@ -182,7 +182,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_send_and_delete_after_30_minutes_not_before(self):
         row = self.enqueue()
-        with patch("server_notifications.time.time", return_value=1000):
+        with patch("bot.discord.server_notifications.time.time", return_value=1000):
             await self.bot.deliver_or_delete(row)
         kwargs = self.channel.send.await_args.kwargs
         self.assertTrue(kwargs["allowed_mentions"].everyone)
@@ -193,10 +193,10 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sent["expires"], 2770)
         deletion = AsyncMock()
         self.channel.get_partial_message.return_value = SimpleNamespace(delete=deletion)
-        with patch("server_notifications.time.time", return_value=2769):
+        with patch("bot.discord.server_notifications.time.time", return_value=2769):
             await self.bot.deliver_or_delete(sent)
         deletion.assert_not_awaited()
-        with patch("server_notifications.time.time", return_value=2771):
+        with patch("bot.discord.server_notifications.time.time", return_value=2771):
             await self.bot.deliver_or_delete(sent)
         deletion.assert_awaited_once()
         self.channel.get_partial_message.assert_called_once_with(100)
@@ -206,14 +206,14 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         row = self.enqueue()
         self.bot.store.sent(row, 123, 2800)
         # A new connection/process reads the persisted message and deadline.
-        from notification_store import NotificationStore
+        from bot.storage.notification_store import NotificationStore
         restarted = NotificationStore(self.config.state_path)
         try:
             saved = restarted.pending()[0]
             self.assertEqual(saved["message"], 123)
             deletion = AsyncMock()
             self.channel.get_partial_message.return_value = SimpleNamespace(delete=deletion)
-            with patch("server_notifications.time.time", return_value=3000):
+            with patch("bot.discord.server_notifications.time.time", return_value=3000):
                 await self.bot.deliver_or_delete(saved)
             deletion.assert_awaited_once()
             self.assertEqual(restarted.pending(), [])
@@ -234,7 +234,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
                               timestamp=datetime.fromtimestamp(970, timezone.utc))
         existing = message(222, [embed])
         self.channel.history.side_effect = lambda **kwargs: history([existing])
-        with patch("server_notifications.time.time", return_value=1010):
+        with patch("bot.discord.server_notifications.time.time", return_value=1010):
             await self.bot.deliver_or_delete(row)
         self.channel.send.assert_not_awaited()
         self.assertEqual(self.bot.store.pending()[0]["message"], 222)
@@ -245,14 +245,14 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot.store.sent(row, 100, 2800)
         deletion = AsyncMock(side_effect=RuntimeError("temporary failure"))
         self.channel.get_partial_message.return_value = SimpleNamespace(delete=deletion)
-        with patch("server_notifications.time.time", return_value=3000):
+        with patch("bot.discord.server_notifications.time.time", return_value=3000):
             with self.assertRaises(RuntimeError):
                 await self.bot.deliver_or_delete(self.bot.store.pending()[0])
         self.assertEqual(len(self.bot.store.pending()), 1)
 
     async def test_old_unsent_alert_is_not_delivered_late(self):
         row = self.enqueue()
-        with patch("server_notifications.time.time", return_value=3000):
+        with patch("bot.discord.server_notifications.time.time", return_value=3000):
             await self.bot.deliver_or_delete(row)
         self.channel.send.assert_not_awaited()
         self.assertEqual(self.bot.store.pending(), [])
@@ -268,7 +268,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot.prepare_servers = AsyncMock()
         self.bot.prepare_announcement_channel = AsyncMock()
         self.bot.channels_by_server = {"server-1": self.channel}
-        with patch("server_notifications.ReforgerMonitor.run", new_callable=AsyncMock):
+        with patch("bot.discord.server_notifications.ReforgerMonitor.run", new_callable=AsyncMock):
             await self.bot.on_ready()
         self.bot.prepare_servers.assert_awaited_once()
 
@@ -292,7 +292,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot.channels_by_server = {"server-1": self.channel}
         self.bot.handle_session_start = AsyncMock()
         self.bot.handle_session_end = AsyncMock()
-        with patch("server_notifications.ReforgerMonitor.run", new_callable=AsyncMock):
+        with patch("bot.discord.server_notifications.ReforgerMonitor.run", new_callable=AsyncMock):
             await self.bot.on_ready()
         monitor = self.bot.monitors[0][1]
         monitor.session_key = "recovered"
@@ -309,7 +309,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot.store.sent(row, 100, 2800)
         deletion = AsyncMock()
         self.channel.get_partial_message.return_value = SimpleNamespace(delete=deletion)
-        with patch("server_notifications.time.time", return_value=2771):
+        with patch("bot.discord.server_notifications.time.time", return_value=2771):
             await self.bot.deliver_or_delete(self.bot.store.pending()[0])
         deletion.assert_awaited_once()
 
@@ -340,7 +340,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_delayed_queue_does_not_send_expired_match(self):
         self.bot.store.enqueue("server-1", "old", 50, "Server 1", 100, 1890)
-        with patch("server_notifications.time.time", return_value=1901):
+        with patch("bot.discord.server_notifications.time.time", return_value=1901):
             await self.bot.deliver_or_delete(self.bot.store.pending()[0])
         self.channel.send.assert_not_awaited()
         self.assertEqual(self.bot.store.pending(), [])

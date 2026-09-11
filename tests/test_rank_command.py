@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, AsyncMock, patch
 
 import discord
-from account_links import AccountLinks
-from rank_command import RankCommand
+from bot.storage.account_links import AccountLinks
+from bot.discord.rank_command import RankCommand
 
 
 class CommandTests(unittest.IsolatedAsyncioTestCase):
@@ -43,8 +43,8 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_full_bot_startup_hook_registers_and_closes_cleanly(self):
         import main  # Verify the production entry point and its imports too.
-        from server_notifications import NotificationBot
-        from notification_config import NotificationConfig
+        from bot.discord.server_notifications import NotificationBot
+        from bot.notification_config import NotificationConfig
         bot = NotificationBot(NotificationConfig('not-a-real-token',1,(),str(Path(self.tmp.name)/'notification.db')))
         try:
             with patch.object(bot.rank_command.tree,'sync',new=AsyncMock()) as sync:
@@ -87,6 +87,6 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_renderer_failure_has_useful_response(self):
         self.link()
-        with patch('rank_command.render_card',side_effect=RuntimeError('render failed')):
+        with patch('bot.discord.rank_command.render_card',side_effect=RuntimeError('render failed')):
             await self.command.show(self.interaction)
         self.assertIn('try again',self.interaction.followup.send.await_args.args[0])

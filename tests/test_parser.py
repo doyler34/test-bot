@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from reforger_monitor import LineEvent, parse_line  # noqa: E402
+from bot.tracking.reforger_monitor import LineEvent, parse_line  # noqa: E402
 
 GAME_START = "02:45:31.127 SCRIPT      : SCR_BaseGameMode::OnGameStateChanged = GAME"
 GAME_END = "12:34:56.789 SCRIPT      : SCR_BaseGameMode::OnGameStateChanged = POSTGAME"

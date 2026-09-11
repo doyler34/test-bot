@@ -5,10 +5,10 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 import uuid
 import discord
-from account_links import AccountLinks
-from combat_store import migrate
-from leaderboard_command import LeaderboardCommand, leaderboard_embed, standings
-from rank_command import RankCommand
+from bot.storage.account_links import AccountLinks
+from bot.storage.combat_store import migrate
+from bot.discord.leaderboard_command import LeaderboardCommand, leaderboard_embed, standings
+from bot.discord.rank_command import RankCommand
 
 
 def interaction(user=10, guild=1):

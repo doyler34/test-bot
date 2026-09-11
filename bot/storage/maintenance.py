@@ -9,8 +9,8 @@ from pathlib import Path
 import sqlite3
 import time
 
-from config import configure_connection
-import retention
+from bot.config import configure_connection
+import bot.storage.retention as retention
 
 LOG = logging.getLogger("reforger.retention")
 

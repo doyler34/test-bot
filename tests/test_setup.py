@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from dotenv import dotenv_values
-from config import ConfigError
+from bot.config import ConfigError
 from deploy.setup_config import (discover, env_text, log_path, make_servers,
     process_roots, render_cli, render_unit, save_configuration, select_log,
     token_input, validate, run_tests)
@@ -187,7 +187,7 @@ class SetupTests(unittest.TestCase):
         saved.write_text("VOICE_CHANNEL_ID=1545897772442583141\nJOIN_VOICE_CHANNEL=true\nSESSION_STALE_SECONDS=999\n")
         original = saved.read_bytes()
         servers = self.config(1)
-        with patch("notification_config.load_dotenv", side_effect=lambda: load_dotenv(saved)) as loader:
+        with patch("bot.notification_config.load_dotenv", side_effect=lambda: load_dotenv(saved)) as loader:
             loaded = self.check(servers)
         loader.assert_not_called()
         self.assertEqual(loaded.voice_channel_id, 0)
@@ -197,7 +197,7 @@ class SetupTests(unittest.TestCase):
 
     def test_normal_startup_still_loads_env_file(self):
         from dotenv import load_dotenv
-        from notification_config import load_notification_config
+        from bot.notification_config import load_notification_config
         from deploy.setup_config import environment
         servers = self.config(1)
         path = self.root / "servers.json"
@@ -205,7 +205,7 @@ class SetupTests(unittest.TestCase):
         saved = self.root / ".env"
         saved.write_text("VOICE_CHANNEL_ID=1234\n")
         with environment({**self.values, "SERVERS_CONFIG": str(path)}):
-            with patch("notification_config.load_dotenv", side_effect=lambda: load_dotenv(saved)) as loader:
+            with patch("bot.notification_config.load_dotenv", side_effect=lambda: load_dotenv(saved)) as loader:
                 config = load_notification_config()
         loader.assert_called_once()
         self.assertEqual(config.voice_channel_id, 1234)

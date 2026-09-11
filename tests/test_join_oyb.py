@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, Mock
 import sqlite3
 import discord
 
-from account_links import AccountLinks
-from join_oyb import JoinView, ReviewDecision, find_identity, prepare_join_channel
+from bot.storage.account_links import AccountLinks
+from bot.discord.join_oyb import JoinView, ReviewDecision, find_identity, prepare_join_channel
 
 
 class JoinTests(unittest.IsolatedAsyncioTestCase):
@@ -39,7 +39,7 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
     async def test_create_reuse_card_and_persistent_buttons(self):
         channel = Mock(spec=discord.TextChannel)
         channel.id = 55
-        from join_oyb import MARKER
+        from bot.discord.join_oyb import MARKER
         channel.topic = MARKER
         info = SimpleNamespace(id=66, author=self.bot.user, embeds=[], edit=AsyncMock())
         channel.send = AsyncMock(return_value=info)

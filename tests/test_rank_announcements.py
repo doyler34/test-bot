@@ -5,9 +5,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import discord
-from account_links import AccountLinks
-from rank_sync import RankSync
-from rank_announcements import RankAnnouncements
+from bot.storage.account_links import AccountLinks
+from bot.ranks.rank_sync import RankSync
+from bot.ranks.rank_announcements import RankAnnouncements
 
 
 class AnnouncementTests(unittest.IsolatedAsyncioTestCase):

@@ -5,7 +5,7 @@ from pathlib import Path
 import sqlite3
 from contextlib import closing
 import discord
-from account_links import LinkConflict
+from bot.storage.account_links import LinkConflict
 
 LOG = logging.getLogger("reforger.join_oyb")
 MARKER = "OYB • Verified Reforger account linking"
@@ -46,7 +46,7 @@ class LinkModal(discord.ui.Modal, title="Link your Reforger account"):
             identity = find_identity(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"), name)
             token = self.bot.account_links.submit(interaction.guild_id, interaction.user.id, identity, name)
             try:
-                from link_review import post_request_alert
+                from bot.discord.link_review import post_request_alert
                 await post_request_alert(self.bot, interaction.guild, token)
             except Exception:
                 LOG.exception("Could not post link-request alert for %s", interaction.user.id)

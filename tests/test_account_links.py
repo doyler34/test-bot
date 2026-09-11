@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from account_links import AccountLinks, LinkConflict
+from bot.storage.account_links import AccountLinks, LinkConflict
 
 
 class AccountLinkTests(unittest.TestCase):

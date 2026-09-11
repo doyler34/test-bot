@@ -6,7 +6,7 @@ import math
 import time
 
 import discord
-from leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
+from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
 
 LOG = logging.getLogger('reforger.leaderboard')
 CHANNEL_NAME = '===OYB-LeaderBoard==='

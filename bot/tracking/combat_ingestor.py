@@ -8,8 +8,8 @@ from pathlib import Path
 import re
 import sqlite3
 
-from combat_parser import parse_kill
-from combat_store import record
+from bot.tracking.combat_parser import parse_kill
+from bot.storage.combat_store import record
 
 LOG = logging.getLogger('reforger.combat')
 STAMP = re.compile(r'^(\d{2}:\d{2}:\d{2}\.\d{3})')
@@ -82,7 +82,7 @@ def ingest(database, servers):
     added = 0
     # Separate connection to the SAME database; created and closed on this worker.
     with closing(sqlite3.connect(database,timeout=10)) as db:
-        from config import configure_connection
+        from bot.config import configure_connection
         configure_connection(db)
         for server in servers:
             if not server.enabled:

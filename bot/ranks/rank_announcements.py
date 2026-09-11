@@ -5,7 +5,7 @@ import os
 import time
 
 import discord
-from rank_rules import RANKS
+from bot.ranks.rank_rules import RANKS
 
 LOG = logging.getLogger("reforger.ranks")
 

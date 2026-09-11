@@ -11,8 +11,8 @@ from pathlib import Path
 import re
 import sqlite3
 from datetime import datetime, timezone
-from config import configure_connection
-from rank_persistence import migrate_time, record_interval
+from bot.config import configure_connection
+from bot.storage.rank_persistence import migrate_time, record_interval
 
 LOG = logging.getLogger("reforger.playtime")
 STAMP = re.compile(r"^(\d{2}):(\d{2}):(\d{2})\.(\d{3})")

@@ -5,8 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 import discord
-from notification_roles import NotificationView, prepare_role
-from notification_store import NotificationStore
+from bot.discord.notification_roles import NotificationView, prepare_role
+from bot.storage.notification_store import NotificationStore
 
 
 class RoleTests(unittest.IsolatedAsyncioTestCase):

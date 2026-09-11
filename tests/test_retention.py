@@ -6,12 +6,12 @@ from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 
-from account_links import AccountLinks
-from combat_store import migrate as migrate_combat, record, totals as combat_totals
-from config import configure_connection
-from notification_store import NotificationStore
-from rank_persistence import XPStore, migrate_time, record_interval
-import retention
+from bot.storage.account_links import AccountLinks
+from bot.storage.combat_store import migrate as migrate_combat, record, totals as combat_totals
+from bot.config import configure_connection
+from bot.storage.notification_store import NotificationStore
+from bot.storage.rank_persistence import XPStore, migrate_time, record_interval
+import bot.storage.retention as retention
 
 VICTIM = "11111111-2222-3333-4444-555555555555"
 KILLER = "99999999-2222-3333-4444-555555555555"

@@ -2,7 +2,7 @@
 import logging
 import discord
 from discord import app_commands
-from combat_store import totals
+from bot.storage.combat_store import totals
 
 LOG = logging.getLogger('reforger.stats')
 

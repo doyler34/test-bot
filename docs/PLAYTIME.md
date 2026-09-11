@@ -5,7 +5,7 @@ The tracker runs alongside the timer without needing RCON or new packages.
 `PLAYTIME_DB` defaults to `data/playtime.sqlite3`; `PLAYTIME_SERVER_ID` defaults
 to `server-1`. Back up the database to preserve totals. Keep it out of Git.
 
-Run `.venv/bin/python playtime_tracker.py report` from the bot directory for
+Run `.venv/bin/python -m bot.tracking.playtime_tracker report` from the bot directory for
 saved totals. Reporting only reads the database; it does not start a second
 tracker. No Discord accounts, roles, ranks, or XP are changed in this test.
 

@@ -9,10 +9,10 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 import discord
-from account_links import AccountLinks
-from rank_persistence import XPStore
-from message_xp import award_message
-from server_notifications import NotificationBot
+from bot.storage.account_links import AccountLinks
+from bot.storage.rank_persistence import XPStore
+from bot.ranks.message_xp import award_message
+from bot.discord.server_notifications import NotificationBot
 
 IDENTITY = '11111111-2222-3333-4444-555555555555'
 
@@ -64,7 +64,7 @@ class MessageXPTests(unittest.IsolatedAsyncioTestCase):
         self.links=AccountLinks(self.path)
         self.wallet=XPStore(self.links.db)
         self.assertEqual(self.wallet.award_post(1,10,100,self.created),0)
-        with patch('rank_persistence.XP_PER_POST',5):
+        with patch('bot.storage.rank_persistence.XP_PER_POST',5):
             self.assertEqual(self.wallet.award_post(1,10,101,self.created),5)
         self.assertEqual(self.wallet.cached(1,10),6)
 
@@ -104,10 +104,10 @@ class MessageXPTests(unittest.IsolatedAsyncioTestCase):
                 first=False
                 raise sqlite3.OperationalError('uncertain acknowledgement')
             return result
-        with patch.object(self.wallet,'award_post',side_effect=uncertain), patch('message_xp.asyncio.sleep',new_callable=AsyncMock):
+        with patch.object(self.wallet,'award_post',side_effect=uncertain), patch('bot.ranks.message_xp.asyncio.sleep',new_callable=AsyncMock):
             await award_message(self.bot,self.message())
         self.assertEqual(self.wallet.cached(1,10),1)
-        with patch.object(self.wallet,'award_post',side_effect=sqlite3.OperationalError('locked')) as award, patch('message_xp.asyncio.sleep',new_callable=AsyncMock):
+        with patch.object(self.wallet,'award_post',side_effect=sqlite3.OperationalError('locked')) as award, patch('bot.ranks.message_xp.asyncio.sleep',new_callable=AsyncMock):
             await award_message(self.bot,self.message(101))
         self.assertEqual(award.call_count,3)
 

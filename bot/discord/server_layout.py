@@ -1,7 +1,7 @@
 """Conservative migration from three bot information channels to one."""
 import logging
 import discord
-from category_timer import matches_category
+from bot.discord.category_timer import matches_category
 
 LOG = logging.getLogger("reforger.layout")
 

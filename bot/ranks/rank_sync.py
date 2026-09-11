@@ -7,8 +7,8 @@ import time
 import discord
 
 LOG = logging.getLogger("reforger.ranks")
-from rank_rules import RANKS as DEFINITIONS, rank_for_xp
-from rank_persistence import XPStore
+from bot.ranks.rank_rules import RANKS as DEFINITIONS, rank_for_xp
+from bot.storage.rank_persistence import XPStore
 RANKS = tuple(rank.role_name for rank in DEFINITIONS)
 _NO_SNAPSHOT = object()
 
@@ -23,7 +23,7 @@ class RankSync:
         self.wallet = XPStore(self.db)
         self.db.execute("CREATE TABLE IF NOT EXISTS rank_roles_v2 (guild INTEGER, tier INTEGER, role INTEGER, PRIMARY KEY(guild,tier))")
         self.db.commit()
-        from rank_announcements import RankAnnouncements
+        from bot.ranks.rank_announcements import RankAnnouncements
         self.announcements = RankAnnouncements(bot)
 
     async def prepare(self, guild):

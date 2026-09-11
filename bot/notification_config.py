@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 from dotenv import load_dotenv
-from config import ConfigError, _require, _require_int, _optional_int, _optional_bool
+from bot.config import ConfigError, _require, _require_int, _optional_int, _optional_bool
 
 
 @dataclass(frozen=True)

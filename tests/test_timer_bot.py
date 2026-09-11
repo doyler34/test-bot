@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import discord
 
-from config import ConfigError, load_config
-from timer_bot import TimerBot
+from bot.config import ConfigError, load_config
+from bot.discord.timer_bot import TimerBot
 
 
 class ConfigTests(unittest.TestCase):
@@ -25,10 +25,10 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(raw=raw), patch.dict(os.environ, required, clear=True):
                 if raw is not None:
                     os.environ["JOIN_VOICE_CHANNEL"] = raw
-                with patch("config.load_dotenv"):
+                with patch("bot.config.load_dotenv"):
                     self.assertEqual(load_config().join_voice_channel, expected)
         with patch.dict(os.environ, {**required, "JOIN_VOICE_CHANNEL": "typo"}, clear=True):
-            with patch("config.load_dotenv"), self.assertRaises(ConfigError):
+            with patch("bot.config.load_dotenv"), self.assertRaises(ConfigError):
                 load_config()
 
 

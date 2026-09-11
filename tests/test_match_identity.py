@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-from notification_store import NotificationStore
-from reforger_monitor import ReforgerMonitor
+from bot.storage.notification_store import NotificationStore
+from bot.tracking.reforger_monitor import ReforgerMonitor
 
 
 class MatchIdentityTests(unittest.IsolatedAsyncioTestCase):

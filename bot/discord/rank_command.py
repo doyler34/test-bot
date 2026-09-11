@@ -6,7 +6,7 @@ import logging
 
 import discord
 from discord import app_commands
-from rank_card import render_card
+from bot.ranks.rank_card import render_card
 
 LOG = logging.getLogger("reforger.rank_command")
 

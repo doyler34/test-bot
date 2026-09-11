@@ -6,6 +6,18 @@ combat stats and match pings — no game mods or RCON needed.
 
 One bot handles up to three Reforger servers on the same box.
 
+## Repository layout
+
+- `main.py` starts the bot.
+- `bot/tracking/` reads match, playtime and combat logs.
+- `bot/discord/` contains commands, buttons and channel displays.
+- `bot/ranks/` handles XP, roles and rank cards.
+- `bot/storage/` handles databases and retention.
+- [docs/](docs/) contains the feature guides.
+- [deploy/](deploy/) contains the VPS installer.
+- `assets/` contains artwork and fonts; `dev/` contains artwork tools.
+- `tests/` contains the automated checks.
+
 ## What it does
 
 - **Live server status** — a SERVER STATS category shows each server (Classic /
@@ -54,8 +66,8 @@ files under `data/` across updates — they hold XP, combat totals, playtime and
 account links, and setup never overwrites them. Set `MATCH_ALERT_CHANNEL_ID`,
 `ADMIN_ROLE_ID`, etc. in `.env` to override defaults (see `.env.example`).
 
-More detail: [RANKS.md](RANKS.md) · [STATS.md](STATS.md) · [LEADERBOARD.md](LEADERBOARD.md)
-· [NOTIFICATIONS.md](NOTIFICATIONS.md) · [PLAYTIME.md](PLAYTIME.md) · [JOIN_OYB.md](JOIN_OYB.md)
+More detail: [RANKS.md](docs/RANKS.md) · [STATS.md](docs/STATS.md) · [LEADERBOARD.md](docs/LEADERBOARD.md)
+· [NOTIFICATIONS.md](docs/NOTIFICATIONS.md) · [PLAYTIME.md](docs/PLAYTIME.md) · [JOIN_OYB.md](docs/JOIN_OYB.md)
 
 ## Tests
 

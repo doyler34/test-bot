@@ -4,8 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 import discord
-from notification_store import NotificationStore
-from server_layout import cleanup_legacy_layout, remove_timer_categories
+from bot.storage.notification_store import NotificationStore
+from bot.discord.server_layout import cleanup_legacy_layout, remove_timer_categories
 
 
 async def stream(items):

@@ -8,10 +8,10 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 import discord
-from leaderboard_command import leaderboard_embed
-from leaderboard_display import (LeaderboardDisplay, CHANNEL_NAME, MARKER, overwrites,
+from bot.discord.leaderboard_command import leaderboard_embed
+from bot.discord.leaderboard_display import (LeaderboardDisplay, CHANNEL_NAME, MARKER, overwrites,
                                  retry_delay, signature)
-from notification_store import NotificationStore
+from bot.storage.notification_store import NotificationStore
 
 
 def missing():
@@ -140,9 +140,9 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
             user=SimpleNamespace(id=99), add_view=Mock(), get_guild=lambda id:self.guild)
         self.now = 1000
         self.rows = [(f'Player {i}',100-i,i) for i in range(31)]
-        self.clock = patch('leaderboard_display.time.time', side_effect=lambda:self.now)
+        self.clock = patch('bot.discord.leaderboard_display.time.time', side_effect=lambda:self.now)
         self.clock.start()
-        self.channels = patch('leaderboard_display.discord.TextChannel', Channel)
+        self.channels = patch('bot.discord.leaderboard_display.discord.TextChannel', Channel)
         self.channels.start()
         self.displays = []
         self.display = self.new_display()
@@ -324,8 +324,8 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message.channel.edits,0)
 
     async def test_real_database_updates_and_xp_untouched(self):
-        from account_links import AccountLinks
-        from combat_store import migrate
+        from bot.storage.account_links import AccountLinks
+        from bot.storage.combat_store import migrate
         links=AccountLinks(Path(self.tmp.name)/'links.db')
         try:
             migrate(links.db)

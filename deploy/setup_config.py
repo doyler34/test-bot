@@ -18,8 +18,8 @@ import warnings
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from dotenv import dotenv_values
-from notification_config import read_servers, load_notification_config
-from config import ConfigError
+from bot.notification_config import read_servers, load_notification_config
+from bot.config import ConfigError
 
 
 @contextmanager

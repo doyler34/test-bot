@@ -2,7 +2,7 @@
 import sqlite3
 from pathlib import Path
 
-from config import configure_connection
+from bot.config import configure_connection
 
 
 class NotificationStore:
