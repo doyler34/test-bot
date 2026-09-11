@@ -150,7 +150,10 @@ class NotificationBot(TimerBot):
                 return
             try:
                 await self.prepare_servers(guild)
-                await self.prepare_announcement_channel(guild)
+                try:
+                    await self.prepare_announcement_channel(guild)
+                except Exception:
+                    logger.exception("Announcements channel unavailable; alerts fall back to #servers")
                 await prepare_join_channel(self, guild, readonly_overwrites(guild))
                 try:
                     from link_review import prepare_review_channel
