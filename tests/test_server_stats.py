@@ -168,6 +168,21 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(classic.name, "🟢 Classic · 13 min")
         self.assertEqual(classic.edits, 2)
 
+    async def test_match_state_change_bypasses_pacing(self):
+        await self.stats.prepare(self.guild)
+        everon = self.stats.channels["server-2"]  # created as "🟡 ... Waiting for match"
+        self.assertTrue(everon.name.startswith("🟡"))
+        # Match starts -> immediate rename despite being inside the 5-min window.
+        self.bot.match_times["server-2"] = (self.now, self.base)
+        await self.stats.tick()
+        self.assertTrue(everon.name.startswith("🟢"))
+        self.assertEqual(everon.edits, 1)
+        # Match ends moments later -> state change again forces a rename.
+        del self.bot.match_times["server-2"]
+        await self.stats.tick()
+        self.assertTrue(everon.name.startswith("🟡"))
+        self.assertEqual(everon.edits, 2)
+
     async def test_admins_tile_only_when_role_configured(self):
         self.assertNotIn("admins", self.stats.stat_keys())
         with patch.dict("os.environ", {"ADMIN_ROLE_ID": "4242"}):

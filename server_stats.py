@@ -62,6 +62,9 @@ class ServerStats:
         self.db.commit()
         raw = os.getenv("ADMIN_ROLE_ID", "").strip()
         self.admin_role_id = int(raw) if raw.isdigit() else None
+        # Last applied match state per server tile, so a live/idle/offline change
+        # can rename immediately instead of waiting out the 5-minute pacing.
+        self._applied_state = {}
 
     def stat_keys(self):
         keys = [server.id for server in self.bot.config.servers]
@@ -111,6 +114,9 @@ class ServerStats:
                 self.db.execute("INSERT OR REPLACE INTO stat_channels VALUES (?,?,0)",
                                 (key, channel.id))
         self.channels[key] = channel
+        server = next((s for s in self.bot.config.servers if s.id == key), None)
+        if server is not None:
+            self._applied_state[key] = self._state_token(server)
 
     # --- data ----------------------------------------------------------------
 
@@ -132,6 +138,15 @@ class ServerStats:
 
     def _label(self, server):
         return label_for(server)
+
+    def _state_token(self, server):
+        """Coarse match state (soon/live/waiting/offline), ignoring the minute count."""
+        if not server.enabled:
+            return "soon"
+        if server.id in getattr(self.bot, "match_times", {}):
+            return "live"
+        monitor = next((m for sid, m in getattr(self.bot, "monitors", []) if sid == server.id), None)
+        return "waiting" if (monitor is not None and getattr(monitor, "online", False)) else "offline"
 
     def _server_status(self, server):
         # The live match counter that used to live on the old server categories,
@@ -181,19 +196,26 @@ class ServerStats:
         if guild is None or self.category is None:
             return
         counts = self._in_game()
+        servers = {s.id: s for s in self.bot.config.servers}
         now = time.time()
         for key, channel in list(self.channels.items()):
             desired = self._desired_name(guild, key, counts)
             if desired is None or channel.name == desired:
                 continue
-            row = self.db.execute("SELECT updated FROM stat_channels WHERE key=?", (key,)).fetchone()
-            if row and now - row[0] < RENAME_INTERVAL:
-                continue
+            # A server tile whose match state changed (start/end, online/offline)
+            # renames immediately; only the ticking minute count is paced.
+            forced = key in servers and self._state_token(servers[key]) != self._applied_state.get(key)
+            if not forced:
+                row = self.db.execute("SELECT updated FROM stat_channels WHERE key=?", (key,)).fetchone()
+                if row and now - row[0] < RENAME_INTERVAL:
+                    continue
             # Reserve the rename budget before sending so retries obey it too.
             with self.db:
                 self.db.execute("UPDATE stat_channels SET updated=? WHERE key=?", (now, key))
             try:
                 self.channels[key] = await channel.edit(name=desired, reason="OYB live stats")
+                if key in servers:
+                    self._applied_state[key] = self._state_token(servers[key])
             except discord.HTTPException:
                 LOG.exception("Stat channel update failed for %s; retry after cooldown", key)
 

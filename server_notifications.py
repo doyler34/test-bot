@@ -183,6 +183,7 @@ class NotificationBot(TimerBot):
                     self.match_times[server.id] = (time.time() - age, time.monotonic() - age)
                     self._dirty_cards.add(server.id)
                     await self.refresh_servers()
+                    await self.server_stats.tick()  # push the state change immediately
                     monitor = next(m for sid, m in self.monitors if sid == server.id)
                     # Recovered old matches must not trigger a fresh notification.
                     if elapsed >= ANNOUNCEMENT_TTL:
@@ -200,6 +201,7 @@ class NotificationBot(TimerBot):
                     self.match_times.pop(server.id, None)
                     self._dirty_cards.add(server.id)
                     await self.refresh_servers()
+                    await self.server_stats.tick()  # push the state change immediately
 
                 monitor = ReforgerMonitor(
                     log_dir=server.log_dir, on_session_start=started,
