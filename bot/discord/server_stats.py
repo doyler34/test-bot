@@ -50,8 +50,14 @@ class ServerStats:
 
     async def prepare(self, guild):
         self.category = await self._ensure_category(guild)
+        # Snapshot the tiles already sitting in the category so a wiped or stale id
+        # never spawns a second set; whatever is left unclaimed is a duplicate.
+        existing = [c for c in guild.voice_channels
+                    if getattr(c, "category", None) is not None and c.category.id == self.category.id]
+        claimed = set()
         for key in self.stat_keys():
-            await self._ensure_channel(guild, key)
+            await self._ensure_channel(guild, key, existing, claimed)
+        await self._remove_duplicates(existing, claimed)
 
     async def _ensure_category(self, guild):
         row = self.db.execute("SELECT channel FROM stat_channels WHERE key='category'").fetchone()
@@ -70,11 +76,32 @@ class ServerStats:
             LOG.warning("Could not move SERVER STATS to the top; check Manage Channels and role position")
         return category
 
-    async def _ensure_channel(self, guild, key):
+    def _key_for_name(self, name):
+        """Which stat key an existing tile's name belongs to, if any."""
+        for server in self.bot.config.servers:
+            if name == server.id or label_for(server) in name:
+                return server.id
+        if name == "arma" or "Playing ArmA" in name:
+            return "arma"
+        if name == "vc" or "Users in VC" in name:
+            return "vc"
+        if name == "admins" or "Admins" in name:
+            return "admins"
+        return None
+
+    async def _ensure_channel(self, guild, key, existing, claimed):
         row = self.db.execute("SELECT channel FROM stat_channels WHERE key=?", (key,)).fetchone()
         channel = guild.get_channel(row[0]) if row else None
         if not isinstance(channel, discord.VoiceChannel):
             channel = None
+        if channel is None:
+            # Reuse the tile already in the category before making a new one.
+            channel = next((c for c in existing
+                            if c.id not in claimed and self._key_for_name(c.name) == key), None)
+            if channel is not None:
+                with self.db:
+                    self.db.execute("INSERT OR REPLACE INTO stat_channels VALUES (?,?,0)",
+                                    (key, channel.id))
         if channel is None:
             name = self._desired_name(guild, key, self._in_game()) or key
             channel = await guild.create_voice_channel(
@@ -84,10 +111,22 @@ class ServerStats:
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO stat_channels VALUES (?,?,0)",
                                 (key, channel.id))
+        claimed.add(channel.id)
         self.channels[key] = channel
         server = next((s for s in self.bot.config.servers if s.id == key), None)
         if server is not None:
             self._applied_state[key] = self._state_token(server)
+
+    async def _remove_duplicates(self, existing, claimed):
+        """Delete leftover stat tiles in the category that no key adopted."""
+        for channel in existing:
+            if channel.id in claimed or self._key_for_name(channel.name) is None:
+                continue  # keep claimed tiles and any unrelated channel dropped in here
+            try:
+                await channel.delete(reason="OYB removing duplicate stat channel")
+                LOG.info("Removed duplicate stat channel %r", channel.name)
+            except discord.HTTPException:
+                LOG.warning("Could not remove duplicate stat channel %r", channel.name)
 
     def _linked(self):
         return {identity for (identity,) in self.bot.account_links.db.execute(

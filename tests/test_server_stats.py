@@ -26,6 +26,10 @@ class FakeVoice:
         self.name = kwargs.get("name", self.name)
         return self
 
+    async def delete(self, **kwargs):
+        self.guild.voice_channels.remove(self)
+        self.guild._by_id.pop(self.id, None)
+
 
 class FakeCategory:
     def __init__(self, guild, id, name, position=5):
@@ -127,6 +131,26 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
         # 3 servers + arma + vc (no admin role configured).
         self.assertEqual(set(self.stats.channels), {"server-1", "server-2", "server-3", "arma", "vc"})
         self.assertEqual(self.guild.creates, 5)
+
+    async def test_prepare_adopts_existing_tiles_and_removes_duplicates(self):
+        # First run creates the five tiles.
+        await self.stats.prepare(self.guild)
+        first = {k: v.id for k, v in self.stats.channels.items()}
+        self.assertEqual(self.guild.creates, 5)
+        # Simulate a wiped database (stored ids gone) plus a leftover duplicate tile.
+        dup = await self.guild.create_voice_channel("🔴 Classic · Offline", category=self.stats.category)
+        self.store.db.execute("DELETE FROM stat_channels")
+        self.store.db.commit()
+        self.guild.creates = 0
+        stats2 = ServerStats(self.bot)
+        await stats2.prepare(self.guild)
+        # Nothing new created — the existing tiles were reused by name.
+        self.assertEqual(self.guild.creates, 0)
+        self.assertEqual({k: v.id for k, v in stats2.channels.items()}, first)
+        # The stray duplicate was cleaned up; the five real tiles remain.
+        self.assertNotIn(dup, self.guild.voice_channels)
+        self.assertEqual(len([c for c in self.guild.voice_channels
+                              if c.category and c.category.id == stats2.category.id]), 5)
 
     async def test_per_server_states_live_idle_offline_and_coming_soon(self):
         counts = self.stats._in_game()
