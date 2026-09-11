@@ -152,22 +152,35 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.prepare_servers(self.guild)
         old.delete.assert_awaited_once()
 
-    async def test_announcement_channel_reuses_existing_else_creates(self):
-        existing = Mock(spec=discord.TextChannel)
-        existing.id, existing.name = 71, "announcements"
-        self.guild.text_channels = [existing]
+    async def test_announcement_channel_prefers_logs_then_creates(self):
+        logs = Mock(spec=discord.TextChannel)
+        logs.id, logs.name = 71, "logs"
+        announcements = Mock(spec=discord.TextChannel)
+        announcements.id, announcements.name = 72, "announcements"
+        self.guild.text_channels = [announcements, logs]
         await self.bot.prepare_announcement_channel(self.guild)
         self.guild.create_text_channel.assert_not_awaited()
-        self.assertIs(self.bot.announce_channel, existing)
+        self.assertIs(self.bot.announce_channel, logs)  # logs wins over announcements
         self.assertEqual(self.bot.store.channel("__announce__")["channel"], 71)
-        # None present -> one is created with the announce marker.
+        # Nothing to reuse -> a #match-alerts channel is created.
         self.guild.text_channels = []
         self.bot.store.db.execute("DELETE FROM channels WHERE server='__announce__'")
         self.bot.store.db.commit()
         self.guild.get_channel.return_value = None
         await self.bot.prepare_announcement_channel(self.guild)
         self.guild.create_text_channel.assert_awaited_once()
+        self.assertEqual(self.guild.create_text_channel.await_args.args, ("match-alerts",))
         self.assertEqual(self.guild.create_text_channel.await_args.kwargs["topic"], ANNOUNCE_MARKER)
+
+    async def test_match_alert_channel_env_override(self):
+        target = Mock(spec=discord.TextChannel)
+        target.id, target.name = 88, "secret-alerts"
+        self.guild.get_channel = Mock(side_effect=lambda i: target if i == 88 else None)
+        self.guild.text_channels = []
+        with patch.dict(os.environ, {"MATCH_ALERT_CHANNEL_ID": "88"}):
+            await self.bot.prepare_announcement_channel(self.guild)
+        self.guild.create_text_channel.assert_not_awaited()
+        self.assertIs(self.bot.announce_channel, target)
 
     async def test_send_and_delete_after_30_minutes_not_before(self):
         row = self.enqueue()

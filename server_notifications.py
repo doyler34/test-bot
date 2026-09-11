@@ -279,17 +279,26 @@ class NotificationBot(TimerBot):
                     pass
 
     async def prepare_announcement_channel(self, guild):
-        """Reuse an existing announcements channel, else create a read-only one."""
+        """Resolve where match-start alerts post: MATCH_ALERT_CHANNEL_ID, else a
+        logs channel, else an announcements channel, else a created #match-alerts."""
         record = self.store.channel("__announce__")
         channel = guild.get_channel(record["channel"]) if record else None
         if not isinstance(channel, discord.TextChannel):
             channel = None
         if channel is None:
-            existing = [c for c in guild.text_channels if "announcement" in c.name.casefold()]
-            channel = existing[0] if existing else None
+            configured = os.getenv("MATCH_ALERT_CHANNEL_ID", "").strip()
+            if configured.isdigit():
+                candidate = guild.get_channel(int(configured))
+                if isinstance(candidate, discord.TextChannel):
+                    channel = candidate
+        if channel is None:
+            for keyword in ("logs", "log", "announcement"):
+                channel = next((c for c in guild.text_channels if keyword in c.name.casefold()), None)
+                if channel is not None:
+                    break
         if channel is None:
             channel = await guild.create_text_channel(
-                "announcements", topic=ANNOUNCE_MARKER, overwrites=readonly_overwrites(guild),
+                "match-alerts", topic=ANNOUNCE_MARKER, overwrites=readonly_overwrites(guild),
                 reason="OYB match-start announcements")
         self.announce_channel = channel
         self.store.save_channel("__announce__", channel.id)
