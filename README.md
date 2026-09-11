@@ -1,33 +1,41 @@
-# OYB Discord / Reforger bot
+# OYB Reforger bot
 
-Run one bot alongside up to three existing Reforger servers on the same VPS.
-It reads local game logs for match monitoring, categories, notifications and
-playtime. Approved account links connect that playtime to Discord rank roles.
-XP combines tracked time across all servers for the same Reforger IdentityId.
+A Discord bot for the OYB Arma Reforger community. It watches the local server
+logs on the VPS and turns them into Discord: live server status, playtime ranks,
+combat stats and match pings — no game mods or RCON needed.
 
-One read-only **#servers** channel contains three permanent server-information
-messages, each with its own notification button. Match alerts also appear there
-and expire normally. Timer categories reuse existing OYB categories after a
-reinstall, preferring the one containing voice channels. Migration removes old
-bot-only information channels and empty duplicate timer categories. Channels
-with other messages/threads or pending alerts are retained; cleanup retries
-after pending alerts expire. Join OYB and promotion logging remain separate.
+One bot handles up to three Reforger servers on the same box.
 
-## Production setup
+## What it does
 
-On the actual Debian/Ubuntu VPS (systemd, Python 3.11+), from this branch's checkout:
+- **Live server status** — a SERVER STATS category shows each server (Classic /
+  3x Everon / Arland) with a live match timer, plus Playing ArmA and Users in VC.
+- **Ranks & XP** — 1 XP per 10 minutes played (combined across servers) and 1 XP
+  per Discord post once your account is linked. `/rank` shows your card.
+- **Combat leaderboard** — kills/deaths from the vanilla kill log, in a pinned
+  `/leaderboard`. `/stats` for a single player.
+- **Match alerts** — pings when a match goes live in the announcements channel.
+- **Account linking** — `#join-oyb` lets players link their Discord to their
+  in-game name; admins approve from a private staff channel.
+
+Game restarts and map wipes don't reset anyone's XP or stats.
+
+## Setup
+
+On the Debian/Ubuntu VPS (systemd, Python 3.11+):
 
 ```bash
+git clone https://github.com/doyler34/test-bot.git
+cd test-bot
 bash deploy/setup.sh
 ```
 
-Setup asks for a hidden Discord token, guild ID, active server count, local log
-selection and display names. It detects log candidates and offers manual entry.
-The installer configures the full OYB mode with three server definitions; unused
-servers stay disabled / Coming Soon. It installs only the bot and its Python
-dependencies, preserving game files, bot databases and existing settings.
+Setup asks for the bot token, guild ID, how many servers are active, and where
+each server's logs live. It only installs the bot and its Python deps — it never
+touches the game install, configs or databases. See [deploy/README.md](deploy/README.md)
+for details.
 
-See [the setup guide](deploy/README.md) for requirements, reruns and troubleshooting.
+Manage it with:
 
 ```bash
 oyb status
@@ -36,46 +44,18 @@ oyb restart
 oyb setup
 ```
 
-The existing systemd service name remains `reforger-timer`. No voice-channel ID,
-voice connection, A2S configuration or remote agent is needed for this setup.
-The bot needs Discord permissions to manage its channels, messages and roles;
-its own role must be above its notification/rank roles.
+The bot needs Manage Channels / Manage Roles / Send Messages / Embed Links, and
+its role has to sit above the rank roles it creates.
 
-## Configuration and state
+## Config & data
 
-The installer writes a private, gitignored `.env` and `servers.local.json`.
-`SERVERS_CONFIG` selects full OYB mode and `PLAYTIME_ENABLED=true` enables tracking.
-Active server entries use distinct local log directories containing Reforger
-`logs_*/console.log` files. Existing custom settings/rules and database locations
-are reused. Reruns show a summary and require confirmation before replacing config.
+`setup.sh` writes a gitignored `.env` and `servers.local.json`. Keep the SQLite
+files under `data/` across updates — they hold XP, combat totals, playtime and
+account links, and setup never overwrites them. Set `MATCH_ALERT_CHANNEL_ID`,
+`ADMIN_ROLE_ID`, etc. in `.env` to override defaults (see `.env.example`).
 
-Preserve `data/notifications.sqlite3`, `data/playtime.sqlite3` and
-`data/account_links.sqlite3` (or your configured equivalents) across updates.
-Setup backs up replaced config, but never clears or replaces these databases.
-
-Use `/rank` for an original OYB card. Earn 1 XP per 10 connected minutes, combined
-across servers, plus 1 XP per new Discord post after account-link approval.
-Existing XP is retained. See [RANKS.md](RANKS.md) and [POST_XP.md](POST_XP.md). Promotions mention the member in the existing
-`#log` text channel. Optional `RANK_LOG_CHANNEL_ID` selects a specific log channel.
-
-## Match monitoring
-
-Match state follows Reforger's `GAME` and `POSTGAME` log events, FPS heartbeats
-and log rotation. Categories show approximate time, updated roughly every five
-minutes. The information card contains the match-start timestamp. A bot restart
-recovers the current logged match; a real new game starts a new match timer.
-Game restarts and wipes do not clear accumulated player XP.
-
-Match alerts mention the opt-in server notification role and expire 30 minutes
-after match start. Historical expired matches do not generate fresh alerts.
-Scenarios must emit the expected game-state/player lines for accurate tracking.
-
-## Combat statistics
-
-Use `/stats` or `/stats user:@Member` for linked players' recorded combat stats.
-Vanilla kill logs supply player kills, deaths and teamkills; AI kills are explicitly
-unavailable because this logger skips AI victims. See [STATS.md](STATS.md) for source
-coverage, migration, duplicate prevention and live verification requirements.
+More detail: [RANKS.md](RANKS.md) · [STATS.md](STATS.md) · [LEADERBOARD.md](LEADERBOARD.md)
+· [NOTIFICATIONS.md](NOTIFICATIONS.md) · [PLAYTIME.md](PLAYTIME.md) · [JOIN_OYB.md](JOIN_OYB.md)
 
 ## Tests
 
@@ -83,8 +63,4 @@ coverage, migration, duplicate prevention and live verification requirements.
 .venv/bin/python -m unittest discover -s tests
 ```
 
-The installer runs this full suite before saving configuration. VPS/systemd and
-live Discord integration still require checks on the deployment machine.
-
-The older single-server voice timer remains available in code when
-`SERVERS_CONFIG` is absent, but production setup always selects full OYB mode.
+Setup runs the full suite before saving config.
