@@ -59,8 +59,7 @@ class ServerStats:
 
     async def prepare(self, guild):
         self.category = await self._ensure_category(guild)
-        # Snapshot the tiles already sitting in the category so a wiped or stale id
-        # never spawns a second set; whatever is left unclaimed is a duplicate.
+        # Existing tiles in the category; anything a key doesn't claim is a stray.
         existing = [c for c in guild.voice_channels
                     if getattr(c, "category", None) is not None and c.category.id == self.category.id]
         claimed = set()
@@ -69,7 +68,7 @@ class ServerStats:
         await self._remove_duplicates(existing, claimed)
 
     async def _apply_overwrites(self, channel, desired):
-        # Re-applied on boot so OYB_STAGING reliably hides or reveals the tiles.
+        # Re-applied each boot so staging can hide or reveal the tiles.
         if getattr(channel, "overwrites", None) == desired:
             return channel
         try:
@@ -134,7 +133,7 @@ class ServerStats:
                 self.db.execute("INSERT OR REPLACE INTO stat_channels VALUES (?,?,0)",
                                 (key, channel.id))
         else:
-            # Adopted an existing tile: keep its visibility in sync with staging.
+            # Adopted tile: keep its visibility in sync.
             channel = await self._apply_overwrites(channel, stat_overwrites(guild))
         claimed.add(channel.id)
         self.channels[key] = channel
@@ -146,7 +145,7 @@ class ServerStats:
         """Delete leftover stat tiles in the category that no key adopted."""
         for channel in existing:
             if channel.id in claimed or self._key_for_name(channel.name) is None:
-                continue  # keep claimed tiles and any unrelated channel dropped in here
+                continue  # leave claimed tiles and anything else dropped in the category
             try:
                 await channel.delete(reason="OYB removing duplicate stat channel")
                 LOG.info("Removed duplicate stat channel %r", channel.name)

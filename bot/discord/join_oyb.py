@@ -154,7 +154,7 @@ async def prepare_join_channel(bot, guild, overwrites):
         channel = await guild.create_text_channel(
             "join-oyb", topic=MARKER, overwrites=overwrites, reason="OYB account linking")
     else:
-        # Re-apply the lock on any adopted channel (saved id or topic match).
+        # Re-lock a channel we adopted rather than created.
         await channel.edit(overwrites=overwrites, reason="Keep Join OYB read-only")
     with db:
         db.execute("INSERT OR REPLACE INTO join_channel VALUES (?,?,?)", (guild.id, channel.id, row[1] if row and row[0] == channel.id else None))

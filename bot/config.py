@@ -18,8 +18,7 @@ class ConfigError(Exception):
 
 
 def staging_enabled() -> bool:
-    """When OYB_STAGING is on, the bot's own public channels are created hidden
-    from members so a server can be set up privately before launch."""
+    """Hide the bot's public channels while a server is set up before launch."""
     return os.getenv("OYB_STAGING", "").strip().lower() in ("1", "true", "yes", "on")
 
 
