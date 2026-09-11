@@ -53,7 +53,7 @@ owner can still write because Discord allows them to bypass channel overwrites.
 Then run:
 
 ```bash
-cd /root/test-bot && git pull --ff-only origin claude/full-repo-wipe-2ib85o && { test -f servers.local.json || cp servers.example.json servers.local.json; } && sed -i '/^[[:space:]]*SERVERS_CONFIG[[:space:]]*=/d' .env && printf '\nSERVERS_CONFIG=servers.local.json\n' >> .env && systemctl restart reforger-timer
+cd /root/test-bot && git pull --ff-only origin main && { test -f servers.local.json || cp servers.example.json servers.local.json; } && sed -i '/^[[:space:]]*SERVERS_CONFIG[[:space:]]*=/d' .env && printf '\nSERVERS_CONFIG=servers.local.json\n' >> .env && systemctl restart reforger-timer
 ```
 
 The game server stays running. The three channels are created when the bot connects.

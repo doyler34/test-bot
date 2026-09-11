@@ -3,12 +3,12 @@
 On a Debian/Ubuntu VPS with systemd and Python 3.11+, clone this branch and run:
 
 ```bash
-git clone --branch claude/full-repo-wipe-2ib85o --single-branch https://github.com/doyler34/test-bot.git
+git clone https://github.com/doyler34/test-bot.git
 cd test-bot
 bash deploy/setup.sh
 ```
 
-For an existing checkout, pull this branch first, then run the same setup command.
+For an existing checkout, pull `main` first, then run the same setup command.
 Setup installs Python dependencies only. It never installs Reforger, changes a
 game config, opens game ports, restarts a game service or writes to game logs.
 The older combined test-server installer is retired; existing game templates are

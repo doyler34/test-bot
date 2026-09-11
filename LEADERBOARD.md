@@ -93,7 +93,7 @@ References: [Discord pin permission](https://docs.discord.com/developers/resourc
 
 ```bash
 cd /root/test-bot &&
-git pull --ff-only origin claude/full-repo-wipe-2ib85o &&
+git pull --ff-only origin main &&
 .venv/bin/pip install -r requirements.txt &&
 sudo systemctl restart reforger-timer
 sudo journalctl -u reforger-timer --since "2 minutes ago" --no-pager
