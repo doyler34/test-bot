@@ -54,20 +54,23 @@ install -m 755 "$STAGE/oyb" /usr/local/bin/oyb
 systemctl daemon-reload
 systemctl enable "$SERVICE"
 systemctl restart "$SERVICE"
-printf 'Waiting for Discord channels, ranks and playtime tracking to initialise...\n'
+printf 'Waiting for the bot to connect to Discord and set up its channels...\n'
 READY=false
 for attempt in $(seq 1 45); do
     sleep 2
     INVOCATION="$(systemctl show "$SERVICE" -p InvocationID --value)"
     if systemctl is-active --quiet "$SERVICE" && [ -n "$INVOCATION" ]; then
         JOURNAL="$(journalctl "_SYSTEMD_INVOCATION_ID=$INVOCATION" --no-pager -o cat)"
-        if printf '%s' "$JOURNAL" | grep -q 'Ready: shared servers channel with three cards' &&
-           printf '%s' "$JOURNAL" | grep -q 'OYB ranks ready:' &&
-           printf '%s' "$JOURNAL" | grep -q 'Playtime test tracker started'; then
+        if printf '%s' "$JOURNAL" | grep -q 'Ready: one combined servers card'; then
             READY=true
             break
         fi
     fi
 done
-[ "$READY" = true ] || die "Bot did not complete startup within 90 seconds. Run oyb logs to check Discord access, token and role permissions. Saved configuration and state were retained."
+if [ "$READY" = true ]; then
+    printf 'Bot is up and connected to Discord.\n'
+    printf 'Ranks need the bot role above the OYB rank roles; if you see a role error, run oyb logs and fix the role order.\n'
+else
+    die "Bot did not connect within 90 seconds. Run oyb logs to check the token, Discord access and role permissions. Saved configuration and state were retained."
+fi
 "$PY" "$SCRIPT_DIR/setup_config.py" --summary
