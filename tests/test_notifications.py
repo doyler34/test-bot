@@ -162,8 +162,8 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.guild.create_text_channel.assert_not_awaited()
         self.assertIs(self.bot.announce_channel, logs)  # logs wins over announcements
         self.assertEqual(self.bot.store.channel("__announce__")["channel"], 71)
-        # Nothing to reuse -> a #match-alerts channel is created.
-        self.guild.text_channels = []
+        # Only #announcements present -> it is NEVER reused; #match-alerts is created.
+        self.guild.text_channels = [announcements]
         self.bot.store.db.execute("DELETE FROM channels WHERE server='__announce__'")
         self.bot.store.db.commit()
         self.guild.get_channel.return_value = None
@@ -171,6 +171,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.guild.create_text_channel.assert_awaited_once()
         self.assertEqual(self.guild.create_text_channel.await_args.args, ("match-alerts",))
         self.assertEqual(self.guild.create_text_channel.await_args.kwargs["topic"], ANNOUNCE_MARKER)
+        self.assertIsNot(self.bot.announce_channel, announcements)
 
     async def test_match_alert_channel_env_override(self):
         target = Mock(spec=discord.TextChannel)
