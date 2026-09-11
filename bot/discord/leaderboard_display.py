@@ -6,6 +6,7 @@ import math
 import time
 
 import discord
+from bot.config import staging_enabled
 from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
 
 LOG = logging.getLogger('reforger.leaderboard')
@@ -31,7 +32,7 @@ def overwrites(guild, existing=None):
             overwrite.update(view_channel=True, read_message_history=True, send_messages=True,
                              embed_links=True, manage_messages=True, pin_messages=True)
         elif target == guild.default_role or not privileged(target):
-            overwrite.update(view_channel=True, read_message_history=True, send_messages=False,
+            overwrite.update(view_channel=not staging_enabled(), read_message_history=True, send_messages=False,
                 create_public_threads=False, create_private_threads=False, send_messages_in_threads=False,
                 add_reactions=False, use_external_stickers=False, use_external_apps=False,
                 use_application_commands=False, send_polls=False, send_voice_messages=False)

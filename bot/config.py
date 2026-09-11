@@ -17,6 +17,12 @@ class ConfigError(Exception):
     """Raised when required configuration is missing or invalid."""
 
 
+def staging_enabled() -> bool:
+    """When OYB_STAGING is on, the bot's own public channels are created hidden
+    from members so a server can be set up privately before launch."""
+    return os.getenv("OYB_STAGING", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def configure_connection(db, *, busy_timeout_ms: int = 10000, wal: bool = True) -> None:
     """Apply shared SQLite pragmas so the many subsystems contend less.
 

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import discord
 
+from bot.config import staging_enabled
 from bot.storage.notification_store import NotificationStore
 from bot.discord.server_stats import label_for
 from bot.tracking.reforger_monitor import ReforgerMonitor
@@ -71,10 +72,10 @@ def rules_embed(bot):
     return embed
 
 
-def readonly_overwrites(guild):
+def readonly_overwrites(guild, hidden=False):
     return {
         guild.default_role: discord.PermissionOverwrite(
-            view_channel=True, read_message_history=True, send_messages=False,
+            view_channel=not hidden, read_message_history=True, send_messages=False,
             create_public_threads=False, create_private_threads=False,
             send_messages_in_threads=False, add_reactions=False,
             use_application_commands=False, use_external_apps=False,
@@ -152,7 +153,7 @@ class NotificationBot(TimerBot):
                     await self.prepare_announcement_channel(guild)
                 except Exception:
                     logger.exception("Announcements channel unavailable; alerts fall back to #servers")
-                await prepare_join_channel(self, guild, readonly_overwrites(guild))
+                await prepare_join_channel(self, guild, readonly_overwrites(guild, hidden=staging_enabled()))
                 try:
                     from bot.discord.link_review import prepare_review_channel
                     await prepare_review_channel(self, guild)
@@ -234,7 +235,7 @@ class NotificationBot(TimerBot):
             saved = guild.get_channel(record["channel"]) if record else None
             if isinstance(saved, discord.TextChannel) and saved.topic == SERVERS_MARKER:
                 channel = saved
-        overwrites = readonly_overwrites(guild)
+        overwrites = readonly_overwrites(guild, hidden=staging_enabled())
         if channel is None:
             channel = await guild.create_text_channel(
                 "servers", topic=SERVERS_MARKER, overwrites=overwrites,

@@ -6,6 +6,8 @@ import time
 
 import discord
 
+from bot.config import staging_enabled
+
 LOG = logging.getLogger("reforger.stats")
 
 CATEGORY_NAME = "📊 SERVER STATS 📊"
@@ -23,8 +25,15 @@ def label_for(server):
 
 def stat_overwrites(guild):
     return {
-        guild.default_role: discord.PermissionOverwrite(view_channel=True, connect=False),
+        guild.default_role: discord.PermissionOverwrite(view_channel=not staging_enabled(), connect=False),
         guild.me: discord.PermissionOverwrite(view_channel=True, connect=True, manage_channels=True),
+    }
+
+
+def category_overwrites(guild):
+    return {
+        guild.default_role: discord.PermissionOverwrite(view_channel=not staging_enabled()),
+        guild.me: discord.PermissionOverwrite(view_channel=True, manage_channels=True),
     }
 
 
@@ -59,13 +68,26 @@ class ServerStats:
             await self._ensure_channel(guild, key, existing, claimed)
         await self._remove_duplicates(existing, claimed)
 
+    async def _apply_overwrites(self, channel, desired):
+        # Re-applied on boot so OYB_STAGING reliably hides or reveals the tiles.
+        if getattr(channel, "overwrites", None) == desired:
+            return channel
+        try:
+            return await channel.edit(overwrites=desired, reason="OYB stat channel visibility") or channel
+        except discord.HTTPException:
+            LOG.warning("Could not update visibility for %r", getattr(channel, "name", channel))
+            return channel
+
     async def _ensure_category(self, guild):
+        desired = category_overwrites(guild)
         row = self.db.execute("SELECT channel FROM stat_channels WHERE key='category'").fetchone()
         category = guild.get_channel(row[0]) if row else None
         if not isinstance(category, discord.CategoryChannel):
             category = next((c for c in guild.categories if c.name == CATEGORY_NAME), None)
         if category is None:
-            category = await guild.create_category(CATEGORY_NAME, reason="OYB live server stats")
+            category = await guild.create_category(CATEGORY_NAME, overwrites=desired, reason="OYB live server stats")
+        else:
+            category = await self._apply_overwrites(category, desired)
         if row is None or row[0] != category.id:
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO stat_channels VALUES ('category',?,0)", (category.id,))
@@ -111,6 +133,9 @@ class ServerStats:
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO stat_channels VALUES (?,?,0)",
                                 (key, channel.id))
+        else:
+            # Adopted an existing tile: keep its visibility in sync with staging.
+            channel = await self._apply_overwrites(channel, stat_overwrites(guild))
         claimed.add(channel.id)
         self.channels[key] = channel
         server = next((s for s in self.bot.config.servers if s.id == key), None)
