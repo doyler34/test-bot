@@ -24,8 +24,9 @@ One bot handles up to three Reforger servers on the same box.
   3x Everon / Arland) with a live match timer, plus Playing ArmA and Users in VC.
 - **Ranks & XP** — 1 XP per 10 minutes played (combined across servers) and 1 XP
   per Discord post once your account is linked. `/rank` shows your card.
-- **Combat leaderboard** — kills/deaths from the vanilla kill log, in a pinned
-  `/leaderboard`. `/stats` for a single player.
+- **Combat leaderboard** — kills/deaths from the vanilla kill log, shown in a
+  pinned, read-only leaderboard channel with Previous/Next buttons. `/stats`
+  for a single player.
 - **Match alerts** — pings when a match goes live in the announcements channel.
 - **Account linking** — `#join-oyb` lets players link their Discord to their
   in-game name; admins approve from a private staff channel.

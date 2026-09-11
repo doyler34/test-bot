@@ -1,11 +1,8 @@
-"""Paged, read-only combat standings from existing approved OYB links."""
-import logging
+"""Shared combat-standings query and embed for the pinned channel leaderboard."""
 import unicodedata
 
 import discord
-from discord import app_commands
 
-LOG = logging.getLogger('reforger.leaderboard')
 PAGE_SIZE = 15
 
 
@@ -48,36 +45,3 @@ def leaderboard_embed(rows, page):
     embed.set_footer(text=f'Page {page + 1}/{pages} • {len(rows)} players • All servers\n'
                           'Player kills ↓ · deaths ↑ • Updates automatically')
     return embed
-
-
-class LeaderboardCommand:
-    def __init__(self, bot):
-        self.bot = bot
-        self.command = app_commands.Command(name='leaderboard', description='Find the permanent OYB leaderboard', callback=self.show)
-        app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id, i.user.id))(self.command)
-        self.command.error(self.error)
-        bot.rank_command.tree.add_command(self.command, guild=bot.rank_command.guild)
-
-    async def error(self, interaction, error):
-        message = (f'Try /leaderboard again in {error.retry_after:.0f} seconds.'
-                   if isinstance(error, app_commands.CommandOnCooldown)
-                   else 'The leaderboard could not be loaded. Please try again shortly.')
-        if not isinstance(error, app_commands.CommandOnCooldown):
-            LOG.error('Leaderboard failed', exc_info=(type(error), error, error.__traceback__))
-        if interaction.response.is_done():
-            await interaction.followup.send(message, ephemeral=True)
-        else:
-            await interaction.response.send_message(message, ephemeral=True)
-
-    async def show(self, interaction: discord.Interaction):
-        if interaction.guild_id != self.bot.config.guild_id:
-            await interaction.response.send_message('Use /leaderboard in the OYB Discord server.', ephemeral=True)
-            return
-        try:
-            saved = self.bot.store.leaderboard(interaction.guild_id)
-            target = f"<#{saved['channel']}>" if saved['channel'] else '**===OYB-LeaderBoard===** (being prepared)'
-            text = f'View the permanent leaderboard in {target}. Use its Previous/Next buttons to browse.'
-        except Exception:
-            LOG.exception('Could not read leaderboard channel state')
-            text = 'The leaderboard is temporarily unavailable; please try again shortly.'
-        await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())

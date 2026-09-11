@@ -18,8 +18,8 @@ combat table. All combat totals still combine the available server logs.
 Everyone can use the shared Previous / Page indicator / Next buttons. Controls
 have stable custom IDs and no expiry, and are registered once during setup.
 The selected page survives restart and refresh, clamping to the final page if
-players disappear. `/leaderboard` now responds privately with a channel link;
-it never creates another public leaderboard. See [LEADERBOARD.md](LEADERBOARD.md)
+players disappear. The leaderboard lives only in its pinned channel message —
+there is no slash command for it. See [LEADERBOARD.md](LEADERBOARD.md)
 for storage, recovery, permissions, rate limiting and deployment checks.
 
 ## Confirmed source and limits

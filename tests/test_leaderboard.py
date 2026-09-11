@@ -1,22 +1,10 @@
 from pathlib import Path
 import tempfile
-from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, Mock, patch
 import uuid
-import discord
 from bot.storage.account_links import AccountLinks
 from bot.storage.combat_store import migrate
-from bot.discord.leaderboard_command import LeaderboardCommand, leaderboard_embed, standings
-from bot.discord.rank_command import RankCommand
-
-
-def interaction(user=10, guild=1):
-    return SimpleNamespace(user=SimpleNamespace(id=user), guild_id=guild,
-        guild=SimpleNamespace(get_member=Mock(return_value=None)),
-        app_permissions=SimpleNamespace(embed_links=True),
-        response=SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock(), edit_message=AsyncMock(), is_done=Mock(return_value=False)),
-        followup=SimpleNamespace(send=AsyncMock()))
+from bot.discord.leaderboard_command import leaderboard_embed, standings
 
 
 def players(count):
@@ -28,14 +16,8 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
         self.tmp=tempfile.TemporaryDirectory()
         self.links=AccountLinks(Path(self.tmp.name)/'links.db')
         migrate(self.links.db)
-        self.bot=discord.Client(intents=discord.Intents.default())
-        self.bot.config=SimpleNamespace(guild_id=1)
-        self.bot.account_links=self.links
-        self.bot.rank_command=RankCommand(self.bot)
-        self.command=LeaderboardCommand(self.bot)
 
     async def asyncTearDown(self):
-        await self.bot.close()
         self.links.close()
         self.tmp.cleanup()
 
@@ -72,19 +54,8 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn('No linked players',embed.description)
 
     async def test_names_cannot_escape_table(self):
-        embed=leaderboard_embed([('```\n@everyone\r\n\u202e'+'X'*200,4,3),('Éowyn 玩家',2,1)],0)
+        embed=leaderboard_embed([('```\n@everyone\r\n‮'+'X'*200,4,3),('Éowyn 玩家',2,1)],0)
         self.assertEqual(embed.description.count('```'),2)
-        self.assertNotIn('\u202e',embed.description)
+        self.assertNotIn('‮',embed.description)
         self.assertIn('Éowyn 玩家',embed.description)
         self.assertEqual(len(embed.description.splitlines()),5)
-
-    async def test_command_only_redirects_privately(self):
-        self.bot.store=SimpleNamespace(leaderboard=Mock(return_value={'channel':123}))
-        i=interaction()
-        await self.command.show(i)
-        self.assertIn('<#123>',i.response.send_message.await_args.args[0])
-        self.assertTrue(i.response.send_message.await_args.kwargs['ephemeral'])
-        i.followup.send.assert_not_awaited()
-        self.bot.store.leaderboard.side_effect=RuntimeError('database locked')
-        await self.command.show(i)
-        self.assertTrue(i.response.send_message.await_args.kwargs['ephemeral'])

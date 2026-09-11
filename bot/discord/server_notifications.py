@@ -22,7 +22,6 @@ from bot.discord.rank_command import RankCommand
 from bot.storage.combat_store import migrate as migrate_combat
 from bot.tracking.combat_ingestor import CombatIngestor
 from bot.discord.stats_command import StatsCommand
-from bot.discord.leaderboard_command import LeaderboardCommand
 from bot.discord.leaderboard_display import LeaderboardDisplay
 from bot.ranks.message_xp import award_message
 from bot.storage.maintenance import Maintenance
@@ -118,7 +117,6 @@ class NotificationBot(TimerBot):
         self.rank_command = RankCommand(self)
         migrate_combat(self.account_links.db)
         self.stats_command = StatsCommand(self)
-        self.leaderboard_command = LeaderboardCommand(self)
         self.leaderboard_display = LeaderboardDisplay(self)
         self.combat_ingestor = CombatIngestor(self)
         self.server_stats = ServerStats(self)
