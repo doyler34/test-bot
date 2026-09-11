@@ -1,10 +1,7 @@
 """Private staff channel that alerts on new link requests with inline approve/reject.
 
-Closes the gap where admins had to poll the review panel to notice submissions.
-On submit, an alert is posted to a staff-only channel with Approve / Reject
-buttons; admins opt in to pings with a toggle button (no env editing). The views
-are persistent (fixed custom_ids + the request token carried in the alert's
-footer), so they keep working across bot restarts.
+Views are persistent (fixed custom_ids plus the request token in the alert
+footer), so they keep working across restarts.
 """
 import logging
 

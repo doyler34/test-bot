@@ -56,10 +56,7 @@ class RankSync:
         return bool(self.bot._trackers) and all(t.initialized and t.caught_up for t in self.bot._trackers)
 
     def progress(self, member, identity, snapshot=_NO_SNAPSHOT):
-        # snapshot is the per-tick batched playtime read. When omitted (direct
-        # reads/tests) read() opens its own connection for backward compatibility;
-        # an explicit dict (or None, when the batch failed) is forwarded so a
-        # tick never opens one connection per player.
+        # snapshot: per-tick batched playtime read; omitted means read() opens its own.
         path = os.getenv("PLAYTIME_DB", "data/playtime.sqlite3")
         if snapshot is _NO_SNAPSHOT:
             return self.wallet.read(self.bot.config.guild_id, member, identity, path, self._ready())

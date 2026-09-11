@@ -1,22 +1,8 @@
-"""Bounded retention for raw dedup/event rows once their totals are aggregated.
+"""Prune old raw dedup/event rows once their totals are aggregated.
 
-Totals (XP, kills, deaths, playtime, account links) live in permanent aggregate
-tables and are never touched here. Only raw rows whose sole purpose is
-exactly-once processing are pruned, and only once they can no longer legitimately
-replay:
-
-* discord_post_events — one row per Discord post, aggregated into
-  discord_post_totals. Discord never re-delivers a message from days ago as a
-  new MESSAGE_CREATE, so rows past a generous window are dead dedup weight.
-* combat_events — one row per kill, aggregated into combat_totals. A dated,
-  completed log folder is skipped once its size equals the stored checkpoint,
-  and a rewritten log is refused, so old events are never re-scanned.
-* announcements (done=1) — terminal match alerts; never re-processed.
-* global_intervals — the interval-union dedup for combined playtime. The running
-  total is kept permanently in global_time; new intervals are always near the
-  present, so far-past intervals can never overlap a future one again.
-
-Deletes are chunked so each write transaction stays short under WAL.
+Aggregate tables (XP, kills, deaths, playtime, links) are never touched; only
+raw rows that can no longer legitimately replay are removed. Deletes are chunked
+to keep each write transaction short.
 """
 from __future__ import annotations
 
@@ -48,7 +34,6 @@ def _days(name):
 
 
 def _prune(db, table, where, params, chunk=5000):
-    """Delete matching rows in bounded batches; returns rows removed."""
     removed = 0
     sql = f"DELETE FROM {table} WHERE rowid IN (SELECT rowid FROM {table} WHERE {where} LIMIT ?)"
     while True:

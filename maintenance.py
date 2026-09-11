@@ -1,10 +1,4 @@
-"""Periodic, bounded database maintenance for the running bot.
-
-Runs the retention sweep on a worker thread with its own short-lived
-connections (never the event-loop connections, which are not thread-safe),
-exactly like the combat ingestor. WAL plus busy_timeout let these deletes run
-without blocking the trackers, rank sync or leaderboard.
-"""
+"""Periodic retention sweep, run on a worker thread with its own connections."""
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +18,6 @@ LOG = logging.getLogger("reforger.retention")
 class Maintenance:
     def __init__(self, bot):
         self.bot = bot
-        # Capture file paths on the main thread; open fresh connections per sweep.
         self.links_path = bot.account_links.db.execute("PRAGMA database_list").fetchone()[2]
         self.notif_path = bot.store.db.execute("PRAGMA database_list").fetchone()[2]
         self.playtime_path = os.getenv("PLAYTIME_DB", "data/playtime.sqlite3")
