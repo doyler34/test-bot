@@ -279,8 +279,8 @@ class NotificationBot(TimerBot):
                     pass
 
     async def prepare_announcement_channel(self, guild):
-        """Resolve where match-start alerts post: MATCH_ALERT_CHANNEL_ID, else a
-        logs channel, else a created #match-alerts. Never the announcements channel."""
+        """Resolve where match-start alerts post: MATCH_ALERT_CHANNEL_ID, else the
+        announcements channel, else a created #announcements."""
         record = self.store.channel("__announce__")
         channel = guild.get_channel(record["channel"]) if record else None
         if not isinstance(channel, discord.TextChannel):
@@ -292,15 +292,12 @@ class NotificationBot(TimerBot):
                 if isinstance(candidate, discord.TextChannel):
                     channel = candidate
         if channel is None:
-            # Prefer a logs channel; never fall back to the announcements channel.
-            for keyword in ("logs", "log"):
-                channel = next((c for c in guild.text_channels if keyword in c.name.casefold()), None)
-                if channel is not None:
-                    break
+            channel = next((c for c in guild.text_channels
+                            if "announcement" in c.name.casefold()), None)
         if channel is None:
             channel = await guild.create_text_channel(
-                "match-alerts", topic=ANNOUNCE_MARKER, overwrites=readonly_overwrites(guild),
-                reason="OYB match-start alerts")
+                "announcements", topic=ANNOUNCE_MARKER, overwrites=readonly_overwrites(guild),
+                reason="OYB match-start announcements")
         self.announce_channel = channel
         self.store.save_channel("__announce__", channel.id)
         return channel

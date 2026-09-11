@@ -152,26 +152,23 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.prepare_servers(self.guild)
         old.delete.assert_awaited_once()
 
-    async def test_announcement_channel_prefers_logs_then_creates(self):
-        logs = Mock(spec=discord.TextChannel)
-        logs.id, logs.name = 71, "logs"
+    async def test_announcement_channel_reuses_announcements_else_creates(self):
         announcements = Mock(spec=discord.TextChannel)
         announcements.id, announcements.name = 72, "announcements"
-        self.guild.text_channels = [announcements, logs]
+        self.guild.text_channels = [announcements]
         await self.bot.prepare_announcement_channel(self.guild)
         self.guild.create_text_channel.assert_not_awaited()
-        self.assertIs(self.bot.announce_channel, logs)  # logs wins over announcements
-        self.assertEqual(self.bot.store.channel("__announce__")["channel"], 71)
-        # Only #announcements present -> it is NEVER reused; #match-alerts is created.
-        self.guild.text_channels = [announcements]
+        self.assertIs(self.bot.announce_channel, announcements)
+        self.assertEqual(self.bot.store.channel("__announce__")["channel"], 72)
+        # None present -> an #announcements channel is created.
+        self.guild.text_channels = []
         self.bot.store.db.execute("DELETE FROM channels WHERE server='__announce__'")
         self.bot.store.db.commit()
         self.guild.get_channel.return_value = None
         await self.bot.prepare_announcement_channel(self.guild)
         self.guild.create_text_channel.assert_awaited_once()
-        self.assertEqual(self.guild.create_text_channel.await_args.args, ("match-alerts",))
+        self.assertEqual(self.guild.create_text_channel.await_args.args, ("announcements",))
         self.assertEqual(self.guild.create_text_channel.await_args.kwargs["topic"], ANNOUNCE_MARKER)
-        self.assertIsNot(self.bot.announce_channel, announcements)
 
     async def test_match_alert_channel_env_override(self):
         target = Mock(spec=discord.TextChannel)
