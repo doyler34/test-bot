@@ -10,7 +10,7 @@ from bot.config import staging_enabled
 from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
 
 LOG = logging.getLogger('reforger.leaderboard')
-CHANNEL_NAME = '===OYB-LeaderBoard==='
+CHANNEL_NAME = 'leaderboard'
 MARKER = 'OYB • Permanent leaderboard'
 POLL = 15
 DEBOUNCE = 30
