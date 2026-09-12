@@ -7,7 +7,8 @@ from unittest.mock import AsyncMock, patch
 import discord
 from bot.storage.account_links import AccountLinks
 import bot.discord.link_review as link_review
-from bot.discord.link_review import AlertsControlView, ReviewButtons, TOKEN_PREFIX, post_request_alert
+from bot.discord.link_review import (AlertsControlView, ReviewButtons, TOKEN_PREFIX,
+                                     HANDLED_MARKER, CONTROL_MARKER, post_request_alert, prune_handled)
 
 IDENT = "11111111-2222-3333-4444-555555555555"
 
@@ -51,6 +52,55 @@ def alert_embed(token):
     embed = discord.Embed(description="x")
     embed.set_footer(text=TOKEN_PREFIX + token)
     return embed
+
+
+class FakeMsg:
+    def __init__(self, id, author_id, footer):
+        self.id = id
+        self.author = SimpleNamespace(id=author_id)
+        e = discord.Embed(description="x")
+        e.set_footer(text=footer)
+        self.embeds = [e]
+        self.deleted = False
+
+    async def delete(self):
+        self.deleted = True
+
+
+class HistoryChannel:
+    def __init__(self, messages):
+        self.messages = messages
+
+    async def history(self, limit=None, before=None):
+        for m in self.messages:
+            yield m
+
+
+class PruneTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.links = AccountLinks(Path(self.tmp.name) / "l.db")
+        self.links.save_review_settings(1, channel=42, control=7)
+        self.bot = SimpleNamespace(account_links=self.links, user=SimpleNamespace(id=500))
+
+    async def asyncTearDown(self):
+        self.links.close()
+        self.tmp.cleanup()
+
+    async def test_removes_handled_keeps_pending_control_and_others(self):
+        handled = FakeMsg(1, 500, HANDLED_MARKER)
+        pending = FakeMsg(2, 500, TOKEN_PREFIX + "abc")
+        control = FakeMsg(7, 500, CONTROL_MARKER)
+        foreign = FakeMsg(3, 999, HANDLED_MARKER)  # another user's message
+        channel = HistoryChannel([handled, pending, control, foreign])
+        guild = SimpleNamespace(id=1, get_channel=lambda i: channel)
+        with patch.object(link_review.discord, "TextChannel", HistoryChannel):
+            removed = await prune_handled(self.bot, guild)
+        self.assertEqual(removed, 1)
+        self.assertTrue(handled.deleted)
+        self.assertFalse(pending.deleted)
+        self.assertFalse(control.deleted)
+        self.assertFalse(foreign.deleted)
 
 
 class ReviewSettingsTests(unittest.TestCase):

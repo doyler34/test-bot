@@ -328,6 +328,7 @@ class NotificationBot(TimerBot):
 
     async def delivery_loop(self):
         cleaned = 0
+        swept = 0
         while not self.is_closed():
             if self._dirty_cards:
                 await self.refresh_servers()
@@ -342,6 +343,17 @@ class NotificationBot(TimerBot):
                 if guild:
                     await cleanup_legacy_layout(self, guild)
                 cleaned = time.monotonic()
+            if time.monotonic() - swept >= 6 * 3600:
+                from bot.discord.link_review import prune_handled
+                guild = self.get_guild(self.config.guild_id)
+                if guild:
+                    try:
+                        gone = await prune_handled(self, guild)
+                        if gone:
+                            logger.info("Cleared %s handled link-request alerts", gone)
+                    except Exception:
+                        logger.exception("Link-request channel sweep failed; will retry")
+                swept = time.monotonic()
             await asyncio.sleep(5)
 
     async def deliver_or_delete(self, row):
