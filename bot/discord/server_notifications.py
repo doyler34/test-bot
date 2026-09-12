@@ -12,7 +12,7 @@ import discord
 
 from bot.config import staging_enabled
 from bot.storage.notification_store import NotificationStore
-from bot.discord.server_stats import label_for
+from bot.discord.server_stats import label_for, format_elapsed
 from bot.tracking.reforger_monitor import ReforgerMonitor
 from bot.discord.timer_bot import TimerBot
 from bot.discord.category_timer import CategoryTimers
@@ -41,7 +41,7 @@ def server_status_line(bot, server):
         return "⚫ Coming soon — not active yet."
     match = getattr(bot, "match_times", {}).get(server.id)
     if match is not None:
-        return f"🟢 **Match live** — started <t:{int(match[0])}:t> · <t:{int(match[0])}:R>"
+        return f"🟢 **Match live** — started <t:{int(match[0])}:t> · {format_elapsed(match)}"
     monitor = next((m for sid, m in getattr(bot, "monitors", []) if sid == server.id), None)
     if monitor is not None and getattr(monitor, "online", False):
         return "🟡 Online — waiting for a match to start."

@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
@@ -325,11 +326,12 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.bot.store.save_channel("servers", 50, 100)
         card = SimpleNamespace(edit=AsyncMock())
         self.channel.get_partial_message.return_value = card
-        self.bot.match_times["server-1"] = (1000, 50)
+        self.bot.match_times["server-1"] = (1000, time.monotonic() - 4 * 60)
         self.bot._dirty_cards.add("server-1")
         await self.bot.refresh_servers()
         embeds = card.edit.await_args.kwargs["embeds"]
-        self.assertIn("<t:1000:R>", embeds[0].fields[0].value)
+        self.assertIn("Match live", embeds[0].fields[0].value)
+        self.assertIn("4 min", embeds[0].fields[0].value)  # same value the tile shows
         self.assertIn("In-game rules", embeds[1].title)  # rules stay on the card
         self.assertNotIn("view", card.edit.await_args.kwargs)
         self.assertEqual(self.bot._dirty_cards, set())

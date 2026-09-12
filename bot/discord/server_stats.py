@@ -23,6 +23,14 @@ def label_for(server):
         or LABELS.get(server.id, server.name)
 
 
+def format_elapsed(match):
+    """One live-duration string, used by the tiles and the #servers card so the
+    two can never show different numbers."""
+    minutes = max(0, int((time.monotonic() - match[1]) // 60))
+    hours, rem = divmod(minutes, 60)
+    return f"{hours}h {rem:02d}m" if hours else f"{minutes} min"
+
+
 def stat_overwrites(guild):
     return {
         guild.default_role: discord.PermissionOverwrite(view_channel=not staging_enabled(), connect=False),
@@ -181,10 +189,7 @@ class ServerStats:
             return f"⚫ {label} · Coming soon"
         match = getattr(self.bot, "match_times", {}).get(server.id)
         if match is not None:
-            minutes = max(0, int((time.monotonic() - match[1]) // 60))
-            hours, rem = divmod(minutes, 60)
-            elapsed = f"{hours}h {rem:02d}m" if hours else f"{minutes} min"
-            return f"🟢 {label} · {elapsed}"
+            return f"🟢 {label} · {format_elapsed(match)}"
         monitor = next((m for sid, m in getattr(self.bot, "monitors", []) if sid == server.id), None)
         if monitor is not None and getattr(monitor, "online", False):
             return f"🟡 {label} · Waiting for match"
@@ -221,6 +226,7 @@ class ServerStats:
         counts = self._in_game()
         servers = {s.id: s for s in self.bot.config.servers}
         now = time.time()
+        renamed_server = False
         for key, channel in list(self.channels.items()):
             desired = self._desired_name(guild, key, counts)
             if desired is None or channel.name == desired:
@@ -237,8 +243,12 @@ class ServerStats:
                 self.channels[key] = await channel.edit(name=desired, reason="OYB live stats")
                 if key in servers:
                     self._applied_state[key] = self._state_token(servers[key])
+                    renamed_server = True
             except discord.HTTPException:
                 LOG.exception("Stat channel update failed for %s; retry after cooldown", key)
+        # Redraw the #servers card with the same value at the same moment.
+        if renamed_server and hasattr(self.bot, "refresh_servers"):
+            await self.bot.refresh_servers()
 
     async def run(self):
         while not self.bot.is_closed():
