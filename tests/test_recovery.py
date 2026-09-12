@@ -40,6 +40,19 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         elapsed = monitor.on_session_start.await_args.args[0]
         self.assertAlmostEqual(elapsed, seconds, delta=3)
 
+    async def test_online_when_log_is_written_without_a_matching_heartbeat(self):
+        # Some builds format the FPS line differently; a fresh log still means up.
+        self.write("12:00:00.000 SCRIPT : a line the parser ignores\n", age=0)
+        monitor = self.monitor()
+        await monitor._tick()
+        self.assertTrue(monitor.online)
+
+    async def test_offline_when_log_stops_being_written(self):
+        self.write(heartbeat("12:00:00"), age=10000)
+        monitor = self.monitor()
+        await monitor._tick()
+        self.assertFalse(monitor.online)
+
     async def test_fresh_bot_recovers_same_match_age_twice(self):
         self.write(game("10:00:00") + heartbeat("12:14:00"))
         first = self.monitor()

@@ -121,6 +121,7 @@ class ReforgerMonitor:
     _clock_day: float = field(default=0.0, init=False)
     _last_clock: Optional[float] = field(default=None, init=False)
     _log_clock: float = field(default=0.0, init=False)
+    _log_mtime: float = field(default=0.0, init=False)
 
     def _advance_clock(self, line: str) -> float:
         """Unwrap time-of-day stamps using every log line, including midnight."""
@@ -136,14 +137,14 @@ class ReforgerMonitor:
 
     @property
     def online(self) -> bool:
-        """True when the server has emitted a heartbeat within the stale window.
-
-        Distinguishes a server that is up but between matches (idle) from one
-        whose process is down / not shipping logs (offline).
+        """True when the server is up: a recent FPS heartbeat, or failing that a
+        log file that is still being written (covers builds that log the
+        heartbeat line differently). A down server stops writing, so its log
+        goes stale and this reads offline.
         """
-        if self._last_heartbeat == 0.0:
-            return False
-        return (time.monotonic() - self._last_heartbeat) < self.stale_seconds
+        if self._last_heartbeat and (time.monotonic() - self._last_heartbeat) < self.stale_seconds:
+            return True
+        return bool(self._log_mtime) and (time.time() - self._log_mtime) < self.stale_seconds
 
     async def run(self) -> None:
         """Main loop. Runs until cancelled."""
@@ -168,6 +169,11 @@ class ReforgerMonitor:
             # Re-read history if the same path returns after a wipe or a gap.
             self._current_path = None
             return
+
+        try:
+            self._log_mtime = os.path.getmtime(path)
+        except OSError:
+            self._log_mtime = 0.0
 
         if path != self._current_path:
             await self._on_rotation(path)
