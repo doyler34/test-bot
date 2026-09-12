@@ -92,6 +92,22 @@ class AccountLinks:
             self.db.execute("UPDATE link_requests SET status=?,reviewer=? WHERE token=?",
                             ("approved" if approve else "rejected", reviewer, token))
 
+    def unlink(self, guild, discord_id):
+        """Remove an approved link so an abused account stops earning XP.
+
+        The game identity's tracked playtime and XP are untouched, so a genuine
+        owner can re-link later and keep their history. Returns the removed
+        identity, or None if that Discord account had no link.
+        """
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            row = self.db.execute("SELECT identity FROM account_links WHERE guild=? AND discord_id=?",
+                                  (guild, discord_id)).fetchone()
+            if not row:
+                return None
+            self.db.execute("DELETE FROM account_links WHERE guild=? AND discord_id=?", (guild, discord_id))
+        return row[0]
+
     def status(self, guild, discord_id):
         identity = self.lookup(guild, discord_id)
         if identity:

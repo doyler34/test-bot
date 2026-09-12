@@ -27,6 +27,21 @@ class AccountLinkTests(unittest.TestCase):
             finally:
                 links.close()
 
+    def test_unlink_removes_link_and_frees_the_game_account(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            links = AccountLinks(Path(tmp) / "links.sqlite3")
+            try:
+                identity = "11111111-2222-3333-4444-555555555555"
+                links.verified_link(1, 10, identity, "admin:1")
+                self.assertEqual(links.unlink(1, 10), identity)
+                self.assertIsNone(links.lookup(1, 10))
+                self.assertIsNone(links.unlink(1, 10))  # already gone
+                # The game account and a different Discord user can both link again.
+                links.verified_link(1, 20, identity, "admin:1")
+                self.assertEqual(links.lookup(1, 20), identity)
+            finally:
+                links.close()
+
     def test_persistence_and_duplicate_claims(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "links.sqlite3"

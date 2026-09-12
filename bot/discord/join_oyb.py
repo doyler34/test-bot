@@ -109,6 +109,81 @@ class ReviewList(discord.ui.View):
         self.add_item(select)
 
 
+async def _strip_rank_roles(bot, guild, member_id):
+    """Take back any rank roles after an unlink so an abused account loses them."""
+    sync = getattr(bot, "rank_sync", None)
+    if sync is None:
+        return
+    sync.applied.pop(member_id, None)
+    managed = [r for r in getattr(sync, "roles", []) if r is not None]
+    if not managed:
+        return
+    try:
+        member = await guild.fetch_member(member_id)
+    except discord.HTTPException:
+        return
+    held = [r for r in managed if r in member.roles]
+    if held:
+        try:
+            await member.remove_roles(*held, reason="OYB link removed by admin")
+        except discord.HTTPException:
+            LOG.warning("Could not remove rank roles from %s after unlink", member_id)
+
+
+class UnlinkView(discord.ui.View):
+    """Admin picks a member; a matching link is removed after a confirmation step."""
+    def __init__(self, bot, owner):
+        super().__init__(timeout=180)
+        self.bot, self.owner = bot, owner
+        select = discord.ui.UserSelect(placeholder="Choose the member to unlink", min_values=1, max_values=1)
+
+        async def chosen(interaction):
+            if not can_review(interaction, bot.config.guild_id) or interaction.user.id != owner:
+                await interaction.response.send_message("Admin access required.", ephemeral=True)
+                return
+            target = select.values[0]
+            identity = bot.account_links.lookup(interaction.guild_id, target.id)
+            if not identity:
+                await interaction.response.edit_message(
+                    content=f"{target.mention} has no linked Reforger account.", view=None,
+                    allowed_mentions=discord.AllowedMentions.none())
+                return
+            text = (f"Remove the link for {target.mention} (`{target.id}`)?\n"
+                    f"Game identity: `{identity}`\n\n"
+                    "Their tracked playtime and XP stay with the game account, so a genuine "
+                    "owner can re-link later. Rank roles are removed now.")
+            await interaction.response.edit_message(content=text,
+                                                    view=ConfirmUnlink(bot, owner, target.id),
+                                                    allowed_mentions=discord.AllowedMentions.none())
+        select.callback = chosen
+        self.add_item(select)
+
+
+class ConfirmUnlink(discord.ui.View):
+    def __init__(self, bot, owner, target_id):
+        super().__init__(timeout=180)
+        self.bot, self.owner, self.target_id = bot, owner, target_id
+
+    @discord.ui.button(label="Remove link", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction, button):
+        if not can_review(interaction, self.bot.config.guild_id) or interaction.user.id != self.owner:
+            await interaction.response.send_message("Admin access required.", ephemeral=True)
+            return
+        identity = self.bot.account_links.unlink(interaction.guild_id, self.target_id)
+        if identity is None:
+            text = "That link was already removed."
+        else:
+            await _strip_rank_roles(self.bot, interaction.guild, self.target_id)
+            text = f"Removed the link for <@{self.target_id}> (was `{identity}`)."
+        await interaction.response.edit_message(content=text, view=None,
+                                                allowed_mentions=discord.AllowedMentions.none())
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction, button):
+        await interaction.response.edit_message(content="Cancelled. No link was removed.", view=None,
+                                                allowed_mentions=discord.AllowedMentions.none())
+
+
 class JoinView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)
@@ -140,6 +215,14 @@ class JoinView(discord.ui.View):
         await interaction.response.send_message("Pending requests (up to 25; reopen after reviewing for more)." if rows else "No pending requests.",
                                                 view=ReviewList(self.bot, rows, interaction.user.id) if rows else None,
                                                 ephemeral=True)
+
+    @discord.ui.button(label="Admin: remove a link", custom_id="oyb:link-unlink", style=discord.ButtonStyle.danger)
+    async def unlink(self, interaction, button):
+        if not can_review(interaction, self.bot.config.guild_id):
+            await interaction.response.send_message("Only admins with Manage Server can remove links.", ephemeral=True)
+            return
+        await interaction.response.send_message("Remove a member's Reforger link (use for abuse or a bad link).",
+                                                view=UnlinkView(self.bot, interaction.user.id), ephemeral=True)
 
 
 async def prepare_join_channel(bot, guild, overwrites):

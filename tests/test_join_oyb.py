@@ -7,7 +7,8 @@ import sqlite3
 import discord
 
 from bot.storage.account_links import AccountLinks
-from bot.discord.join_oyb import JoinView, ReviewDecision, find_identity, prepare_join_channel
+from bot.discord.join_oyb import (JoinView, ReviewDecision, ConfirmUnlink, find_identity,
+                                  prepare_join_channel)
 
 
 class JoinTests(unittest.IsolatedAsyncioTestCase):
@@ -55,12 +56,37 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         info.embeds = [channel.send.await_args.kwargs["embed"]]
         view = channel.send.await_args.kwargs["view"]
         self.assertTrue(view.is_persistent())
-        self.assertEqual(len(view.children), 3)
+        self.assertEqual(len(view.children), 4)
         await prepare_join_channel(self.bot, guild, {})
         guild.create_text_channel.assert_awaited_once()
         channel.send.assert_awaited_once()
         info.edit.assert_awaited_once()
         self.assertTrue(channel.send.await_args.kwargs["silent"])
+
+    async def test_admin_unlink_removes_link_and_strips_rank_roles(self):
+        identity = "11111111-2222-3333-4444-555555555555"
+        self.links.verified_link(1, 10, identity, "admin:1")
+        role = SimpleNamespace(id=7)
+        member = SimpleNamespace(id=10, roles=[role], remove_roles=AsyncMock())
+        self.bot.rank_sync = SimpleNamespace(roles=[role], applied={10: ("x", 0)})
+        guild = SimpleNamespace(fetch_member=AsyncMock(return_value=member))
+        interaction = SimpleNamespace(guild_id=1, guild=guild, user=SimpleNamespace(id=1),
+            permissions=SimpleNamespace(manage_guild=True, administrator=False),
+            response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+        await ConfirmUnlink(self.bot, 1, 10).confirm.callback(interaction)
+        self.assertIsNone(self.links.lookup(1, 10))
+        member.remove_roles.assert_awaited_once()
+        self.assertNotIn(10, self.bot.rank_sync.applied)
+
+    async def test_unlink_requires_admin_and_leaves_link(self):
+        identity = "11111111-2222-3333-4444-555555555555"
+        self.links.verified_link(1, 10, identity, "admin:1")
+        interaction = SimpleNamespace(guild_id=1, user=SimpleNamespace(id=22),
+            permissions=SimpleNamespace(manage_guild=False, administrator=False),
+            response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+        await ConfirmUnlink(self.bot, 1, 10).confirm.callback(interaction)
+        interaction.response.send_message.assert_awaited()  # denied
+        self.assertEqual(self.links.lookup(1, 10), identity)
 
     async def test_name_lookup_is_unique_and_does_not_change_totals(self):
         path = self.root / "playtime.sqlite3"
