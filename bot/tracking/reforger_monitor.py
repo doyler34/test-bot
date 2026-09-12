@@ -252,9 +252,10 @@ class ReforgerMonitor:
             if heartbeat is not None:
                 self._last_heartbeat = now - age(heartbeat)
             if live_start is not None:
-                stale = heartbeat is None or age(heartbeat) >= self.stale_seconds
-                if not stale or await self._server_alive_via_a2s():
-                    if stale:
+                fresh_log = bool(self._log_mtime) and (time.time() - self._log_mtime) < self.stale_seconds
+                fresh_beat = heartbeat is not None and age(heartbeat) < self.stale_seconds
+                if fresh_beat or fresh_log or await self._server_alive_via_a2s():
+                    if not fresh_beat:
                         self._last_heartbeat = now
                     await self._start(age(live_start), f"{path}:{live_start:.3f}")
             logger.info("Initial scan complete for %s (live=%s)", path, self._live)
@@ -270,6 +271,11 @@ class ReforgerMonitor:
             elif event is LineEvent.GAME_END and self._live:
                 await self._end()
 
+        if chunk and not events:
+            # Fresh log lines the parser doesn't recognize still mean the server
+            # is writing; keep the session's liveness current.
+            self._last_heartbeat = now
+
     @staticmethod
     def _read_from(path: str, pos: int) -> tuple[str, int, float]:
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
@@ -280,17 +286,14 @@ class ReforgerMonitor:
     async def _check_staleness(self) -> None:
         if not self._live:
             return
-        if self._last_heartbeat == 0.0:
+        fresh_log = bool(self._log_mtime) and (time.time() - self._log_mtime) < self.stale_seconds
+        fresh_beat = bool(self._last_heartbeat) and (time.monotonic() - self._last_heartbeat) < self.stale_seconds
+        if fresh_log or fresh_beat:
             return
-        elapsed = time.monotonic() - self._last_heartbeat
-        if elapsed < self.stale_seconds:
-            return
+        if not self._log_mtime and self._last_heartbeat == 0.0:
+            return  # no liveness signal yet; nothing to judge by
 
-        logger.warning(
-            "No server heartbeat for %.0fs (threshold %ds)",
-            elapsed,
-            self.stale_seconds,
-        )
+        logger.warning("Server log went stale (threshold %ds)", self.stale_seconds)
         if await self._server_alive_via_a2s():
             # Logs stalled (shipping hiccup) but server is up: avoid flapping.
             logger.info("A2S reports server up; keeping session alive")

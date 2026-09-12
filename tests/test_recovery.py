@@ -53,6 +53,22 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         await monitor._tick()
         self.assertFalse(monitor.online)
 
+    async def test_match_recovers_on_fresh_log_without_a_heartbeat(self):
+        # A build with an unrecognized heartbeat line: an open match on a log
+        # that is still being written should still be picked up as live.
+        self.write(game("10:00:00"), age=0)
+        monitor = self.monitor()
+        await monitor._tick()
+        monitor.on_session_start.assert_awaited_once()
+        self.assertTrue(monitor.online)
+
+    async def test_open_match_on_a_stale_log_is_not_started(self):
+        # Same open match but the log stopped being written: server is down.
+        self.write(game("10:00:00"), age=10000)
+        monitor = self.monitor()
+        await monitor._tick()
+        monitor.on_session_start.assert_not_awaited()
+
     async def test_fresh_bot_recovers_same_match_age_twice(self):
         self.write(game("10:00:00") + heartbeat("12:14:00"))
         first = self.monitor()
