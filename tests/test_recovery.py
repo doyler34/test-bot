@@ -69,6 +69,17 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         await monitor._tick()
         monitor.on_session_start.assert_not_awaited()
 
+    async def test_open_match_recovers_once_the_log_resumes(self):
+        # Boot while the log is momentarily quiet: match not picked up yet.
+        self.write(game("10:00:00"), age=10000)
+        monitor = self.monitor()
+        await monitor._tick()
+        monitor.on_session_start.assert_not_awaited()
+        # The server writes again (log fresh): the open match is now recovered.
+        os.utime(self.path, None)
+        await monitor._tick()
+        monitor.on_session_start.assert_awaited_once()
+
     async def test_fresh_bot_recovers_same_match_age_twice(self):
         self.write(game("10:00:00") + heartbeat("12:14:00"))
         first = self.monitor()

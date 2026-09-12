@@ -122,6 +122,7 @@ class ReforgerMonitor:
     _last_clock: Optional[float] = field(default=None, init=False)
     _log_clock: float = field(default=0.0, init=False)
     _log_mtime: float = field(default=0.0, init=False)
+    _open_start: Optional[float] = field(default=None, init=False)
 
     def _advance_clock(self, line: str) -> float:
         """Unwrap time-of-day stamps using every log line, including midnight."""
@@ -179,7 +180,20 @@ class ReforgerMonitor:
             await self._on_rotation(path)
 
         await self._read_new_lines()
+        await self._recover_pending()
         await self._check_staleness()
+
+    async def _recover_pending(self) -> None:
+        """Start an open match that boot recovery couldn't confirm, once the log
+        is being written again. Without this a match seen while the log was
+        momentarily quiet would stay 'waiting' forever."""
+        if self._open_start is None or self._live:
+            return
+        fresh_log = bool(self._log_mtime) and (time.time() - self._log_mtime) < self.stale_seconds
+        if fresh_log or await self._server_alive_via_a2s():
+            self._last_heartbeat = time.monotonic()
+            await self._start(time.monotonic() - self._open_start, f"{self._current_path}:recovered")
+            self._open_start = None
 
     async def _on_rotation(self, path: str) -> None:
         """A new session folder appeared (or first run): reset and re-scan."""
@@ -258,6 +272,12 @@ class ReforgerMonitor:
                     if not fresh_beat:
                         self._last_heartbeat = now
                     await self._start(age(live_start), f"{path}:{live_start:.3f}")
+                else:
+                    # Couldn't confirm the server is up right now; remember the open
+                    # match and start it on a later tick once the log resumes writing.
+                    self._open_start = now - age(live_start)
+            else:
+                self._open_start = None
             logger.info("Initial scan complete for %s (live=%s)", path, self._live)
             return
 
@@ -266,10 +286,13 @@ class ReforgerMonitor:
                 self._last_heartbeat = now - age(clock)
             elif event is LineEvent.GAME_START:
                 self._last_heartbeat = now - age(clock)
+                self._open_start = None
                 if not self._live:
                     await self._start(age(clock), f"{path}:{clock:.3f}")
-            elif event is LineEvent.GAME_END and self._live:
-                await self._end()
+            elif event is LineEvent.GAME_END:
+                self._open_start = None
+                if self._live:
+                    await self._end()
 
         if chunk and not events:
             # Fresh log lines the parser doesn't recognize still mean the server
