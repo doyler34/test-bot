@@ -70,7 +70,7 @@ class AlertTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.links = AccountLinks(Path(self.tmp.name) / "links.db")
-        self.token = self.links.submit(1, 10, IDENT, "Player One")
+        self.token = self.links.submit(1, 10, IDENT, "Player One", "CoolNickname")
         self.links.save_review_settings(1, channel=42, reviewer_role=555)
         self.channel = FakeChannel()
         self.role = Role(555)
@@ -90,6 +90,7 @@ class AlertTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sent["content"], "<@&555>")
         self.assertTrue(sent["embed"].footer.text.endswith(self.token))
         self.assertIn("Player One", sent["embed"].description)
+        self.assertIn("CoolNickname", sent["embed"].description)  # Discord name, not just the ID
         self.assertEqual(sent["allowed_mentions"].roles, [self.role])
 
     async def test_no_channel_configured_is_safe(self):

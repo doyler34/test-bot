@@ -44,7 +44,8 @@ class LinkModal(discord.ui.Modal, title="Link your Reforger account"):
         try:
             name = str(self.name_input).strip()
             identity = find_identity(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"), name)
-            token = self.bot.account_links.submit(interaction.guild_id, interaction.user.id, identity, name)
+            token = self.bot.account_links.submit(interaction.guild_id, interaction.user.id, identity, name,
+                                                  interaction.user.display_name)
             try:
                 from bot.discord.link_review import post_request_alert
                 await post_request_alert(self.bot, interaction.guild, token)
@@ -88,15 +89,17 @@ class ReviewList(discord.ui.View):
         super().__init__(timeout=180)
         self.bot, self.rows, self.owner = bot, {r[0]: r for r in rows}, owner
         select = discord.ui.Select(placeholder="Choose a linking request", options=[
-            discord.SelectOption(label=r[3][:100], description=f"Discord ID: {r[1]}", value=r[0]) for r in rows])
+            discord.SelectOption(label=r[3][:100], description=(r[4] or f"Discord ID: {r[1]}")[:100], value=r[0])
+            for r in rows])
 
         async def selected(interaction):
             if not can_review(interaction, bot.config.guild_id) or interaction.user.id != owner:
                 await interaction.response.send_message("Admin access required.", ephemeral=True)
                 return
             token = select.values[0]
-            _, member, identity, name = self.rows[token]
-            text = (f"Discord account: <@{member}> (`{member}`)\n"
+            _, member, identity, name, discord_name = self.rows[token]
+            who = discord.utils.escape_markdown(discord_name) + " " if discord_name else ""
+            text = (f"Discord account: {who}<@{member}> (`{member}`)\n"
                     f"Reforger name: {discord.utils.escape_markdown(name)}\n"
                     f"Game identity: `{identity}`\n\n"
                     "Confirm ownership with the player in-game before approving. A matching name alone is not verification.")
