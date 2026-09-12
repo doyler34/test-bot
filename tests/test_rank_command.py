@@ -65,15 +65,19 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_linked_response_is_png_and_avatar_timeout_is_safe(self):
         self.link()
         self.avatar.replace.return_value.read.side_effect=TimeoutError()
+        sent = SimpleNamespace(delete=AsyncMock())
         async def receive(**kwargs):
             self.assertEqual(kwargs['file'].filename,'oyb-rank.png')
             self.assertTrue(kwargs['file'].fp.read().startswith(b'\x89PNG'))
             self.assertEqual(kwargs['allowed_mentions'].to_dict(),{'parse':[]})
+            return sent
         self.interaction.followup.send.side_effect=receive
         await self.command.show(self.interaction)
         self.interaction.response.defer.assert_awaited_once()
         self.interaction.followup.send.assert_awaited_once()
         self.avatar.replace.assert_called_once_with(format='png',size=256)
+        sent.delete.assert_awaited_once()  # public card is scheduled to auto-clear
+        self.assertEqual(sent.delete.await_args.kwargs['delay'],300)
 
     async def test_wrong_guild_and_missing_permission(self):
         self.interaction.guild_id=99

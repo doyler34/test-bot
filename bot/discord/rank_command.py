@@ -6,6 +6,7 @@ import logging
 
 import discord
 from discord import app_commands
+from bot.config import command_auto_clear_seconds
 from bot.ranks.rank_card import render_card
 
 LOG = logging.getLogger("reforger.rank_command")
@@ -71,7 +72,10 @@ class RankCommand:
                 data = await asyncio.to_thread(render_card, interaction.user.display_name, xp, avatar)
                 with BytesIO(data) as buffer:
                     with closing(discord.File(buffer, filename="oyb-rank.png")) as attachment:
-                        await interaction.followup.send(file=attachment, allowed_mentions=discord.AllowedMentions.none())
+                        sent = await interaction.followup.send(file=attachment, allowed_mentions=discord.AllowedMentions.none())
+            clear = command_auto_clear_seconds()
+            if clear:
+                await sent.delete(delay=clear)
         except Exception:
             LOG.exception("Rank card failed for Discord %s", interaction.user.id)
             await interaction.followup.send("Your rank card could not be loaded. Please try again shortly.", ephemeral=True)

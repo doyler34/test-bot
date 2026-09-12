@@ -22,6 +22,15 @@ def staging_enabled() -> bool:
     return os.getenv("OYB_STAGING", "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def command_auto_clear_seconds() -> int:
+    """Seconds before a /rank or /stats card auto-deletes (0 = keep). Default 5 min."""
+    raw = os.getenv("COMMAND_AUTO_CLEAR_SECONDS", "300").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 300
+
+
 def configure_connection(db, *, busy_timeout_ms: int = 10000, wal: bool = True) -> None:
     """Apply shared SQLite pragmas so the many subsystems contend less.
 

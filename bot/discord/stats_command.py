@@ -2,6 +2,7 @@
 import logging
 import discord
 from discord import app_commands
+from bot.config import command_auto_clear_seconds
 from bot.storage.combat_store import totals
 
 LOG = logging.getLogger('reforger.stats')
@@ -58,7 +59,10 @@ class StatsCommand:
         await interaction.response.defer(thinking=True)
         try:
             data = totals(self.bot.account_links.db,identity)
-            await interaction.followup.send(embed=stats_embed(member.display_name,data),allowed_mentions=discord.AllowedMentions.none())
+            sent = await interaction.followup.send(embed=stats_embed(member.display_name,data),allowed_mentions=discord.AllowedMentions.none())
+            clear = command_auto_clear_seconds()
+            if clear:
+                await sent.delete(delay=clear)
         except Exception:
             LOG.exception('Could not load combat stats')
             await interaction.followup.send('Combat stats could not be loaded. Please try again shortly.',ephemeral=True)
