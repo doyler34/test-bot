@@ -128,8 +128,10 @@ class NotificationBot(TimerBot):
     async def setup_hook(self):
         self.leaderboard_display.register()
         from bot.discord.link_review import AlertsControlView, ReviewButtons
+        from bot.discord.factions import FactionView
         self.add_view(AlertsControlView(self))
         self.add_view(ReviewButtons(self))
+        self.add_view(FactionView(self))
         self._jobs.append(asyncio.create_task(self.rank_command.register()))
 
     async def on_message(self, message):
@@ -154,6 +156,15 @@ class NotificationBot(TimerBot):
                 except Exception:
                     logger.exception("Announcements channel unavailable; alerts fall back to #servers")
                 await prepare_join_channel(self, guild, readonly_overwrites(guild, hidden=staging_enabled()))
+                try:
+                    from bot.discord.factions import prepare_faction_picker
+                    row = self.account_links.db.execute(
+                        "SELECT channel FROM join_channel WHERE guild=?", (guild.id,)).fetchone()
+                    register_channel = guild.get_channel(row[0]) if row else None
+                    if isinstance(register_channel, discord.TextChannel):
+                        await prepare_faction_picker(self, guild, register_channel)
+                except Exception:
+                    logger.exception("Faction picker unavailable; check Manage Roles")
                 try:
                     from bot.discord.link_review import prepare_review_channel
                     await prepare_review_channel(self, guild)

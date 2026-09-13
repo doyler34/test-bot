@@ -30,6 +30,12 @@ class AccountLinks:
             guild INTEGER PRIMARY KEY, channel INTEGER NOT NULL, message INTEGER);
             CREATE TABLE IF NOT EXISTS link_review (
             guild INTEGER PRIMARY KEY, channel INTEGER, control INTEGER, reviewer_role INTEGER);
+            CREATE TABLE IF NOT EXISTS faction_choice (
+            guild INTEGER NOT NULL, discord_id INTEGER NOT NULL, faction TEXT NOT NULL,
+            PRIMARY KEY(guild, discord_id));
+            CREATE TABLE IF NOT EXISTS faction_roles (
+            guild INTEGER NOT NULL, faction TEXT NOT NULL, role INTEGER NOT NULL,
+            PRIMARY KEY(guild, faction));
         ''')
         # Older databases predate the stored Discord display name.
         if "discord_name" not in {r[1] for r in self.db.execute("PRAGMA table_info(link_requests)")}:
@@ -123,6 +129,28 @@ class AccountLinks:
         return self.db.execute(
             "SELECT discord_id,identity,name,status,discord_name FROM link_requests WHERE guild=? AND token=?",
             (guild, token)).fetchone()
+
+    def set_faction(self, guild, discord_id, faction):
+        with self.db:
+            self.db.execute("INSERT INTO faction_choice(guild,discord_id,faction) VALUES (?,?,?) "
+                            "ON CONFLICT(guild,discord_id) DO UPDATE SET faction=excluded.faction",
+                            (guild, discord_id, faction))
+
+    def faction(self, guild, discord_id):
+        row = self.db.execute("SELECT faction FROM faction_choice WHERE guild=? AND discord_id=?",
+                              (guild, discord_id)).fetchone()
+        return row[0] if row else None
+
+    def save_faction_role(self, guild, faction, role):
+        with self.db:
+            self.db.execute("INSERT INTO faction_roles(guild,faction,role) VALUES (?,?,?) "
+                            "ON CONFLICT(guild,faction) DO UPDATE SET role=excluded.role",
+                            (guild, faction, role))
+
+    def faction_role(self, guild, faction):
+        row = self.db.execute("SELECT role FROM faction_roles WHERE guild=? AND faction=?",
+                              (guild, faction)).fetchone()
+        return row[0] if row else None
 
     def review_settings(self, guild):
         row = self.db.execute("SELECT channel,control,reviewer_role FROM link_review WHERE guild=?",
