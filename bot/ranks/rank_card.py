@@ -39,6 +39,23 @@ def template():
     return image
 
 
+FACTION_THEMES = {
+    'US':   ('#8FB4E6', 'us.svg'),
+    'USSR': ('#E5675E', 'ussr.png'),
+    'FIA':  ('#CBBB79', 'fia.png'),
+}
+
+
+@lru_cache(maxsize=8)
+def crest(name, size):
+    path = ASSETS / 'factions' / name
+    if name.endswith('.svg'):
+        return vector(path, size, size)
+    with Image.open(path) as image:
+        rgba = image.convert('RGBA')
+    return rgba.resize((round(rgba.width * size / rgba.height), size), Image.Resampling.LANCZOS)
+
+
 def clean_name(value):
     value = unicodedata.normalize('NFC', str(value))
     return ''.join(c for c in value if not unicodedata.category(c).startswith('C'))[:256].strip() or 'OYB PLAYER'
@@ -59,8 +76,9 @@ def fitted(draw, value, xy, width, size, minimum, fill=INK, display=False, audit
         audit.append((value, draw.textbbox(xy, value, font=face, anchor='lt'), (xy[0], xy[1], xy[0]+width, xy[1]+size+8)))
 
 
-def render_card(name, xp, avatar=None, *, audit=None):
+def render_card(name, xp, avatar=None, *, audit=None, faction=None):
     progress = rank_for_xp(xp)
+    accent, crest_file = FACTION_THEMES.get(faction, (ACCENT, None))
     image = template().copy()
     draw = ImageDraw.Draw(image)
     portrait = None
@@ -83,22 +101,27 @@ def render_card(name, xp, avatar=None, *, audit=None):
     try:
         image.alpha_composite(vector(ASSETS / 'ranks' / (progress.current.slug + '.svg'), 100, 100), (790, 77))
     except (OSError, ValueError):
-        draw.polygon([(840, 97), (865, 127), (840, 157), (815, 127)], outline=ACCENT, width=3)
+        draw.polygon([(840, 97), (865, 127), (840, 157), (815, 127)], outline=accent, width=3)
     fitted(draw, 'O.Y.B', (30, 16), 90, 28, 28, display=True, audit=audit)
     fitted(draw, 'COMMUNITY RANK', (148, 20), 300, 13, 13, fill=MUTED, audit=audit)
     fitted(draw, 'SERVICE RECORD', (774, 20), 162, 12, 12, fill=MUTED, audit=audit)
     fitted(draw, name, (244, 65), 460, 23, 15, audit=audit)
-    fitted(draw, progress.current.name.upper(), (241, 98), 466, 61, 44, fill=ACCENT, display=True, audit=audit)
+    fitted(draw, progress.current.name.upper(), (241, 98), 466, 61, 44, fill=accent, display=True, audit=audit)
     fitted(draw, 'VERIFIED PLAYER', (46, 238), 150, 13, 12, fill=MUTED, audit=audit)
     fitted(draw, 'O.Y.B  /  REFORGER', (45, 268), 150, 12, 11, fill=MUTED, audit=audit)
-    fitted(draw, 'FIELD INSIGNIA', (779, 219), 134, 13, 12, fill=MUTED, audit=audit)
-    fitted(draw, 'O.Y.B', (806, 246), 100, 35, 35, fill=ACCENT, display=True, audit=audit)
+    if crest_file:
+        draw.text((840, 212), 'FACTION', font=font(12), fill=MUTED, anchor='mt')
+        emblem = crest(crest_file, 60)
+        image.alpha_composite(emblem, (840 - emblem.width // 2, 262 - emblem.height // 2))
+    else:
+        fitted(draw, 'FIELD INSIGNIA', (779, 219), 134, 13, 12, fill=MUTED, audit=audit)
+        fitted(draw, 'O.Y.B', (806, 246), 100, 35, 35, fill=accent, display=True, audit=audit)
     xp_text = f'{progress.xp:,} / {progress.next.threshold:,} XP' if progress.next else f'{progress.xp:,} XP'
     fitted(draw, xp_text, (244, 188), 460, 27, 16, display=True, audit=audit)
     draw.rounded_rectangle((244, 228, 704, 239), radius=2, fill='#354137')
     filled = round(460 * progress.fraction)
     if filled:
-        draw.rectangle((244, 228, 243+filled, 239), fill=ACCENT)
+        draw.rectangle((244, 228, 243+filled, 239), fill=accent)
     for x in range(267, 704, 23):
         draw.line((x, 228, x, 239), fill='#18201b', width=2)
     if progress.next:
@@ -108,7 +131,7 @@ def render_card(name, xp, avatar=None, *, audit=None):
         right = 704 - draw.textlength(remaining, font=font(14))
         fitted(draw, remaining, (right, 276), 235, 14, 14, fill=MUTED, audit=audit)
     else:
-        fitted(draw, 'MAX RANK', (244, 270), 460, 26, 22, fill=ACCENT, display=True, audit=audit)
+        fitted(draw, 'MAX RANK', (244, 270), 460, 26, 22, fill=accent, display=True, audit=audit)
     buffer = BytesIO()
     image.convert('RGB').save(buffer, format='PNG', optimize=True)
     return buffer.getvalue()

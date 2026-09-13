@@ -79,6 +79,15 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         sent.delete.assert_awaited_once()  # public card is scheduled to auto-clear
         self.assertEqual(sent.delete.await_args.kwargs['delay'],300)
 
+    async def test_rank_passes_picked_faction_to_the_card(self):
+        self.link()
+        self.links.set_faction(1, 2, 'USSR')
+        sent = SimpleNamespace(delete=AsyncMock())
+        self.interaction.followup.send = AsyncMock(return_value=sent)
+        with patch('bot.discord.rank_command.render_card', return_value=b'\x89PNG') as render:
+            await self.command.show(self.interaction)
+        self.assertEqual(render.call_args.kwargs.get('faction'), 'USSR')
+
     async def test_wrong_guild_and_missing_permission(self):
         self.interaction.guild_id=99
         await self.command.show(self.interaction)

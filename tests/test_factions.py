@@ -90,5 +90,13 @@ class ApplyTests(unittest.IsolatedAsyncioTestCase):
         interaction.response.send_message.assert_awaited()
 
 
+class CardTests(unittest.TestCase):
+    def test_render_card_themes_for_every_faction(self):
+        from bot.ranks.rank_card import render_card
+        for f in [None, "US", "USSR", "FIA"]:
+            png = render_card("GARETH", 347, faction=f)
+            self.assertTrue(png.startswith(b"\x89PNG"), f)  # renders, no crash
+
+
 if __name__ == "__main__":
     unittest.main()
