@@ -11,7 +11,7 @@ from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standi
 
 LOG = logging.getLogger('reforger.leaderboard')
 CHANNEL_NAME = 'leaderboard'
-MARKER = 'OYB • Permanent leaderboard'
+MARKER = 'OYB-LEADERBOARD'
 POLL = 15
 DEBOUNCE = 30
 RECONCILE = 300
