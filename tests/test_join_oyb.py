@@ -7,8 +7,8 @@ import sqlite3
 import discord
 
 from bot.storage.account_links import AccountLinks
-from bot.discord.join_oyb import (JoinView, ReviewDecision, ConfirmUnlink, find_identity,
-                                  prepare_join_channel)
+from bot.discord.join_oyb import (JoinView, ReviewDecision, ConfirmUnlink, ForceLinkChoice,
+                                  find_identity, find_candidates, prepare_join_channel)
 
 
 class JoinTests(unittest.IsolatedAsyncioTestCase):
@@ -56,7 +56,7 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         info.embeds = [channel.send.await_args.kwargs["embed"]]
         view = channel.send.await_args.kwargs["view"]
         self.assertTrue(view.is_persistent())
-        self.assertEqual(len(view.children), 4)
+        self.assertEqual(len(view.children), 5)
         await prepare_join_channel(self.bot, guild, {})
         guild.create_text_channel.assert_awaited_once()
         channel.send.assert_awaited_once()
@@ -87,6 +87,48 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         await ConfirmUnlink(self.bot, 1, 10).confirm.callback(interaction)
         interaction.response.send_message.assert_awaited()  # denied
         self.assertEqual(self.links.lookup(1, 10), identity)
+
+    def test_find_candidates_groups_playtime_and_orders_by_most_played(self):
+        path = self.root / "playtime.sqlite3"
+        db = sqlite3.connect(path)
+        try:
+            db.execute("CREATE TABLE totals (server TEXT, identity TEXT, name TEXT, seconds REAL)")
+            db.executemany("INSERT INTO totals VALUES (?,?,?,?)", [
+                ("s1", "id-a", "LOGAN", 3600), ("s2", "id-a", "LOGAN", 1800),
+                ("s1", "id-b", "LOGAN", 120)])
+            db.commit()
+        finally:
+            db.close()
+        cands = find_candidates(path, "logan")  # case-insensitive, like the linker
+        self.assertEqual([c["identity"] for c in cands], ["id-a", "id-b"])
+        self.assertEqual(cands[0]["seconds"], 5400)
+        self.assertEqual(find_candidates(self.root / "missing.sqlite3", "logan"), [])
+
+    async def test_force_link_creates_the_chosen_link(self):
+        ident = "11111111-2222-3333-4444-555555555555"
+        view = ForceLinkChoice(self.bot, owner=1, discord_id=10,
+                               candidates=[dict(identity=ident, seconds=5400, servers="s1")])
+        select = view.children[0]
+        select._values = [ident]
+        i = SimpleNamespace(guild_id=1, user=SimpleNamespace(id=1),
+            permissions=SimpleNamespace(manage_guild=True, administrator=False),
+            response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+        await select.callback(i)
+        self.assertEqual(self.links.lookup(1, 10), ident)
+        i.response.edit_message.assert_awaited()
+
+    async def test_force_link_requires_admin(self):
+        ident = "11111111-2222-3333-4444-555555555555"
+        view = ForceLinkChoice(self.bot, owner=1, discord_id=10,
+                               candidates=[dict(identity=ident, seconds=1, servers="s1")])
+        select = view.children[0]
+        select._values = [ident]
+        i = SimpleNamespace(guild_id=1, user=SimpleNamespace(id=2),
+            permissions=SimpleNamespace(manage_guild=False, administrator=False),
+            response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+        await select.callback(i)
+        i.response.send_message.assert_awaited()  # denied
+        self.assertIsNone(self.links.lookup(1, 10))
 
     async def test_name_lookup_is_unique_and_does_not_change_totals(self):
         path = self.root / "playtime.sqlite3"

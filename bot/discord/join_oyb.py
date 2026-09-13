@@ -29,6 +29,25 @@ def find_identity(path, name):
     return matches.pop()
 
 
+def find_candidates(path, name):
+    """Every game account seen under a name, with playtime and servers so an
+    admin can tell duplicate names apart. Ordered most-played first."""
+    if not Path(path).is_file():
+        return []
+    with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)) as db:
+        rows = db.execute(
+            "SELECT identity, SUM(seconds), GROUP_CONCAT(DISTINCT server) FROM totals "
+            "WHERE name = ? COLLATE NOCASE GROUP BY identity ORDER BY SUM(seconds) DESC",
+            (name.strip(),)).fetchall()
+    return [dict(identity=r[0], seconds=r[1] or 0, servers=r[2] or "") for r in rows]
+
+
+def play_summary(candidate):
+    minutes = int(candidate.get("seconds", 0) // 60)
+    hours, mins = divmod(minutes, 60)
+    return f"{hours}h {mins:02d}m played" if hours else f"{minutes} min played"
+
+
 class LinkModal(discord.ui.Modal, title="Link your Reforger account"):
     name_input = discord.ui.TextInput(label="Your exact Reforger in-game name", min_length=1, max_length=100)
 
@@ -184,6 +203,66 @@ class ConfirmUnlink(discord.ui.View):
                                                 allowed_mentions=discord.AllowedMentions.none())
 
 
+class ForceLinkChoice(discord.ui.View):
+    """Admin picks the correct game account for a Discord member and links it."""
+    def __init__(self, bot, owner, discord_id, candidates):
+        super().__init__(timeout=180)
+        self.bot, self.owner, self.discord_id = bot, owner, discord_id
+        options = [discord.SelectOption(
+            label=play_summary(c)[:100],
+            description=f"{c['servers'] or 'unknown server'} · {c['identity'][:8]}…"[:100],
+            value=c["identity"]) for c in candidates[:25]]
+        select = discord.ui.Select(placeholder="Pick the correct account", options=options)
+
+        async def chosen(interaction):
+            if not can_review(interaction, bot.config.guild_id) or interaction.user.id != owner:
+                await interaction.response.send_message("Admin access required.", ephemeral=True)
+                return
+            identity = select.values[0]
+            try:
+                bot.account_links.verified_link(interaction.guild_id, self.discord_id, identity,
+                                                f"admin:{interaction.user.id}")
+                text = f"✅ Linked <@{self.discord_id}> to `{identity}`."
+            except LinkConflict as exc:
+                text = f"⚠️ {exc}\nUse **Admin: remove a link** first if you need to move it."
+            except (ValueError, sqlite3.Error) as exc:
+                text = f"Could not link: {exc}"
+            await interaction.response.edit_message(content=text, view=None,
+                                                    allowed_mentions=discord.AllowedMentions.none())
+        select.callback = chosen
+        self.add_item(select)
+
+
+class ForceLinkModal(discord.ui.Modal, title="Force-link a Reforger account"):
+    member_id = discord.ui.TextInput(label="Discord user ID", min_length=5, max_length=25)
+    name_input = discord.ui.TextInput(label="Exact in-game name", min_length=1, max_length=100)
+
+    def __init__(self, bot, owner):
+        super().__init__()
+        self.bot, self.owner = bot, owner
+
+    async def on_submit(self, interaction):
+        if not can_review(interaction, self.bot.config.guild_id) or interaction.user.id != self.owner:
+            await interaction.response.send_message("Admin access required.", ephemeral=True)
+            return
+        try:
+            discord_id = int(str(self.member_id).strip())
+        except ValueError:
+            await interaction.response.send_message("That Discord ID isn't a number — right-click the user → Copy ID.", ephemeral=True)
+            return
+        name = str(self.name_input).strip()
+        candidates = find_candidates(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"), name)
+        if not candidates:
+            await interaction.response.send_message(
+                f"No game account found under **{discord.utils.escape_markdown(name)}**. "
+                "Make sure they've joined an OYB server so the tracker has seen them.", ephemeral=True)
+            return
+        await interaction.response.send_message(
+            f"Force-link <@{discord_id}> (`{discord_id}`) to which **{discord.utils.escape_markdown(name)}**?",
+            view=ForceLinkChoice(self.bot, self.owner, discord_id, candidates),
+            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+
 class JoinView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)
@@ -223,6 +302,13 @@ class JoinView(discord.ui.View):
             return
         await interaction.response.send_message("Remove a member's Reforger link (use for abuse or a bad link).",
                                                 view=UnlinkView(self.bot, interaction.user.id), ephemeral=True)
+
+    @discord.ui.button(label="Admin: force-link", custom_id="oyb:link-force", style=discord.ButtonStyle.secondary)
+    async def force(self, interaction, button):
+        if not can_review(interaction, self.bot.config.guild_id):
+            await interaction.response.send_message("Only admins with Manage Server can force-link.", ephemeral=True)
+            return
+        await interaction.response.send_modal(ForceLinkModal(self.bot, interaction.user.id))
 
 
 async def prepare_join_channel(bot, guild, overwrites):
