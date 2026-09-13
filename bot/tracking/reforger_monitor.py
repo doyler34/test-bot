@@ -117,6 +117,7 @@ class ReforgerMonitor:
     _current_path: Optional[str] = field(default=None, init=False)
     _pos: int = field(default=0, init=False)
     _last_heartbeat: float = field(default=0.0, init=False)
+    _seen_heartbeat: bool = field(default=False, init=False)
 
     _clock_day: float = field(default=0.0, init=False)
     _last_clock: Optional[float] = field(default=None, init=False)
@@ -263,6 +264,7 @@ class ReforgerMonitor:
                     live_start = None
                 elif event is LineEvent.HEARTBEAT:
                     heartbeat = clock
+                    self._seen_heartbeat = True
             if heartbeat is not None:
                 self._last_heartbeat = now - age(heartbeat)
             if live_start is not None:
@@ -271,6 +273,10 @@ class ReforgerMonitor:
                 if fresh_beat or fresh_log or await self._server_alive_via_a2s():
                     if not fresh_beat:
                         self._last_heartbeat = now
+                    await self._start(age(live_start), f"{path}:{live_start:.3f}")
+                elif not self._seen_heartbeat:
+                    # This build never writes a heartbeat, so a quiet log is just an
+                    # idle match, not a finished one. Resume it; only POSTGAME ends it.
                     await self._start(age(live_start), f"{path}:{live_start:.3f}")
                 else:
                     # Couldn't confirm the server is up right now; remember the open
@@ -284,6 +290,7 @@ class ReforgerMonitor:
         for event, clock in events:
             if event is LineEvent.HEARTBEAT:
                 self._last_heartbeat = now - age(clock)
+                self._seen_heartbeat = True
             elif event is LineEvent.GAME_START:
                 self._last_heartbeat = now - age(clock)
                 self._open_start = None
@@ -315,6 +322,11 @@ class ReforgerMonitor:
             return
         if not self._log_mtime and self._last_heartbeat == 0.0:
             return  # no liveness signal yet; nothing to judge by
+        if not self._seen_heartbeat:
+            # Builds that never write a heartbeat also go quiet when a live match
+            # empties out. We can't tell 'quiet' from 'down', so keep the match
+            # live and let POSTGAME (or a log rotation) end it, not a stall.
+            return
 
         logger.warning("Server log went stale (threshold %ds)", self.stale_seconds)
         if await self._server_alive_via_a2s():
