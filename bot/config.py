@@ -22,6 +22,15 @@ def staging_enabled() -> bool:
     return os.getenv("OYB_STAGING", "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def leaderboard_channel_id() -> int | None:
+    """Pin the public leaderboard to this channel id instead of finding/creating one."""
+    raw = os.getenv("LEADERBOARD_CHANNEL_ID", "").strip()
+    try:
+        return int(raw) if raw else None
+    except ValueError:
+        return None
+
+
 def command_auto_clear_seconds() -> int:
     """Seconds before a /rank or /stats card auto-deletes (0 = keep). Default 5 min."""
     raw = os.getenv("COMMAND_AUTO_CLEAR_SECONDS", "300").strip()

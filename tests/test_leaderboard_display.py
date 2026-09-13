@@ -162,6 +162,24 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
         self.store.close()
         self.tmp.cleanup()
 
+    async def test_pinned_channel_id_is_used_and_never_created(self):
+        pinned = Channel(self.guild, 555, name='leaderboard', topic=None)
+        self.guild.channels.append(pinned)
+        state = self.store.leaderboard(1)
+        with patch('bot.discord.leaderboard_display.leaderboard_channel_id', return_value=555):
+            channel = await self.display.channel(self.guild, state)
+        self.assertIs(channel, pinned)
+        self.assertEqual(self.guild.creates, 0)  # never creates when pinned
+        self.assertEqual(self.store.leaderboard(1)['channel'], 555)  # saved
+
+    async def test_pinned_channel_missing_raises_instead_of_creating(self):
+        state = self.store.leaderboard(1)
+        self.guild.fetch_channel = AsyncMock(side_effect=missing())
+        with patch('bot.discord.leaderboard_display.leaderboard_channel_id', return_value=999):
+            with self.assertRaises(RuntimeError):
+                await self.display.channel(self.guild, state)
+        self.assertEqual(self.guild.creates, 0)
+
     async def initial(self):
         await self.display.tick()
         return self.guild.channels[0].messages[0]

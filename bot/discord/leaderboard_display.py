@@ -6,7 +6,7 @@ import math
 import time
 
 import discord
-from bot.config import staging_enabled
+from bot.config import staging_enabled, leaderboard_channel_id
 from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
 
 LOG = logging.getLogger('reforger.leaderboard')
@@ -142,6 +142,27 @@ class LeaderboardDisplay:
         return result
 
     async def channel(self, guild, state):
+        # An admin can pin the board to one channel by id; then we never create
+        # or search, which sidesteps Discord's channel-create rate limit.
+        pinned = leaderboard_channel_id()
+        if pinned:
+            channel = guild.get_channel(pinned)
+            if not isinstance(channel, discord.TextChannel):
+                try:
+                    fetched = await guild.fetch_channel(pinned)
+                except discord.HTTPException:
+                    fetched = None
+                channel = fetched if isinstance(fetched, discord.TextChannel) else None
+            if channel is None:
+                raise RuntimeError(f"LEADERBOARD_CHANNEL_ID {pinned} is not a text channel I can see")
+            desired = overwrites(guild, channel.overwrites)
+            if channel.topic != MARKER or desired != channel.overwrites:
+                channel = await channel.edit(topic=MARKER, overwrites=desired,
+                                             reason='Pin OYB leaderboard to the configured channel')
+            if state['channel'] != channel.id:
+                state.update(channel=channel.id, message=None)
+                self.bot.store.save_leaderboard(state)
+            return channel
         # Steady state: the saved channel is in the gateway cache, so resolve it
         # without a REST channel-list call every refresh.
         channel = None
