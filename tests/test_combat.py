@@ -10,7 +10,7 @@ import discord
 
 from bot.storage.account_links import AccountLinks
 from bot.tracking.combat_parser import parse_kill
-from bot.storage.combat_store import migrate, totals
+from bot.storage.combat_store import migrate, totals, faction_totals
 from bot.tracking.combat_ingestor import scan, ingest
 from bot.discord.stats_command import StatsCommand, stats_embed, kd
 from bot.discord.rank_command import RankCommand
@@ -68,6 +68,20 @@ class IngestionTests(unittest.TestCase):
         result=totals(self.db,KILLER)
         self.assertEqual((result['player_kills'],result['teamkills'],result['deaths']),(1,1,0))
         self.assertEqual(totals(self.db,VICTIM)['deaths'],2)
+
+    def test_faction_is_captured_per_side(self):
+        # event(): victim fights for US, killer for FIA.
+        self.process(event(killer=KILLER)+event('15:31:00.000','TK',KILLER))
+        killer_by_faction={r['faction']:r for r in faction_totals(self.db,KILLER)}
+        self.assertEqual((killer_by_faction['FIA']['player_kills'],killer_by_faction['FIA']['teamkills']),(1,1))
+        victim_by_faction={r['faction']:r for r in faction_totals(self.db,VICTIM)}
+        self.assertEqual(victim_by_faction['US']['deaths'],2)
+        # Career totals stay identical to the per-faction sums.
+        self.assertEqual(totals(self.db,KILLER)['player_kills'],1)
+
+    def test_parse_kill_reads_both_factions(self):
+        ev=parse_kill(event(killer=KILLER))
+        self.assertEqual((ev.victim_faction,ev.killer_faction),('US','FIA'))
 
     def test_restart_and_copied_log_do_not_duplicate(self):
         self.process(event())
