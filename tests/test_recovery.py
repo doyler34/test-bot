@@ -62,47 +62,23 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         monitor.on_session_start.assert_awaited_once()
         self.assertTrue(monitor.online)
 
-    async def test_heartbeatless_open_match_resumes_on_a_quiet_log(self):
-        # No heartbeat anywhere + an open match on a quiet log: resume it live.
-        # A quiet log on this build just means an idle match, so we keep it live
-        # across restarts and let POSTGAME end it.
+    async def test_open_match_on_a_stale_log_is_not_started(self):
+        # Same open match but the log stopped being written: server is down.
         self.write(game("10:00:00"), age=10000)
         monitor = self.monitor()
         await monitor._tick()
-        monitor.on_session_start.assert_awaited_once()
+        monitor.on_session_start.assert_not_awaited()
 
-    async def test_heartbeat_build_open_match_on_stale_log_waits_then_recovers(self):
-        # This build DOES write heartbeats, so a stale log means the server is
-        # down: don't resume until it writes again.
-        self.write(game("10:00:00") + heartbeat("10:00:05"), age=10000)
+    async def test_open_match_recovers_once_the_log_resumes(self):
+        # Boot while the log is momentarily quiet: match not picked up yet.
+        self.write(game("10:00:00"), age=10000)
         monitor = self.monitor()
         await monitor._tick()
         monitor.on_session_start.assert_not_awaited()
-        os.utime(self.path, None)  # server writes again
+        # The server writes again (log fresh): the open match is now recovered.
+        os.utime(self.path, None)
         await monitor._tick()
         monitor.on_session_start.assert_awaited_once()
-
-    async def test_heartbeatless_live_match_survives_a_stale_log(self):
-        # A live match on a heartbeat-less build must not be ended just because
-        # the log went quiet (empty server).
-        monitor = self.monitor()
-        monitor._live = True
-        monitor._seen_heartbeat = False
-        monitor._log_mtime = time.time() - 10000
-        monitor._last_heartbeat = time.monotonic() - 10000
-        await monitor._check_staleness()
-        monitor.on_session_end.assert_not_awaited()
-
-    async def test_heartbeat_build_still_ends_on_a_stale_log(self):
-        # Regression guard: a build that writes heartbeats still ends the match
-        # when both the log and the heartbeat go stale.
-        monitor = self.monitor()
-        monitor._live = True
-        monitor._seen_heartbeat = True
-        monitor._log_mtime = time.time() - 10000
-        monitor._last_heartbeat = time.monotonic() - 10000
-        await monitor._check_staleness()
-        monitor.on_session_end.assert_awaited_once()
 
     async def test_fresh_bot_recovers_same_match_age_twice(self):
         self.write(game("10:00:00") + heartbeat("12:14:00"))
