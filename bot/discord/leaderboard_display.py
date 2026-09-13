@@ -141,6 +141,22 @@ class LeaderboardDisplay:
             result.append((name or (member.display_name if member else f'Member {member_id}'), kills, deaths))
         return result
 
+    async def _lock(self, channel, guild, set_topic=False):
+        """Best-effort keep the channel display-only. Never block posting the
+        board if we lack Manage Channels/Roles here — the board matters more."""
+        desired = overwrites(guild, channel.overwrites)
+        change_topic = set_topic and channel.topic != MARKER
+        if desired == channel.overwrites and not change_topic:
+            return channel
+        kwargs = dict(overwrites=desired, reason='Keep OYB leaderboard display-only')
+        if change_topic:
+            kwargs['topic'] = MARKER
+        try:
+            return await channel.edit(**kwargs)
+        except discord.HTTPException:
+            LOG.warning("Could not lock the leaderboard channel (needs Manage Channels/Roles); posting anyway")
+            return channel
+
     async def channel(self, guild, state):
         # An admin can pin the board to one channel by id; then we never create
         # or search, which sidesteps Discord's channel-create rate limit.
@@ -155,10 +171,7 @@ class LeaderboardDisplay:
                 channel = fetched if isinstance(fetched, discord.TextChannel) else None
             if channel is None:
                 raise RuntimeError(f"LEADERBOARD_CHANNEL_ID {pinned} is not a text channel I can see")
-            desired = overwrites(guild, channel.overwrites)
-            if channel.topic != MARKER or desired != channel.overwrites:
-                channel = await channel.edit(topic=MARKER, overwrites=desired,
-                                             reason='Pin OYB leaderboard to the configured channel')
+            channel = await self._lock(channel, guild, set_topic=True)
             if state['channel'] != channel.id:
                 state.update(channel=channel.id, message=None)
                 self.bot.store.save_leaderboard(state)
@@ -185,9 +198,7 @@ class LeaderboardDisplay:
                 overwrites=overwrites(guild), reason='OYB permanent leaderboard')
             LOG.info('Leaderboard channel created: %s', channel.id)
         else:
-            desired = overwrites(guild, channel.overwrites)
-            if desired != channel.overwrites:
-                channel = await channel.edit(overwrites=desired, reason='Keep OYB leaderboard display-only')
+            channel = await self._lock(channel, guild)
         if state['channel'] != channel.id:
             state.update(channel=channel.id, message=None)
             self.bot.store.save_leaderboard(state)

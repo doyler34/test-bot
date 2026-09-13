@@ -172,6 +172,14 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.guild.creates, 0)  # never creates when pinned
         self.assertEqual(self.store.leaderboard(1)['channel'], 555)  # saved
 
+    async def test_lock_failure_does_not_block_the_board(self):
+        channel = Channel(self.guild, 777, name='leaderboard', topic=MARKER)
+        async def forbidden(**kwargs):
+            raise discord.Forbidden(SimpleNamespace(status=403, reason='Forbidden'), 'no perms')
+        channel.edit = forbidden
+        result = await self.display._lock(channel, self.guild)  # must not raise
+        self.assertIs(result, channel)
+
     async def test_pinned_channel_missing_raises_instead_of_creating(self):
         state = self.store.leaderboard(1)
         self.guild.fetch_channel = AsyncMock(side_effect=missing())
