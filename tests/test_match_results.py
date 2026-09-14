@@ -57,9 +57,12 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
         self.identity = '11111111-2222-3333-4444-555555555555'
         token = self.links.submit(1, 10, self.identity, 'Test Player')
         self.links.review(1, token, 99, True)
-        self.channel = MagicMock(spec=discord.TextChannel)
+        self.channel = MagicMock(spec=discord.TextChannel)      # the board channel
         self.channel.send = AsyncMock()
-        self.guild = SimpleNamespace(id=1, get_channel=lambda _id: self.channel,
+        self.dedicated = MagicMock(spec=discord.TextChannel)    # a channel of its own
+        self.dedicated.send = AsyncMock()
+        self.channels = {777: self.channel, 555: self.dedicated}
+        self.guild = SimpleNamespace(id=1, get_channel=self.channels.get,
                                      get_member=lambda _id: None)
         self.bot = SimpleNamespace(config=SimpleNamespace(guild_id=1), account_links=self.links,
                                    get_guild=lambda _id: self.guild)
@@ -71,11 +74,13 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
                 "INSERT INTO combat_events (server,event_key,occurred,victim,killer,relation)"
                 " VALUES ('s',?,?,?,?,'ENEMY')", (tag, stamp(when), victim, killer))
 
-    async def publish(self, channel_id='555'):
-        env = {'GAME_LEADERBOARD_CHANNEL_ID': channel_id} if channel_id is not None else {}
+    async def publish(self, game_id=None, board_id='777'):
+        env = {k: v for k, v in [('GAME_LEADERBOARD_CHANNEL_ID', game_id),
+                                 ('LEADERBOARD_CHANNEL_ID', board_id)] if v is not None}
         with patch.dict(os.environ, env, clear=False), patch('bot.discord.match_results.SETTLE', 0):
-            if channel_id is None:
-                os.environ.pop('GAME_LEADERBOARD_CHANNEL_ID', None)
+            for name in ('GAME_LEADERBOARD_CHANNEL_ID', 'LEADERBOARD_CHANNEL_ID'):
+                if name not in env:
+                    os.environ.pop(name, None)
             await self.results.publish('OYB Classic', START, END)
 
     async def test_posts_only_the_kills_inside_the_match_window(self):
@@ -100,10 +105,23 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
         await self.publish()
         self.channel.send.assert_not_awaited()
 
-    async def test_unset_channel_disables_the_feed(self):
+    async def test_results_go_to_the_leaderboard_channel_by_default(self):
         self.kill('during', START + timedelta(minutes=10), OTHER, self.identity)
-        await self.publish(channel_id=None)
+        await self.publish()  # no dedicated channel configured
+        self.channel.send.assert_awaited_once()
+        self.dedicated.send.assert_not_awaited()
+
+    async def test_a_dedicated_channel_takes_precedence(self):
+        self.kill('during', START + timedelta(minutes=10), OTHER, self.identity)
+        await self.publish(game_id='555')
+        self.dedicated.send.assert_awaited_once()
         self.channel.send.assert_not_awaited()
+
+    async def test_no_channel_at_all_disables_the_feed(self):
+        self.kill('during', START + timedelta(minutes=10), OTHER, self.identity)
+        await self.publish(board_id=None)
+        self.channel.send.assert_not_awaited()
+        self.dedicated.send.assert_not_awaited()
 
     async def test_unusable_channel_is_reported_not_raised(self):
         self.kill('during', START + timedelta(minutes=10), OTHER, self.identity)
@@ -119,7 +137,7 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_schedule_does_not_block_the_caller(self):
         self.kill('during', START + timedelta(minutes=10), OTHER, self.identity)
-        with patch.dict(os.environ, {'GAME_LEADERBOARD_CHANNEL_ID': '555'}), \
+        with patch.dict(os.environ, {'LEADERBOARD_CHANNEL_ID': '777'}), \
              patch('bot.discord.match_results.SETTLE', 0):
             self.results.schedule('OYB Classic', START, END)
             self.assertEqual(len(self.results._tasks), 1)

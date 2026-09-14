@@ -32,7 +32,8 @@ def leaderboard_channel_id() -> int | None:
 
 
 def game_leaderboard_channel_id() -> int | None:
-    """Post per-match results to this channel id; unset disables the feed."""
+    """Post per-match results to this channel id. Unset, they go to the
+    leaderboard channel; set this only to keep them in a channel of their own."""
     raw = os.getenv("GAME_LEADERBOARD_CHANNEL_ID", "").strip()
     try:
         return int(raw) if raw else None
