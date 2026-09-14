@@ -2,11 +2,14 @@
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+from zoneinfo import ZoneInfo
 from bot.storage.rank_persistence import backup_before
 
 # Vanilla records a damage type but never the weapon; gunfire is the only class
 # that makes a fair "longest kill", so explosives and vehicles are excluded.
 GUNFIRE = 'KINETIC'
+# The week turns over at midnight where the community is, not where the box is.
+BOSTON = ZoneInfo('America/New_York')
 
 NAME = '''(SELECT r.name FROM link_requests r
          WHERE r.guild=a.guild AND r.discord_id=a.discord_id
@@ -98,15 +101,23 @@ def faction_totals(db, identity):
 
 
 def stamp(moment):
-    """Match how combat_events.occurred is written: local, millisecond ISO."""
+    """Render an instant the way combat_events.occurred is written: the game
+    server's own local clock, naive, to the millisecond."""
+    if moment.tzinfo is not None:
+        moment = moment.astimezone().replace(tzinfo=None)
     return moment.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]
 
 
 def week_start(now=None):
-    """Most recent Monday 00:00. Log timestamps are server-local and naive, so
-    the window is built in the same frame rather than in UTC."""
-    now = datetime.now() if now is None else now
-    return (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    """The most recent Monday 00:00 in Boston, as an aware instant. The box may
+    well be on UTC, so the boundary is found in Boston and converted for
+    comparison by stamp() rather than assumed to be local midnight."""
+    moment = datetime.now().astimezone() if now is None else now
+    if moment.tzinfo is None:
+        moment = moment.astimezone()  # a naive clock here means the box's own
+    boston = moment.astimezone(BOSTON)
+    return (boston - timedelta(days=boston.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0)
 
 
 def window(start, end=None):

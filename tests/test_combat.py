@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -11,7 +11,7 @@ import discord
 
 from bot.storage.account_links import AccountLinks
 from bot.tracking.combat_parser import parse_kill
-from bot.storage.combat_store import (migrate, totals, faction_totals, longest_kill,
+from bot.storage.combat_store import (BOSTON, migrate, totals, faction_totals, longest_kill,
                                       week_start, window_standings, window_totals)
 from bot.tracking.combat_ingestor import scan, ingest
 from bot.discord.stats_command import StatsCommand, stats_embed, kd
@@ -132,9 +132,27 @@ class IngestionTests(unittest.TestCase):
         # Being shot never earns the victim a longest kill.
         self.assertIsNone(longest_kill(self.db,VICTIM,start,end))
 
-    def test_week_starts_monday_midnight(self):
-        for moment in (datetime(2026,9,14,0,0), datetime(2026,9,16,13,5), datetime(2026,9,20,23,59)):
-            self.assertEqual(week_start(moment), datetime(2026,9,14))
+    def test_week_starts_monday_midnight_in_boston(self):
+        monday = datetime(2026,9,14,tzinfo=BOSTON)
+        for moment in (datetime(2026,9,14,0,0,tzinfo=BOSTON),
+                       datetime(2026,9,16,13,5,tzinfo=BOSTON),
+                       datetime(2026,9,20,23,59,tzinfo=BOSTON)):
+            self.assertEqual(week_start(moment), monday)
+
+    def test_week_turns_over_on_boston_midnight_not_utc(self):
+        # The box may run on UTC; 03:00 UTC Monday is still Sunday night in
+        # Boston (EDT, UTC-4), so that kill belongs to the week just gone.
+        self.assertEqual(week_start(datetime(2026,9,14,3,0,tzinfo=timezone.utc)),
+                         datetime(2026,9,7,tzinfo=BOSTON))
+        self.assertEqual(week_start(datetime(2026,9,14,5,0,tzinfo=timezone.utc)),
+                         datetime(2026,9,14,tzinfo=BOSTON))
+
+    def test_boundary_follows_boston_through_the_dst_change(self):
+        # January is EST (UTC-5), an hour later in absolute terms than EDT.
+        self.assertEqual(week_start(datetime(2027,1,11,6,0,tzinfo=timezone.utc)),
+                         datetime(2027,1,11,tzinfo=BOSTON))
+        self.assertEqual(week_start(datetime(2027,1,11,4,0,tzinfo=timezone.utc)),
+                         datetime(2027,1,4,tzinfo=BOSTON))
 
     def test_restart_and_copied_log_do_not_duplicate(self):
         self.process(event(killer=KILLER))
