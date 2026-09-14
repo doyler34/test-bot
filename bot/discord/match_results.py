@@ -4,7 +4,7 @@ import logging
 
 import discord
 
-from bot.config import game_leaderboard_channel_id, leaderboard_channel_id
+from bot.config import game_leaderboard_channel_id
 from bot.discord.leaderboard_command import table
 from bot.storage.combat_store import record_match, window_standings
 
@@ -56,9 +56,7 @@ class MatchResults:
         return result
 
     async def channel(self, guild):
-        # Falls back to the leaderboard channel, so match results post with no
-        # extra setup; point them somewhere else only if you want them split.
-        pinned = game_leaderboard_channel_id() or leaderboard_channel_id()
+        pinned = game_leaderboard_channel_id()
         if not pinned:
             return None
         channel = guild.get_channel(pinned)

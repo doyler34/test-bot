@@ -22,32 +22,37 @@ def staging_enabled() -> bool:
     return os.getenv("OYB_STAGING", "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def leaderboard_channel_id() -> int | None:
-    """Pin the public leaderboard to this channel id instead of finding/creating one."""
-    raw = os.getenv("LEADERBOARD_CHANNEL_ID", "").strip()
+# The OYB server's own channels, so a deploy needs no extra setup. Another
+# guild overrides them with the matching environment variable; a channel this
+# bot cannot see is logged and skipped rather than treated as fatal.
+MATCH_LEADERBOARD_CHANNEL = 1549082383729565696
+FACTION_CHANNEL = 1549082869832359956
+
+
+def _channel_id(name: str, default: int | None) -> int | None:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
     try:
-        return int(raw) if raw else None
+        return int(raw)
     except ValueError:
-        return None
+        return default
+
+
+def leaderboard_channel_id() -> int | None:
+    """Pin the public leaderboard to this channel id. Unset, the bot finds or
+    creates a #leaderboard itself, which other guilds rely on."""
+    return _channel_id("LEADERBOARD_CHANNEL_ID", None)
 
 
 def faction_channel_id() -> int | None:
-    """Post the faction picker to this channel id instead of the register channel."""
-    raw = os.getenv("FACTION_CHANNEL_ID", "").strip()
-    try:
-        return int(raw) if raw else None
-    except ValueError:
-        return None
+    """Where the faction picker lives."""
+    return _channel_id("FACTION_CHANNEL_ID", FACTION_CHANNEL)
 
 
 def game_leaderboard_channel_id() -> int | None:
-    """Post per-match results to this channel id. Unset, they go to the
-    leaderboard channel; set this only to keep them in a channel of their own."""
-    raw = os.getenv("GAME_LEADERBOARD_CHANNEL_ID", "").strip()
-    try:
-        return int(raw) if raw else None
-    except ValueError:
-        return None
+    """Where each finished match posts its own results board."""
+    return _channel_id("GAME_LEADERBOARD_CHANNEL_ID", MATCH_LEADERBOARD_CHANNEL)
 
 
 def command_auto_clear_seconds() -> int:
