@@ -53,15 +53,21 @@ class IngestionTests(unittest.TestCase):
             stream.write(text)
         return scan(self.db,server,path)
 
-    def test_actual_ai_deaths_repeated_reads_and_new_event(self):
-        self.process(event()+event('15:32:57.397'))
+    def test_repeated_reads_and_new_event_do_not_double_count(self):
+        self.process(event(killer=KILLER)+event('15:32:57.397',killer=KILLER))
         self.assertEqual(totals(self.db,VICTIM)['deaths'],2)
         self.assertIsNone(totals(self.db,VICTIM)['ai_kills'])
         self.assertEqual(scan(self.db,'one',self.path),0)
-        self.process(event(),append=True)
+        self.process(event(killer=KILLER),append=True)  # duplicate: ignored
         self.assertEqual(totals(self.db,VICTIM)['deaths'],2)
-        self.process(event('15:33:00.000'),append=True)
+        self.process(event('15:33:00.000',killer=KILLER),append=True)  # new
         self.assertEqual(totals(self.db,VICTIM)['deaths'],3)
+
+    def test_ai_kills_do_not_count_as_deaths(self):
+        self.process(event())  # killed by AI -> not a death
+        self.assertIsNone(totals(self.db,VICTIM))
+        self.process(event('15:31:00.000',killer=KILLER),append=True)  # killed by a player
+        self.assertEqual(totals(self.db,VICTIM)['deaths'],1)  # only the player death counts
 
     def test_player_kills_and_teamkills_separate(self):
         self.process(event(killer=KILLER)+event('15:31:00.000','TK',KILLER))
@@ -84,7 +90,7 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual((ev.victim_faction,ev.killer_faction),('US','FIA'))
 
     def test_restart_and_copied_log_do_not_duplicate(self):
-        self.process(event())
+        self.process(event(killer=KILLER))
         self.links.close()
         self.links=AccountLinks(self.database)
         self.db=self.links.db
@@ -92,26 +98,27 @@ class IngestionTests(unittest.TestCase):
         scan(self.db,'one',self.path)
         copied=self.root/'logs_2026-09-07_16-00-00'/'console.log'
         copied.parent.mkdir()
-        self.process(event(),path=copied)
+        self.process(event(killer=KILLER),path=copied)
         self.assertEqual(totals(self.db,VICTIM)['deaths'],1)
-        self.process(event('16:01:00.000'),path=copied,append=True)
+        self.process(event('16:01:00.000',killer=KILLER),path=copied,append=True)
         self.assertEqual(totals(self.db,VICTIM)['deaths'],2)
 
     def test_multiserver_disabled_and_name_changes(self):
-        self.process(event())
+        self.process(event(killer=KILLER))
         other=self.root/'server-two'/'logs_2026-09-07_14-44-37'/'console.log'
         other.parent.mkdir(parents=True)
-        other.write_text(event('16:00:00.000',name='New Name'))
+        other.write_text(event('16:00:00.000',killer=KILLER,name='New Name'))
         config=[SimpleNamespace(id='two',enabled=False,log_dir=str(other.parent.parent))]
         ingest(str(self.database),config)
         self.assertEqual(totals(self.db,VICTIM)['deaths'],1)
         config[0].enabled=True
         ingest(str(self.database),config)
         self.assertEqual(totals(self.db,VICTIM)['deaths'],2)
-        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM combat_totals').fetchone()[0],1)
+        # VICTIM (deaths) and KILLER (kills) each get one totals row.
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM combat_totals').fetchone()[0],2)
 
     def test_partial_write_and_rewrite(self):
-        self.process(event().rstrip('\n'))
+        self.process(event(killer=KILLER).rstrip('\n'))
         self.assertIsNone(totals(self.db,VICTIM))
         self.process('\n',append=True)
         self.assertEqual(totals(self.db,VICTIM)['deaths'],1)
@@ -138,7 +145,8 @@ class IngestionTests(unittest.TestCase):
             self.assertEqual(backup.execute('SELECT credit,milliseconds FROM rank_wallet_v2').fetchone(),(80,599999))
 
     def test_midnight_and_duplicate_previous_day_record(self):
-        self.process(event('23:59:59.000')+event('00:00:01.000')+event('23:59:59.000')+event('00:00:02.000'))
+        self.process(event('23:59:59.000',killer=KILLER)+event('00:00:01.000',killer=KILLER)
+                     +event('23:59:59.000',killer=KILLER)+event('00:00:02.000',killer=KILLER))
         self.assertEqual(totals(self.db,VICTIM)['deaths'],3)
 
     def test_suicide_counts_death_only_and_warning_format(self):

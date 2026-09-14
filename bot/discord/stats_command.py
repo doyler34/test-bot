@@ -21,7 +21,7 @@ def stats_embed(name, data):
                             ('K/D',kd(data['player_kills'],data['deaths'])),
                             ('AI Kills','Unavailable'),('Teamkills',data['teamkills'])]:
             embed.add_field(name=label,value=str(value),inline=True)
-        embed.add_field(name='Coverage',value='Recorded human death events across OYB servers. Vanilla kill logs do not report AI victims.',inline=False)
+        embed.add_field(name='Coverage',value='Player-vs-player only. Kills and deaths both count human combat; deaths to AI are not counted, and vanilla logs do not report AI kills.',inline=False)
     embed.set_footer(text='O.Y.B • Combat statistics • Available server logs')
     return embed
 

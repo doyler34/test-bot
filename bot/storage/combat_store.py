@@ -39,12 +39,15 @@ def record(db, server, occurred, event):
     observed = datetime.now(timezone.utc).isoformat()
     victim_faction = getattr(event, 'victim_faction', None)
     killer_faction = getattr(event, 'killer_faction', None)
-    db.execute('''INSERT INTO combat_totals(identity,deaths,updated_at) VALUES (?,1,?)
-        ON CONFLICT(identity) DO UPDATE SET deaths=deaths+1,updated_at=excluded.updated_at''', (event.victim,observed))
-    if victim_faction:
-        db.execute('''INSERT INTO combat_faction_totals(identity,faction,deaths,updated_at) VALUES (?,?,1,?)
-            ON CONFLICT(identity,faction) DO UPDATE SET deaths=deaths+1,updated_at=excluded.updated_at''',
-            (event.victim,victim_faction,observed))
+    # Only count a death when a player did the killing (killer is None for AI),
+    # so Deaths matches Kills as a player-vs-player figure. Suicides still count.
+    if event.killer is not None:
+        db.execute('''INSERT INTO combat_totals(identity,deaths,updated_at) VALUES (?,1,?)
+            ON CONFLICT(identity) DO UPDATE SET deaths=deaths+1,updated_at=excluded.updated_at''', (event.victim,observed))
+        if victim_faction:
+            db.execute('''INSERT INTO combat_faction_totals(identity,faction,deaths,updated_at) VALUES (?,?,1,?)
+                ON CONFLICT(identity,faction) DO UPDATE SET deaths=deaths+1,updated_at=excluded.updated_at''',
+                (event.victim,victim_faction,observed))
     if event.killer and event.killer != event.victim:
         kills, teamkills = int(event.relation == 'ENEMY'), int(event.relation == 'TK')
         db.execute('''INSERT INTO combat_totals(identity,player_kills,teamkills,updated_at) VALUES (?,?,?,?)
