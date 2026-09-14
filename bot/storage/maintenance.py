@@ -35,10 +35,12 @@ class Maintenance:
                     configure_connection(db)
                     posts = retention.prune_post_events(
                         db, now - retention._days("POST_EVENT_RETENTION_DAYS") * 86400)
-                    combat = retention.prune_combat_events(
-                        db, retention.combat_cutoff_iso(now, retention._days("COMBAT_EVENT_RETENTION_DAYS")))
-                if posts or combat:
-                    LOG.info("Pruned %s post-XP and %s combat dedup rows (totals unchanged)", posts, combat)
+                    cutoff = retention.combat_cutoff_iso(now, retention._days("COMBAT_EVENT_RETENTION_DAYS"))
+                    combat = retention.prune_combat_events(db, cutoff)
+                    matches = retention.prune_matches(db, cutoff)
+                if posts or combat or matches:
+                    LOG.info("Pruned %s post-XP, %s combat dedup and %s match rows (totals unchanged)",
+                             posts, combat, matches)
             except sqlite3.Error:
                 LOG.exception("Account-links retention sweep failed; will retry")
         if self.notif_path:

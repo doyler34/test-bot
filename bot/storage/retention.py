@@ -52,6 +52,11 @@ def prune_combat_events(db, cutoff_iso, chunk=5000):
     return _prune(db, "combat_events", "occurred < ?", (cutoff_iso,), chunk)
 
 
+def prune_matches(db, cutoff_iso, chunk=5000):
+    """Match spans are useless once their events have gone."""
+    return _prune(db, "combat_matches", "ended < ?", (cutoff_iso,), chunk)
+
+
 def prune_finished_announcements(db, cutoff_ts, chunk=5000):
     return _prune(db, "announcements", "done=1 AND queued < ?", (cutoff_ts,), chunk)
 

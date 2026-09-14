@@ -215,7 +215,8 @@ class NotificationBot(TimerBot):
                         # Post that match's own board once the ingestor has the
                         # closing kills; the window is the match's own span.
                         self.match_results.schedule(
-                            server.name, datetime.fromtimestamp(played[0]), datetime.now())
+                            server.id, server.name,
+                            datetime.fromtimestamp(played[0]), datetime.now())
                     self._dirty_cards.add(server.id)
                     await self.refresh_servers()
                     await self.server_stats.tick()  # push the state change immediately

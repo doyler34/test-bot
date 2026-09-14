@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -12,9 +12,10 @@ import discord
 from bot.storage.account_links import AccountLinks
 from bot.tracking.combat_parser import parse_kill
 from bot.storage.combat_store import (BOSTON, migrate, totals, faction_totals, longest_kill,
-                                      week_start, window_standings, window_totals)
+                                      recent_matches, record_match, stamp, week_start,
+                                      window_standings, window_totals)
 from bot.tracking.combat_ingestor import scan, ingest
-from bot.discord.stats_command import StatsCommand, stats_embed, kd
+from bot.discord.stats_command import StatsCommand, matches_embed, stats_embed, kd
 from bot.discord.rank_command import RankCommand
 
 VICTIM='11111111-2222-3333-4444-555555555555'
@@ -154,6 +155,29 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(week_start(datetime(2027,1,11,4,0,tzinfo=timezone.utc)),
                          datetime(2027,1,4,tzinfo=BOSTON))
 
+    def test_recent_matches_skip_games_the_player_sat_out(self):
+        # Three matches on the day the fixture log covers; the player only
+        # appears in the first and third.
+        base = datetime(2026,9,7,15,0)
+        for n in range(3):
+            opened = base + timedelta(hours=n)
+            record_match(self.db,'one',f'Server {n}',opened,opened+timedelta(minutes=50))
+        self.process(event('15:05:00.000',killer=KILLER)+event('17:05:00.000',killer=KILLER))
+        played = recent_matches(self.db,VICTIM)
+        self.assertEqual([m['name'] for m in played],['Server 2','Server 0'])
+        self.assertEqual([(m['kills'],m['deaths']) for m in played],[(0,1),(0,1)])
+
+    def test_recent_matches_are_capped_and_newest_first(self):
+        base = datetime(2026,9,7,0,0)
+        for n in range(12):
+            opened = base + timedelta(minutes=n)
+            record_match(self.db,'one',f'Server {n}',opened,opened+timedelta(minutes=1))
+            clock = f'{opened:%H:%M:%S}.000'
+            self.process(event(clock,killer=KILLER),append=n>0)
+        played = recent_matches(self.db,VICTIM,limit=10)
+        self.assertEqual(len(played),10)
+        self.assertEqual(played[0]['name'],'Server 11')
+
     def test_restart_and_copied_log_do_not_duplicate(self):
         self.process(event(killer=KILLER))
         self.links.close()
@@ -244,6 +268,16 @@ class OutputTests(unittest.TestCase):
         self.assertEqual(fields['Longest Kill'],'312 m')
         self.assertFalse({'XP','Rank','Playtime'} & fields.keys())
 
+    def test_per_game_embed_lists_each_match(self):
+        from datetime import datetime as when
+        embed=matches_embed('Player',[dict(name='OYB Classic',started=when(2026,9,14,20,0),kills=3,deaths=1)])
+        self.assertIn('OYB Classic',embed.description)
+        self.assertRegex(embed.description,r'14 Sep 20:00\s+3\s+1')
+
+    def test_per_game_embed_explains_an_empty_history(self):
+        embed=matches_embed('Player',[])
+        self.assertIn('No finished matches',embed.fields[0].name+embed.fields[0].value)
+
     def test_longest_kill_absent_reads_as_a_dash(self):
         embed=stats_embed('Player',dict(player_kills=1,deaths=0,teamkills=0,longest_kill=None))
         self.assertEqual({f.name:f.value for f in embed.fields}['Longest Kill'],'—')
@@ -270,6 +304,35 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn('No recorded data',interaction.followup.send.await_args.kwargs['embed'].fields[0].name)
                 await command.show(interaction,user=SimpleNamespace(id=30,display_name='Other'))
                 self.assertIn('does not have',interaction.response.send_message.await_args.args[0])
+            finally:
+                await bot.close()
+                bot.account_links.close()
+
+    async def test_per_game_button_replies_privately_with_the_match_list(self):
+        from datetime import timedelta
+        with tempfile.TemporaryDirectory() as folder:
+            bot=discord.Client(intents=discord.Intents.default())
+            bot.config=SimpleNamespace(guild_id=1)
+            bot.account_links=AccountLinks(Path(folder)/'links.db')
+            bot.rank_command=RankCommand(bot)
+            migrate(bot.account_links.db)
+            command=StatsCommand(bot)
+            try:
+                opened=datetime(2026,9,7,15,0)
+                record_match(bot.account_links.db,'one','OYB Classic',opened,opened+timedelta(minutes=50))
+                with bot.account_links.db:
+                    bot.account_links.db.execute(
+                        "INSERT INTO combat_events (server,event_key,occurred,victim,killer,relation)"
+                        " VALUES ('one','k',?,?,?,'ENEMY')",
+                        (stamp(opened+timedelta(minutes=5)),VICTIM,KILLER))
+                interaction=SimpleNamespace(
+                    response=SimpleNamespace(defer=AsyncMock(),is_done=lambda:True),
+                    followup=SimpleNamespace(send=AsyncMock()))
+                await command.per_game(interaction,KILLER,'Killer')
+                self.assertTrue(interaction.response.defer.await_args.kwargs['ephemeral'])
+                sent=interaction.followup.send.await_args
+                self.assertTrue(sent.kwargs['ephemeral'])
+                self.assertIn('OYB Classic',sent.kwargs['embed'].description)
             finally:
                 await bot.close()
                 bot.account_links.close()

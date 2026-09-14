@@ -48,6 +48,11 @@ def migrate(db):
             db.execute('ALTER TABLE combat_events ADD COLUMN damage_type TEXT')
         # Every window query filters on time first.
         db.execute('CREATE INDEX IF NOT EXISTS combat_events_occurred ON combat_events(occurred)')
+        # Which kills belonged to which game. The monitor knows a match's span
+        # while it runs but nothing persisted it, so per-game stats need this.
+        db.execute('''CREATE TABLE IF NOT EXISTS combat_matches (
+            server TEXT NOT NULL, started TEXT NOT NULL, ended TEXT NOT NULL,
+            name TEXT, PRIMARY KEY(server, started))''')
 
 
 def record(db, server, occurred, event):
@@ -153,6 +158,31 @@ def longest_kill(db, identity, start, end=None):
           AND killer=? AND relation='ENEMY' AND damage_type=? AND distance IS NOT NULL''',
         (low, high, identity, GUNFIRE)).fetchone()
     return row[0] if row else None
+
+
+def record_match(db, server, name, start, end):
+    """Remember a finished match so its kills can be sliced out again later."""
+    with db:
+        db.execute('INSERT OR REPLACE INTO combat_matches VALUES (?,?,?,?)',
+                   (server, stamp(start), stamp(end), name))
+
+
+def recent_matches(db, identity, limit=10, scan=80):
+    """The player's last few matches, most recent first. Matches they took no
+    part in are skipped rather than listed as a row of zeroes."""
+    rows = db.execute(f'''SELECT name, started, kills, deaths FROM (
+            SELECT m.name AS name, m.started AS started,
+              (SELECT COUNT(*) FROM combat_events e
+                 WHERE e.occurred>=m.started AND e.occurred<=m.ended
+                   AND e.killer=?1 AND {SCORED} AND e.relation='ENEMY') AS kills,
+              (SELECT COUNT(*) FROM combat_events e
+                 WHERE e.occurred>=m.started AND e.occurred<=m.ended
+                   AND e.victim=?1 AND {SCORED}) AS deaths
+            FROM combat_matches m ORDER BY m.started DESC LIMIT ?3)
+        WHERE kills>0 OR deaths>0 ORDER BY started DESC LIMIT ?2''',
+        (identity, limit, scan)).fetchall()
+    return [dict(name=row[0], started=datetime.strptime(row[1], '%Y-%m-%dT%H:%M:%S.%f'),
+                 kills=row[2], deaths=row[3]) for row in rows]
 
 
 def window_standings(db, guild, start, end=None):

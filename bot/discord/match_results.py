@@ -6,7 +6,7 @@ import discord
 
 from bot.config import game_leaderboard_channel_id, leaderboard_channel_id
 from bot.discord.leaderboard_command import table
-from bot.storage.combat_store import window_standings
+from bot.storage.combat_store import record_match, window_standings
 
 LOG = logging.getLogger('reforger.match')
 # The log ingestor polls every 15s, so wait a few cycles for the closing kills
@@ -36,8 +36,13 @@ class MatchResults:
         self.bot = bot
         self._tasks = set()
 
-    def schedule(self, server_name, start, end):
-        """Called from the match-end callback; never blocks it."""
+    def schedule(self, server_id, server_name, start, end):
+        """Called from the match-end callback; never blocks it. The match span is
+        stored straight away so /stats can break it out even if posting fails."""
+        try:
+            record_match(self.bot.account_links.db, server_id, server_name, start, end)
+        except Exception:
+            LOG.exception('Could not record the %s match span', server_name)
         task = asyncio.create_task(self.publish(server_name, start, end))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)

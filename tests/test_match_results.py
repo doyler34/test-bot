@@ -139,8 +139,11 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
         self.kill('during', START + timedelta(minutes=10), OTHER, self.identity)
         with patch.dict(os.environ, {'LEADERBOARD_CHANNEL_ID': '777'}), \
              patch('bot.discord.match_results.SETTLE', 0):
-            self.results.schedule('OYB Classic', START, END)
+            self.results.schedule('one', 'OYB Classic', START, END)
             self.assertEqual(len(self.results._tasks), 1)
+            # The span is stored immediately, not after the settle delay.
+            self.assertEqual(self.links.db.execute(
+                'SELECT server,name FROM combat_matches').fetchone(), ('one', 'OYB Classic'))
             await self.results.close()  # cancels cleanly on shutdown
         self.assertFalse(self.results._tasks)
 

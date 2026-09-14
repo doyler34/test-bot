@@ -48,6 +48,14 @@ class CombatRetentionTests(unittest.TestCase):
         self.assertEqual(combat_totals(self.db, KILLER)["player_kills"], kills)
         self.assertEqual(combat_totals(self.db, VICTIM)["deaths"], deaths)
 
+    def test_match_spans_are_pruned_alongside_their_events(self):
+        from datetime import datetime
+        from bot.storage.combat_store import record_match
+        record_match(self.db, "server-1", "Old", datetime(2026,1,1,10,0), datetime(2026,1,1,11,0))
+        record_match(self.db, "server-1", "Recent", datetime(2026,9,1,10,0), datetime(2026,9,1,11,0))
+        self.assertEqual(retention.prune_matches(self.db, "2026-06-01T00:00:00.000"), 1)
+        self.assertEqual([r[0] for r in self.db.execute("SELECT name FROM combat_matches")], ["Recent"])
+
     def test_duplicate_event_after_restart_counts_once(self):
         with self.db:
             self.assertTrue(record(self.db, "server-1", "2026-09-01T10:00:00.000", kill()))
