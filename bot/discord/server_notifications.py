@@ -159,12 +159,20 @@ class NotificationBot(TimerBot):
                     logger.exception("Announcements channel unavailable; alerts fall back to #servers")
                 await prepare_join_channel(self, guild, readonly_overwrites(guild, hidden=staging_enabled()))
                 try:
+                    from bot.config import faction_channel_id
                     from bot.discord.factions import prepare_faction_picker
-                    row = self.account_links.db.execute(
-                        "SELECT channel FROM join_channel WHERE guild=?", (guild.id,)).fetchone()
-                    register_channel = guild.get_channel(row[0]) if row else None
-                    if isinstance(register_channel, discord.TextChannel):
-                        await prepare_faction_picker(self, guild, register_channel)
+                    pinned = faction_channel_id()
+                    if pinned:
+                        target = guild.get_channel(pinned)
+                        if not isinstance(target, discord.TextChannel):
+                            logger.warning("FACTION_CHANNEL_ID %s is not a text channel I can see", pinned)
+                            target = None
+                    else:
+                        row = self.account_links.db.execute(
+                            "SELECT channel FROM join_channel WHERE guild=?", (guild.id,)).fetchone()
+                        target = guild.get_channel(row[0]) if row else None
+                    if isinstance(target, discord.TextChannel):
+                        await prepare_faction_picker(self, guild, target)
                 except Exception:
                     logger.exception("Faction picker unavailable; check Manage Roles")
                 try:

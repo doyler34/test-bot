@@ -13,8 +13,19 @@ LOG = logging.getLogger("reforger.factions")
 PICKER_MARKER = "OYB • Faction picker"
 
 # (name, role colour, picker emoji). Colours confirmed with the community.
-FACTIONS = (("US", 0x3B5B8C, "🇺🇸"), ("USSR", 0xB23A32, "🚩"), ("FIA", 0x8A7B3F, "🏴"))
+FACTIONS = (("US", 0x3B5B8C, "🇺🇸"), ("USSR", 0xB23A32, "🇷🇺"), ("FIA", 0x8A7B3F, "🏳️"))
 FACTION_NAMES = tuple(name for name, _, _ in FACTIONS)
+
+
+def current_faction(bot, guild, member):
+    """The faction role the member actually holds, if any. Read from roles rather
+    than the saved pick so an admin lifting the lock is just removing the role."""
+    for name, _, _ in FACTIONS:
+        role_id = bot.account_links.faction_role(guild.id, name)
+        role = guild.get_role(role_id) if role_id else None
+        if role is not None and role in member.roles:
+            return name
+    return None
 
 
 async def ensure_faction_roles(bot, guild):
@@ -73,9 +84,16 @@ class FactionView(discord.ui.View):
             if interaction.guild_id != self.bot.config.guild_id:
                 await interaction.response.send_message("Use this in the OYB server.", ephemeral=True)
                 return
+            held = current_faction(self.bot, interaction.guild, interaction.user)
+            if held is not None:
+                await interaction.response.send_message(
+                    f"You're locked to **{held}**. Ask an admin if you need to switch sides.",
+                    ephemeral=True)
+                return
             try:
                 await apply_faction(self.bot, interaction.guild, interaction.user, name)
-                text = f"You're now flying **{name}** colours. Switch anytime — your stats and XP are unaffected."
+                text = (f"You're **{name}** now, and locked to it. You've got access to the "
+                        f"{name} channels — see you out there.")
             except discord.Forbidden:
                 text = "I need Manage Roles, and my role must sit above the faction roles. Ask an admin."
             await interaction.response.send_message(text, ephemeral=True)
@@ -87,9 +105,13 @@ class FactionView(discord.ui.View):
 async def prepare_faction_picker(bot, guild, channel):
     """Ensure the faction roles exist and post/refresh the picker in the channel."""
     await ensure_faction_roles(bot, guild)
-    embed = discord.Embed(title="Pick your faction", colour=0x5865F2, description=(
-        "Choose the side you fight for. This colours your name and brands your **/rank** card.\n\n"
-        "You can switch anytime, and it doesn't affect your stats or XP."))
+    embed = discord.Embed(title="Welcome to OYB — in-game roles", colour=0x5865F2, description=(
+        "Pick a faction below and join their side. Your choice colours your name and "
+        "brands your **/rank** card.\n\n"
+        "**You will be locked to your faction** once you pick — contact an admin if you "
+        "need to switch sides.\n\n"
+        "Picking also gets you into that faction's own channels.\n\n"
+        "Welcome to the fight. 🫡"))
     embed.set_footer(text=PICKER_MARKER)
     existing = None
     async for message in channel.history(limit=50):

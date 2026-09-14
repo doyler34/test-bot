@@ -81,13 +81,40 @@ class ApplyTests(unittest.IsolatedAsyncioTestCase):
     async def test_view_button_applies_faction(self):
         view = FactionView(self.bot)
         self.assertEqual(len(view.children), 3)
-        interaction = SimpleNamespace(guild_id=1, guild=self.guild, user=SimpleNamespace(id=10),
+        interaction = SimpleNamespace(guild_id=1, guild=self.guild,
+                                      user=SimpleNamespace(id=10, roles=[]),
                                       response=SimpleNamespace(send_message=AsyncMock()))
         with patch("bot.discord.factions.apply_faction", new=AsyncMock()) as applied:
             await view.children[0].callback(interaction)
         applied.assert_awaited_once()
         self.assertEqual(applied.await_args.args[3], "US")  # first button = US
         interaction.response.send_message.assert_awaited()
+
+    async def test_a_second_pick_is_refused_and_points_at_an_admin(self):
+        view = FactionView(self.bot)
+        held = self.guild.get_role(self.links.faction_role(1, "USSR"))
+        interaction = SimpleNamespace(guild_id=1, guild=self.guild,
+                                      user=SimpleNamespace(id=10, roles=[held]),
+                                      response=SimpleNamespace(send_message=AsyncMock()))
+        with patch("bot.discord.factions.apply_faction", new=AsyncMock()) as applied:
+            await view.children[0].callback(interaction)  # try to switch to US
+        applied.assert_not_awaited()
+        text = interaction.response.send_message.await_args.args[0]
+        self.assertIn("locked to **USSR**", text)
+        self.assertIn("admin", text)
+
+    async def test_an_admin_removing_the_role_lifts_the_lock(self):
+        view = FactionView(self.bot)
+        interaction = SimpleNamespace(guild_id=1, guild=self.guild,
+                                      user=SimpleNamespace(id=10, roles=[]),
+                                      response=SimpleNamespace(send_message=AsyncMock()))
+        with patch("bot.discord.factions.apply_faction", new=AsyncMock()) as applied:
+            await view.children[0].callback(interaction)
+        applied.assert_awaited_once()
+
+    async def test_picker_emoji_are_the_three_flags(self):
+        from bot.discord.factions import FACTIONS
+        self.assertEqual([e for _, _, e in FACTIONS], ["🇺🇸", "🇷🇺", "🏳️"])
 
 
 class CardTests(unittest.TestCase):

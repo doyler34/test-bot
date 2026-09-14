@@ -31,6 +31,15 @@ def leaderboard_channel_id() -> int | None:
         return None
 
 
+def faction_channel_id() -> int | None:
+    """Post the faction picker to this channel id instead of the register channel."""
+    raw = os.getenv("FACTION_CHANNEL_ID", "").strip()
+    try:
+        return int(raw) if raw else None
+    except ValueError:
+        return None
+
+
 def game_leaderboard_channel_id() -> int | None:
     """Post per-match results to this channel id. Unset, they go to the
     leaderboard channel; set this only to keep them in a channel of their own."""
