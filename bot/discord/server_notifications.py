@@ -24,6 +24,7 @@ from bot.storage.combat_store import migrate as migrate_combat
 from bot.tracking.combat_ingestor import CombatIngestor
 from bot.discord.stats_command import StatsCommand
 from bot.discord.leaderboard_display import LeaderboardDisplay
+from bot.discord.match_results import MatchResults
 from bot.ranks.message_xp import award_message
 from bot.storage.maintenance import Maintenance
 from bot.discord.server_stats import ServerStats
@@ -119,6 +120,7 @@ class NotificationBot(TimerBot):
         migrate_combat(self.account_links.db)
         self.stats_command = StatsCommand(self)
         self.leaderboard_display = LeaderboardDisplay(self)
+        self.match_results = MatchResults(self)
         self.combat_ingestor = CombatIngestor(self)
         self.server_stats = ServerStats(self)
         self.maintenance = Maintenance(self)
@@ -208,7 +210,12 @@ class NotificationBot(TimerBot):
                     )
 
                 async def ended(server=server):
-                    self.match_times.pop(server.id, None)
+                    played = self.match_times.pop(server.id, None)
+                    if played is not None:
+                        # Post that match's own board once the ingestor has the
+                        # closing kills; the window is the match's own span.
+                        self.match_results.schedule(
+                            server.name, datetime.fromtimestamp(played[0]), datetime.now())
                     self._dirty_cards.add(server.id)
                     await self.refresh_servers()
                     await self.server_stats.tick()  # push the state change immediately
@@ -427,6 +434,7 @@ class NotificationBot(TimerBot):
             self.store.finish(row)
 
     async def close(self):
+        await self.match_results.close()
         for task in self._jobs:
             task.cancel()
         if self._jobs:

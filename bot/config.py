@@ -31,6 +31,15 @@ def leaderboard_channel_id() -> int | None:
         return None
 
 
+def game_leaderboard_channel_id() -> int | None:
+    """Post per-match results to this channel id; unset disables the feed."""
+    raw = os.getenv("GAME_LEADERBOARD_CHANNEL_ID", "").strip()
+    try:
+        return int(raw) if raw else None
+    except ValueError:
+        return None
+
+
 def command_auto_clear_seconds() -> int:
     """Seconds before a /rank or /stats card auto-deletes (0 = keep). Default 5 min."""
     raw = os.getenv("COMMAND_AUTO_CLEAR_SECONDS", "300").strip()
