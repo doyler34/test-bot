@@ -1,8 +1,17 @@
 """Combat tables in the existing account-links SQLite database; never touch XP."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from bot.storage.rank_persistence import backup_before
+
+# Vanilla records a damage type but never the weapon; gunfire is the only class
+# that makes a fair "longest kill", so explosives and vehicles are excluded.
+GUNFIRE = 'KINETIC'
+
+NAME = '''(SELECT r.name FROM link_requests r
+         WHERE r.guild=a.guild AND r.discord_id=a.discord_id
+           AND r.identity=a.identity AND r.status='approved'
+         ORDER BY r.created DESC, r.token LIMIT 1)'''
 
 
 def migrate(db):
@@ -27,28 +36,40 @@ def migrate(db):
             player_kills INTEGER NOT NULL DEFAULT 0, deaths INTEGER NOT NULL DEFAULT 0,
             teamkills INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL,
             PRIMARY KEY(identity, faction))''')
+        # Distance and damage type arrived with the weekly board; older rows keep
+        # NULL, which every window query already treats as "not reported".
+        columns = {row[1] for row in db.execute('PRAGMA table_info(combat_events)')}
+        if 'distance' not in columns:
+            db.execute('ALTER TABLE combat_events ADD COLUMN distance REAL')
+        if 'damage_type' not in columns:
+            db.execute('ALTER TABLE combat_events ADD COLUMN damage_type TEXT')
+        # Every window query filters on time first.
+        db.execute('CREATE INDEX IF NOT EXISTS combat_events_occurred ON combat_events(occurred)')
 
 
 def record(db, server, occurred, event):
     """Call inside the same transaction as the source checkpoint."""
     key = hashlib.sha256(json.dumps([occurred,event.victim,event.killer,event.relation],separators=(',',':')).encode()).hexdigest()
-    cursor = db.execute('INSERT OR IGNORE INTO combat_events VALUES (?,?,?,?,?,?)',
-                        (server,key,occurred,event.victim,event.killer,event.relation))
+    cursor = db.execute('''INSERT OR IGNORE INTO combat_events
+        (server,event_key,occurred,victim,killer,relation,distance,damage_type)
+        VALUES (?,?,?,?,?,?,?,?)''',
+        (server,key,occurred,event.victim,event.killer,event.relation,
+         getattr(event,'distance',None),getattr(event,'damage_type',None)))
     if not cursor.rowcount:
         return False
     observed = datetime.now(timezone.utc).isoformat()
     victim_faction = getattr(event, 'victim_faction', None)
     killer_faction = getattr(event, 'killer_faction', None)
-    # Only count a death when a player did the killing (killer is None for AI),
-    # so Deaths matches Kills as a player-vs-player figure. Suicides still count.
-    if event.killer is not None:
+    # A death counts only when another player did the killing: AI kills arrive
+    # with no killer, and a suicide is the victim killing themselves. Both are
+    # deliberately excluded so Deaths stays a player-vs-player figure.
+    if event.killer is not None and event.killer != event.victim:
         db.execute('''INSERT INTO combat_totals(identity,deaths,updated_at) VALUES (?,1,?)
             ON CONFLICT(identity) DO UPDATE SET deaths=deaths+1,updated_at=excluded.updated_at''', (event.victim,observed))
         if victim_faction:
             db.execute('''INSERT INTO combat_faction_totals(identity,faction,deaths,updated_at) VALUES (?,?,1,?)
                 ON CONFLICT(identity,faction) DO UPDATE SET deaths=deaths+1,updated_at=excluded.updated_at''',
                 (event.victim,victim_faction,observed))
-    if event.killer and event.killer != event.victim:
         kills, teamkills = int(event.relation == 'ENEMY'), int(event.relation == 'TK')
         db.execute('''INSERT INTO combat_totals(identity,player_kills,teamkills,updated_at) VALUES (?,?,?,?)
             ON CONFLICT(identity) DO UPDATE SET player_kills=player_kills+excluded.player_kills,
@@ -74,3 +95,72 @@ def faction_totals(db, identity):
     rows = db.execute('''SELECT faction,player_kills,deaths,teamkills FROM combat_faction_totals
         WHERE identity=? ORDER BY player_kills DESC, deaths ASC, faction''', (identity,)).fetchall()
     return [dict(faction=r[0],player_kills=r[1],deaths=r[2],teamkills=r[3],ai_kills=None) for r in rows]
+
+
+def stamp(moment):
+    """Match how combat_events.occurred is written: local, millisecond ISO."""
+    return moment.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]
+
+
+def week_start(now=None):
+    """Most recent Monday 00:00. Log timestamps are server-local and naive, so
+    the window is built in the same frame rather than in UTC."""
+    now = datetime.now() if now is None else now
+    return (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def window(start, end=None):
+    return stamp(start), stamp(end) if end is not None else '9999'
+
+
+# A death or a kill is only ever credited on a player-vs-player row.
+SCORED = "killer IS NOT NULL AND killer<>victim"
+
+
+def window_totals(db, identity, start, end=None):
+    """Combat figures for one player inside a time window, straight from events."""
+    low, high = window(start, end)
+    row = db.execute(f'''SELECT
+        COALESCE(SUM(CASE WHEN killer=?1 AND relation='ENEMY' THEN 1 END),0),
+        COALESCE(SUM(CASE WHEN killer=?1 AND relation='TK' THEN 1 END),0),
+        COALESCE(SUM(CASE WHEN victim=?1 THEN 1 END),0),
+        COUNT(*)
+        FROM combat_events
+        WHERE occurred>=?2 AND occurred<?3 AND {SCORED} AND (killer=?1 OR victim=?1)''',
+        (identity, low, high)).fetchone()
+    if not row or not row[3]:
+        return None
+    return dict(player_kills=row[0], teamkills=row[1], deaths=row[2], ai_kills=None,
+                longest_kill=longest_kill(db, identity, start, end))
+
+
+def longest_kill(db, identity, start, end=None):
+    """Longest gunfire kill in the window; explosives and vehicles don't qualify."""
+    low, high = window(start, end)
+    row = db.execute(f'''SELECT MAX(distance) FROM combat_events
+        WHERE occurred>=? AND occurred<? AND {SCORED}
+          AND killer=? AND relation='ENEMY' AND damage_type=? AND distance IS NOT NULL''',
+        (low, high, identity, GUNFIRE)).fetchone()
+    return row[0] if row else None
+
+
+def window_standings(db, guild, start, end=None):
+    """One row per linked player with activity in the window, best kills first."""
+    low, high = window(start, end)
+    return db.execute(f'''
+        WITH scored AS (
+            SELECT victim, killer, relation FROM combat_events
+            WHERE occurred>=? AND occurred<? AND {SCORED}
+        ), tallied AS (
+            SELECT identity, SUM(kills) AS kills, SUM(deaths) AS deaths FROM (
+                SELECT killer AS identity, CASE WHEN relation='ENEMY' THEN 1 ELSE 0 END AS kills,
+                       0 AS deaths FROM scored
+                UNION ALL
+                SELECT victim AS identity, 0, 1 FROM scored
+            ) GROUP BY identity
+        )
+        SELECT a.discord_id, t.kills, t.deaths, {NAME}
+        FROM account_links a JOIN tallied t ON t.identity=a.identity
+        WHERE a.guild=?
+        ORDER BY t.kills DESC, t.deaths ASC, a.discord_id ASC''',
+        (low, high, guild)).fetchall()

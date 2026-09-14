@@ -8,6 +8,7 @@ import time
 import discord
 from bot.config import staging_enabled, leaderboard_channel_id
 from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
+from bot.storage.combat_store import week_start
 
 LOG = logging.getLogger('reforger.leaderboard')
 CHANNEL_NAME = 'leaderboard'
@@ -226,7 +227,7 @@ class LeaderboardDisplay:
         page = max(0, min(state['page'], max(0, (len(rows) - 1) // PAGE_SIZE)))
         state['page'] = page
         self.view.configure(page, len(rows))
-        embed = leaderboard_embed(rows, page)
+        embed = leaderboard_embed(rows, page, week_start())
         embed.set_footer(text=MARKER + '\n' + embed.footer.text)
         desired = signature(embed, self.view.to_components())
         if message is None:

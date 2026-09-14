@@ -3,19 +3,14 @@ import unicodedata
 
 import discord
 
+from bot.storage.combat_store import week_start, window_standings
+
 PAGE_SIZE = 15
 
 
-def standings(db, guild):
-    """One snapshot, one row per approved identity; never write XP or stats."""
-    return db.execute('''SELECT a.discord_id, c.player_kills, c.deaths,
-        (SELECT r.name FROM link_requests r
-         WHERE r.guild=a.guild AND r.discord_id=a.discord_id
-           AND r.identity=a.identity AND r.status='approved'
-         ORDER BY r.created DESC, r.token LIMIT 1)
-        FROM account_links a JOIN combat_totals c ON c.identity=a.identity
-        WHERE a.guild=?
-        ORDER BY c.player_kills DESC, c.deaths ASC, a.discord_id ASC''', (guild,)).fetchall()
+def standings(db, guild, start=None, end=None):
+    """One snapshot for the current week; never write XP or stats."""
+    return window_standings(db, guild, week_start() if start is None else start, end)
 
 
 def clean_name(value):
@@ -26,22 +21,23 @@ def clean_name(value):
     return value[:17] + '…' if len(value) > 18 else value
 
 
-def leaderboard_embed(rows, page):
+def leaderboard_embed(rows, page, start=None):
     pages = max(1, (len(rows) + PAGE_SIZE - 1) // PAGE_SIZE)
     page = max(0, min(page, pages - 1))
     embed = discord.Embed(title='OYB LEADERBOARD', colour=0xA9BC8C)
     if rows:
-        start = page * PAGE_SIZE
-        selected = rows[start:start + PAGE_SIZE]
-        number_width = max(2, len(str(start + len(selected))))
+        offset = page * PAGE_SIZE
+        selected = rows[offset:offset + PAGE_SIZE]
+        number_width = max(2, len(str(offset + len(selected))))
         kills_width = max(5, max(len(str(row[1])) for row in selected))
         deaths_width = max(6, max(len(str(row[2])) for row in selected))
         lines = [f"{'#':>{number_width}}  {'Name':18}  {'Kills':>{kills_width}}  {'Deaths':>{deaths_width}}"]
-        for position, (name, kills, deaths) in enumerate(selected, start + 1):
+        for position, (name, kills, deaths) in enumerate(selected, offset + 1):
             lines.append(f'{position:>{number_width}}  {clean_name(name):18}  {kills:>{kills_width}}  {deaths:>{deaths_width}}')
         embed.description = '```text\n' + '\n'.join(lines) + '\n```'
     else:
-        embed.description = 'No linked players have recorded combat stats yet. Link your account in **#join-oyb** to appear once combat is recorded.'
-    embed.set_footer(text=f'Page {page + 1}/{pages} • {len(rows)} players • All servers\n'
-                          'Player kills ↓ · deaths ↑ • Updates automatically')
+        embed.description = 'No combat recorded this week yet. Link your account in **#join-oyb** and get stuck in — the board resets every Monday.'
+    week = f'Week of {start:%d %b}' if start else 'This week'
+    embed.set_footer(text=f'Page {page + 1}/{pages} • {len(rows)} players • {week}\n'
+                          'Player kills ↓ · deaths ↑ • Resets Monday')
     return embed

@@ -3,7 +3,7 @@ import logging
 import discord
 from discord import app_commands
 from bot.config import command_auto_clear_seconds
-from bot.storage.combat_store import totals
+from bot.storage.combat_store import week_start, window_totals
 
 LOG = logging.getLogger('reforger.stats')
 
@@ -12,17 +12,24 @@ def kd(kills, deaths):
     return f'{kills / deaths if deaths else kills:.2f}'
 
 
-def stats_embed(name, data):
+def metres(value):
+    return f'{value:.0f} m' if value else '—'
+
+
+def stats_embed(name, data, start=None):
     embed = discord.Embed(title='OYB PLAYER STATS',description=discord.utils.escape_markdown(name)[:256],colour=0xA9BC8C)
     if data is None:
-        embed.add_field(name='No recorded data',value='No Reforger combat stats have been recorded for this player yet.',inline=False)
+        embed.add_field(name='No recorded data',value='No Reforger combat has been recorded for this player this week.',inline=False)
     else:
         for label,value in [('Player Kills',data['player_kills']),('Deaths',data['deaths']),
                             ('K/D',kd(data['player_kills'],data['deaths'])),
+                            ('Longest Kill',metres(data.get('longest_kill'))),
                             ('AI Kills','Unavailable'),('Teamkills',data['teamkills'])]:
             embed.add_field(name=label,value=str(value),inline=True)
-        embed.add_field(name='Coverage',value='Player-vs-player only. Kills and deaths both count human combat; deaths to AI are not counted, and vanilla logs do not report AI kills.',inline=False)
-    embed.set_footer(text='O.Y.B • Combat statistics • Available server logs')
+        embed.add_field(name='Coverage',value='Player-vs-player only. Deaths to AI and suicides are not counted, '
+            'and vanilla logs do not report AI kills. Longest kill counts gunfire only.',inline=False)
+    week = f"Week of {start:%d %b}" if start else 'This week'
+    embed.set_footer(text=f'O.Y.B • {week} • Resets Monday')
     return embed
 
 
@@ -58,8 +65,9 @@ class StatsCommand:
             return
         await interaction.response.defer(thinking=True)
         try:
-            data = totals(self.bot.account_links.db,identity)
-            sent = await interaction.followup.send(embed=stats_embed(member.display_name,data),allowed_mentions=discord.AllowedMentions.none())
+            start = week_start()
+            data = window_totals(self.bot.account_links.db,identity,start)
+            sent = await interaction.followup.send(embed=stats_embed(member.display_name,data,start),allowed_mentions=discord.AllowedMentions.none())
             clear = command_auto_clear_seconds()
             if clear:
                 await sent.delete(delay=clear)

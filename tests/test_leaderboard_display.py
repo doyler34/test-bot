@@ -8,7 +8,16 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 import discord
-from bot.discord.leaderboard_command import leaderboard_embed
+from bot.discord.leaderboard_command import leaderboard_embed as _embed
+from bot.storage.combat_store import stamp, week_start
+
+
+def leaderboard_embed(rows, page):
+    # Match how the display builds it, marker footer included, so fixture
+    # messages compare equal and are recognised as boards this bot owns.
+    embed = _embed(rows, page, week_start())
+    embed.set_footer(text=MARKER + '\n' + embed.footer.text)
+    return embed
 from bot.discord.leaderboard_display import (LeaderboardDisplay, CHANNEL_NAME, MARKER, overwrites,
                                  retry_delay, signature)
 from bot.storage.notification_store import NotificationStore
@@ -358,15 +367,23 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
             identity='11111111-2222-3333-4444-555555555555'
             token=links.submit(1,10,identity,'Test Player')
             links.review(1,token,99,True)
+            other='99999999-9999-9999-9999-999999999999'
+            when=stamp(week_start())
+            sql=("INSERT INTO combat_events (server,event_key,occurred,victim,killer,relation)"
+                 " VALUES ('s',?,?,?,?,'ENEMY')")
+            def scored(tag, victim, killer):
+                links.db.execute(sql,(tag,when,victim,killer))
             with links.db:
                 links.db.execute('CREATE TABLE rank_wallet_v2 (credit, milliseconds)')
                 links.db.execute('INSERT INTO rank_wallet_v2 VALUES (123,456)')
-                links.db.execute('INSERT INTO combat_totals VALUES (?,1,2,0,?)',(identity,'now'))
+                scored('k0',other,identity)                      # one kill
+                scored('d0',identity,other); scored('d1',identity,other)  # two deaths
             self.bot.account_links=links
             self.display.rows=LeaderboardDisplay.rows.__get__(self.display)
             message=await self.initial()
             with links.db:
-                links.db.execute('UPDATE combat_totals SET player_kills=7 WHERE identity=?',(identity,))
+                for n in range(1,7):  # six more kills this week: 1 -> 7
+                    scored(f'k{n}',other,identity)
             self.now+=15
             await self.display.tick()
             self.now+=30
@@ -375,7 +392,6 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('Test Player',message.embeds[0].description)
             self.assertRegex(message.embeds[0].description,r'Test Player\s+7\s+2')
             self.assertEqual(links.db.execute('SELECT * FROM rank_wallet_v2').fetchone(),(123,456))
-            self.assertEqual(links.db.execute('SELECT player_kills,deaths FROM combat_totals').fetchone(),(7,2))
         finally:
             links.close()
 

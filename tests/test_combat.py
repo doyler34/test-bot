@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -10,7 +11,8 @@ import discord
 
 from bot.storage.account_links import AccountLinks
 from bot.tracking.combat_parser import parse_kill
-from bot.storage.combat_store import migrate, totals, faction_totals
+from bot.storage.combat_store import (migrate, totals, faction_totals, longest_kill,
+                                      week_start, window_standings, window_totals)
 from bot.tracking.combat_ingestor import scan, ingest
 from bot.discord.stats_command import StatsCommand, stats_embed, kd
 from bot.discord.rank_command import RankCommand
@@ -19,13 +21,14 @@ VICTIM='11111111-2222-3333-4444-555555555555'
 KILLER='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 
 
-def event(clock='15:30:54.085', relation='ENEMY', killer='AI', name='Player'):
+def event(clock='15:30:54.085', relation='ENEMY', killer='AI', name='Player',
+          distance='17.8', damage='KINETIC'):
     # Based on the supplied live records; identifying values anonymised.
     attacker = 'AI' if killer == 'AI' else f'Other (playerID = 2 | UUID = {killer})'
     return (f'{clock}   SCRIPT       : INFO: KILL {relation}: {name} (playerID = 1 | UUID = {VICTIM}) '
             f'from US faction at <3926.26, 13.56, 8526.9> was killed by {attacker} from FIA faction '
-            "who was at that time at <3912.02, 13.8667, 8516.17> [17.8m away from the corpse]. "
-            "With last inflicted damage type KINETIC to the 'RArm' hit zone\n")
+            f"who was at that time at <3912.02, 13.8667, 8516.17> [{distance}m away from the corpse]. "
+            f"With last inflicted damage type {damage} to the 'RArm' hit zone\n")
 
 
 class IngestionTests(unittest.TestCase):
@@ -89,6 +92,50 @@ class IngestionTests(unittest.TestCase):
         ev=parse_kill(event(killer=KILLER))
         self.assertEqual((ev.victim_faction,ev.killer_faction),('US','FIA'))
 
+    def test_parse_kill_reads_distance_and_damage_type(self):
+        ev=parse_kill(event(killer=KILLER))
+        self.assertEqual((ev.distance,ev.damage_type),(17.8,'KINETIC'))
+
+    def test_suicide_without_a_damage_suffix_still_parses(self):
+        # Vanilla writes suicides both with and without the damage-type suffix.
+        bare=event(killer=KILLER).split(' was killed by ')[0]+' killed himself!\n'
+        ev=parse_kill(bare)
+        self.assertEqual((ev.victim,ev.killer,ev.damage_type,ev.distance),(VICTIM,VICTIM,None,None))
+        suffixed=bare.rstrip('\n')+" With last inflicted damage type TRUE to the 'LThigh' hit zone\n"
+        self.assertEqual(parse_kill(suffixed).damage_type,'TRUE')
+
+    def test_window_totals_and_standings_respect_the_window(self):
+        self.process(event(killer=KILLER)+event('15:31:00.000','TK',KILLER))
+        start, end = datetime(2026,9,7), datetime(2026,9,8)
+        killer=window_totals(self.db,KILLER,start,end)
+        self.assertEqual((killer['player_kills'],killer['teamkills'],killer['deaths']),(1,1,0))
+        self.assertEqual(window_totals(self.db,VICTIM,start,end)['deaths'],2)
+        # A window that closes before the events happened sees nothing at all.
+        self.assertIsNone(window_totals(self.db,KILLER,datetime(2026,9,1),datetime(2026,9,2)))
+        # Only VICTIM is a linked member of guild 1, so only VICTIM ranks.
+        self.assertEqual([tuple(r[:3]) for r in window_standings(self.db,1,start,end)],[(10,0,2)])
+
+    def test_window_excludes_ai_and_suicide_deaths(self):
+        suicide=event(killer=KILLER).split(' was killed by ')[0]+' killed himself!\n'
+        self.process(event()+suicide)  # an AI kill and a suicide, nothing else
+        start, end = datetime(2026,9,7), datetime(2026,9,8)
+        self.assertIsNone(window_totals(self.db,VICTIM,start,end))
+        self.assertEqual(window_standings(self.db,1,start,end),[])
+
+    def test_longest_kill_counts_gunfire_only(self):
+        self.process(event(killer=KILLER,distance='250.5')
+                     +event('15:31:00.000',killer=KILLER,distance='900.0',damage='EXPLOSIVE'))
+        start, end = datetime(2026,9,7), datetime(2026,9,8)
+        # The 900m explosive must not beat the 250.5m gunfire kill.
+        self.assertEqual(longest_kill(self.db,KILLER,start,end),250.5)
+        self.assertEqual(window_totals(self.db,KILLER,start,end)['longest_kill'],250.5)
+        # Being shot never earns the victim a longest kill.
+        self.assertIsNone(longest_kill(self.db,VICTIM,start,end))
+
+    def test_week_starts_monday_midnight(self):
+        for moment in (datetime(2026,9,14,0,0), datetime(2026,9,16,13,5), datetime(2026,9,20,23,59)):
+            self.assertEqual(week_start(moment), datetime(2026,9,14))
+
     def test_restart_and_copied_log_do_not_duplicate(self):
         self.process(event(killer=KILLER))
         self.links.close()
@@ -149,11 +196,12 @@ class IngestionTests(unittest.TestCase):
                      +event('23:59:59.000',killer=KILLER)+event('00:00:02.000',killer=KILLER))
         self.assertEqual(totals(self.db,VICTIM)['deaths'],3)
 
-    def test_suicide_counts_death_only_and_warning_format(self):
+    def test_suicide_is_not_a_death_and_warning_format(self):
         text=event(killer=KILLER)
         text=text.split(' was killed by ')[0]+' killed himself!\n'
         self.process(text+event('15:32:00.000',killer=KILLER).replace('SCRIPT       : INFO','SCRIPT (W): WARNING'))
-        self.assertEqual(totals(self.db,VICTIM)['deaths'],2)
+        # Only the player-vs-player kill counts; topping yourself is not a death.
+        self.assertEqual(totals(self.db,VICTIM)['deaths'],1)
         self.assertEqual(totals(self.db,KILLER)['player_kills'],1)
 
     def test_warnings_invalid_uuid_and_ai_victim_not_counted(self):
@@ -167,15 +215,20 @@ class OutputTests(unittest.TestCase):
         for k,d,result in [(184,91,'2.02'),(5,0,'5.00'),(0,0,'0.00'),(0,3,'0.00')]:
             self.assertEqual(kd(k,d),result)
         embed=stats_embed('Player',None)
-        self.assertIn('No Reforger combat stats',embed.fields[0].value)
+        self.assertIn('this week',embed.fields[0].value)
         self.assertNotIn('Player Kills',[f.name for f in embed.fields])
 
     def test_clean_output_and_unavailable_ai(self):
-        embed=stats_embed('Player',dict(player_kills=184,deaths=91,teamkills=4))
+        embed=stats_embed('Player',dict(player_kills=184,deaths=91,teamkills=4,longest_kill=312.4))
         fields={f.name:f.value for f in embed.fields}
         self.assertEqual(fields['AI Kills'],'Unavailable')
         self.assertEqual(fields['K/D'],'2.02')
+        self.assertEqual(fields['Longest Kill'],'312 m')
         self.assertFalse({'XP','Rank','Playtime'} & fields.keys())
+
+    def test_longest_kill_absent_reads_as_a_dash(self):
+        embed=stats_embed('Player',dict(player_kills=1,deaths=0,teamkills=0,longest_kill=None))
+        self.assertEqual({f.name:f.value for f in embed.fields}['Longest Kill'],'—')
 
 
 class CommandTests(unittest.IsolatedAsyncioTestCase):

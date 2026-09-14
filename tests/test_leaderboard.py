@@ -3,7 +3,7 @@ import tempfile
 import unittest
 import uuid
 from bot.storage.account_links import AccountLinks
-from bot.storage.combat_store import migrate
+from bot.storage.combat_store import migrate, stamp, week_start
 from bot.discord.leaderboard_command import leaderboard_embed, standings
 
 
@@ -16,6 +16,7 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
         self.tmp=tempfile.TemporaryDirectory()
         self.links=AccountLinks(Path(self.tmp.name)/'links.db')
         migrate(self.links.db)
+        self.seq=0
 
     async def asyncTearDown(self):
         self.links.close()
@@ -26,16 +27,25 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
         token=self.links.submit(guild,member,identity,name)
         self.links.review(guild,token,999,True)
         if combat:
-            with self.links.db:
-                self.links.db.execute('INSERT INTO combat_totals VALUES (?,?,?,?,?)',(identity,kills,deaths,0,'now'))
+            self.events(identity,kills,deaths)
+
+    def events(self, identity, kills=0, deaths=0):
+        """Standings are computed from this week's raw events, not from totals."""
+        other='99999999-9999-9999-9999-999999999999'
+        when=stamp(week_start())
+        sql=("INSERT INTO combat_events (server,event_key,occurred,victim,killer,relation)"
+             " VALUES ('s',?,?,?,?,'ENEMY')")
+        with self.links.db:
+            for victim,killer in [(other,identity)]*kills + [(identity,other)]*deaths:
+                self.seq+=1
+                self.links.db.execute(sql,(f'e{self.seq}',when,victim,killer))
 
     async def test_sort_scope_and_read_only(self):
         for args in [(12,10,2),(11,10,2),(13,10,1),(14,11,9)]:
             self.add(*args)
         self.add(15,999,guild=2)
         self.add(16,combat=False)
-        with self.links.db:
-            self.links.db.execute("INSERT INTO combat_totals VALUES ('unlinked',999,0,0,'now')")
+        self.events('00000000-0000-0000-0000-0000000000ff',999,0)  # never linked
         before=list(self.links.db.iterdump())
         self.assertEqual([row[0] for row in standings(self.links.db,1)],[14,13,11,12])
         self.assertEqual(before,list(self.links.db.iterdump()))
@@ -51,7 +61,7 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(int(lines[0].split()[0]),page*15+1)
                     self.assertLess(len(embed.description),4096)
                 else:
-                    self.assertIn('No linked players',embed.description)
+                    self.assertIn('No combat recorded this week',embed.description)
 
     async def test_names_cannot_escape_table(self):
         embed=leaderboard_embed([('```\n@everyone\r\n‮'+'X'*200,4,3),('Éowyn 玩家',2,1)],0)
