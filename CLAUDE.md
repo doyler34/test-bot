@@ -17,13 +17,18 @@ cd /root/Arma-bot-upload.StfK1D
 git fetch origin && git reset --hard origin/main
 git -C /root/test-bot pull --ff-only origin main
 git -C /root/test-bot archive HEAD | tar -x -C .
-grep -rIl --exclude-dir=.git 'doyler34' . | xargs -r sed -i 's#doyler34/test-bot#Gazlagom/Arma-bot#g; s#doyler34#Gazlagom#g'
+grep -rIlE --exclude-dir=.git 'doyler34|test-bot' . | xargs -r sed -i 's#doyler34/test-bot#Gazlagom/Arma-bot#g; s#doyler34#Gazlagom#g; s#test-bot#Arma-bot#g'
 git add -A
 git -c user.name='Gazlagom' -c user.email='327911930+Gazlagom@users.noreply.github.com' commit -m '<describe the changes>'
 git push origin HEAD
 ```
 
 - `origin` in the upload folder points at Gazlagom.
+- The scrub must catch the bare repo name too: docs and `dev/` scripts say
+  `cd /root/test-bot` without any `doyler34` next to it, so a grep for
+  `doyler34` alone never even opens those files. Verify a change to the scrub
+  by exporting `git archive HEAD` to a temp dir, running it, then grepping the
+  result for `doyler|test-bot|claude|anthropic` — all four must come back empty.
 - The push may prompt for a token (username `Gazlagom`, password = a
   fine-grained token with Contents: Read/Write on Arma-bot). The user is fine
   entering it each time — do not push a stored-token script unless they ask.
