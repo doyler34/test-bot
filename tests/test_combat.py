@@ -178,6 +178,20 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(len(played),10)
         self.assertEqual(played[0]['name'],'Server 11')
 
+    def test_linking_late_picks_up_this_week_but_not_last(self):
+        # Kills are logged against the in-game identity whether or not anyone
+        # has linked it, so linking is retroactive - but only inside the week.
+        monday = datetime(2026,9,7)  # the fixture log's own day
+        self.process(event('15:00:00.000',killer=KILLER))
+        other = self.root/'logs_2026-09-06_15-00-00'/'console.log'
+        other.parent.mkdir()
+        self.process(event('15:00:00.000',killer=KILLER),path=other)  # the day before
+        token = self.links.submit(1,42,KILLER,'Late Linker')
+        self.links.review(1,token,99,True)
+        rows = window_standings(self.db,1,monday)
+        self.assertEqual([(r[0],r[1]) for r in rows if r[0]==42],[(42,1)])
+        self.assertEqual(window_totals(self.db,KILLER,monday)['player_kills'],1)
+
     def test_restart_and_copied_log_do_not_duplicate(self):
         self.process(event(killer=KILLER))
         self.links.close()
