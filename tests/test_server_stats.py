@@ -239,3 +239,29 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LabelTests(unittest.TestCase):
+    """Every player-facing surface must name a server the same way."""
+
+    def test_configured_servers_get_their_community_name(self):
+        for server_id, expected in [("server-1", "Classic"), ("server-2", "3x Everon"),
+                                    ("server-3", "Arland")]:
+            self.assertEqual(
+                server_stats.label_for(SimpleNamespace(id=server_id, name="Server X")), expected)
+
+    def test_env_overrides_and_an_unknown_id_falls_back(self):
+        import os
+        with patch.dict(os.environ, {"STAT_LABEL_SERVER_2": "Everon 3x"}):
+            self.assertEqual(
+                server_stats.label_for(SimpleNamespace(id="server-2", name="Server 2")), "Everon 3x")
+        self.assertEqual(
+            server_stats.label_for(SimpleNamespace(id="server-9", name="Server 9")), "Server 9")
+
+    def test_notifications_never_name_a_server_from_the_raw_config(self):
+        # The @everyone match alert announced "Server 2" while the tiles, the
+        # #servers card and the role buttons all said "3x Everon"; the match
+        # results board then inherited the same mistake. Both went through
+        # server.name instead of label_for, so nothing here may use it.
+        source = Path("bot/discord/server_notifications.py").read_text()
+        self.assertNotIn("server.name", source)

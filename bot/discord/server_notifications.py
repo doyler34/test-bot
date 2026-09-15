@@ -214,7 +214,7 @@ class NotificationBot(TimerBot):
                         return
                     self.store.enqueue(
                         server.id, monitor.session_key, channel.id,
-                        server.name, now - elapsed, now,
+                        label_for(server), now - elapsed, now,
                     )
 
                 async def ended(server=server):
@@ -223,7 +223,7 @@ class NotificationBot(TimerBot):
                         # Post that match's own board once the ingestor has the
                         # closing kills; the window is the match's own span.
                         self.match_results.schedule(
-                            server.id, server.name,
+                            server.id, label_for(server),
                             datetime.fromtimestamp(played[0]), datetime.now())
                     self._dirty_cards.add(server.id)
                     await self.refresh_servers()
