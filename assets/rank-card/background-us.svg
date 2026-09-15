@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="320" viewBox="0 0 960 320">
+<defs>
+<pattern id="usgrid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#9fc0ea" stroke-width=".5" opacity=".07"/></pattern>
+<clipPath id="usmid"><path d="M220 58H740V296H220Z"/></clipPath>
+</defs>
+<path d="M16 0H944L960 16V304L944 320H16L0 304V16Z" fill="#0c1218"/>
+<path d="M24 58H210V296H24Z" fill="#16202c"/>
+<path d="M744 58H936V296H744Z" fill="#131c26"/>
+<path d="M24 58H936V296H24Z" fill="url(#usgrid)"/>
+<g clip-path="url(#usmid)" fill="none" stroke="#8FB4E6" stroke-width="14" opacity=".05">
+<path d="M180 40L300 160L180 280"/><path d="M300 40L420 160L300 280"/><path d="M420 40L540 160L420 280"/>
+<path d="M540 40L660 160L540 280"/><path d="M660 40L780 160L660 280"/>
+</g>
+<g clip-path="url(#usmid)" stroke="#8FB4E6" opacity=".10">
+<path d="M220 70H740M220 286H740" stroke-width="1"/>
+</g>
+<path d="M17 1H943L959 17V303L943 319H17L1 303V17Z" stroke="#3b5570" fill="none"/>
+<path d="M24 58H210V296H24ZM744 58H936V296H744Z" stroke="#2a3c50" fill="none"/>
+<path d="M24 78V58H44M916 58H936V78M24 276V296H44M916 296H936V276" stroke="#8FB4E6" stroke-width="2" fill="none"/>
+<path d="M132 34H710M744 34H936" stroke="#2e4157"/>
+<path d="M244 172H704" stroke="#3f5f80"/>
+<path d="M220 82V272" stroke="#24343f"/>
+<path d="M232 99H238M232 109H238M232 119H238M232 129H238" stroke="#6f89a6"/>
+<path d="M720 59L730 69V99M720 295L730 285V255" stroke="#44607e" fill="none"/>
+</svg>

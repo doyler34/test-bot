@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="320" viewBox="0 0 960 320">
+<defs>
+<clipPath id="sumid"><path d="M220 58H740V296H220Z"/></clipPath>
+</defs>
+<path d="M16 0H944L960 16V304L944 320H16L0 304V16Z" fill="#150d0d"/>
+<path d="M24 58H210V296H24Z" fill="#271616"/>
+<path d="M744 58H936V296H744Z" fill="#221313"/>
+<g clip-path="url(#sumid)">
+<g stroke="#E5675E" stroke-width="26" opacity=".05" fill="none">
+<path d="M120 320L420 20"/><path d="M220 320L520 20"/><path d="M320 320L620 20"/>
+<path d="M420 320L720 20"/><path d="M520 320L820 20"/><path d="M620 320L920 20"/>
+</g>
+<path d="M480 96L502 164H574L516 206L538 274L480 232L422 274L444 206L386 164H458Z"
+      fill="none" stroke="#E5675E" stroke-width="3" opacity=".13"/>
+<path d="M480 120L495 166H543L504 194L519 240L480 212L441 240L456 194L417 166H465Z"
+      fill="#E5675E" opacity=".05"/>
+</g>
+<path d="M17 1H943L959 17V303L943 319H17L1 303V17Z" stroke="#6e3b39" fill="none"/>
+<path d="M24 58H210V296H24ZM744 58H936V296H744Z" stroke="#4d2a28" fill="none"/>
+<path d="M24 78V58H44M916 58H936V78M24 276V296H44M916 296H936V276" stroke="#E5675E" stroke-width="2" fill="none"/>
+<path d="M132 34H710M744 34H936" stroke="#502c2a"/>
+<path d="M244 172H704" stroke="#8a4340"/>
+<path d="M220 82V272" stroke="#3c2220"/>
+<path d="M232 99H238M232 109H238M232 119H238M232 129H238" stroke="#a97470"/>
+<path d="M720 59L730 69V99M720 295L730 285V255" stroke="#7a4240" fill="none"/>
+</svg>

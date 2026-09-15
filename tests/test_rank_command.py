@@ -16,7 +16,8 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.bot = discord.Client(intents=discord.Intents.default())
         self.bot.config = SimpleNamespace(guild_id=1)
         self.bot.account_links = self.links
-        self.bot.rank_sync = SimpleNamespace(progress=Mock(return_value=347))
+        self.bot.rank_sync = SimpleNamespace(progress=Mock(return_value=347),
+                                             playtime=Mock(return_value=9_240_000))
         self.command = RankCommand(self.bot)
         self.avatar = Mock()
         self.avatar.replace.return_value.read = AsyncMock(return_value=b'bad avatar')
@@ -113,6 +114,14 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_no_faction_renders_the_default_card(self):
         self.link()
         self.assertIsNone(await self.render_with())
+
+    async def test_playtime_reaches_the_card(self):
+        self.link()
+        sent = SimpleNamespace(delete=AsyncMock())
+        self.interaction.followup.send = AsyncMock(return_value=sent)
+        with patch('bot.discord.rank_command.render_card', return_value=b'\x89PNG') as render:
+            await self.command.show(self.interaction)
+        self.assertEqual(render.call_args.kwargs.get('playtime_ms'), 9_240_000)
 
     async def test_wrong_guild_and_missing_permission(self):
         self.interaction.guild_id=99

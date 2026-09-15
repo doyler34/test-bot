@@ -62,6 +62,9 @@ class RankSync:
             return self.wallet.read(self.bot.config.guild_id, member, identity, path, self._ready())
         return self.wallet.read(self.bot.config.guild_id, member, identity, path, self._ready(), snapshot=snapshot)
 
+    def playtime(self, member):
+        return self.wallet.played(self.bot.config.guild_id, member)
+
     def status(self, member):
         xp = self.wallet.cached(self.bot.config.guild_id, member)
         return f"Rank: **{rank_for_xp(xp).current.role_name}** · **{xp} XP**. Use /rank for your card."

@@ -124,6 +124,21 @@ class CardTests(unittest.TestCase):
             png = render_card("GARETH", 347, faction=f)
             self.assertTrue(png.startswith(b"\x89PNG"), f)  # renders, no crash
 
+    def test_each_faction_has_its_own_artwork(self):
+        from bot.ranks.rank_card import ASSETS, DEFAULT_LAYERS, FACTION_THEMES
+        artwork = [layers for _, _, layers in FACTION_THEMES.values()]
+        self.assertEqual(len(set(artwork)), len(FACTION_THEMES))  # no two share a look
+        self.assertNotIn(DEFAULT_LAYERS, artwork)
+        for layers in artwork + [DEFAULT_LAYERS]:
+            for name in layers:
+                self.assertTrue((ASSETS / name).is_file(), name)
+
+    def test_served_reads_as_hours_and_minutes(self):
+        from bot.ranks.rank_card import served
+        for milliseconds, text in [(None, "0m"), (0, "0m"), (60_000, "1m"),
+                                   (9_240_000, "2h 34m"), (360_000_000, "100h 00m")]:
+            self.assertEqual(served(milliseconds), text)
+
 
 if __name__ == "__main__":
     unittest.main()

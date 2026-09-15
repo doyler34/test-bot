@@ -71,7 +71,9 @@ class RankCommand:
                 except (discord.HTTPException, OSError, TimeoutError):
                     LOG.debug("Avatar unavailable; using local portrait")
                 faction = current_faction(self.bot, interaction.guild, interaction.user)
-                data = await asyncio.to_thread(render_card, interaction.user.display_name, xp, avatar, faction=faction)
+                played = self.bot.rank_sync.playtime(interaction.user.id)
+                data = await asyncio.to_thread(render_card, interaction.user.display_name, xp, avatar,
+                                               faction=faction, playtime_ms=played)
                 with BytesIO(data) as buffer:
                     with closing(discord.File(buffer, filename="oyb-rank.png")) as attachment:
                         sent = await interaction.followup.send(file=attachment, allowed_mentions=discord.AllowedMentions.none())

@@ -126,6 +126,12 @@ class XPStore:
                 self.db.execute("INSERT OR REPLACE INTO rank_wallet_v2 VALUES (?,?,?,?,?,?)", (guild, member, identity, credit, baseline, earned))
         return credit + xp_from_seconds(earned / 1000) + self.post_xp(guild, member)
 
+    def played(self, guild, member):
+        """Tracked server time in milliseconds. read() refreshes it, so call
+        this after progress() to get the current figure."""
+        row = self.db.execute("SELECT milliseconds FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
+        return (row[0] or 0) if row else 0
+
     def cached(self, guild, member):
         row = self.db.execute("SELECT credit,milliseconds FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
         return (row[0] + xp_from_seconds(row[1]/1000) if row else 0) + self.post_xp(guild, member)
