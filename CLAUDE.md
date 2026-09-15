@@ -29,13 +29,14 @@ git push origin HEAD
   entering it each time — do not push a stored-token script unless they ask.
 - "nothing to commit" means Gazlagom is already current.
 
-## After syncing — restart the bots
-- User's own bot (this VPS, runs from `/root/test-bot`): `oyb restart`
-- Friend's box: `cd ~/Arma-bot && git pull && oyb restart`
+## After syncing — restart the bot
+- Friend's box, the only one running a live bot: `cd ~/Arma-bot && git pull && oyb restart`
+- Do NOT tell the user to restart anything on the VPS.
 
 ## Live bot paths
-- User's production bot: `/root/test-bot` (data at `/root/test-bot/data`).
-- Friend's bot: `~/Arma-bot` (data at `~/Arma-bot/data`).
+- `/root/test-bot` on the VPS is a plain checkout used to feed the Gazlagom
+  sync. No bot runs from it — nothing to restart, no live data there.
+- Friend's bot: `~/Arma-bot` (data at `~/Arma-bot/data`). This is production.
 
 ## House rules
 - The user is on a mobile terminal: give single-line commands, no multi-line
