@@ -20,8 +20,12 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.command = RankCommand(self.bot)
         self.avatar = Mock()
         self.avatar.replace.return_value.read = AsyncMock(return_value=b'bad avatar')
-        self.interaction = SimpleNamespace(guild_id=1,
-            user=SimpleNamespace(id=2,display_name='GARETH',display_avatar=self.avatar),
+        self.roles = {}   # role id -> role, as the guild would resolve them
+        self.member_roles = []
+        self.guild = SimpleNamespace(id=1, get_role=self.roles.get)
+        self.interaction = SimpleNamespace(guild_id=1, guild=self.guild,
+            user=SimpleNamespace(id=2,display_name='GARETH',display_avatar=self.avatar,
+                                 roles=self.member_roles),
             app_permissions=SimpleNamespace(attach_files=True),
             response=SimpleNamespace(send_message=AsyncMock(),defer=AsyncMock(),is_done=Mock(return_value=False)),
             followup=SimpleNamespace(send=AsyncMock()))
@@ -33,6 +37,14 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
 
     def link(self):
         self.links.verified_link(1,2,'11111111-2222-3333-4444-555555555555','admin:3')
+
+    def give_faction_role(self, faction, role_id=500):
+        """Register the faction role and put it on the member, as the picker does."""
+        role = SimpleNamespace(id=role_id, name=faction)
+        self.roles[role_id] = role
+        self.links.save_faction_role(1, faction, role_id)
+        self.member_roles.append(role)
+        return role
 
     async def test_guild_registration_and_command_contract(self):
         self.assertEqual(self.command.tree.get_command('rank',guild=discord.Object(id=1)).name,'rank')
@@ -79,14 +91,28 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         sent.delete.assert_awaited_once()  # public card is scheduled to auto-clear
         self.assertEqual(sent.delete.await_args.kwargs['delay'],300)
 
-    async def test_rank_passes_picked_faction_to_the_card(self):
-        self.link()
-        self.links.set_faction(1, 2, 'USSR')
+    async def render_with(self):
         sent = SimpleNamespace(delete=AsyncMock())
         self.interaction.followup.send = AsyncMock(return_value=sent)
         with patch('bot.discord.rank_command.render_card', return_value=b'\x89PNG') as render:
             await self.command.show(self.interaction)
-        self.assertEqual(render.call_args.kwargs.get('faction'), 'USSR')
+        return render.call_args.kwargs.get('faction')
+
+    async def test_rank_themes_the_card_from_the_faction_role(self):
+        self.link()
+        self.give_faction_role('USSR')
+        self.assertEqual(await self.render_with(), 'USSR')
+
+    async def test_a_stale_saved_pick_does_not_theme_the_card(self):
+        # An admin lifts the lock by removing the faction role. The saved pick
+        # stays behind, and must not keep branding a card they no longer hold.
+        self.link()
+        self.links.set_faction(1, 2, 'USSR')
+        self.assertIsNone(await self.render_with())
+
+    async def test_no_faction_renders_the_default_card(self):
+        self.link()
+        self.assertIsNone(await self.render_with())
 
     async def test_wrong_guild_and_missing_permission(self):
         self.interaction.guild_id=99
