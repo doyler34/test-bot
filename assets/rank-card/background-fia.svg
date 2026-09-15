@@ -2,27 +2,27 @@
 <defs>
 <clipPath id="fiamid"><path d="M220 58H740V296H220Z"/></clipPath>
 </defs>
-<path d="M16 0H944L960 16V304L944 320H16L0 304V16Z" fill="#12110a"/>
-<path d="M24 58H210V296H24Z" fill="#221f14"/>
-<path d="M744 58H936V296H744Z" fill="#1d1b11"/>
-<g clip-path="url(#fiamid)" stroke="#CBBB79" fill="none">
-<g stroke-width="2" opacity=".07">
+<path d="M16 0H944L960 16V304L944 320H16L0 304V16Z" fill="#0d130b"/>
+<path d="M24 58H210V296H24Z" fill="#1a2515"/>
+<path d="M744 58H936V296H744Z" fill="#162012"/>
+<g clip-path="url(#fiamid)" stroke="#8FBF5E" fill="none">
+<g stroke-width="2" opacity=".08">
 <path d="M232 300L268 44"/><path d="M262 296L292 52"/><path d="M300 302L326 46"/><path d="M336 294L358 58"/>
 <path d="M372 300L390 48"/><path d="M414 296L426 56"/><path d="M452 302L460 44"/><path d="M492 294L494 58"/>
 <path d="M530 300L524 46"/><path d="M572 296L558 54"/><path d="M610 302L590 44"/><path d="M650 294L624 56"/>
 <path d="M690 300L658 48"/><path d="M728 296L690 52"/>
 </g>
-<g stroke-width="3" opacity=".10" stroke-linecap="round">
+<g stroke-width="3" opacity=".12" stroke-linecap="round">
 <path d="M250 110L286 104"/><path d="M318 214L352 222"/><path d="M430 92L470 98"/>
 <path d="M560 240L602 232"/><path d="M640 130L678 138"/><path d="M380 262L418 254"/>
 </g>
 </g>
-<path d="M17 1H943L959 17V303L943 319H17L1 303V17Z" stroke="#6b6338" fill="none"/>
-<path d="M24 58H210V296H24ZM744 58H936V296H744Z" stroke="#4a4527" fill="none"/>
-<path d="M24 78V58H44M916 58H936V78M24 276V296H44M916 296H936V276" stroke="#CBBB79" stroke-width="2" fill="none"/>
-<path d="M132 34H710M744 34H936" stroke="#4d4726"/>
-<path d="M244 172H704" stroke="#877c41"/>
-<path d="M220 82V272" stroke="#39351d"/>
-<path d="M232 99H238M232 109H238M232 119H238M232 129H238" stroke="#a49767"/>
-<path d="M720 59L730 69V99M720 295L730 285V255" stroke="#756a38" fill="none"/>
+<path d="M17 1H943L959 17V303L943 319H17L1 303V17Z" stroke="#4d6b39" fill="none"/>
+<path d="M24 58H210V296H24ZM744 58H936V296H744Z" stroke="#354c27" fill="none"/>
+<path d="M24 78V58H44M916 58H936V78M24 276V296H44M916 296H936V276" stroke="#8FBF5E" stroke-width="2" fill="none"/>
+<path d="M132 34H710M744 34H936" stroke="#384f28"/>
+<path d="M244 172H704" stroke="#5f8842"/>
+<path d="M220 82V272" stroke="#28381e"/>
+<path d="M232 99H238M232 109H238M232 119H238M232 129H238" stroke="#7a9c62"/>
+<path d="M720 59L730 69V99M720 295L730 285V255" stroke="#53753a" fill="none"/>
 </svg>

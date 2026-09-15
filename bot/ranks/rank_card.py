@@ -10,7 +10,7 @@ from bot.ranks.rank_rules import rank_for_xp
 
 ASSETS = Path(__file__).resolve().parents[2] / 'assets/rank-card'
 WIDTH, HEIGHT = 960, 320
-INK, MUTED, ACCENT = '#e9eee5', '#8b9c8d', '#c1d49f'
+INK, MUTED, ACCENT = '#e9eee5', '#9a927f', '#D9A441'
 
 
 @lru_cache(maxsize=64)
@@ -43,7 +43,7 @@ def template(layers):
 FACTION_THEMES = {
     'US':   ('#8FB4E6', 'us.svg',   ('background-us.svg',)),
     'USSR': ('#E5675E', 'ussr.png', ('background-ussr.svg',)),
-    'FIA':  ('#CBBB79', 'fia.png',  ('background-fia.svg',)),
+    'FIA':  ('#8FBF5E', 'fia.png',  ('background-fia.svg',)),
 }
 DEFAULT_LAYERS = ('background.svg', 'frame.svg')
 
