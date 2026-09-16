@@ -92,8 +92,8 @@ class PostRetentionTests(unittest.TestCase):
 
     def test_old_post_events_pruned_total_preserved_and_growth_bounded(self):
         now = time.time()
-        for message in range(50):
-            self.wallet.award_post(1, 10, 1000 + message, now + 10)
+        for message in range(50):  # One a day, so the daily post cap never bites.
+            self.wallet.award_post(1, 10, 1000 + message, now + 10 + message * 86400)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM discord_post_events").fetchone()[0], 50)
         total = self.wallet.post_xp(1, 10)
         self.assertEqual(total, 50)

@@ -3,6 +3,12 @@ from dataclasses import dataclass
 
 SECONDS_PER_XP = 600
 XP_PER_POST = 1
+# Chat is a trickle, not a ladder: without a cap a member can post their way to
+# the top rank in an evening.
+POSTS_PER_DAY = 10
+XP_PER_KILL = 2
+XP_PER_TEAMKILL = -2
+XP_PER_MATCH = 5
 
 
 @dataclass(frozen=True)
@@ -17,8 +23,11 @@ class Rank:
         return "OYB " + self.name
 
 
-RANKS = tuple(Rank(name, i * 100) for i, name in enumerate((
-    "Renegade", "Recruit", "Private", "Corporal", "Sergeant", "Lieutenant", "Captain", "Major")))
+# The first steps stay small so a new player moves off Renegade on their first
+# night; the gaps widen so the senior ranks stay worth holding.
+RANKS = tuple(Rank(name, threshold) for name, threshold in (
+    ("Renegade", 0), ("Recruit", 100), ("Private", 250), ("Corporal", 450),
+    ("Sergeant", 700), ("Lieutenant", 1000), ("Captain", 1400), ("Major", 1900)))
 
 
 def xp_from_seconds(seconds):

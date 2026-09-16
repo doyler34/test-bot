@@ -16,18 +16,21 @@ from test_playtime import join, heartbeat, leave, UID
 
 class RuleTests(unittest.TestCase):
     def test_all_boundaries(self):
-        names = ('Renegade', 'Recruit', 'Private', 'Corporal', 'Sergeant', 'Lieutenant', 'Captain', 'Major')
-        for xp in (0, 1, 99, 100, 199, 200, 299, 300, 347, 399, 400, 499, 500, 599, 600, 699, 700, 1000):
+        expected = {0: 'Renegade', 1: 'Renegade', 99: 'Renegade', 100: 'Recruit', 249: 'Recruit',
+                    250: 'Private', 449: 'Private', 450: 'Corporal', 699: 'Corporal',
+                    700: 'Sergeant', 999: 'Sergeant', 1000: 'Lieutenant', 1399: 'Lieutenant',
+                    1400: 'Captain', 1899: 'Captain', 1900: 'Major', 5000: 'Major'}
+        for xp, name in expected.items():
             with self.subTest(xp=xp):
-                self.assertEqual(rank_for_xp(xp).current.name, names[min(xp//100, 7)])
+                self.assertEqual(rank_for_xp(xp).current.name, name)
 
     def test_xp_fraction_and_maximum(self):
         for seconds, xp in ((599, 0), (600, 1), (1199, 1), (1200, 2), (1560, 2)):
             self.assertEqual(xp_from_seconds(seconds), xp)
-        p = rank_for_xp(347)
-        self.assertEqual((p.current.threshold, p.next.threshold, p.remaining, p.fraction), (300, 400, 53, .47))
-        self.assertEqual(rank_for_xp(400).fraction, 0)
-        p = rank_for_xp(1000)
+        p = rank_for_xp(350)
+        self.assertEqual((p.current.threshold, p.next.threshold, p.remaining, p.fraction), (250, 450, 100, .5))
+        self.assertEqual(rank_for_xp(450).fraction, 0)
+        p = rank_for_xp(1900)
         self.assertEqual((p.next, p.remaining, p.fraction), (None, None, 1))
 
 
@@ -115,7 +118,7 @@ class PersistenceTests(unittest.TestCase):
 
 class CardTests(unittest.TestCase):
     def test_cards_fit_and_major_has_no_next_rank(self):
-        for name,xp in [('GazLagom',0),('GARETH',143),('GARETH',347),('GARETH',450),('GARETH',700),('Long name '*40,1000),('Gáréth · Ελληνικά · Игрок · 玩家',600)]:
+        for name,xp in [('GazLagom',0),('GARETH',143),('GARETH',347),('GARETH',450),('GARETH',1900),('Long name '*40,2600),('Gáréth · Ελληνικά · Игрок · 玩家',600)]:
             audit=[]
             with Image.open(BytesIO(render_card(name,xp,audit=audit))) as card:
                 self.assertEqual(card.size,(960,320))
@@ -125,8 +128,8 @@ class CardTests(unittest.TestCase):
                 self.assertLessEqual(box[2],limit[2]+2,text)
                 self.assertLessEqual(box[3],320,text)
             labels=[t for t,_,_ in audit]
-            self.assertEqual('MAX RANK' in labels,xp>=700)
-            self.assertEqual('NEXT RANK' in labels,xp<700)
+            self.assertEqual('MAX RANK' in labels,xp>=1900)
+            self.assertEqual('NEXT RANK' in labels,xp<1900)
 
     def test_bad_avatar_and_missing_insignia(self):
         from bot.ranks.rank_card import vector

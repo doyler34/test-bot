@@ -11,9 +11,11 @@ import discord
 
 from bot.storage.account_links import AccountLinks
 from bot.tracking.combat_parser import parse_kill
-from bot.storage.combat_store import (BOSTON, migrate, totals, faction_totals, longest_kill,
-                                      recent_matches, record_match, stamp, week_start,
-                                      window_standings, window_totals)
+from bot.ranks.rank_rules import XP_PER_KILL, XP_PER_MATCH, XP_PER_TEAMKILL
+from bot.storage.combat_store import (BOSTON, combat_xp, migrate, totals, faction_totals,
+                                      longest_kill, recent_matches, record_match, stamp,
+                                      week_start, window_standings, window_totals)
+from bot.storage.rank_persistence import XPStore
 from bot.tracking.combat_ingestor import scan, ingest
 from bot.discord.stats_command import StatsCommand, matches_embed, stats_embed, kd
 from bot.discord.rank_command import RankCommand
@@ -166,6 +168,30 @@ class IngestionTests(unittest.TestCase):
         played = recent_matches(self.db,VICTIM)
         self.assertEqual([m['name'] for m in played],['Server 2','Server 0'])
         self.assertEqual([(m['kills'],m['deaths']) for m in played],[(0,1),(0,1)])
+
+    def test_combat_xp_pays_for_fights_not_for_ai_deaths_or_suicides(self):
+        base = datetime(2026,9,7,15,0)
+        for n in range(2):
+            opened = base + timedelta(hours=n)
+            record_match(self.db,'one',f'Server {n}',opened,opened+timedelta(minutes=50))
+        # Two kills and a teamkill in the first game; the second holds only an
+        # AI death and a suicide, so nobody is paid for turning up to it.
+        self.process(event('15:01:00.000',killer=KILLER)+event('15:02:00.000',killer=KILLER)
+                     +event('15:03:00.000',relation='TK',killer=KILLER)
+                     +event('16:01:00.000')+event('16:02:00.000',killer=VICTIM))
+        self.assertEqual(combat_xp(self.db,KILLER),
+                         2*XP_PER_KILL + XP_PER_TEAMKILL + XP_PER_MATCH)
+        # Dying to another player still counts as having fought the game.
+        self.assertEqual(combat_xp(self.db,VICTIM), XP_PER_MATCH)
+        self.assertEqual(combat_xp(self.db,'nobody'), 0)
+
+    def test_kill_xp_reaches_the_wallet_with_nothing_to_recompute(self):
+        wallet = XPStore(self.db)
+        self.assertEqual(wallet.cached(1,10), 80)
+        base = datetime(2026,9,7,15,0)
+        record_match(self.db,'one','Server 0',base,base+timedelta(minutes=50))
+        self.process(event('15:01:00.000',killer=KILLER))
+        self.assertEqual(wallet.cached(1,10), 80+XP_PER_MATCH)
 
     def test_recent_matches_are_capped_and_newest_first(self):
         base = datetime(2026,9,7,0,0)

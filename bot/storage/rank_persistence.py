@@ -1,10 +1,11 @@
 """Additive migrations and durable global time / XP accounting."""
 from contextlib import closing
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import os
 import sqlite3
 import time
-from bot.ranks.rank_rules import xp_from_seconds, XP_PER_POST
+from bot.ranks.rank_rules import xp_from_seconds, POSTS_PER_DAY, XP_PER_POST
 
 _UNSET = object()
 
@@ -57,6 +58,8 @@ class XPStore:
     def __init__(self, db):
         self.db = db
         self._migrate_posts()
+        with db:
+            db.execute('CREATE INDEX IF NOT EXISTS discord_post_events_day ON discord_post_events(guild,member,created)')
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='rank_wallet_v2'").fetchone():
             return
         backup_before(db, "rank-v2")
@@ -124,7 +127,7 @@ class XPStore:
         if (None if row is None else (row[1], row[2], row[3])) != (credit, baseline, earned):
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO rank_wallet_v2 VALUES (?,?,?,?,?,?)", (guild, member, identity, credit, baseline, earned))
-        return credit + xp_from_seconds(earned / 1000) + self.post_xp(guild, member)
+        return credit + xp_from_seconds(earned / 1000) + self.post_xp(guild, member) + self.combat_xp(identity)
 
     def played(self, guild, member):
         """Tracked server time in milliseconds. read() refreshes it, so call
@@ -133,8 +136,17 @@ class XPStore:
         return (row[0] or 0) if row else 0
 
     def cached(self, guild, member):
-        row = self.db.execute("SELECT credit,milliseconds FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
-        return (row[0] + xp_from_seconds(row[1]/1000) if row else 0) + self.post_xp(guild, member)
+        row = self.db.execute("SELECT credit,milliseconds,identity FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
+        banked = row[0] + xp_from_seconds(row[1]/1000) + self.combat_xp(row[2]) if row else 0
+        return banked + self.post_xp(guild, member)
+
+    def combat_xp(self, identity):
+        # Imported here because combat_store needs backup_before from this module.
+        from bot.storage.combat_store import combat_xp
+        try:
+            return combat_xp(self.db, identity)
+        except sqlite3.Error:
+            return 0  # Combat tables absent on a links-only database.
 
     def _migrate_posts(self):
         if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='discord_post_events'").fetchone():
@@ -148,6 +160,18 @@ class XPStore:
             self.db.execute('''CREATE TABLE discord_post_totals (
                 guild INTEGER, member INTEGER, identity TEXT NOT NULL, xp INTEGER NOT NULL,
                 PRIMARY KEY(guild,member))''')
+
+    def posts_on_day(self, guild, member, created):
+        """Posts already credited on the same day as this one. The day boundary
+        is the community's, the same one the weekly leaderboard turns over on,
+        and it follows the post rather than the clock so a replayed backlog is
+        still capped against the day it was written."""
+        from bot.storage.combat_store import day_start
+        midnight = day_start(datetime.fromtimestamp(created, timezone.utc))
+        return self.db.execute('''SELECT COUNT(*) FROM discord_post_events
+            WHERE guild=? AND member=? AND created>=? AND created<?''',
+            (guild, member, midnight.timestamp(),
+             (midnight + timedelta(days=1)).timestamp())).fetchone()[0]
 
     def post_xp(self, guild, member):
         row = self.db.execute('SELECT xp FROM discord_post_totals WHERE guild=? AND member=?',
@@ -167,6 +191,8 @@ class XPStore:
                                        (guild,member)).fetchone()
             if previous and previous[0] != identity:
                 raise ValueError('Linked identity changed; admin review required')
+            if self.posts_on_day(guild, member, created) >= POSTS_PER_DAY:
+                return 0
             inserted = self.db.execute('INSERT OR IGNORE INTO discord_post_events VALUES (?,?,?,?,?,?)',
                                         (message,guild,member,identity,XP_PER_POST,created))
             if not inserted.rowcount:

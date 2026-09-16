@@ -13,8 +13,8 @@ def main():
     dest = parser.parse_args().output
     dest.mkdir(parents=True, exist_ok=True)
     cases = [('renegade', 'GazLagom', 0), ('recruit', 'GazLagom', 143),
-             ('corporal', 'GARETH', 347), ('sergeant', 'GazLagom', 450),
-             ('major', 'GazLagom', 700), ('long-name', 'An exceptionally long OYB player display name with extra words', 347),
+             ('private', 'GARETH', 347), ('corporal', 'GazLagom', 450),
+             ('major', 'GazLagom', 1900), ('long-name', 'An exceptionally long OYB player display name with extra words', 347),
              ('unicode', 'Gáréth · Ελληνικά · Игрок', 600)]
     sheet = Image.new('RGB', (WIDTH, HEIGHT*len(cases)), '#080c09')
     for i, (slug, name, xp) in enumerate(cases):

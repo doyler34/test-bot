@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import discord
 from bot.storage.account_links import AccountLinks
+from bot.ranks.rank_rules import POSTS_PER_DAY, XP_PER_POST
 from bot.storage.rank_persistence import XPStore
 from bot.ranks.message_xp import award_message
 from bot.discord.server_notifications import NotificationBot
@@ -84,6 +85,15 @@ class MessageXPTests(unittest.IsolatedAsyncioTestCase):
             db.commit()
         self.assertEqual(self.wallet.read(1,10,IDENTITY,source,True),82)
         self.assertEqual(self.wallet.cached(1,10),82)
+
+    async def test_daily_post_cap_holds_then_resets_the_next_day(self):
+        for message in range(POSTS_PER_DAY + 5):
+            await award_message(self.bot, self.message(200 + message))
+        self.assertEqual(self.wallet.post_xp(1, 10), POSTS_PER_DAY)
+        self.assertEqual(self.links.db.execute(
+            'SELECT COUNT(*) FROM discord_post_events').fetchone()[0], POSTS_PER_DAY)
+        # A fresh day earns again; the cap is per day, not a lifetime ceiling.
+        self.assertEqual(self.wallet.award_post(1, 10, 300, self.created + 86400), XP_PER_POST)
 
     async def test_transaction_rolls_back_then_retry_counts_once(self):
         self.links.db.execute("CREATE TRIGGER fail_post BEFORE INSERT ON discord_post_totals BEGIN SELECT RAISE(ABORT,'temporary'); END")

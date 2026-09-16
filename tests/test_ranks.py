@@ -80,7 +80,7 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.member.add_roles.assert_awaited_with(self.sync.roles[1], reason="OYB rank: 100 XP", atomic=True)
         self.member.remove_roles.assert_awaited_once_with(self.sync.roles[0], reason="OYB rank promotion", atomic=True)
         self.member.roles = [self.sync.roles[1]]
-        self.advance(60000)
+        self.advance(90000)  # 250 XP in total, the Private threshold.
         await self.sync.tick()
         self.assertIn("OYB Private", self.sync.status(10))
 

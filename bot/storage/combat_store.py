@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from zoneinfo import ZoneInfo
+from bot.ranks.rank_rules import XP_PER_KILL, XP_PER_MATCH, XP_PER_TEAMKILL
 from bot.storage.rank_persistence import backup_before
 
 # Vanilla records a damage type but never the weapon; gunfire is the only class
@@ -48,6 +49,10 @@ def migrate(db):
             db.execute('ALTER TABLE combat_events ADD COLUMN damage_type TEXT')
         # Every window query filters on time first.
         db.execute('CREATE INDEX IF NOT EXISTS combat_events_occurred ON combat_events(occurred)')
+        # Combat XP is recomputed per member on every rank tick, so both sides
+        # of a kill need to be reachable without scanning the table.
+        db.execute('CREATE INDEX IF NOT EXISTS combat_events_killer ON combat_events(killer)')
+        db.execute('CREATE INDEX IF NOT EXISTS combat_events_victim ON combat_events(victim)')
         # Which kills belonged to which game. The monitor knows a match's span
         # while it runs but nothing persisted it, so per-game stats need this.
         db.execute('''CREATE TABLE IF NOT EXISTS combat_matches (
@@ -113,16 +118,20 @@ def stamp(moment):
     return moment.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]
 
 
-def week_start(now=None):
-    """The most recent Monday 00:00 in Boston, as an aware instant. The box may
-    well be on UTC, so the boundary is found in Boston and converted for
-    comparison by stamp() rather than assumed to be local midnight."""
+def day_start(now=None):
+    """Today's 00:00 in Boston, as an aware instant. The box may well be on UTC,
+    so the boundary is found in Boston and converted for comparison by stamp()
+    rather than assumed to be local midnight."""
     moment = datetime.now().astimezone() if now is None else now
     if moment.tzinfo is None:
         moment = moment.astimezone()  # a naive clock here means the box's own
-    boston = moment.astimezone(BOSTON)
-    return (boston - timedelta(days=boston.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0)
+    return moment.astimezone(BOSTON).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def week_start(now=None):
+    """The most recent Monday 00:00 in Boston."""
+    boston = day_start(now)
+    return boston - timedelta(days=boston.weekday())
 
 
 def window(start, end=None):
@@ -158,6 +167,25 @@ def longest_kill(db, identity, start, end=None):
           AND killer=? AND relation='ENEMY' AND damage_type=? AND distance IS NOT NULL''',
         (low, high, identity, GUNFIRE)).fetchone()
     return row[0] if row else None
+
+
+def combat_xp(db, identity):
+    """Kill, teamkill and match XP for one player, over their whole history.
+
+    Derived from the events rather than banked, so a re-parse or a late account
+    link corrects the balance on the next read with nothing to recompute.
+    """
+    kills, teamkills = db.execute(f'''SELECT
+        COALESCE(SUM(CASE WHEN relation='ENEMY' THEN 1 END),0),
+        COALESCE(SUM(CASE WHEN relation='TK' THEN 1 END),0)
+        FROM combat_events WHERE killer=? AND {SCORED}''', (identity,)).fetchone()
+    # A match only pays out if they actually fought in it, so idling in the
+    # lobby earns nothing.
+    matches = db.execute(f'''SELECT COUNT(*) FROM combat_matches m
+        WHERE EXISTS (SELECT 1 FROM combat_events e
+            WHERE e.occurred>=m.started AND e.occurred<=m.ended
+              AND (e.killer=?1 OR e.victim=?1) AND {SCORED})''', (identity,)).fetchone()[0]
+    return kills*XP_PER_KILL + teamkills*XP_PER_TEAMKILL + matches*XP_PER_MATCH
 
 
 def record_match(db, server, name, start, end):
