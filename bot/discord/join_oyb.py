@@ -285,30 +285,8 @@ class JoinView(discord.ui.View):
             text += "\n" + self.bot.rank_sync.status(interaction.user.id)
         await interaction.response.send_message(text, ephemeral=True)
 
-    @discord.ui.button(label="Admin: review requests", custom_id="oyb:link-review")
-    async def review(self, interaction, button):
-        if not can_review(interaction, self.bot.config.guild_id):
-            await interaction.response.send_message("Only admins with Manage Server can review requests.", ephemeral=True)
-            return
-        rows = self.bot.account_links.pending(interaction.guild_id)
-        await interaction.response.send_message("Pending requests (up to 25; reopen after reviewing for more)." if rows else "No pending requests.",
-                                                view=ReviewList(self.bot, rows, interaction.user.id) if rows else None,
-                                                ephemeral=True)
-
-    @discord.ui.button(label="Admin: remove a link", custom_id="oyb:link-unlink", style=discord.ButtonStyle.danger)
-    async def unlink(self, interaction, button):
-        if not can_review(interaction, self.bot.config.guild_id):
-            await interaction.response.send_message("Only admins with Manage Server can remove links.", ephemeral=True)
-            return
-        await interaction.response.send_message("Remove a member's Reforger link (use for abuse or a bad link).",
-                                                view=UnlinkView(self.bot, interaction.user.id), ephemeral=True)
-
-    @discord.ui.button(label="Admin: force-link", custom_id="oyb:link-force", style=discord.ButtonStyle.secondary)
-    async def force(self, interaction, button):
-        if not can_review(interaction, self.bot.config.guild_id):
-            await interaction.response.send_message("Only admins with Manage Server can force-link.", ephemeral=True)
-            return
-        await interaction.response.send_modal(ForceLinkModal(self.bot, interaction.user.id))
+    # Review, force-link and unlink moved to the pinned panel in the staff-only
+    # link-request channel; members should not see admin buttons at all.
 
 
 async def prepare_join_channel(bot, guild, overwrites):

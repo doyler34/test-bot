@@ -129,9 +129,9 @@ class NotificationBot(TimerBot):
 
     async def setup_hook(self):
         self.leaderboard_display.register()
-        from bot.discord.link_review import AlertsControlView, ReviewButtons
+        from bot.discord.link_review import AdminPanelView, ReviewButtons
         from bot.discord.factions import FactionView
-        self.add_view(AlertsControlView(self))
+        self.add_view(AdminPanelView(self))
         self.add_view(ReviewButtons(self))
         self.add_view(FactionView(self))
         self._jobs.append(asyncio.create_task(self.rank_command.register()))

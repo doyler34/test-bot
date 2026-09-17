@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import discord
 from bot.storage.account_links import AccountLinks
 import bot.discord.link_review as link_review
-from bot.discord.link_review import (AlertsControlView, ReviewButtons, TOKEN_PREFIX,
+from bot.discord.link_review import (AdminPanelView, ReviewButtons, TOKEN_PREFIX,
                                      HANDLED_MARKER, CONTROL_MARKER, post_request_alert, prune_handled)
 
 IDENT = "11111111-2222-3333-4444-555555555555"
@@ -173,13 +173,40 @@ class AlertTests(unittest.IsolatedAsyncioTestCase):
         second.response.send_message.assert_awaited()  # "already handled" message
         second.message.edit.assert_awaited()  # buttons removed
 
+    async def test_existing_link_conflict_keeps_the_buttons(self):
+        # Approving fails because that Discord account is already linked, but
+        # the request is still pending, so Reject must stay available.
+        self.links.verified_link(1, 10, "22222222-3333-4444-5555-666666666666", "admin:1")
+        i = interaction(embeds=[alert_embed(self.token)])
+        await ReviewButtons(self.bot)._decide(i, True)
+        i.response.send_message.assert_awaited()  # the conflict is explained
+        i.message.edit.assert_not_awaited()       # ...and the view survives
+        later = interaction(embeds=[alert_embed(self.token)])
+        await ReviewButtons(self.bot)._decide(later, False)
+        self.assertEqual(self.links.request(1, self.token)[3], "rejected")
+
+    async def test_admin_panel_carries_every_control_and_refuses_members(self):
+        view = link_review.AdminPanelView(self.bot)
+        self.assertTrue(view.is_persistent())
+        ids = {child.custom_id for child in view.children}
+        self.assertEqual(ids, {"oyb:admin:pending", "oyb:admin:forcelink",
+                               "oyb:admin:unlink", "oyb:linkalerts:toggle"})
+        denied = interaction(admin=False)
+        await view.pending.callback(denied)
+        denied.response.send_message.assert_awaited()
+
+    async def test_panel_embed_reports_the_queue(self):
+        self.assertIn("**1** waiting", link_review.admin_panel_embed(self.links, 1).description)
+        self.links.review(1, self.token, 99, False)
+        self.assertIn("nothing waiting", link_review.admin_panel_embed(self.links, 1).description)
+
     async def test_toggle_adds_then_removes_reviewer_role(self):
         member = SimpleNamespace(id=99, roles=[], add_roles=AsyncMock(), remove_roles=AsyncMock())
         guild = SimpleNamespace(get_role=lambda i: self.role)
         i = SimpleNamespace(guild_id=1, guild=guild, user=member,
                             permissions=discord.Permissions(manage_guild=True),
                             response=SimpleNamespace(send_message=AsyncMock()))
-        view = AlertsControlView(self.bot)
+        view = AdminPanelView(self.bot)
         await view.toggle.callback(i)
         member.add_roles.assert_awaited_once()
         member.roles = [self.role]  # now subscribed

@@ -56,7 +56,7 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         info.embeds = [channel.send.await_args.kwargs["embed"]]
         view = channel.send.await_args.kwargs["view"]
         self.assertTrue(view.is_persistent())
-        self.assertEqual(len(view.children), 5)
+        self.assertEqual(len(view.children), 2)  # members see linking only; admin buttons moved
         await prepare_join_channel(self.bot, guild, {})
         guild.create_text_channel.assert_awaited_once()
         channel.send.assert_awaited_once()
