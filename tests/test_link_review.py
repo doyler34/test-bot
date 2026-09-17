@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import discord
 from bot.storage.account_links import AccountLinks
@@ -173,17 +173,32 @@ class AlertTests(unittest.IsolatedAsyncioTestCase):
         second.response.send_message.assert_awaited()  # "already handled" message
         second.message.edit.assert_awaited()  # buttons removed
 
-    async def test_existing_link_conflict_keeps_the_buttons(self):
-        # Approving fails because that Discord account is already linked, but
-        # the request is still pending, so Reject must stay available.
+    async def test_unapprovable_request_is_auto_rejected_and_the_member_told(self):
+        # That Discord account is already linked, so this request can never be
+        # approved. It closes itself rather than sitting in the queue forever.
         self.links.verified_link(1, 10, "22222222-3333-4444-5555-666666666666", "admin:1")
-        i = interaction(embeds=[alert_embed(self.token)])
+        member = SimpleNamespace(id=10, send=AsyncMock())
+        guild = SimpleNamespace(id=1, get_member=lambda i: member, get_channel=lambda i: None)
+        i = interaction(embeds=[alert_embed(self.token)], guild=guild)
         await ReviewButtons(self.bot)._decide(i, True)
-        i.response.send_message.assert_awaited()  # the conflict is explained
-        i.message.edit.assert_not_awaited()       # ...and the view survives
-        later = interaction(embeds=[alert_embed(self.token)])
-        await ReviewButtons(self.bot)._decide(later, False)
         self.assertEqual(self.links.request(1, self.token)[3], "rejected")
+        member.send.assert_awaited_once()
+        self.assertIn("already has a linked game account", member.send.await_args.args[0])
+        edited = i.message.edit.await_args.kwargs["embed"]
+        self.assertEqual(edited.footer.text, HANDLED_MARKER)
+        self.assertEqual(edited.fields[-1].name, "\U0001F6AB Auto-rejected")
+
+    async def test_closed_dms_fall_back_to_the_join_channel(self):
+        self.links.verified_link(1, 10, "22222222-3333-4444-5555-666666666666", "admin:1")
+        member = SimpleNamespace(id=10, send=AsyncMock(side_effect=discord.HTTPException(Mock(), "closed")))
+        channel = FakeChannel()
+        with self.links.db:
+            self.links.db.execute("CREATE TABLE IF NOT EXISTS join_channel (guild INTEGER PRIMARY KEY, channel INTEGER, message INTEGER)")
+            self.links.db.execute("INSERT OR REPLACE INTO join_channel VALUES (1, 77, NULL)")
+        guild = SimpleNamespace(id=1, get_member=lambda i: member, get_channel=lambda i: channel)
+        i = interaction(embeds=[alert_embed(self.token)], guild=guild)
+        await ReviewButtons(self.bot)._decide(i, True)
+        self.assertIn("<@10>", channel.sent[0]["content"])
 
     async def test_admin_panel_carries_every_control_and_refuses_members(self):
         view = link_review.AdminPanelView(self.bot)

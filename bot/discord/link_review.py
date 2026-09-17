@@ -125,6 +125,31 @@ class ReviewButtons(discord.ui.View):
                 return text[len(TOKEN_PREFIX):].strip()
         return None
 
+    async def _settle_conflict(self, interaction, token, reason):
+        """A request that cannot be approved is finished, so close it here.
+
+        Leaving it pending is what stranded requests before: the queue kept
+        showing work nobody could action. The member is told directly, because
+        they cannot see this channel.
+        """
+        links = self.bot.account_links
+        request = links.request(interaction.guild_id, token)
+        if request and request[3] == "pending":
+            try:
+                links.review(interaction.guild_id, token, interaction.user.id, False)
+            except LinkConflict:
+                pass  # settled by someone else in the meantime; nothing to close
+            await notify_member(self.bot, interaction.guild, request[0], reason)
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        if embed is not None:
+            embed.colour = discord.Colour(0xE74C3C)
+            embed.add_field(name="🚫 Auto-rejected", value=reason, inline=False)
+            embed.set_footer(text=HANDLED_MARKER)
+            await interaction.message.edit(embed=embed, view=None,
+                                           allowed_mentions=discord.AllowedMentions.none())
+        else:
+            await interaction.message.edit(view=None)
+
     async def _decide(self, interaction, approve):
         if not can_review(interaction, self.bot.config.guild_id):
             await interaction.response.send_message("Only staff with Manage Server can review requests.", ephemeral=True)
@@ -137,12 +162,7 @@ class ReviewButtons(discord.ui.View):
             self.bot.account_links.review(interaction.guild_id, token, interaction.user.id, approve)
         except LinkConflict as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
-            request = self.bot.account_links.request(interaction.guild_id, token)
-            # Only retire the buttons when the request itself is settled. A
-            # conflict against an existing link leaves it pending, and Reject
-            # still needs to work - stripping the view there stranded it.
-            if not request or request[3] != "pending":
-                await interaction.message.edit(view=None)
+            await self._settle_conflict(interaction, token, str(exc))
             return
         embed = interaction.message.embeds[0]
         embed.colour = discord.Colour(0x2ECC71 if approve else 0xE74C3C)
@@ -159,6 +179,32 @@ class ReviewButtons(discord.ui.View):
     @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, custom_id="oyb:linkreview:reject")
     async def reject(self, interaction, button):
         await self._decide(interaction, False)
+
+
+async def notify_member(bot, guild, discord_id, reason):
+    """Tell a member their request was closed. DM first; if their DMs are shut,
+    say it in the join channel where they asked, so the answer still reaches
+    them. Never raises - a failed notice must not break the review."""
+    text = (f"Your OYB Reforger link request could not be completed: {reason}\n"
+            "Ask an admin if you think that is wrong.")
+    member = guild.get_member(discord_id) if guild else None
+    if member is not None:
+        try:
+            await member.send(text)
+            return True
+        except discord.HTTPException:
+            LOG.info("DMs closed for %s; falling back to the join channel", discord_id)
+    row = bot.account_links.db.execute(
+        "SELECT channel FROM join_channel WHERE guild=?", (guild.id,)).fetchone() if guild else None
+    channel = guild.get_channel(row[0]) if row and row[0] else None
+    if isinstance(channel, discord.TextChannel):
+        try:
+            await channel.send(content=f"<@{discord_id}> {text}", silent=True,
+                               allowed_mentions=discord.AllowedMentions(users=True))
+            return True
+        except discord.HTTPException:
+            LOG.warning("Could not tell %s their request was closed", discord_id)
+    return False
 
 
 def admin_panel_embed(links, guild_id):

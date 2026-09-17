@@ -8,7 +8,8 @@ import discord
 
 from bot.storage.account_links import AccountLinks
 from bot.discord.join_oyb import (JoinView, ReviewDecision, ConfirmUnlink, ForceLinkChoice,
-                                  find_identity, find_candidates, prepare_join_channel)
+                                  find_identity, find_candidates, prepare_join_channel,
+                                  resolve_identity, known_name)
 
 
 class JoinTests(unittest.IsolatedAsyncioTestCase):
@@ -129,6 +130,31 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         await select.callback(i)
         i.response.send_message.assert_awaited()  # denied
         self.assertIsNone(self.links.lookup(1, 10))
+
+    async def test_identity_id_is_accepted_when_a_name_is_ambiguous(self):
+        path = self.root / "playtime.sqlite3"
+        one = "11111111-2222-3333-4444-555555555555"
+        two = "66666666-7777-8888-9999-000000000000"
+        db = sqlite3.connect(path)
+        try:
+            db.execute("CREATE TABLE totals (identity TEXT, name TEXT, seconds REAL)")
+            db.executemany("INSERT INTO totals VALUES (?,?,?)",
+                           [(one, "Player", 900), (two, "Player", 100), (one, "OldName", 60)])
+            db.commit()
+            # Two players share the name, so the name route refuses...
+            with self.assertRaises(ValueError):
+                resolve_identity(path, "Player")
+            # ...but either of them can identify themselves by ID.
+            self.assertEqual(resolve_identity(path, two), two)
+            self.assertEqual(resolve_identity(path, "  " + one.upper() + " "), one)
+            # An ID nobody here has played under is refused, not queued.
+            with self.assertRaises(ValueError):
+                resolve_identity(path, "deadbeef-0000-0000-0000-000000000000")
+            # Admins see a name for an ID-based request, not just the raw ID.
+            self.assertEqual(known_name(path, one), "Player")
+            self.assertIsNone(known_name(path, "deadbeef-0000-0000-0000-000000000000"))
+        finally:
+            db.close()
 
     async def test_name_lookup_is_unique_and_does_not_change_totals(self):
         path = self.root / "playtime.sqlite3"
