@@ -51,7 +51,7 @@ class RankCommand:
         if interaction.guild_id != self.bot.config.guild_id:
             await interaction.response.send_message("Use /rank in the OYB Discord server.", ephemeral=True)
             return
-        identity = self.bot.account_links.lookup(interaction.guild_id, interaction.user.id)
+        identity = self.bot.account_links.identities(interaction.guild_id, interaction.user.id)
         if not identity:
             await interaction.response.send_message(
                 "Open **#join-oyb**, press **Link Reforger account**, and submit your in-game name. "

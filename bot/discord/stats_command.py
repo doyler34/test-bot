@@ -101,7 +101,7 @@ class StatsCommand:
             await interaction.response.send_message('Use /stats in the OYB Discord server.',ephemeral=True)
             return
         member = user or interaction.user
-        identity = self.bot.account_links.lookup(interaction.guild_id,member.id)
+        identity = self.bot.account_links.identities(interaction.guild_id,member.id)
         if not identity:
             text = ('Open **#join-oyb**, press **Link Reforger account**, and submit your in-game name for admin approval.'
                     if member.id == interaction.user.id else 'That member does not have an approved Reforger account link.')

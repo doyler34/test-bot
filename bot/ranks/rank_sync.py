@@ -56,11 +56,14 @@ class RankSync:
         return bool(self.bot._trackers) and all(t.initialized and t.caught_up for t in self.bot._trackers)
 
     def progress(self, member, identity, snapshot=_NO_SNAPSHOT):
-        # snapshot: per-tick batched playtime read; omitted means read() opens its own.
+        """Combined XP for the member. `identity` may be one or several, since
+        Reforger issues a separate game account per platform."""
+        # snapshot: per-tick batched playtime read; omitted means total() opens its own.
         path = os.getenv("PLAYTIME_DB", "data/playtime.sqlite3")
+        held = [identity] if isinstance(identity, str) else list(identity)
         if snapshot is _NO_SNAPSHOT:
-            return self.wallet.read(self.bot.config.guild_id, member, identity, path, self._ready())
-        return self.wallet.read(self.bot.config.guild_id, member, identity, path, self._ready(), snapshot=snapshot)
+            return self.wallet.total(self.bot.config.guild_id, member, held, path, self._ready())
+        return self.wallet.total(self.bot.config.guild_id, member, held, path, self._ready(), snapshot=snapshot)
 
     def playtime(self, member):
         return self.wallet.played(self.bot.config.guild_id, member)
@@ -76,8 +79,12 @@ class RankSync:
                 return
             if not self.roles:
                 await self.prepare(guild)
-            rows = self.db.execute("SELECT discord_id,identity FROM account_links WHERE guild=?",
-                                   (guild.id,)).fetchall()
+            # One row per member, with every account they hold, so a player on
+            # two platforms is ranked once on their combined total.
+            rows = self.db.execute(
+                "SELECT discord_id,GROUP_CONCAT(identity) FROM account_links WHERE guild=? GROUP BY discord_id",
+                (guild.id,)).fetchall()
+            rows = [(member_id, held.split(",")) for member_id, held in rows]
             # One batched read-only load of playtime for the whole tick, instead
             # of opening a connection per linked member.
             snapshot = self.wallet.snapshot(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3")) if self._ready() else None

@@ -174,22 +174,22 @@ class AlertTests(unittest.IsolatedAsyncioTestCase):
         second.message.edit.assert_awaited()  # buttons removed
 
     async def test_unapprovable_request_is_auto_rejected_and_the_member_told(self):
-        # That Discord account is already linked, so this request can never be
-        # approved. It closes itself rather than sitting in the queue forever.
-        self.links.verified_link(1, 10, "22222222-3333-4444-5555-666666666666", "admin:1")
+        # The game account belongs to somebody else, so this request can never
+        # be approved. It closes itself rather than sitting in the queue.
+        self.links.verified_link(1, 77, IDENT, "admin:1")
         member = SimpleNamespace(id=10, send=AsyncMock())
         guild = SimpleNamespace(id=1, get_member=lambda i: member, get_channel=lambda i: None)
         i = interaction(embeds=[alert_embed(self.token)], guild=guild)
         await ReviewButtons(self.bot)._decide(i, True)
         self.assertEqual(self.links.request(1, self.token)[3], "rejected")
         member.send.assert_awaited_once()
-        self.assertIn("already has a linked game account", member.send.await_args.args[0])
+        self.assertIn("already linked to another Discord account", member.send.await_args.args[0])
         edited = i.message.edit.await_args.kwargs["embed"]
         self.assertEqual(edited.footer.text, HANDLED_MARKER)
         self.assertEqual(edited.fields[-1].name, "\U0001F6AB Auto-rejected")
 
     async def test_closed_dms_fall_back_to_the_join_channel(self):
-        self.links.verified_link(1, 10, "22222222-3333-4444-5555-666666666666", "admin:1")
+        self.links.verified_link(1, 77, IDENT, "admin:1")
         member = SimpleNamespace(id=10, send=AsyncMock(side_effect=discord.HTTPException(Mock(), "closed")))
         channel = FakeChannel()
         with self.links.db:

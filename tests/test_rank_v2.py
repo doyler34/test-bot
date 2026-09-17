@@ -87,8 +87,10 @@ class PersistenceTests(unittest.TestCase):
             pass
         wallet = XPStore(self.db)
         self.assertEqual(wallet.read(1,2,'player',self.root/'time.db',True),2)
-        with self.assertRaises(ValueError):
-            wallet.read(1,2,'different',self.root/'time.db',True)
+        # A second game account is a second wallet, not a mismatch: Reforger
+        # issues one identity per platform and both belong to the same member.
+        self.assertEqual(wallet.read(1,2,'different',self.root/'time.db',True),0)
+        self.assertEqual(wallet.total(1,2,['player','different'],self.root/'time.db',True),2)
 
     def test_two_real_trackers_overlap_restart_and_rotation(self):
         roots = [self.root/'one',self.root/'two']

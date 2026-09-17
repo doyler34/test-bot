@@ -1,10 +1,16 @@
-"""Durable one-to-one Discord/Reforger identity links, independent of match resets."""
+"""Durable Discord/Reforger identity links, independent of match resets."""
+import logging
 import sqlite3
 import time
 import uuid
 from pathlib import Path
 
 from bot.config import configure_connection
+
+LOG = logging.getLogger("reforger.account_links")
+# Reforger creates a Game Identity per platform and a Bohemia account can hold
+# one of each, so three covers PC, Xbox and PlayStation with nothing spare.
+MAX_IDENTITIES = 3
 
 
 class LinkConflict(ValueError):
@@ -16,12 +22,16 @@ class AccountLinks:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path, timeout=10)
         configure_connection(self.db)
+        # Keyed by identity, not by member: Reforger issues one Game Identity
+        # per platform, so a player on PC and Xbox genuinely owns two. An
+        # identity still belongs to at most one member.
         self.db.execute('''CREATE TABLE IF NOT EXISTS account_links (
             guild INTEGER NOT NULL, discord_id INTEGER NOT NULL,
             identity TEXT NOT NULL, linked_at REAL NOT NULL,
             verified_by TEXT NOT NULL,
-            PRIMARY KEY(guild,discord_id), UNIQUE(guild,identity))''')
+            PRIMARY KEY(guild,identity))''')
         self.db.commit()
+        self._widen_links()
         self.db.executescript('''CREATE TABLE IF NOT EXISTS link_requests (
             token TEXT PRIMARY KEY, guild INTEGER NOT NULL, discord_id INTEGER NOT NULL,
             identity TEXT NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL,
@@ -42,10 +52,40 @@ class AccountLinks:
             self.db.execute("ALTER TABLE link_requests ADD COLUMN discord_name TEXT")
         self.db.commit()
 
-    def lookup(self, guild, discord_id):
-        row = self.db.execute("SELECT identity FROM account_links WHERE guild=? AND discord_id=?",
-                              (guild, discord_id)).fetchone()
+    def _widen_links(self):
+        """Older databases keyed account_links by member, which capped a player
+        at one platform. Rebuild them keyed by identity; the rows are already
+        one-per-member so nothing is lost."""
+        sql = self.db.execute("SELECT sql FROM sqlite_master WHERE name='account_links'").fetchone()
+        if not sql or "PRIMARYKEY(guild,identity)" in sql[0].replace(" ", ""):
+            return
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            self.db.execute('''CREATE TABLE account_links_v2 (
+                guild INTEGER NOT NULL, discord_id INTEGER NOT NULL,
+                identity TEXT NOT NULL, linked_at REAL NOT NULL,
+                verified_by TEXT NOT NULL, PRIMARY KEY(guild,identity))''')
+            self.db.execute("INSERT INTO account_links_v2 SELECT guild,discord_id,identity,linked_at,verified_by FROM account_links")
+            self.db.execute("DROP TABLE account_links")
+            self.db.execute("ALTER TABLE account_links_v2 RENAME TO account_links")
+        LOG.info("account_links rebuilt: a member may now hold one identity per platform")
+
+    def identities(self, guild, discord_id):
+        """Every game account this member holds, oldest link first. The first
+        is their original one, which callers use when they can only show one."""
+        return [row[0] for row in self.db.execute(
+            "SELECT identity FROM account_links WHERE guild=? AND discord_id=? ORDER BY linked_at, identity",
+            (guild, discord_id))]
+
+    def owner(self, guild, identity):
+        row = self.db.execute("SELECT discord_id FROM account_links WHERE guild=? AND identity=?",
+                              (guild, identity)).fetchone()
         return row[0] if row else None
+
+    def lookup(self, guild, discord_id):
+        """The member's first linked identity, or None. Prefer identities()."""
+        found = self.identities(guild, discord_id)
+        return found[0] if found else None
 
     def verified_link(self, guild, discord_id, identity, verified_by):
         """Call only after ownership verification. Never silently replace a link."""
@@ -57,11 +97,13 @@ class AccountLinks:
             self._insert_link(guild, discord_id, identity, verified_by)
 
     def _insert_link(self, guild, discord_id, identity, verified_by):
-        existing = self.lookup(guild, discord_id)
-        if existing == identity:
+        held = self.identities(guild, discord_id)
+        if identity in held:
             return
-        if existing:
-            raise LinkConflict("This Discord account already has a linked game account.")
+        if len(held) >= MAX_IDENTITIES:
+            raise LinkConflict(
+                f"This Discord account already holds {MAX_IDENTITIES} game accounts, "
+                "which is one per platform. Ask an admin to remove one first.")
         try:
             self.db.execute("INSERT INTO account_links VALUES (?,?,?,?,?)",
                             (guild, discord_id, identity, time.time(), verified_by))
@@ -73,10 +115,15 @@ class AccountLinks:
         token = uuid.uuid4().hex
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
-            if self.lookup(guild, discord_id):
-                raise LinkConflict("Your Discord account is already linked.")
-            if self.db.execute("SELECT 1 FROM account_links WHERE guild=? AND identity=?", (guild, identity)).fetchone():
-                raise LinkConflict("That game account is already linked. Contact an admin.")
+            held = self.identities(guild, discord_id)
+            if identity in held:
+                raise LinkConflict("That game account is already linked to you.")
+            if len(held) >= MAX_IDENTITIES:
+                raise LinkConflict(f"You already have {MAX_IDENTITIES} linked game accounts, "
+                                   "which is one per platform. Ask an admin to remove one first.")
+            owner = self.owner(guild, identity)
+            if owner is not None:
+                raise LinkConflict("That game account is already linked to another member. Contact an admin.")
             self.db.execute("UPDATE link_requests SET status='replaced' WHERE guild=? AND discord_id=? AND status='pending'", (guild, discord_id))
             self.db.execute("INSERT INTO link_requests"
                             "(token,guild,discord_id,identity,name,status,created,reviewer,discord_name)"
@@ -98,26 +145,29 @@ class AccountLinks:
             self.db.execute("UPDATE link_requests SET status=?,reviewer=? WHERE token=?",
                             ("approved" if approve else "rejected", reviewer, token))
 
-    def unlink(self, guild, discord_id):
+    def unlink(self, guild, discord_id, identity=None):
         """Remove an approved link so an abused account stops earning XP.
 
-        The game identity's tracked playtime and XP are untouched, so a genuine
-        owner can re-link later and keep their history. Returns the removed
-        identity, or None if that Discord account had no link.
+        With no identity, every link the member holds goes. The game accounts'
+        tracked playtime and XP are untouched, so a genuine owner can re-link
+        later and keep their history. Returns the identities removed.
         """
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
-            row = self.db.execute("SELECT identity FROM account_links WHERE guild=? AND discord_id=?",
-                                  (guild, discord_id)).fetchone()
-            if not row:
-                return None
-            self.db.execute("DELETE FROM account_links WHERE guild=? AND discord_id=?", (guild, discord_id))
-        return row[0]
+            held = self.identities(guild, discord_id)
+            going = [i for i in held if identity is None or i == identity]
+            for one in going:
+                self.db.execute("DELETE FROM account_links WHERE guild=? AND identity=?", (guild, one))
+        return going
 
     def status(self, guild, discord_id):
-        identity = self.lookup(guild, discord_id)
-        if identity:
-            return "Your Reforger account is linked. Previously tracked playtime stays with your game account."
+        held = self.identities(guild, discord_id)
+        if held:
+            more = "" if len(held) >= MAX_IDENTITIES else (
+                " Playing on another platform? Link that account too — Reforger gives you a separate "
+                "ID per platform and your stats are added together.")
+            return (f"Your Reforger account is linked ({len(held)} of {MAX_IDENTITIES}). "
+                    f"Previously tracked playtime stays with your game account.{more}")
         row = self.db.execute("SELECT status FROM link_requests WHERE guild=? AND discord_id=? ORDER BY created DESC LIMIT 1", (guild, discord_id)).fetchone()
         if not row:
             return "No linking request yet. Use Link Reforger account to submit your in-game name."

@@ -61,18 +61,35 @@ class XPStore:
         with db:
             db.execute('CREATE INDEX IF NOT EXISTS discord_post_events_day ON discord_post_events(guild,member,created)')
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='rank_wallet_v2'").fetchone():
+            self._widen_wallet()
             return
         backup_before(db, "rank-v2")
         with db:
             db.execute("BEGIN IMMEDIATE")
             db.execute('''CREATE TABLE rank_wallet_v2(guild INTEGER, member INTEGER, identity TEXT,
-                credit INTEGER, baseline INTEGER, milliseconds INTEGER, PRIMARY KEY(guild,member))''')
+                credit INTEGER, baseline INTEGER, milliseconds INTEGER, PRIMARY KEY(guild,member,identity))''')
             legacy = db.execute("SELECT 1 FROM sqlite_master WHERE name='rank_progress'").fetchone()
             if legacy:
                 # Preserve the exact previously awarded test XP and partial minute.
                 db.execute('''INSERT INTO rank_wallet_v2 SELECT guild,member,identity,
                     CAST(seconds/60 AS INTEGER)*10,NULL,CAST(ROUND((seconds-CAST(seconds/60 AS INTEGER)*60)*1000) AS INTEGER)
                     FROM rank_progress''')
+
+    def _widen_wallet(self):
+        """One wallet row per game account, not per member, so a player on two
+        platforms keeps a separate baseline for each. Existing rows are already
+        one per member, so the rebuild carries them over untouched."""
+        sql = self.db.execute("SELECT sql FROM sqlite_master WHERE name='rank_wallet_v2'").fetchone()
+        if not sql or "PRIMARYKEY(guild,member,identity)" in sql[0].replace(" ", ""):
+            return
+        backup_before(self.db, "rank-wallet-multi")
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            self.db.execute('''CREATE TABLE rank_wallet_v3(guild INTEGER, member INTEGER, identity TEXT,
+                credit INTEGER, baseline INTEGER, milliseconds INTEGER, PRIMARY KEY(guild,member,identity))''')
+            self.db.execute("INSERT INTO rank_wallet_v3 SELECT guild,member,identity,credit,baseline,milliseconds FROM rank_wallet_v2")
+            self.db.execute("DROP TABLE rank_wallet_v2")
+            self.db.execute("ALTER TABLE rank_wallet_v3 RENAME TO rank_wallet_v2")
 
     def snapshot(self, path):
         """One batched read-only load of every identity's tracked/legacy time.
@@ -95,11 +112,32 @@ class XPStore:
             return None
         return {identity: (ms, legacy.get(identity)) for identity, ms in total.items()}
 
+    def total(self, guild, member, identities, path, ready, snapshot=_UNSET):
+        """Combined XP for every game account the member holds.
+
+        Playtime is summed in milliseconds before converting, so a player split
+        across two platforms keeps the partial minutes each one contributes
+        instead of having both rounded down.
+        """
+        credit = earned = 0
+        for identity in identities:
+            one, milliseconds = self.wallet(guild, member, identity, path, ready, snapshot)
+            credit += one
+            earned += milliseconds
+        return (credit + xp_from_seconds(earned / 1000) + self.post_xp(guild, member)
+                + sum(self.combat_xp(i) for i in identities))
+
     def read(self, guild, member, identity, path, ready, snapshot=_UNSET):
-        row = self.db.execute("SELECT identity,credit,baseline,milliseconds FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
-        if row and row[0] != identity:
-            raise ValueError("Linked identity changed; admin review required")
-        credit, baseline, earned = (row[1], row[2], row[3]) if row else (0, 0, 0)
+        """One identity's XP. total() is what the rank loop uses."""
+        credit, earned = self.wallet(guild, member, identity, path, ready, snapshot)
+        return (credit + xp_from_seconds(earned / 1000) + self.post_xp(guild, member)
+                + self.combat_xp(identity))
+
+    def wallet(self, guild, member, identity, path, ready, snapshot=_UNSET):
+        """Durable credit and tracked milliseconds for a single game account."""
+        row = self.db.execute("SELECT credit,baseline,milliseconds FROM rank_wallet_v2 WHERE guild=? AND member=? AND identity=?",
+                              (guild,member,identity)).fetchone()
+        credit, baseline, earned = row if row else (0, 0, 0)
         if ready:
             total_ms = legacy_ms = None
             if snapshot is _UNSET:
@@ -124,20 +162,21 @@ class XPStore:
                 earned = max(earned, total_ms - baseline)
         # Write only when the durable values actually changed; a stable rank
         # must not rewrite rank_wallet_v2 on every sync.
-        if (None if row is None else (row[1], row[2], row[3])) != (credit, baseline, earned):
+        if (row if row else None) != (credit, baseline, earned):
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO rank_wallet_v2 VALUES (?,?,?,?,?,?)", (guild, member, identity, credit, baseline, earned))
-        return credit + xp_from_seconds(earned / 1000) + self.post_xp(guild, member) + self.combat_xp(identity)
+        return credit, earned
 
     def played(self, guild, member):
-        """Tracked server time in milliseconds. read() refreshes it, so call
-        this after progress() to get the current figure."""
-        row = self.db.execute("SELECT milliseconds FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
+        """Tracked server time in milliseconds across every linked account.
+        total() refreshes it, so call this afterwards for the current figure."""
+        row = self.db.execute("SELECT SUM(milliseconds) FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
         return (row[0] or 0) if row else 0
 
     def cached(self, guild, member):
-        row = self.db.execute("SELECT credit,milliseconds,identity FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchone()
-        banked = row[0] + xp_from_seconds(row[1]/1000) + self.combat_xp(row[2]) if row else 0
+        rows = self.db.execute("SELECT credit,milliseconds,identity FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchall()
+        banked = (sum(r[0] for r in rows) + xp_from_seconds(sum(r[1] for r in rows) / 1000)
+                  + sum(self.combat_xp(r[2]) for r in rows))
         return banked + self.post_xp(guild, member)
 
     def combat_xp(self, identity):

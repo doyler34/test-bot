@@ -185,6 +185,25 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(combat_xp(self.db,VICTIM), XP_PER_MATCH)
         self.assertEqual(combat_xp(self.db,'nobody'), 0)
 
+    def test_two_platforms_count_as_one_player(self):
+        # A member on PC and Xbox holds two game identities. Their kills,
+        # deaths and match XP must add up, and they get one leaderboard row.
+        self.links.verified_link(1, 10, KILLER, "admin:20")   # second account
+        base = datetime(2026,9,7,15,0)
+        record_match(self.db,'one','Server 0',base,base+timedelta(minutes=50))
+        # VICTIM dies once; KILLER gets that kill. Same human, both accounts.
+        self.process(event('15:01:00.000',killer=KILLER))
+        both = self.links.identities(1, 10)
+        self.assertEqual(len(both), 2)
+        totals = window_totals(self.db, both, week_start(datetime(2026,9,7,12,0)))
+        self.assertEqual((totals['player_kills'], totals['deaths']), (1, 1))
+        # One match played, not one per account.
+        self.assertEqual(combat_xp(self.db, both),
+                         XP_PER_KILL + XP_PER_MATCH)
+        rows = window_standings(self.db, 1, week_start(datetime(2026,9,7,12,0)))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0][0], rows[0][1], rows[0][2]), (10, 1, 1))
+
     def test_kill_xp_reaches_the_wallet_with_nothing_to_recompute(self):
         wallet = XPStore(self.db)
         self.assertEqual(wallet.cached(1,10), 80)

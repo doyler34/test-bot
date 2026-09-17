@@ -142,17 +142,25 @@ def window(start, end=None):
 SCORED = "killer IS NOT NULL AND killer<>victim"
 
 
+def held(identity):
+    """A player may hold one game account per platform; take either shape."""
+    return [identity] if isinstance(identity, str) else list(identity)
+
+
 def window_totals(db, identity, start, end=None):
     """Combat figures for one player inside a time window, straight from events."""
     low, high = window(start, end)
+    who = held(identity)
+    marks = ",".join("?" * len(who))
     row = db.execute(f'''SELECT
-        COALESCE(SUM(CASE WHEN killer=?1 AND relation='ENEMY' THEN 1 END),0),
-        COALESCE(SUM(CASE WHEN killer=?1 AND relation='TK' THEN 1 END),0),
-        COALESCE(SUM(CASE WHEN victim=?1 THEN 1 END),0),
+        COALESCE(SUM(CASE WHEN killer IN ({marks}) AND relation='ENEMY' THEN 1 END),0),
+        COALESCE(SUM(CASE WHEN killer IN ({marks}) AND relation='TK' THEN 1 END),0),
+        COALESCE(SUM(CASE WHEN victim IN ({marks}) THEN 1 END),0),
         COUNT(*)
         FROM combat_events
-        WHERE occurred>=?2 AND occurred<?3 AND {SCORED} AND (killer=?1 OR victim=?1)''',
-        (identity, low, high)).fetchone()
+        WHERE occurred>=? AND occurred<? AND {SCORED}
+          AND (killer IN ({marks}) OR victim IN ({marks}))''',
+        (*who, *who, *who, low, high, *who, *who)).fetchone()
     if not row or not row[3]:
         return None
     return dict(player_kills=row[0], teamkills=row[1], deaths=row[2], ai_kills=None,
@@ -162,10 +170,12 @@ def window_totals(db, identity, start, end=None):
 def longest_kill(db, identity, start, end=None):
     """Longest gunfire kill in the window; explosives and vehicles don't qualify."""
     low, high = window(start, end)
+    who = held(identity)
+    marks = ",".join("?" * len(who))
     row = db.execute(f'''SELECT MAX(distance) FROM combat_events
         WHERE occurred>=? AND occurred<? AND {SCORED}
-          AND killer=? AND relation='ENEMY' AND damage_type=? AND distance IS NOT NULL''',
-        (low, high, identity, GUNFIRE)).fetchone()
+          AND killer IN ({marks}) AND relation='ENEMY' AND damage_type=? AND distance IS NOT NULL''',
+        (low, high, *who, GUNFIRE)).fetchone()
     return row[0] if row else None
 
 
@@ -175,16 +185,19 @@ def combat_xp(db, identity):
     Derived from the events rather than banked, so a re-parse or a late account
     link corrects the balance on the next read with nothing to recompute.
     """
+    who = held(identity)
+    marks = ",".join("?" * len(who))
     kills, teamkills = db.execute(f'''SELECT
         COALESCE(SUM(CASE WHEN relation='ENEMY' THEN 1 END),0),
         COALESCE(SUM(CASE WHEN relation='TK' THEN 1 END),0)
-        FROM combat_events WHERE killer=? AND {SCORED}''', (identity,)).fetchone()
+        FROM combat_events WHERE killer IN ({marks}) AND {SCORED}''', who).fetchone()
     # A match only pays out if they actually fought in it, so idling in the
-    # lobby earns nothing.
+    # lobby earns nothing. One match, one payout, however many accounts played.
     matches = db.execute(f'''SELECT COUNT(*) FROM combat_matches m
         WHERE EXISTS (SELECT 1 FROM combat_events e
             WHERE e.occurred>=m.started AND e.occurred<=m.ended
-              AND (e.killer=?1 OR e.victim=?1) AND {SCORED})''', (identity,)).fetchone()[0]
+              AND (e.killer IN ({marks}) OR e.victim IN ({marks})) AND {SCORED})''',
+        (*who, *who)).fetchone()[0]
     return kills*XP_PER_KILL + teamkills*XP_PER_TEAMKILL + matches*XP_PER_MATCH
 
 
@@ -198,17 +211,19 @@ def record_match(db, server, name, start, end):
 def recent_matches(db, identity, limit=10, scan=80):
     """The player's last few matches, most recent first. Matches they took no
     part in are skipped rather than listed as a row of zeroes."""
+    who = held(identity)
+    marks = ",".join("?" * len(who))
     rows = db.execute(f'''SELECT name, started, kills, deaths FROM (
             SELECT m.name AS name, m.started AS started,
               (SELECT COUNT(*) FROM combat_events e
                  WHERE e.occurred>=m.started AND e.occurred<=m.ended
-                   AND e.killer=?1 AND {SCORED} AND e.relation='ENEMY') AS kills,
+                   AND e.killer IN ({marks}) AND {SCORED} AND e.relation='ENEMY') AS kills,
               (SELECT COUNT(*) FROM combat_events e
                  WHERE e.occurred>=m.started AND e.occurred<=m.ended
-                   AND e.victim=?1 AND {SCORED}) AS deaths
-            FROM combat_matches m ORDER BY m.started DESC LIMIT ?3)
-        WHERE kills>0 OR deaths>0 ORDER BY started DESC LIMIT ?2''',
-        (identity, limit, scan)).fetchall()
+                   AND e.victim IN ({marks}) AND {SCORED}) AS deaths
+            FROM combat_matches m ORDER BY m.started DESC LIMIT ?)
+        WHERE kills>0 OR deaths>0 ORDER BY started DESC LIMIT ?''',
+        (*who, *who, scan, limit)).fetchall()
     return [dict(name=row[0], started=datetime.strptime(row[1], '%Y-%m-%dT%H:%M:%S.%f'),
                  kills=row[2], deaths=row[3]) for row in rows]
 
@@ -228,8 +243,9 @@ def window_standings(db, guild, start, end=None):
                 SELECT victim AS identity, 0, 1 FROM scored
             ) GROUP BY identity
         )
-        SELECT a.discord_id, t.kills, t.deaths, {NAME}
+        SELECT a.discord_id, SUM(t.kills), SUM(t.deaths), MIN({NAME})
         FROM account_links a JOIN tallied t ON t.identity=a.identity
         WHERE a.guild=?
-        ORDER BY t.kills DESC, t.deaths ASC, a.discord_id ASC''',
+        GROUP BY a.discord_id
+        ORDER BY SUM(t.kills) DESC, SUM(t.deaths) ASC, a.discord_id ASC''',
         (low, high, guild)).fetchall()

@@ -162,7 +162,7 @@ class ReviewList(discord.ui.View):
             who = discord.utils.escape_markdown(discord_name) + " " if discord_name else ""
             text = (f"Discord account: {who}<@{member}> (`{member}`)\n"
                     f"Reforger name: {discord.utils.escape_markdown(name)}\n"
-                    f"Game identity: `{identity}`\n\n"
+                    + "".join(f"Game identity: `{i}`\n" for i in held) + "\n"
                     "Confirm ownership with the player in-game before approving. A matching name alone is not verification.")
             await interaction.response.edit_message(content=text, view=ReviewDecision(bot, token, owner),
                                                     allowed_mentions=discord.AllowedMentions.none())
@@ -203,14 +203,14 @@ class UnlinkView(discord.ui.View):
                 await interaction.response.send_message("Admin access required.", ephemeral=True)
                 return
             target = select.values[0]
-            identity = bot.account_links.lookup(interaction.guild_id, target.id)
-            if not identity:
+            held = bot.account_links.identities(interaction.guild_id, target.id)
+            if not held:
                 await interaction.response.edit_message(
                     content=f"{target.mention} has no linked Reforger account.", view=None,
                     allowed_mentions=discord.AllowedMentions.none())
                 return
             text = (f"Remove the link for {target.mention} (`{target.id}`)?\n"
-                    f"Game identity: `{identity}`\n\n"
+                    + "".join(f"Game identity: `{i}`\n" for i in held) + "\n"
                     "Their tracked playtime and XP stay with the game account, so a genuine "
                     "owner can re-link later. Rank roles are removed now.")
             await interaction.response.edit_message(content=text,
@@ -323,7 +323,7 @@ class JoinView(discord.ui.View):
     @discord.ui.button(label="My link status", custom_id="oyb:link-status")
     async def status(self, interaction, button):
         text = self.bot.account_links.status(interaction.guild_id, interaction.user.id)
-        if self.bot.account_links.lookup(interaction.guild_id, interaction.user.id):
+        if self.bot.account_links.identities(interaction.guild_id, interaction.user.id):
             text += "\n" + self.bot.rank_sync.status(interaction.user.id)
         await interaction.response.send_message(text, ephemeral=True)
 
