@@ -4,7 +4,7 @@ import unittest
 import uuid
 from bot.storage.account_links import AccountLinks
 from bot.storage.combat_store import migrate, stamp, week_start
-from bot.discord.leaderboard_command import leaderboard_embed, standings
+from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
 
 
 def players(count):
@@ -51,14 +51,16 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(before,list(self.links.db.iterdump()))
 
     async def test_page_sizes_and_numbering(self):
-        for count,pages in [(0,1),(1,1),(15,1),(16,2),(30,2),(31,3)]:
+        # Derived from PAGE_SIZE so raising it never silently breaks this.
+        for count,pages in [(0,1),(1,1),(PAGE_SIZE,1),(PAGE_SIZE+1,2),
+                            (PAGE_SIZE*2,2),(PAGE_SIZE*2+1,3)]:
             for page in range(pages):
                 embed=leaderboard_embed(players(count),page)
                 self.assertIn(f'Page {page+1}/{pages}',embed.footer.text)
                 if count:
                     lines=embed.description.splitlines()[2:-1]
-                    self.assertEqual(len(lines),min(15,count-page*15))
-                    self.assertEqual(int(lines[0].split()[0]),page*15+1)
+                    self.assertEqual(len(lines),min(PAGE_SIZE,count-page*PAGE_SIZE))
+                    self.assertEqual(int(lines[0].split()[0]),page*PAGE_SIZE+1)
                     self.assertLess(len(embed.description),4096)
                 else:
                     self.assertIn('No combat recorded this week',embed.description)

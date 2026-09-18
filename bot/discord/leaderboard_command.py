@@ -5,7 +5,7 @@ import discord
 
 from bot.storage.combat_store import week_start, window_standings
 
-PAGE_SIZE = 15
+PAGE_SIZE = 25
 
 
 def standings(db, guild, start=None, end=None):

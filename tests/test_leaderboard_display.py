@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 import discord
-from bot.discord.leaderboard_command import leaderboard_embed as _embed
+from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed as _embed
 from bot.storage.combat_store import stamp, week_start
 
 
@@ -148,7 +148,7 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
         self.bot = SimpleNamespace(store=self.store, config=SimpleNamespace(guild_id=1),
             user=SimpleNamespace(id=99), add_view=Mock(), get_guild=lambda id:self.guild)
         self.now = 1000
-        self.rows = [(f'Player {i}',100-i,i) for i in range(31)]
+        self.rows = [(f'Player {i}',100-i,i) for i in range(PAGE_SIZE*2+1)]  # 3 pages
         self.clock = patch('bot.discord.leaderboard_display.time.time', side_effect=lambda:self.now)
         self.clock.start()
         self.channels = patch('bot.discord.leaderboard_display.discord.TextChannel', Channel)
@@ -231,7 +231,7 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
         self.now += 300
         await restart.tick()
         self.assertEqual(restart.view.indicator.label, 'Page 2 / 3')
-        self.rows = self.rows[:16]
+        self.rows = self.rows[:PAGE_SIZE+1]  # shrinks to 2 pages
         self.now += 300
         await restart.tick()
         self.assertEqual(self.store.leaderboard(1)['page'], 1)
