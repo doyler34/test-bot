@@ -11,6 +11,13 @@ DISTANCE = re.compile(r'\[(\d+(?:\.\d+)?)m away from the corpse\]')
 # "With last inflicted damage type KINETIC to the 'RArm' hit zone" — the only
 # cause-of-death detail vanilla records; there is no weapon anywhere in the log.
 DAMAGE = re.compile(r'With last inflicted damage type ([A-Z][A-Z_]*)\b')
+# "INFO: Faction: player Someone (playerID = 1 | UUID = ...) has joined faction
+# #AR-Faction_US (US)" — written for everyone who picks a side, whether or not
+# they ever fire a shot, so it is the only record of who was actually present.
+JOINED = re.compile(
+    r'^(\d{2}:\d{2}:\d{2}\.\d{3})\s+SCRIPT\s*(?:\(W\))?\s*:\s*INFO: Faction: player '
+    r'(.*?) \(playerID = [1-9]\d* \| UUID = ([0-9a-fA-F-]{36})\) has joined faction '
+    r'\S+ \((\w+)\)\s*$')
 
 
 @dataclass(frozen=True)
@@ -59,6 +66,34 @@ def person(text):
     if identity == str(uuid.UUID(int=0)):
         return None
     return identity, text[match.end():]
+
+
+@dataclass(frozen=True)
+class JoinEvent:
+    clock: str
+    identity: str
+    name: str
+    faction: str
+
+
+def parse_join(line):
+    """Who took the field, from the faction line vanilla writes on every pick."""
+    match = JOINED.match(line.rstrip('\r\n'))
+    if not match:
+        return None
+    clock, name, raw, faction = match.groups()
+    h, m, s = map(int, clock[:8].split(':'))
+    if h > 23 or m > 59 or s > 59:
+        return None
+    if 'UUID =' in name:
+        return None
+    try:
+        identity = str(uuid.UUID(raw))
+    except ValueError:
+        return None
+    if identity == str(uuid.UUID(int=0)):
+        return None
+    return JoinEvent(clock, identity, name, faction)
 
 
 def parse_kill(line):

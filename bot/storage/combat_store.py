@@ -58,6 +58,12 @@ def migrate(db):
         db.execute('''CREATE TABLE IF NOT EXISTS combat_matches (
             server TEXT NOT NULL, started TEXT NOT NULL, ended TEXT NOT NULL,
             name TEXT, PRIMARY KEY(server, started))''')
+        # Who took the field, whether or not they scored. A results board built
+        # from kills alone leaves out everyone who had a quiet game.
+        db.execute('''CREATE TABLE IF NOT EXISTS combat_presence (
+            server TEXT NOT NULL, occurred TEXT NOT NULL, identity TEXT NOT NULL,
+            PRIMARY KEY(server, occurred, identity))''')
+        db.execute('CREATE INDEX IF NOT EXISTS combat_presence_seen ON combat_presence(server,occurred)')
 
 
 def record(db, server, occurred, event):
@@ -94,6 +100,12 @@ def record(db, server, occurred, event):
                 teamkills=teamkills+excluded.teamkills,updated_at=excluded.updated_at''',
                 (event.killer,killer_faction,kills,teamkills,observed))
     return True
+
+
+def record_presence(db, server, occurred, identity):
+    """Call inside the same transaction as the source checkpoint."""
+    return bool(db.execute('INSERT OR IGNORE INTO combat_presence VALUES (?,?,?)',
+                           (server, occurred, identity)).rowcount)
 
 
 def totals(db, identity):
@@ -229,15 +241,22 @@ def recent_matches(db, identity, limit=10, scan=80):
 
 
 def window_standings(db, guild, start, end=None, server=None):
-    """One row per linked player with activity in the window, best kills first.
+    """One row per linked player, best kills first.
 
     `server` narrows it to one server's events, which a single match's board
     needs: OYB runs several servers at once, so a time window on its own also
-    catches the kills everyone else was getting elsewhere.
+    catches the kills everyone else was getting elsewhere. With a server given
+    this is an end-of-game board, so everyone who took the field is listed,
+    including the players who finished without a kill or a death.
     """
     low, high = window(start, end)
     scope = "" if server is None else " AND server=?"
     where = (low, high) if server is None else (low, high, server)
+    present = f"""
+        UNION ALL
+        SELECT identity, 0, 0 FROM combat_presence
+        WHERE occurred>=? AND occurred<?{scope}
+    """ if server is not None else ""
     return db.execute(f'''
         WITH scored AS (
             SELECT victim, killer, relation FROM combat_events
@@ -248,6 +267,7 @@ def window_standings(db, guild, start, end=None, server=None):
                        0 AS deaths FROM scored
                 UNION ALL
                 SELECT victim AS identity, 0, 1 FROM scored
+                {present}
             ) GROUP BY identity
         )
         SELECT a.discord_id, SUM(t.kills), SUM(t.deaths), MIN({NAME})
@@ -255,4 +275,4 @@ def window_standings(db, guild, start, end=None, server=None):
         WHERE a.guild=?
         GROUP BY a.discord_id
         ORDER BY SUM(t.kills) DESC, SUM(t.deaths) ASC, a.discord_id ASC''',
-        (*where, guild)).fetchall()
+        (*where, *(where if server is not None else ()), guild)).fetchall()

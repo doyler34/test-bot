@@ -8,8 +8,8 @@ from pathlib import Path
 import re
 import sqlite3
 
-from bot.tracking.combat_parser import parse_kill
-from bot.storage.combat_store import record
+from bot.tracking.combat_parser import parse_join, parse_kill
+from bot.storage.combat_store import record, record_presence
 
 LOG = logging.getLogger('reforger.combat')
 STAMP = re.compile(r'^(\d{2}:\d{2}:\d{2}\.\d{3})')
@@ -69,6 +69,11 @@ def scan(db, server, path, budget=4*1024*1024):
                 if event:
                     occurred = f'{initial_date+timedelta(days=event_day)}T{event.clock}'
                     added += int(record(db,server,occurred,event))
+                    continue
+                joined = parse_join(line)
+                if joined:
+                    occurred = f'{initial_date+timedelta(days=event_day)}T{joined.clock}'
+                    record_presence(db,server,occurred,joined.identity)
                 elif ': KILL ' in line:
                     LOG.warning('Unrecognised combat event at %s:%s; not counted',path,position)
             stream.seek(max(0,position-256))
