@@ -195,7 +195,7 @@ def combat_xp(db, identity):
     # lobby earns nothing. One match, one payout, however many accounts played.
     matches = db.execute(f'''SELECT COUNT(*) FROM combat_matches m
         WHERE EXISTS (SELECT 1 FROM combat_events e
-            WHERE e.occurred>=m.started AND e.occurred<=m.ended
+            WHERE e.server=m.server AND e.occurred>=m.started AND e.occurred<=m.ended
               AND (e.killer IN ({marks}) OR e.victim IN ({marks})) AND {SCORED})''',
         (*who, *who)).fetchone()[0]
     return kills*XP_PER_KILL + teamkills*XP_PER_TEAMKILL + matches*XP_PER_MATCH
@@ -216,10 +216,10 @@ def recent_matches(db, identity, limit=10, scan=80):
     rows = db.execute(f'''SELECT name, started, kills, deaths FROM (
             SELECT m.name AS name, m.started AS started,
               (SELECT COUNT(*) FROM combat_events e
-                 WHERE e.occurred>=m.started AND e.occurred<=m.ended
+                 WHERE e.server=m.server AND e.occurred>=m.started AND e.occurred<=m.ended
                    AND e.killer IN ({marks}) AND {SCORED} AND e.relation='ENEMY') AS kills,
               (SELECT COUNT(*) FROM combat_events e
-                 WHERE e.occurred>=m.started AND e.occurred<=m.ended
+                 WHERE e.server=m.server AND e.occurred>=m.started AND e.occurred<=m.ended
                    AND e.victim IN ({marks}) AND {SCORED}) AS deaths
             FROM combat_matches m ORDER BY m.started DESC LIMIT ?)
         WHERE kills>0 OR deaths>0 ORDER BY started DESC LIMIT ?''',
@@ -228,13 +228,20 @@ def recent_matches(db, identity, limit=10, scan=80):
                  kills=row[2], deaths=row[3]) for row in rows]
 
 
-def window_standings(db, guild, start, end=None):
-    """One row per linked player with activity in the window, best kills first."""
+def window_standings(db, guild, start, end=None, server=None):
+    """One row per linked player with activity in the window, best kills first.
+
+    `server` narrows it to one server's events, which a single match's board
+    needs: OYB runs several servers at once, so a time window on its own also
+    catches the kills everyone else was getting elsewhere.
+    """
     low, high = window(start, end)
+    scope = "" if server is None else " AND server=?"
+    where = (low, high) if server is None else (low, high, server)
     return db.execute(f'''
         WITH scored AS (
             SELECT victim, killer, relation FROM combat_events
-            WHERE occurred>=? AND occurred<? AND {SCORED}
+            WHERE occurred>=? AND occurred<?{scope} AND {SCORED}
         ), tallied AS (
             SELECT identity, SUM(kills) AS kills, SUM(deaths) AS deaths FROM (
                 SELECT killer AS identity, CASE WHEN relation='ENEMY' THEN 1 ELSE 0 END AS kills,
@@ -248,4 +255,4 @@ def window_standings(db, guild, start, end=None):
         WHERE a.guild=?
         GROUP BY a.discord_id
         ORDER BY SUM(t.kills) DESC, SUM(t.deaths) ASC, a.discord_id ASC''',
-        (low, high, guild)).fetchall()
+        (*where, guild)).fetchall()

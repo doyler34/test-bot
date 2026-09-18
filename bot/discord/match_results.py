@@ -25,8 +25,9 @@ def match_embed(server_name, rows, start, end):
     embed = discord.Embed(title=f'🏁 Match results — {server_name}'[:256], colour=0xA9BC8C)
     embed.description = table(rows[:LIMIT])
     shown = f' • top {LIMIT} of {len(rows)}' if len(rows) > LIMIT else ''
+    closed = f'{end:%H:%M}' if start.date() == end.date() else f'{end:%d %b %H:%M}'
     embed.set_footer(text=f'{len(rows)} players{shown} • {duration(start, end)} • '
-                          f'{start:%d %b %H:%M}–{end:%H:%M}\n'
+                          f'{start:%d %b %H:%M}–{closed}\n'
                           'Player kills only • Counts toward the weekly board')
     return embed
 
@@ -43,14 +44,14 @@ class MatchResults:
             record_match(self.bot.account_links.db, server_id, server_name, start, end)
         except Exception:
             LOG.exception('Could not record the %s match span', server_name)
-        task = asyncio.create_task(self.publish(server_name, start, end))
+        task = asyncio.create_task(self.publish(server_id, server_name, start, end))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    def rows(self, guild, start, end):
+    def rows(self, guild, start, end, server_id):
         result = []
         for member_id, kills, deaths, name in window_standings(
-                self.bot.account_links.db, guild.id, start, end):
+                self.bot.account_links.db, guild.id, start, end, server=server_id):
             member = guild.get_member(member_id)
             result.append((name or (member.display_name if member else f'Member {member_id}'), kills, deaths))
         return result
@@ -70,7 +71,7 @@ class MatchResults:
             return None
         return channel
 
-    async def publish(self, server_name, start, end):
+    async def publish(self, server_id, server_name, start, end):
         try:
             await asyncio.sleep(SETTLE)
             guild = self.bot.get_guild(self.bot.config.guild_id)
@@ -79,7 +80,7 @@ class MatchResults:
             channel = await self.channel(guild)
             if channel is None:
                 return
-            rows = self.rows(guild, start, end)
+            rows = self.rows(guild, start, end, server_id)
             if not rows:
                 # An empty board after every quiet match would just be noise.
                 LOG.info('No linked-player kills in the %s match; nothing to post', server_name)

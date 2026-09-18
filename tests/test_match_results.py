@@ -75,7 +75,7 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
     async def publish(self, game_id='555'):
         with patch.dict(os.environ, {'GAME_LEADERBOARD_CHANNEL_ID': game_id}), \
              patch('bot.discord.match_results.SETTLE', 0):
-            await self.results.publish('OYB Classic', START, END)
+            await self.results.publish('s', 'OYB Classic', START, END)
 
     async def test_posts_only_the_kills_inside_the_match_window(self):
         self.kill('before', START - timedelta(minutes=5), OTHER, self.identity)
@@ -84,6 +84,19 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
         await self.publish()
         embed = self.channel.send.await_args.kwargs['embed']
         # One kill, not three: the earlier and later ones belong to other matches.
+        self.assertRegex(embed.description, r'Test Player\s+1\s+0')
+
+    async def test_another_servers_kills_stay_off_this_board(self):
+        # OYB runs several servers at once, so the same minutes exist on each.
+        # A board must only count the server whose match it is.
+        self.kill('mine', START + timedelta(minutes=10), OTHER, self.identity)
+        with self.links.db:
+            self.links.db.execute(
+                "INSERT INTO combat_events (server,event_key,occurred,victim,killer,relation)"
+                " VALUES ('arland','elsewhere',?,?,?,'ENEMY')",
+                (stamp(START + timedelta(minutes=11)), OTHER, self.identity))
+        await self.publish()
+        embed = self.channel.send.await_args.kwargs['embed']
         self.assertRegex(embed.description, r'Test Player\s+1\s+0')
 
     async def test_quiet_match_posts_nothing(self):
