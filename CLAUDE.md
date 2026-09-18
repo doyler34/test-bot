@@ -32,6 +32,12 @@ git push origin HEAD
 - The push may prompt for a token (username `Gazlagom`, password = a
   fine-grained token with Contents: Read/Write on Arma-bot). The user is fine
   entering it each time — do not push a stored-token script unless they ask.
+- **HTTPS and a token. Never SSH, never a deploy key, never a credential
+  helper.** The remote stays `https://github.com/Gazlagom/Arma-bot.git`. Do not
+  offer an alternative auth method when a push fails — a 403 means the token
+  needs Contents: Read/Write on Arma-bot, and the fix is a token, nothing else.
+  If the remote has been switched to SSH, put it back:
+  `git remote set-url origin https://github.com/Gazlagom/Arma-bot.git`
 - "nothing to commit" means Gazlagom is already current.
 
 ## After syncing — restart the bot
