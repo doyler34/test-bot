@@ -4,7 +4,7 @@ import logging
 
 import discord
 
-from bot.config import game_leaderboard_channel_id
+from bot.config import game_leaderboard_channel_id, live_board_channel_id
 from bot.discord.leaderboard_command import table
 from bot.storage.combat_store import record_match, window_standings
 
@@ -99,6 +99,11 @@ class MatchResults:
                 return
             channel = await self.channel(guild)
             if channel is None:
+                return
+            if live_board_channel_id() == channel.id:
+                # The live board already stands in this channel as the final
+                # result; a second post would just repeat it.
+                LOG.info('Live board owns %s; skipping the results post', channel.id)
                 return
             rows = self.rows(guild, start, end, server_id)
             if not rows:

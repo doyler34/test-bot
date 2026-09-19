@@ -67,6 +67,7 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
         token = self.links.submit(1, 10, self.identity, 'Test Player')
         self.links.review(1, token, 99, True)
         self.channel = MagicMock(spec=discord.TextChannel)
+        self.channel.id = 555
         self.channel.send = AsyncMock()
         self.channels = {555: self.channel}
         self.guild = SimpleNamespace(id=1, get_channel=self.channels.get,
@@ -120,6 +121,17 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
         self.kill('self', START + timedelta(minutes=2), self.identity, self.identity)
         await self.publish()
         self.channel.send.assert_not_awaited()
+
+    async def test_the_live_board_replaces_the_results_post_in_its_own_channel(self):
+        self.kill('during', START + timedelta(minutes=10), OTHER, self.identity)
+        with patch.dict(os.environ, {'LIVE_BOARD_CHANNEL_ID': '555'}):
+            await self.publish()
+        # One message per match: the live board in that channel is the result.
+        self.channel.send.assert_not_awaited()
+        # Pointed anywhere else - a test channel - the results board still posts.
+        with patch.dict(os.environ, {'LIVE_BOARD_CHANNEL_ID': '777'}):
+            await self.publish()
+        self.channel.send.assert_awaited_once()
 
     async def test_the_match_channel_is_configured_without_a_dotenv_entry(self):
         from bot.config import MATCH_LEADERBOARD_CHANNEL, game_leaderboard_channel_id

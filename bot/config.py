@@ -55,6 +55,13 @@ def game_leaderboard_channel_id() -> int | None:
     return _channel_id("GAME_LEADERBOARD_CHANNEL_ID", MATCH_LEADERBOARD_CHANNEL)
 
 
+def live_board_channel_id() -> int | None:
+    """Where a running match's self-updating board lives. Unset turns the live
+    board off. Point it at the results channel and the live message becomes that
+    match's final board, so no second results post is made there."""
+    return _channel_id("LIVE_BOARD_CHANNEL_ID", None)
+
+
 def command_auto_clear_seconds() -> int:
     """Seconds before a /rank or /stats card auto-deletes (0 = keep). Default 5 min."""
     raw = os.getenv("COMMAND_AUTO_CLEAR_SECONDS", "300").strip()
