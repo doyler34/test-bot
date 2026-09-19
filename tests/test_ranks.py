@@ -37,7 +37,11 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.env = patch.dict("os.environ", {"PLAYTIME_DB": str(self.root / "playtime.db")})
         self.env.start()
         self.member = SimpleNamespace(roles=[], add_roles=AsyncMock(), remove_roles=AsyncMock())
-        self.guild = SimpleNamespace(id=1, fetch_member=AsyncMock(return_value=self.member))
+        self.guild = SimpleNamespace(id=1, fetch_member=AsyncMock(return_value=self.member),
+                                     get_member=Mock(return_value=None))
+        # On a side, so the XP ladder applies. Without one they stay Renegade,
+        # which test_no_faction_stays_renegade covers.
+        self.links.set_faction(1, 10, "US")
         self.tracker = SimpleNamespace(initialized=True, caught_up=True)
         self.bot = SimpleNamespace(account_links=self.links, config=SimpleNamespace(guild_id=1),
                                    _trackers=[self.tracker], get_guild=Mock(return_value=self.guild))
@@ -58,43 +62,69 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
             self.source.execute("UPDATE totals SET seconds=seconds+?", (seconds,))
             self.source.execute("UPDATE global_time SET milliseconds=milliseconds+?", (round(seconds*1000),))
 
-    async def test_pending_gets_nothing_approved_starts_renegade(self):
+    async def test_pending_gets_nothing_approved_starts_recruit(self):
         token = self.links.submit(1, 10, IDENTITY, "Player")
         await self.sync.tick()
         self.guild.fetch_member.assert_not_awaited()
         self.links.review(1, token, 22, True)
         await self.sync.tick()
-        self.member.add_roles.assert_awaited_once_with(self.sync.roles[0], reason="OYB rank: 0 XP", atomic=True)
+        # They picked a side, so their first rank is Recruit and not Renegade.
+        self.member.add_roles.assert_awaited_once_with(self.sync.roles[1], reason="OYB rank: 0 XP", atomic=True)
         self.assertIn("0 XP", self.sync.status(10))
         self.assertEqual(self.source.execute("SELECT seconds FROM totals").fetchone()[0], 1200)
+
+    async def test_no_faction_stays_renegade_however_much_xp(self):
+        self.links.db.execute("DELETE FROM faction_choice")
+        self.links.db.commit()
+        self.links.verified_link(1, 10, IDENTITY, "admin:22")
+        self.advance(600000)  # 1000 XP, which would be Lieutenant on a side.
+        await self.sync.tick()
+        self.member.add_roles.assert_awaited_once_with(self.sync.roles[0], reason="OYB rank: 1000 XP", atomic=True)
+        self.assertIn("OYB Renegade", self.sync.status(10))
+        self.assertIn("Pick US, USSR or FIA", self.sync.status(10))
+        # Picking a side lifts them straight to what their XP has earned.
+        self.links.set_faction(1, 10, "FIA")
+        await self.sync.tick()
+        self.member.add_roles.assert_awaited_with(self.sync.roles[5], reason="OYB rank: 1000 XP", atomic=True)
+
+    async def test_the_faction_role_beats_a_stale_saved_pick(self):
+        # current_faction reads roles, so an admin removing the role drops them
+        # back to Renegade even though the old pick is still on record.
+        self.links.verified_link(1, 10, IDENTITY, "admin:22")
+        self.links.save_faction_role(1, "US", 501)
+        self.guild.get_member = Mock(return_value=self.member)
+        self.member.roles = []
+        await self.sync.tick()
+        self.member.add_roles.assert_awaited_once_with(self.sync.roles[0], reason="OYB rank: 0 XP", atomic=True)
 
     async def test_full_minutes_promote_and_preserve_other_roles(self):
         self.links.verified_link(1, 10, IDENTITY, "admin:22")
         await self.sync.tick()
-        self.member.roles = [self.sync.roles[0], role(77, "Server One"), role(88, "Admin")]
-        self.advance(59999)
+        self.member.roles = [self.sync.roles[1], role(77, "Server One"), role(88, "Admin")]
+        self.advance(149999)  # 249 XP, one short of Private.
         await self.sync.tick()
         self.assertEqual(self.member.add_roles.await_count, 1)
         self.advance(1)
         await self.sync.tick()
-        self.member.add_roles.assert_awaited_with(self.sync.roles[1], reason="OYB rank: 100 XP", atomic=True)
-        self.member.remove_roles.assert_awaited_once_with(self.sync.roles[0], reason="OYB rank promotion", atomic=True)
-        self.member.roles = [self.sync.roles[1]]
-        self.advance(90000)  # 250 XP in total, the Private threshold.
+        self.member.add_roles.assert_awaited_with(self.sync.roles[2], reason="OYB rank: 250 XP", atomic=True)
+        self.member.remove_roles.assert_awaited_once_with(self.sync.roles[1], reason="OYB rank promotion", atomic=True)
+        self.member.roles = [self.sync.roles[2]]
+        self.advance(120000)  # 450 XP in total, the Corporal threshold.
         await self.sync.tick()
-        self.assertIn("OYB Private", self.sync.status(10))
+        self.assertIn("OYB Corporal", self.sync.status(10))
 
     async def test_post_plus_playtime_promotes_existing_role_and_announces(self):
         import time
         self.links.verified_link(1,10,IDENTITY,'admin:22')
         self.advance(59400)  # 99 playtime XP.
         await self.sync.tick()
-        self.member.roles=[self.sync.roles[0]]
+        self.member.roles=[self.sync.roles[1]]
         self.sync.wallet.award_post(1,10,123,time.time()+1)
+        self.advance(90000)  # 249 playtime XP; the post carries them to 250.
         await self.sync.tick()
-        self.member.add_roles.assert_awaited_with(self.sync.roles[1],reason='OYB rank: 100 XP',atomic=True)
-        self.assertIn('100 XP',self.sync.status(10))
-        self.assertEqual(self.links.db.execute('SELECT xp FROM rank_alerts_v2').fetchone()[0],100)
+        self.member.add_roles.assert_awaited_with(self.sync.roles[2],reason='OYB rank: 250 XP',atomic=True)
+        self.assertIn('250 XP',self.sync.status(10))
+        self.assertEqual(self.links.db.execute('SELECT xp FROM rank_alerts_v2').fetchone()[0],250)
 
     async def test_restart_offline_time_and_source_reset_do_not_reset_xp(self):
         self.links.verified_link(1, 10, IDENTITY, "admin:22")

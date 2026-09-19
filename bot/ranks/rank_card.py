@@ -103,7 +103,7 @@ def fitted(draw, value, xy, width, size, minimum, fill=INK, display=False, audit
 
 
 def render_card(name, xp, avatar=None, *, audit=None, faction=None, playtime_ms=0):
-    progress = rank_for_xp(xp)
+    progress = rank_for_xp(xp, faction)
     accent, crest_file, layers = FACTION_THEMES.get(faction, (ACCENT, None, DEFAULT_LAYERS))
     image = template(layers).copy()
     draw = ImageDraw.Draw(image)
@@ -145,7 +145,11 @@ def render_card(name, xp, avatar=None, *, audit=None, faction=None, playtime_ms=
     else:
         draw.text((840, 220), 'O.Y.B', font=font(32, True), fill=accent, anchor='mt')
         draw.text((840, 264), 'UNALIGNED', font=font(15), fill=MUTED, anchor='mt')
-    xp_text = f'{progress.xp:,} / {progress.next.threshold:,} XP' if progress.next else f'{progress.xp:,} XP'
+    # A Renegade is held there by having no faction, not by being short of XP,
+    # so their card counts no threshold down and says what actually unblocks it.
+    blocked = not faction
+    xp_text = (f'{progress.xp:,} XP' if blocked or not progress.next
+               else f'{progress.xp:,} / {progress.next.threshold:,} XP')
     fitted(draw, xp_text, (244, 188), 460, 27, 16, display=True, audit=audit)
     draw.rounded_rectangle((244, 228, 704, 239), radius=2, fill=shade(accent, .26))
     filled = round(460 * progress.fraction)
@@ -156,7 +160,7 @@ def render_card(name, xp, avatar=None, *, audit=None, faction=None, playtime_ms=
     if progress.next:
         fitted(draw, 'NEXT RANK', (244, 260), 220, 11, 11, fill=MUTED, audit=audit)
         fitted(draw, progress.next.name.upper(), (244, 279), 210, 24, 20, display=True, audit=audit)
-        remaining = f'{progress.remaining} XP REMAINING'
+        remaining = 'PICK A FACTION' if blocked else f'{progress.remaining} XP REMAINING'
         right = 704 - draw.textlength(remaining, font=font(14))
         fitted(draw, remaining, (right, 276), 235, 14, 14, fill=MUTED, audit=audit)
     else:

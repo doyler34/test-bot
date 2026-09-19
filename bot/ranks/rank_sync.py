@@ -7,6 +7,7 @@ import time
 import discord
 
 LOG = logging.getLogger("reforger.ranks")
+from bot.discord.factions import held_faction
 from bot.ranks.rank_rules import RANKS as DEFINITIONS, rank_for_xp
 from bot.storage.rank_persistence import XPStore
 RANKS = tuple(rank.role_name for rank in DEFINITIONS)
@@ -69,8 +70,15 @@ class RankSync:
         return self.wallet.played(self.bot.config.guild_id, member)
 
     def status(self, member):
+        from bot.discord.factions import held_faction
         xp = self.wallet.cached(self.bot.config.guild_id, member)
-        return f"Rank: **{rank_for_xp(xp).current.role_name}** · **{xp} XP**. Use /rank for your card."
+        guild = self.bot.get_guild(self.bot.config.guild_id)
+        faction = held_faction(self.bot, guild, member) if guild else None
+        progress = rank_for_xp(xp, faction)
+        if not faction:
+            return (f"Rank: **{progress.current.role_name}** · **{xp} XP**. "
+                    "Pick US, USSR or FIA to start at Recruit.")
+        return f"Rank: **{progress.current.role_name}** · **{xp} XP**. Use /rank for your card."
 
     async def tick(self):
         async with self.lock:
@@ -91,7 +99,9 @@ class RankSync:
             for member_id, identity in rows:
                 try:
                     xp = self.progress(member_id, identity, snapshot)
-                    tier = rank_for_xp(xp).tier
+                    # Renegade is the no-faction rank, so a member's side decides
+                    # whether the XP ladder applies to them at all.
+                    tier = rank_for_xp(xp, held_faction(self.bot, guild, member_id)).tier
                     target = self.roles[tier]
                     previous = self.applied.get(member_id)
                     if previous and previous[0] == target.id and time.monotonic() - previous[1] < 300:

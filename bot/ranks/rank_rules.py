@@ -23,8 +23,9 @@ class Rank:
         return "OYB " + self.name
 
 
-# The first steps stay small so a new player moves off Renegade on their first
-# night; the gaps widen so the senior ranks stay worth holding.
+# Renegade sits outside the ladder: it is where someone waits until they pick a
+# side. Recruit is the real first rung, and the gaps widen from there so the
+# senior ranks stay worth holding.
 RANKS = tuple(Rank(name, threshold) for name, threshold in (
     ("Renegade", 0), ("Recruit", 100), ("Private", 250), ("Corporal", 450),
     ("Sergeant", 700), ("Lieutenant", 1000), ("Captain", 1400), ("Major", 1900)))
@@ -46,12 +47,26 @@ class RankProgress:
         return RANKS[self.tier+1] if self.tier+1 < len(RANKS) else None
     @property
     def fraction(self):
-        return (self.xp-self.current.threshold)/(self.next.threshold-self.current.threshold) if self.next else 1.0
+        if not self.next:
+            return 1.0
+        span = self.next.threshold - self.current.threshold
+        # A Renegade can be holding more XP than Recruit asks for, so clamp
+        # rather than draw a bar past its own end.
+        return min(1.0, max(0.0, (self.xp - self.current.threshold) / span))
     @property
     def remaining(self):
-        return self.next.threshold-self.xp if self.next else None
+        return max(0, self.next.threshold - self.xp) if self.next else None
 
 
-def rank_for_xp(xp):
+def rank_for_xp(xp, faction=None):
+    """Renegade means not on a side yet, not bottom of the ladder.
+
+    US, USSR or FIA starts you at Recruit and the XP ladder runs from there.
+    With no faction the ladder does not apply at all: you are Renegade until
+    you pick one, however much XP you are carrying.
+    """
     xp = max(0, int(xp))
-    return RankProgress(xp, max(i for i, rank in enumerate(RANKS) if xp >= rank.threshold))
+    if not faction:
+        return RankProgress(xp, 0)
+    earned = max(i for i, rank in enumerate(RANKS) if xp >= rank.threshold)
+    return RankProgress(xp, max(1, earned))

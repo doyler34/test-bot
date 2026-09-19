@@ -28,6 +28,15 @@ def current_faction(bot, guild, member):
     return None
 
 
+def held_faction(bot, guild, member_id):
+    """The member's faction when only their id is to hand. Their role is the
+    truth; the saved pick covers a member the gateway cache has not loaded."""
+    member = guild.get_member(member_id)
+    if member is not None:
+        return current_faction(bot, guild, member)
+    return bot.account_links.faction(guild.id, member_id)
+
+
 async def ensure_faction_roles(bot, guild):
     """Create or adopt the three coloured faction roles and remember their ids."""
     links = bot.account_links
