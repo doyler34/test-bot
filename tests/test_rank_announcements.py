@@ -76,6 +76,27 @@ class AnnouncementTests(unittest.IsolatedAsyncioTestCase):
             await self.alerts.flush(self.guild)
         self.channel.send.assert_awaited_once()
 
+    async def test_no_log_channel_is_quiet_rather_than_an_error(self):
+        # It used to raise every 15 seconds, which buried the log and took the
+        # rank loop down with it, on a server that never wanted these posts.
+        self.alerts.record(1, 10, 1, 10)
+        self.guild.text_channels = []
+        await self.alerts.flush(self.guild)     # must not raise
+        self.channel.send.assert_not_awaited()
+        # Still queued, so it goes out if a channel turns up later.
+        self.guild.text_channels = [self.channel]
+        await self.alerts.flush(self.guild)
+        self.channel.send.assert_awaited_once()
+
+    async def test_announcements_can_be_turned_off(self):
+        self.alerts.record(1, 10, 1, 10)
+        with patch.dict("os.environ", {"RANK_ANNOUNCEMENTS": "off"}):
+            await self.alerts.flush(self.guild)
+        self.channel.send.assert_not_awaited()
+        # Dropped for good, so turning them back on does not spit out a backlog.
+        await self.alerts.flush(self.guild)
+        self.channel.send.assert_not_awaited()
+
     async def test_install_does_not_reannounce_existing_ranks(self):
         self.links.db.executescript("DROP TABLE rank_announced_v2; DROP TABLE rank_alerts_v2;")
         alerts = RankAnnouncements(self.bot)

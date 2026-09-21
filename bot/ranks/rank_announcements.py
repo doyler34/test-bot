@@ -34,6 +34,14 @@ class RankAnnouncements:
             self.db.execute("INSERT OR REPLACE INTO rank_announced_v2 VALUES (?,?,?)",
                             (guild, member, max(previous, tier)))
 
+    def wanted(self):
+        """Promotion posts are opt-in. RANK_ANNOUNCEMENTS=off turns them off
+        outright, and no channel to post in means the same thing: a server that
+        never asked for them should not be told it is missing one."""
+        if os.getenv("RANK_ANNOUNCEMENTS", "").strip().lower() in ("0", "off", "false", "no"):
+            return False
+        return True
+
     def channel(self, guild, saved):
         configured = os.getenv("RANK_LOG_CHANNEL_ID", "").strip()
         if saved or configured:
@@ -41,7 +49,7 @@ class RankAnnouncements:
         else:
             matches = [c for c in guild.text_channels if c.name == "log"]
             if len(matches) != 1:
-                raise RuntimeError("Need one #log text channel, or set RANK_LOG_CHANNEL_ID")
+                return None      # Nowhere to post; the promotion still happened.
             channel = matches[0]
         if not isinstance(channel, discord.TextChannel) or channel.guild.id != guild.id:
             raise RuntimeError("Rank log channel must be a text channel in this Discord server")
@@ -50,9 +58,18 @@ class RankAnnouncements:
     async def flush(self, guild):
         rows = self.db.execute("SELECT member,tier,xp,queued,channel FROM rank_alerts_v2 WHERE guild=? AND message IS NULL ORDER BY queued",
                                (guild.id,)).fetchall()
+        if rows and not self.wanted():
+            with self.db:
+                self.db.execute("DELETE FROM rank_alerts_v2 WHERE guild=? AND message IS NULL", (guild.id,))
+            return
         for member, tier, xp, queued, saved in rows:
             try:
                 channel = self.channel(guild, saved)
+                if channel is None:
+                    # Nowhere to post yet. Leave it queued in case a channel
+                    # appears, but say nothing: a server that never asked for
+                    # promotion posts should not get an error every 15 seconds.
+                    continue
                 with self.db:
                     self.db.execute("UPDATE rank_alerts_v2 SET channel=? WHERE guild=? AND member=? AND tier=?",
                                     (channel.id, guild.id, member, tier))
