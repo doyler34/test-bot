@@ -72,7 +72,16 @@ async def on_ready():
 
         everyone = guild.default_role
         planned, blocked = [], []
-        targets = list(guild.categories) + [c for c in guild.channels if c.category is None]
+        # Categories, anything sitting outside one, and the channels that stay
+        # public. A category reports no category of its own, so filtering on
+        # that alone listed every one of them twice; and a public channel
+        # inside a category would never be reached at all, which would deny
+        # the category and leave nobody able to find the way in.
+        targets = list(guild.categories)
+        targets += [c for c in guild.channels
+                    if c.category is None and not isinstance(c, discord.CategoryChannel)]
+        targets += [c for c in guild.channels
+                    if c.id in opened and c not in targets]
         for channel in targets:
             public = channel.id in opened
             now = channel.overwrites_for(everyone)
@@ -86,6 +95,10 @@ async def on_ready():
             if need or (not public and channel.overwrites_for(member).view_channel is not True):
                 planned.append((channel, public))
 
+        missing = opened - {c.id for c in targets}
+        if missing:
+            print(f"\n--open ids not found in this server: {sorted(missing)}")
+            return
         print(f'\n{len(planned)} to change, {len(blocked)} the bot cannot touch\n')
         for channel, public in planned:
             kind = 'category' if isinstance(channel, discord.CategoryChannel) else 'channel'
