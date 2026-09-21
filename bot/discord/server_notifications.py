@@ -168,7 +168,11 @@ class NotificationBot(TimerBot):
                 except Exception:
                     logger.exception("Announcements channel unavailable; alerts fall back to #servers")
                 try:
-                    await prepare_join_channel(self, guild, readonly_overwrites(guild, hidden=staging_enabled()))
+                    from bot.config import onboarding_channel_id
+                    # The Start here panel carries the linking button, so a
+                    # separate #join-oyb would be a second door to the same room.
+                    if onboarding_channel_id() is None:
+                        await prepare_join_channel(self, guild, readonly_overwrites(guild, hidden=staging_enabled()))
                 except Exception:
                     logger.exception("Join OYB channel unavailable; check Manage Channels")
                 try:
@@ -181,9 +185,12 @@ class NotificationBot(TimerBot):
                             logger.warning("FACTION_CHANNEL_ID %s is not a text channel I can see", pinned)
                             target = None
                     else:
+                        from bot.config import onboarding_channel_id
                         row = self.account_links.db.execute(
                             "SELECT channel FROM join_channel WHERE guild=?", (guild.id,)).fetchone()
                         target = guild.get_channel(row[0]) if row else None
+                        if target is None and onboarding_channel_id():
+                            target = guild.get_channel(onboarding_channel_id())
                     if isinstance(target, discord.TextChannel):
                         await prepare_faction_picker(self, guild, target)
                 except Exception:

@@ -6,7 +6,7 @@ import logging
 
 import discord
 from discord import app_commands
-from bot.config import command_auto_clear_seconds
+from bot.config import linking_channel, command_auto_clear_seconds
 from bot.discord.factions import current_faction
 from bot.ranks.rank_card import render_card
 
@@ -54,7 +54,7 @@ class RankCommand:
         identity = self.bot.account_links.identities(interaction.guild_id, interaction.user.id)
         if not identity:
             await interaction.response.send_message(
-                "Open **#join-oyb**, press **Link Reforger account**, and submit your in-game name. "
+                f"Open {linking_channel()}, press **Link Reforger account**, and submit your in-game name. "
                 "An admin must approve your link before you can use /rank.", ephemeral=True)
             return
         if not interaction.app_permissions.attach_files:

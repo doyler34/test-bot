@@ -199,9 +199,13 @@ async def notify_member(bot, guild, discord_id, reason):
             return True
         except discord.HTTPException:
             LOG.info("DMs closed for %s; falling back to the join channel", discord_id)
+    from bot.config import onboarding_channel_id
     row = bot.account_links.db.execute(
         "SELECT channel FROM join_channel WHERE guild=?", (guild.id,)).fetchone() if guild else None
     channel = guild.get_channel(row[0]) if row and row[0] else None
+    if channel is None and guild is not None and onboarding_channel_id():
+        # No #join-oyb on a server that uses the panel instead; say it there.
+        channel = guild.get_channel(onboarding_channel_id())
     if isinstance(channel, discord.TextChannel):
         try:
             await channel.send(content=f"<@{discord_id}> {text}", silent=True,

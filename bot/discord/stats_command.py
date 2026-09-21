@@ -2,7 +2,7 @@
 import logging
 import discord
 from discord import app_commands
-from bot.config import command_auto_clear_seconds
+from bot.config import linking_channel, command_auto_clear_seconds
 from bot.discord.leaderboard_command import clean_name
 from bot.storage.combat_store import recent_matches, week_start, window_totals
 
@@ -103,7 +103,7 @@ class StatsCommand:
         member = user or interaction.user
         identity = self.bot.account_links.identities(interaction.guild_id,member.id)
         if not identity:
-            text = ('Open **#join-oyb**, press **Link Reforger account**, and submit your in-game name for admin approval.'
+            text = (f'Open {linking_channel()}, press **Link Reforger account**, and submit your in-game name for admin approval.'
                     if member.id == interaction.user.id else 'That member does not have an approved Reforger account link.')
             await interaction.response.send_message(text,ephemeral=True)
             return

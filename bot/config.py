@@ -60,6 +60,17 @@ def onboarding_channel_id() -> int | None:
     return _channel_id("ONBOARDING_CHANNEL_ID", None)
 
 
+def linking_channel() -> str:
+    """Where to send a member to link, written for a Discord message.
+
+    The Start here panel carries the linking button itself, so once it is set
+    up #join-oyb is redundant and the wording should point at the panel rather
+    than a channel that may no longer exist.
+    """
+    start = onboarding_channel_id()
+    return f"<#{start}>" if start else "**#join-oyb**"
+
+
 def member_role_name() -> str:
     """The role that accepting the rules grants. This is what channel
     permissions should key off, so a bot outage leaves the gate shut."""

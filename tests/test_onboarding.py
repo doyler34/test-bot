@@ -140,6 +140,15 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await ensure_member_role(self.guild))
         self.guild.create_role.assert_not_awaited()
 
+    def test_the_wording_follows_the_panel_when_there_is_one(self):
+        from bot.config import linking_channel
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('ONBOARDING_CHANNEL_ID', None)
+            self.assertEqual(linking_channel(), '**#join-oyb**')
+        with patch.dict(os.environ, {'ONBOARDING_CHANNEL_ID': '777'}):
+            # A mention, so it stays a working link wherever it is quoted.
+            self.assertEqual(linking_channel(), '<#777>')
+
     def test_grantable_refuses_managed_and_missing_roles(self):
         self.assertTrue(grantable(self.guild, self.member_role))
         self.assertFalse(grantable(self.guild, None))

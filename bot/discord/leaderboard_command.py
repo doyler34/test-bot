@@ -3,6 +3,7 @@ import unicodedata
 
 import discord
 
+from bot.config import linking_channel
 from bot.storage.combat_store import week_start, window_standings
 
 PAGE_SIZE = 25
@@ -40,7 +41,8 @@ def leaderboard_embed(rows, page, start=None):
         offset = page * PAGE_SIZE
         embed.description = table(rows[offset:offset + PAGE_SIZE], offset)
     else:
-        embed.description = 'No combat recorded this week yet. Link your account in **#join-oyb** and get stuck in — the board resets every Monday.'
+        embed.description = (f'No combat recorded this week yet. Link your account in {linking_channel()} '
+                             'and get stuck in — the board resets every Monday.')
     week = f'Week of {start:%d %b}' if start else 'This week'
     embed.set_footer(text=f'Page {page + 1}/{pages} • {len(rows)} players • {week}\n'
                           'Player kills ↓ · deaths ↑ • Resets Monday')
