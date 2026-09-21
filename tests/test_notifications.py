@@ -59,6 +59,32 @@ class ConfigurationTests(unittest.TestCase):
                 read_servers(str(path))
 
 
+class SetupResilienceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_one_broken_channel_does_not_take_the_rest_of_setup_down(self):
+        """A #servers channel the bot cannot edit used to abort everything after
+        it, so the linking panel and onboarding never got posted."""
+        import ast
+        from pathlib import Path
+        tree = ast.parse(Path('bot/discord/server_notifications.py').read_text())
+        ready = next(n for n in ast.walk(tree)
+                     if isinstance(n, ast.AsyncFunctionDef) and n.name == 'on_ready')
+        steps = ('prepare_servers', 'prepare_join_channel', 'prepare_onboarding',
+                 'prepare_review_channel', 'prepare_announcement_channel')
+        guarded = set()
+        for node in ast.walk(ready):
+            if not isinstance(node, ast.Try):
+                continue
+            body = ast.unparse(node.body)
+            inside = [step for step in steps if step in body]
+            # Guarded means its try holds that step alone. A try wrapping two of
+            # them still lets the first one's failure skip the second.
+            if len(inside) == 1:
+                guarded.add(inside[0])
+        self.assertEqual(guarded, {'prepare_servers', 'prepare_join_channel', 'prepare_onboarding',
+                                   'prepare_review_channel', 'prepare_announcement_channel'},
+                         f'not individually guarded: {guarded}')
+
+
 class NotificationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()

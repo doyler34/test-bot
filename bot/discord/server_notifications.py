@@ -156,12 +156,21 @@ class NotificationBot(TimerBot):
                 await self.close()
                 return
             try:
-                await self.prepare_servers(guild)
+                # Each piece is set up on its own. One channel the bot cannot
+                # touch used to abort the whole sequence, so a single bad
+                # permission took the linking panel and onboarding down with it.
+                try:
+                    await self.prepare_servers(guild)
+                except Exception:
+                    logger.exception("Servers channel unavailable; the rest of setup continues")
                 try:
                     await self.prepare_announcement_channel(guild)
                 except Exception:
                     logger.exception("Announcements channel unavailable; alerts fall back to #servers")
-                await prepare_join_channel(self, guild, readonly_overwrites(guild, hidden=staging_enabled()))
+                try:
+                    await prepare_join_channel(self, guild, readonly_overwrites(guild, hidden=staging_enabled()))
+                except Exception:
+                    logger.exception("Join OYB channel unavailable; check Manage Channels")
                 try:
                     from bot.config import faction_channel_id
                     from bot.discord.factions import prepare_faction_picker
