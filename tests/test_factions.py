@@ -30,6 +30,23 @@ class StorageTests(unittest.TestCase):
                 links.close()
 
 
+def clicked(guild, member):
+    """A click that behaves like Discord's: once deferred, replies go through
+    followup, and reply() reads back whichever route was taken."""
+    state = {"done": False}
+
+    async def defer(**_):
+        state["done"] = True
+
+    click = SimpleNamespace(
+        guild_id=1, guild=guild, user=member,
+        followup=SimpleNamespace(send=AsyncMock()),
+        response=SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock(side_effect=defer),
+                                 is_done=lambda: state["done"]))
+    click.reply = lambda: (click.followup.send.await_args or click.response.send_message.await_args).args[0]
+    return click
+
+
 class ApplyTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -81,33 +98,29 @@ class ApplyTests(unittest.IsolatedAsyncioTestCase):
     async def test_view_button_applies_faction(self):
         view = FactionView(self.bot)
         self.assertEqual(len(view.children), 3)
-        interaction = SimpleNamespace(guild_id=1, guild=self.guild,
-                                      user=SimpleNamespace(id=10, roles=[]),
-                                      response=SimpleNamespace(send_message=AsyncMock()))
+        interaction = clicked(self.guild, SimpleNamespace(id=10, roles=[]))
         with patch("bot.discord.factions.apply_faction", new=AsyncMock()) as applied:
             await view.children[0].callback(interaction)
         applied.assert_awaited_once()
         self.assertEqual(applied.await_args.args[3], "US")  # first button = US
-        interaction.response.send_message.assert_awaited()
+        # The click is taken before the two role calls, then answered.
+        interaction.response.defer.assert_awaited_once()
+        interaction.followup.send.assert_awaited()
 
     async def test_a_second_pick_is_refused_and_points_at_an_admin(self):
         view = FactionView(self.bot)
         held = self.guild.get_role(self.links.faction_role(1, "USSR"))
-        interaction = SimpleNamespace(guild_id=1, guild=self.guild,
-                                      user=SimpleNamespace(id=10, roles=[held]),
-                                      response=SimpleNamespace(send_message=AsyncMock()))
+        interaction = clicked(self.guild, SimpleNamespace(id=10, roles=[held]))
         with patch("bot.discord.factions.apply_faction", new=AsyncMock()) as applied:
             await view.children[0].callback(interaction)  # try to switch to US
         applied.assert_not_awaited()
-        text = interaction.response.send_message.await_args.args[0]
+        text = interaction.reply()
         self.assertIn("locked to **USSR**", text)
         self.assertIn("admin", text)
 
     async def test_an_admin_removing_the_role_lifts_the_lock(self):
         view = FactionView(self.bot)
-        interaction = SimpleNamespace(guild_id=1, guild=self.guild,
-                                      user=SimpleNamespace(id=10, roles=[]),
-                                      response=SimpleNamespace(send_message=AsyncMock()))
+        interaction = clicked(self.guild, SimpleNamespace(id=10, roles=[]))
         with patch("bot.discord.factions.apply_faction", new=AsyncMock()) as applied:
             await view.children[0].callback(interaction)
         applied.assert_awaited_once()

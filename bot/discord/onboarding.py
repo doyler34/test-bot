@@ -10,6 +10,7 @@ import discord
 
 from bot.config import member_role_name, unverified_role_name
 from bot.discord.factions import FACTIONS, apply_faction, current_faction
+from bot.discord.interactions import ack, say
 from bot.discord.join_oyb import LinkModal
 
 LOG = logging.getLogger('reforger.onboarding')
@@ -84,7 +85,7 @@ class OnboardingView(discord.ui.View):
     async def interaction_check(self, interaction):
         if interaction.guild_id == self.bot.config.guild_id:
             return True
-        await interaction.response.send_message('Use this in the OYB server.', ephemeral=True)
+        await say(interaction, 'Use this in the OYB server.')
         return False
 
     def _faction(self, name, emoji):
@@ -93,11 +94,11 @@ class OnboardingView(discord.ui.View):
                                    custom_id=f'oyb:onboard:faction:{name}')
 
         async def pick(interaction):
+            await ack(interaction)
             held = current_faction(self.bot, interaction.guild, interaction.user)
             if held is not None:
-                await interaction.response.send_message(
-                    f"You're locked to **{held}**. Ask an admin if you need to switch sides.",
-                    ephemeral=True)
+                await say(interaction,
+                          f"You're locked to **{held}**. Ask an admin if you need to switch sides.")
                 return
             try:
                 await apply_faction(self.bot, interaction.guild, interaction.user, name)
@@ -105,7 +106,7 @@ class OnboardingView(discord.ui.View):
                         'step 3, link your game account.')
             except discord.Forbidden:
                 text = 'I need Manage Roles, and my role must sit above the faction roles. Ask an admin.'
-            await interaction.response.send_message(text, ephemeral=True)
+            await say(interaction, text)
 
         button.callback = pick
         return button
@@ -113,11 +114,12 @@ class OnboardingView(discord.ui.View):
     @discord.ui.button(label='1. Accept the rules', row=0, style=discord.ButtonStyle.success,
                        custom_id='oyb:onboard:verify')
     async def accept(self, interaction, button):
+        await ack(interaction)
         try:
             text = await verify(self.bot, interaction.guild, interaction.user)
         except discord.Forbidden:
             text = 'I need Manage Roles for that, and my role must sit above the member role.'
-        await interaction.response.send_message(text, ephemeral=True)
+        await say(interaction, text)
 
     @discord.ui.button(label='3. Link Reforger account', row=0, style=discord.ButtonStyle.primary,
                        custom_id='oyb:onboard:link')
@@ -126,8 +128,8 @@ class OnboardingView(discord.ui.View):
 
     @discord.ui.button(label='My progress', row=0, custom_id='oyb:onboard:progress')
     async def mine(self, interaction, button):
-        await interaction.response.send_message(
-            progress(self.bot, interaction.guild, interaction.user), ephemeral=True)
+        await ack(interaction)
+        await say(interaction, progress(self.bot, interaction.guild, interaction.user))
 
 
 def panel_embed():

@@ -143,3 +143,64 @@ class AcknowledgementTests(unittest.IsolatedAsyncioTestCase):
         await self.view.force.callback(i)
         i.response.defer.assert_not_awaited()
         i.response.send_modal.assert_awaited_once()
+
+
+class NoHandlerRepliesLateTests(unittest.TestCase):
+    """Every click handler either answers instantly or acknowledges first.
+
+    Walks the source rather than each view, so a handler added later is covered
+    without anyone remembering to test it.
+    """
+
+    # A modal has to be the first response, so these never acknowledge.
+    MODAL = {'link', 'force'}
+
+    def handlers(self):
+        import ast
+        from pathlib import Path
+        for path in sorted(Path('bot/discord').glob('*.py')):
+            if path.name == 'interactions.py':
+                continue
+            tree = ast.parse(path.read_text())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.AsyncFunctionDef):
+                    continue
+                args = [a.arg for a in node.args.args]
+                if 'interaction' not in args:
+                    continue
+                yield path.name, node
+
+    def test_no_handler_works_before_taking_the_click(self):
+        import ast
+        late = []
+        for filename, node in self.handlers():
+            body = ast.unparse(node)
+            if 'send_modal' in body or node.name in self.MODAL:
+                continue
+            if 'response.send_message' not in body and 'response.edit_message' not in body:
+                continue
+            # A handler that tests is_done() itself is already routing both
+            # ways deliberately - that is what ack/say/update do internally.
+            if 'is_done' in body:
+                continue
+            # Replying directly is fine only while nothing slow has happened.
+            # Anything awaited first is either a role change or a query.
+            seen_await = False
+            for step in ast.walk(node):
+                if isinstance(step, ast.Await):
+                    call = ast.unparse(step)
+                    if 'response.send_message' in call or 'response.edit_message' in call:
+                        if seen_await:
+                            late.append(f'{filename}:{node.name}')
+                        break
+                    if 'defer' in call or 'ack(' in call:
+                        break
+                    seen_await = True
+        self.assertEqual(late, [], 'handlers reply after doing work without acknowledging first')
+
+    def test_the_audit_actually_finds_handlers(self):
+        # A silent zero would make the test above pass for the wrong reason.
+        found = {f'{f}:{n.name}' for f, n in self.handlers()}
+        self.assertGreater(len(found), 15, found)
+        self.assertIn('link_review.py:pending', found)
+        self.assertIn('factions.py:pick', found)

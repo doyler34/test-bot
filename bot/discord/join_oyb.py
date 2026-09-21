@@ -6,6 +6,8 @@ import sqlite3
 import uuid
 from contextlib import closing
 import discord
+
+from bot.discord.interactions import ack, say, update
 from bot.storage.account_links import LinkConflict
 
 LOG = logging.getLogger("reforger.join_oyb")
@@ -126,15 +128,16 @@ class ReviewDecision(discord.ui.View):
         self.bot, self.token, self.owner = bot, token, owner
 
     async def decide(self, interaction, approve):
+        await ack(interaction)
         if not can_review(interaction, self.bot.config.guild_id) or interaction.user.id != self.owner:
-            await interaction.response.send_message("An authorised admin must review this request.", ephemeral=True)
+            await say(interaction, "An authorised admin must review this request.")
             return
         try:
             self.bot.account_links.review(interaction.guild_id, self.token, interaction.user.id, approve)
             text = "Account link approved." if approve else "Request rejected."
         except LinkConflict as exc:
             text = str(exc)
-        await interaction.response.edit_message(content=text, view=None, allowed_mentions=discord.AllowedMentions.none())
+        await update(interaction, content=text, view=None, allowed_mentions=discord.AllowedMentions.none())
 
     @discord.ui.button(label="Approve verified owner", style=discord.ButtonStyle.success)
     async def approve(self, interaction, button):
@@ -154,8 +157,9 @@ class ReviewList(discord.ui.View):
             for r in rows])
 
         async def selected(interaction):
+            await ack(interaction)
             if not can_review(interaction, bot.config.guild_id) or interaction.user.id != owner:
-                await interaction.response.send_message("Admin access required.", ephemeral=True)
+                await say(interaction, "Admin access required.")
                 return
             token = select.values[0]
             _, member, identity, name, discord_name = self.rows[token]
@@ -164,8 +168,8 @@ class ReviewList(discord.ui.View):
                     f"Reforger name: {discord.utils.escape_markdown(name)}\n"
                     + "".join(f"Game identity: `{i}`\n" for i in held) + "\n"
                     "Confirm ownership with the player in-game before approving. A matching name alone is not verification.")
-            await interaction.response.edit_message(content=text, view=ReviewDecision(bot, token, owner),
-                                                    allowed_mentions=discord.AllowedMentions.none())
+            await update(interaction, content=text, view=ReviewDecision(bot, token, owner),
+                         allowed_mentions=discord.AllowedMentions.none())
         select.callback = selected
         self.add_item(select)
 
@@ -199,23 +203,22 @@ class UnlinkView(discord.ui.View):
         select = discord.ui.UserSelect(placeholder="Choose the member to unlink", min_values=1, max_values=1)
 
         async def chosen(interaction):
+            await ack(interaction)
             if not can_review(interaction, bot.config.guild_id) or interaction.user.id != owner:
-                await interaction.response.send_message("Admin access required.", ephemeral=True)
+                await say(interaction, "Admin access required.")
                 return
             target = select.values[0]
             held = bot.account_links.identities(interaction.guild_id, target.id)
             if not held:
-                await interaction.response.edit_message(
-                    content=f"{target.mention} has no linked Reforger account.", view=None,
-                    allowed_mentions=discord.AllowedMentions.none())
+                await update(interaction, content=f"{target.mention} has no linked Reforger account.",
+                             view=None, allowed_mentions=discord.AllowedMentions.none())
                 return
             text = (f"Remove the link for {target.mention} (`{target.id}`)?\n"
                     + "".join(f"Game identity: `{i}`\n" for i in held) + "\n"
                     "Their tracked playtime and XP stay with the game account, so a genuine "
                     "owner can re-link later. Rank roles are removed now.")
-            await interaction.response.edit_message(content=text,
-                                                    view=ConfirmUnlink(bot, owner, target.id),
-                                                    allowed_mentions=discord.AllowedMentions.none())
+            await update(interaction, content=text, view=ConfirmUnlink(bot, owner, target.id),
+                         allowed_mentions=discord.AllowedMentions.none())
         select.callback = chosen
         self.add_item(select)
 
@@ -227,8 +230,10 @@ class ConfirmUnlink(discord.ui.View):
 
     @discord.ui.button(label="Remove link", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction, button):
+        # Removing the rank roles is a REST call per role; take the click first.
+        await ack(interaction)
         if not can_review(interaction, self.bot.config.guild_id) or interaction.user.id != self.owner:
-            await interaction.response.send_message("Admin access required.", ephemeral=True)
+            await say(interaction, "Admin access required.")
             return
         identity = self.bot.account_links.unlink(interaction.guild_id, self.target_id)
         if identity is None:
@@ -236,8 +241,8 @@ class ConfirmUnlink(discord.ui.View):
         else:
             await _strip_rank_roles(self.bot, interaction.guild, self.target_id)
             text = f"Removed the link for <@{self.target_id}> (was `{identity}`)."
-        await interaction.response.edit_message(content=text, view=None,
-                                                allowed_mentions=discord.AllowedMentions.none())
+        await update(interaction, content=text, view=None,
+                     allowed_mentions=discord.AllowedMentions.none())
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction, button):
@@ -257,8 +262,9 @@ class ForceLinkChoice(discord.ui.View):
         select = discord.ui.Select(placeholder="Pick the correct account", options=options)
 
         async def chosen(interaction):
+            await ack(interaction)
             if not can_review(interaction, bot.config.guild_id) or interaction.user.id != owner:
-                await interaction.response.send_message("Admin access required.", ephemeral=True)
+                await say(interaction, "Admin access required.")
                 return
             identity = select.values[0]
             try:
@@ -269,8 +275,8 @@ class ForceLinkChoice(discord.ui.View):
                 text = f"⚠️ {exc}\nUse **Admin: remove a link** first if you need to move it."
             except (ValueError, sqlite3.Error) as exc:
                 text = f"Could not link: {exc}"
-            await interaction.response.edit_message(content=text, view=None,
-                                                    allowed_mentions=discord.AllowedMentions.none())
+            await update(interaction, content=text, view=None,
+                         allowed_mentions=discord.AllowedMentions.none())
         select.callback = chosen
         self.add_item(select)
 
@@ -293,16 +299,18 @@ class ForceLinkModal(discord.ui.Modal, title="Force-link a Reforger account"):
             await interaction.response.send_message("That Discord ID isn't a number — right-click the user → Copy ID.", ephemeral=True)
             return
         name = str(self.name_input).strip()
+        # Searching the playtime database comes next; take the submit first.
+        await ack(interaction, thinking=True)
         candidates = find_candidates(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"), name)
         if not candidates:
-            await interaction.response.send_message(
-                f"No game account found under **{discord.utils.escape_markdown(name)}**. "
-                "Make sure they've joined an OYB server so the tracker has seen them.", ephemeral=True)
+            await say(interaction,
+                      f"No game account found under **{discord.utils.escape_markdown(name)}**. "
+                      "Make sure they've joined an OYB server so the tracker has seen them.")
             return
-        await interaction.response.send_message(
-            f"Force-link <@{discord_id}> (`{discord_id}`) to which **{discord.utils.escape_markdown(name)}**?",
-            view=ForceLinkChoice(self.bot, self.owner, discord_id, candidates),
-            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        await say(interaction,
+                  f"Force-link <@{discord_id}> (`{discord_id}`) to which **{discord.utils.escape_markdown(name)}**?",
+                  view=ForceLinkChoice(self.bot, self.owner, discord_id, candidates),
+                  allowed_mentions=discord.AllowedMentions.none())
 
 
 class JoinView(discord.ui.View):
@@ -322,10 +330,11 @@ class JoinView(discord.ui.View):
 
     @discord.ui.button(label="My link status", custom_id="oyb:link-status")
     async def status(self, interaction, button):
+        await ack(interaction)
         text = self.bot.account_links.status(interaction.guild_id, interaction.user.id)
         if self.bot.account_links.identities(interaction.guild_id, interaction.user.id):
             text += "\n" + self.bot.rank_sync.status(interaction.user.id)
-        await interaction.response.send_message(text, ephemeral=True)
+        await say(interaction, text)
 
     # Review, force-link and unlink moved to the pinned panel in the staff-only
     # link-request channel; members should not see admin buttons at all.

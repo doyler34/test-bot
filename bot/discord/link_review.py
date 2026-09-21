@@ -8,6 +8,8 @@ import logging
 
 import discord
 
+from bot.discord.interactions import ack, say, update
+
 from bot.storage.account_links import LinkConflict
 
 LOG = logging.getLogger("reforger.link_review")
@@ -18,25 +20,6 @@ TOKEN_PREFIX = "OYB • Link request • "
 HANDLED_MARKER = TOKEN_PREFIX + "handled"
 REVIEWER_ROLE_NAME = "OYB Link Reviewer"
 STAFF_PERMS = ("administrator", "manage_guild", "manage_channels", "manage_messages", "moderate_members")
-
-
-async def ack(interaction):
-    """Take the click inside Discord's three-second window.
-
-    Everything after this can take as long as it needs; without it a click that
-    lands while the bot is busy dies with "didn't respond in time". A modal has
-    to be the first response, so the force-link button never calls this.
-    """
-    if not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True)
-
-
-async def say(interaction, text, **kwargs):
-    """Reply whether or not the click was already acknowledged."""
-    if interaction.response.is_done():
-        await interaction.followup.send(text, ephemeral=True, **kwargs)
-    else:
-        await interaction.response.send_message(text, ephemeral=True, **kwargs)
 
 
 def can_review(interaction, guild_id):
@@ -172,6 +155,7 @@ class ReviewButtons(discord.ui.View):
             await interaction.message.edit(view=None)
 
     async def _decide(self, interaction, approve):
+        await ack(interaction)
         if not can_review(interaction, self.bot.config.guild_id):
             await say(interaction, "Only staff with Manage Server can review requests.")
             return
@@ -190,10 +174,8 @@ class ReviewButtons(discord.ui.View):
         embed.add_field(name="✅ Approved" if approve else "🚫 Rejected",
                         value=f"by <@{interaction.user.id}>", inline=False)
         embed.set_footer(text="OYB • Link request • handled")
-        # Editing the alert in place is the response, so this one is not
-        # deferred: the write above is a single indexed row.
-        await interaction.response.edit_message(embed=embed, view=None,
-                                                allowed_mentions=discord.AllowedMentions.none())
+        await update(interaction, embed=embed, view=None,
+                     allowed_mentions=discord.AllowedMentions.none())
 
     @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, custom_id="oyb:linkreview:approve")
     async def approve(self, interaction, button):

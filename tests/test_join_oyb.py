@@ -12,6 +12,23 @@ from bot.discord.join_oyb import (JoinView, ReviewDecision, ConfirmUnlink, Force
                                   resolve_identity, known_name)
 
 
+def responding():
+    """Mimics Discord: is_done() flips once the click has been acknowledged,
+    after which a reply has to go through followup."""
+    state = {"done": False}
+
+    async def defer(**_):
+        state["done"] = True
+
+    return SimpleNamespace(send_message=AsyncMock(), edit_message=AsyncMock(),
+                           defer=AsyncMock(side_effect=defer), is_done=lambda: state["done"])
+
+
+def replied(interaction):
+    """The private reply, whichever route it took."""
+    return interaction.followup.send.await_args or interaction.response.send_message.await_args
+
+
 class JoinTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -29,11 +46,12 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         token = self.links.submit(1, 10, identity, "Player")
         interaction = SimpleNamespace(guild_id=1, user=SimpleNamespace(id=22),
             permissions=SimpleNamespace(manage_guild=False, administrator=False),
-            response=SimpleNamespace(send_message=AsyncMock(), edit_message=AsyncMock()))
+            followup=SimpleNamespace(send=AsyncMock()),
+            edit_original_response=AsyncMock(), response=responding())
         view = ReviewDecision(self.bot, token, 22)
         await view.decide(interaction, True)
         self.assertIsNone(self.links.lookup(1, 10))
-        self.assertTrue(interaction.response.send_message.await_args.kwargs["ephemeral"])
+        self.assertTrue(replied(interaction).kwargs["ephemeral"])
         interaction.permissions.manage_guild = True
         await view.decide(interaction, True)
         self.assertEqual(self.links.lookup(1, 10), identity)
@@ -73,7 +91,8 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         guild = SimpleNamespace(fetch_member=AsyncMock(return_value=member))
         interaction = SimpleNamespace(guild_id=1, guild=guild, user=SimpleNamespace(id=1),
             permissions=SimpleNamespace(manage_guild=True, administrator=False),
-            response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+            followup=SimpleNamespace(send=AsyncMock()),
+            edit_original_response=AsyncMock(), response=responding())
         await ConfirmUnlink(self.bot, 1, 10).confirm.callback(interaction)
         self.assertIsNone(self.links.lookup(1, 10))
         member.remove_roles.assert_awaited_once()
@@ -84,9 +103,10 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         self.links.verified_link(1, 10, identity, "admin:1")
         interaction = SimpleNamespace(guild_id=1, user=SimpleNamespace(id=22),
             permissions=SimpleNamespace(manage_guild=False, administrator=False),
-            response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+            followup=SimpleNamespace(send=AsyncMock()),
+            edit_original_response=AsyncMock(), response=responding())
         await ConfirmUnlink(self.bot, 1, 10).confirm.callback(interaction)
-        interaction.response.send_message.assert_awaited()  # denied
+        interaction.followup.send.assert_awaited()  # denied, after the click was taken
         self.assertEqual(self.links.lookup(1, 10), identity)
 
     def test_find_candidates_groups_playtime_and_orders_by_most_played(self):
@@ -113,10 +133,11 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         select._values = [ident]
         i = SimpleNamespace(guild_id=1, user=SimpleNamespace(id=1),
             permissions=SimpleNamespace(manage_guild=True, administrator=False),
-            response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+            followup=SimpleNamespace(send=AsyncMock()),
+            edit_original_response=AsyncMock(), response=responding())
         await select.callback(i)
         self.assertEqual(self.links.lookup(1, 10), ident)
-        i.response.edit_message.assert_awaited()
+        i.edit_original_response.assert_awaited()
 
     async def test_force_link_requires_admin(self):
         ident = "11111111-2222-3333-4444-555555555555"
@@ -126,9 +147,10 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
         select._values = [ident]
         i = SimpleNamespace(guild_id=1, user=SimpleNamespace(id=2),
             permissions=SimpleNamespace(manage_guild=False, administrator=False),
-            response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+            followup=SimpleNamespace(send=AsyncMock()),
+            edit_original_response=AsyncMock(), response=responding())
         await select.callback(i)
-        i.response.send_message.assert_awaited()  # denied
+        i.followup.send.assert_awaited()  # denied, after the click was taken
         self.assertIsNone(self.links.lookup(1, 10))
 
     async def test_identity_id_is_accepted_when_a_name_is_ambiguous(self):
