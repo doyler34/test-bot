@@ -133,9 +133,11 @@ class NotificationBot(TimerBot):
         self.leaderboard_display.register()
         from bot.discord.link_review import AdminPanelView, ReviewButtons
         from bot.discord.factions import FactionView
+        from bot.discord.onboarding import OnboardingView
         self.add_view(AdminPanelView(self))
         self.add_view(ReviewButtons(self))
         self.add_view(FactionView(self))
+        self.add_view(OnboardingView(self))
         self._jobs.append(asyncio.create_task(self.rank_command.register()))
 
     async def on_message(self, message):
@@ -177,6 +179,17 @@ class NotificationBot(TimerBot):
                         await prepare_faction_picker(self, guild, target)
                 except Exception:
                     logger.exception("Faction picker unavailable; check Manage Roles")
+                try:
+                    from bot.config import onboarding_channel_id
+                    from bot.discord.onboarding import prepare_onboarding
+                    start = onboarding_channel_id()
+                    target = guild.get_channel(start) if start else None
+                    if start and not isinstance(target, discord.TextChannel):
+                        logger.warning("ONBOARDING_CHANNEL_ID %s is not a text channel I can see", start)
+                    elif isinstance(target, discord.TextChannel):
+                        await prepare_onboarding(self, guild, target)
+                except Exception:
+                    logger.exception("Onboarding panel unavailable; check Manage Roles/Channels")
                 try:
                     from bot.discord.link_review import prepare_review_channel
                     await prepare_review_channel(self, guild)

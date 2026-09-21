@@ -55,6 +55,23 @@ def game_leaderboard_channel_id() -> int | None:
     return _channel_id("GAME_LEADERBOARD_CHANNEL_ID", MATCH_LEADERBOARD_CHANNEL)
 
 
+def onboarding_channel_id() -> int | None:
+    """Where the three-step Start here panel lives. Unset leaves it unposted."""
+    return _channel_id("ONBOARDING_CHANNEL_ID", None)
+
+
+def member_role_name() -> str:
+    """The role that accepting the rules grants. This is what channel
+    permissions should key off, so a bot outage leaves the gate shut."""
+    return os.getenv("MEMBER_ROLE_NAME", "OYB Member").strip() or "OYB Member"
+
+
+def unverified_role_name() -> str:
+    """A label for members still at the gate. Removed once they verify. Nothing
+    should depend on it for access - see MEMBER_ROLE_NAME."""
+    return os.getenv("UNVERIFIED_ROLE_NAME", "Unverified").strip()
+
+
 def live_board_channel_id() -> int | None:
     """Where a running match's self-updating board lives. Unset turns the live
     board off. Point it at the results channel and the live message becomes that
