@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import discord
 
 from bot.storage.account_links import AccountLinks
-from bot.discord.onboarding import (MARKER, by_name, ensure_member_role, grantable,
-                                    panel_embed, progress, verify)
+from bot.discord.onboarding import (MARKER, NO_FACTION, by_name, ensure_member_role,
+                                    grantable, panel_embed, progress, verify)
 
 IDENTITY = '11111111-2222-3333-4444-555555555555'
 
@@ -84,32 +84,44 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("You're in", await verify(self.bot, self.guild, self.member))
         self.member.add_roles.assert_awaited_once()
 
-    def test_progress_walks_the_three_steps(self):
+    def test_progress_starts_with_both_steps_open(self):
         text = progress(self.bot, self.guild, self.member)
-        self.assertIn('⬜ **1.**', text)
-        self.assertIn('⬜ **2.**', text)
-        self.assertIn('⬜ **3.**', text)
+        self.assertIn('⬜ **1.** Reforger account', text)
+        self.assertIn('⬜ **2.** Side', text)
         self.assertIn('stay **OYB Renegade**', text)
 
     def test_progress_ticks_what_is_done(self):
         self.member.roles = [self.member_role, self.us]
         self.links.save_faction_role(1, 'US', self.us.id)
-        self.links.verified_link(1, 5, IDENTITY, 'admin:9')
+        self.links.verified_link(1, 5, IDENTITY, 'auto:tracker')
         text = progress(self.bot, self.guild, self.member)
-        self.assertIn('✅ **1.**', text)
-        self.assertIn('✅ **2.**', text)
-        self.assertIn('**US**', text)
-        self.assertIn('✅ **3.**', text)
-        self.assertIn('All done', text)
+        self.assertIn('✅ **1.** Reforger account linked (1)', text)
+        self.assertIn('✅ **2.** Side — **US**', text)
+        self.assertIn('You are in', text)
         self.assertIn('OYB Recruit', text)
         self.assertNotIn('Renegade', text)
 
-    def test_the_panel_carries_its_marker_and_the_three_steps(self):
+    def test_choosing_no_side_counts_as_done(self):
+        # Staying Renegade on purpose is a decision, not an unfinished step.
+        self.links.verified_link(1, 5, IDENTITY, 'auto:tracker')
+        self.links.set_faction(1, 5, NO_FACTION)
+        text = progress(self.bot, self.guild, self.member)
+        self.assertIn('✅ **2.** Side — none, by choice', text)
+        self.assertIn('stay **OYB Renegade**', text)
+
+    def test_a_link_waiting_on_an_admin_says_so(self):
+        self.links.verified_link(1, 5, IDENTITY, 'admin:9')
+        self.member.roles = []          # no member role yet
+        text = progress(self.bot, self.guild, self.member)
+        self.assertIn('waiting on an admin', text)
+
+    def test_the_panel_leads_with_the_link_because_that_is_the_gate(self):
         embed = panel_embed()
         self.assertEqual(embed.footer.text, MARKER)
-        for step in ('**1. Accept the rules.**', '**2. Pick your faction**',
-                     '**3. Link your Reforger account.**'):
+        for step in ('**1. Link your Reforger account.**', '**2. Pick your side**',
+                     '**No faction**'):
             self.assertIn(step, embed.description)
+        self.assertIn('opens up the rest of the server', embed.description)
         self.assertLessEqual(len(embed.description), 4096)
 
     async def test_the_member_role_is_created_when_it_is_missing(self):
@@ -148,6 +160,24 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {'ONBOARDING_CHANNEL_ID': '777'}):
             # A mention, so it stays a working link wherever it is quoted.
             self.assertEqual(linking_channel(), '<#777>')
+
+    def test_an_auto_link_still_shows_a_name_on_the_boards(self):
+        # Boards read a player's name from their approved request, so linking
+        # without writing one would print "Member 5" on every leaderboard.
+        from bot.storage.combat_store import migrate, NAME
+        migrate(self.links.db)
+        self.links.auto_link(1, 5, IDENTITY, 'Test Player', 'TestDiscord')
+        self.assertEqual(self.links.identities(1, 5), [IDENTITY])
+        row = self.links.db.execute(
+            f'SELECT {NAME} FROM account_links a WHERE a.guild=1').fetchone()
+        self.assertEqual(row[0], 'Test Player')
+
+    def test_an_auto_link_refuses_an_account_someone_else_holds(self):
+        from bot.storage.account_links import LinkConflict
+        self.links.auto_link(1, 5, IDENTITY, 'Test Player')
+        with self.assertRaises(LinkConflict):
+            self.links.auto_link(1, 6, IDENTITY, 'Impostor')
+        self.assertEqual(self.links.owner(1, IDENTITY), 5)
 
     def test_grantable_refuses_managed_and_missing_roles(self):
         self.assertTrue(grantable(self.guild, self.member_role))

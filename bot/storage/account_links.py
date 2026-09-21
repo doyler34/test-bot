@@ -131,6 +131,28 @@ class AccountLinks:
                             (token, guild, discord_id, identity, name, time.time(), discord_name))
         return token
 
+    def auto_link(self, guild, discord_id, identity, name, discord_name=""):
+        """Link a member the tracker already identified, with no admin step.
+
+        The approved request is written alongside the link because that row is
+        where every board reads a player's name from; without it a linked
+        player shows up as their Discord id.
+        """
+        identity = str(uuid.UUID(identity))
+        token = uuid.uuid4().hex
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            owner = self.owner(guild, identity)
+            if owner is not None:
+                raise LinkConflict("That game account is already linked to another member. Contact an admin.")
+            self._insert_link(guild, discord_id, identity, "auto:tracker")
+            self.db.execute("UPDATE link_requests SET status='replaced' WHERE guild=? AND discord_id=? AND status='pending'", (guild, discord_id))
+            self.db.execute("INSERT INTO link_requests"
+                            "(token,guild,discord_id,identity,name,status,created,reviewer,discord_name)"
+                            " VALUES (?,?,?,?,?,'approved',?,NULL,?)",
+                            (token, guild, discord_id, identity, name, time.time(), discord_name))
+        return token
+
     def pending(self, guild):
         return self.db.execute("SELECT token,discord_id,identity,name,discord_name FROM link_requests WHERE guild=? AND status='pending' ORDER BY created LIMIT 25", (guild,)).fetchall()
 

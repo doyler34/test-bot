@@ -15,6 +15,9 @@ from bot.discord.join_oyb import LinkModal
 
 LOG = logging.getLogger('reforger.onboarding')
 MARKER = 'OYB • Start here'
+# Recorded when somebody chooses to stay Renegade, so the checklist can tell a
+# deliberate choice apart from a step nobody has got round to yet.
+NO_FACTION = 'NONE'
 
 
 def by_name(guild, name):
@@ -83,17 +86,24 @@ def progress(bot, guild, member):
     verified = member_role is not None and member_role in member.roles
     faction = current_faction(bot, guild, member)
     identities = links.identities(guild.id, member.id)
-    lines = [f"{'✅' if verified else '⬜'} **1.** Rules accepted",
-             f"{'✅' if faction else '⬜'} **2.** Faction" + (f" — **{faction}**" if faction else '')]
+    chose = links.faction(guild.id, member.id) == NO_FACTION
     if identities:
-        lines.append(f"✅ **3.** Reforger account linked ({len(identities)})")
+        lines = [f'✅ **1.** Reforger account linked ({len(identities)})']
     else:
-        lines.append('⬜ **3.** Reforger account — ' +
-                     links.status(guild.id, member.id).split('.')[0].lower())
-    if verified and faction and identities:
-        lines.append('\nAll done. ' + bot.rank_sync.status(member.id))
-    elif not faction:
-        lines.append('\nYou stay **OYB Renegade** until you pick a side.')
+        lines = ['⬜ **1.** Reforger account — ' +
+                 links.status(guild.id, member.id).split('.')[0].lower()]
+    if faction:
+        lines.append(f'✅ **2.** Side — **{faction}**')
+    elif chose:
+        lines.append('✅ **2.** Side — none, by choice')
+    else:
+        lines.append('⬜ **2.** Side — not picked')
+    if identities and verified:
+        lines.append('\nYou are in. ' + bot.rank_sync.status(member.id))
+    elif identities and not verified:
+        lines.append('\nYour link is in and waiting on an admin.')
+    if not faction:
+        lines.append('You stay **OYB Renegade** without a side.')
     return '\n'.join(lines)
 
 
@@ -103,6 +113,7 @@ class OnboardingView(discord.ui.View):
         self.bot = bot
         for name, _, emoji in FACTIONS:
             self.add_item(self._faction(name, emoji))
+        self.add_item(self._no_faction())
 
     async def interaction_check(self, interaction):
         if interaction.guild_id == self.bot.config.guild_id:
@@ -133,17 +144,27 @@ class OnboardingView(discord.ui.View):
         button.callback = pick
         return button
 
-    @discord.ui.button(label='1. Accept the rules', row=0, style=discord.ButtonStyle.success,
-                       custom_id='oyb:onboard:verify')
-    async def accept(self, interaction, button):
-        await ack(interaction)
-        try:
-            text = await verify(self.bot, interaction.guild, interaction.user)
-        except discord.Forbidden:
-            text = 'I need Manage Roles for that, and my role must sit above the member role.'
-        await say(interaction, text)
+    def _no_faction(self):
+        """Staying Renegade on purpose is a choice, not an unfinished step."""
+        button = discord.ui.Button(label='No faction', row=1,
+                                   style=discord.ButtonStyle.secondary,
+                                   custom_id='oyb:onboard:faction:none')
 
-    @discord.ui.button(label='3. Link Reforger account', row=0, style=discord.ButtonStyle.primary,
+        async def skip(interaction):
+            await ack(interaction)
+            held = current_faction(self.bot, interaction.guild, interaction.user)
+            if held is not None:
+                await say(interaction,
+                          f"You're already **{held}**. Ask an admin if you want that removed.")
+                return
+            self.bot.account_links.set_faction(interaction.guild_id, interaction.user.id, NO_FACTION)
+            await say(interaction, 'No side for you then. You stay **OYB Renegade** — press a '
+                                   'faction any time you change your mind.')
+
+        button.callback = skip
+        return button
+
+    @discord.ui.button(label='1. Link Reforger account', row=0, style=discord.ButtonStyle.success,
                        custom_id='oyb:onboard:link')
     async def link(self, interaction, button):
         await interaction.response.send_modal(LinkModal(self.bot))
@@ -156,14 +177,15 @@ class OnboardingView(discord.ui.View):
 
 def panel_embed():
     return discord.Embed(title='Start here', colour=0xA9BC8C, description=(
-        'Three steps and you\'re playing.\n\n'
-        '**1. Accept the rules.** Opens up the rest of the server.\n\n'
-        '**2. Pick your faction** — US, USSR or FIA. Colours your name, gets you into that '
-        'side\'s channels, and takes you off **OYB Renegade**. You\'re locked to it after, so '
-        'pick the one your mates are on.\n\n'
-        '**3. Link your Reforger account.** Put in your in-game name or your player ID. An '
-        'admin approves it and your kills, deaths and playtime start counting towards your rank '
-        'and the leaderboards.\n\n'
+        '**1. Link your Reforger account.** Play a round on one of our servers first so we can '
+        'find you, then press the button and put in your in-game name or your player ID.\n\n'
+        'If the name is yours and nobody has claimed it, you are in straight away. If we cannot '
+        'match it, it goes to an admin to sort out.\n\n'
+        '**This is what opens up the rest of the server**, and it starts your kills, deaths and '
+        'playtime counting towards your rank and the leaderboards.\n\n'
+        '**2. Pick your side** — US, USSR or FIA. Colours your name, gets you into that side\'s '
+        'channels, and takes you off **OYB Renegade**. You are locked to it after, so pick the '
+        'one your mates are on. Not fussed? Press **No faction** and stay Renegade.\n\n'
         'Stuck? Press **My progress** to see what you still need.')
     ).set_footer(text=MARKER)
 

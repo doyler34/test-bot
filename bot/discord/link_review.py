@@ -169,6 +169,11 @@ class ReviewButtons(discord.ui.View):
             await say(interaction, str(exc))
             await self._settle_conflict(interaction, token, str(exc))
             return
+        if approve:
+            from bot.discord.join_oyb import grant_member
+            row = self.bot.account_links.request(interaction.guild_id, token)
+            if row:
+                await grant_member(self.bot, interaction.guild, row[0])
         embed = interaction.message.embeds[0]
         embed.colour = discord.Colour(0x2ECC71 if approve else 0xE74C3C)
         embed.add_field(name="✅ Approved" if approve else "🚫 Rejected",
@@ -230,6 +235,32 @@ def admin_panel_embed(links, guild_id):
         "Only staff can see this channel."))
     embed.set_footer(text=CONTROL_MARKER)
     return embed
+
+
+async def post_auto_link(bot, guild, discord_id, identity, name):
+    """Tell the reviewers a link went through on its own.
+
+    No buttons: there is nothing to decide. It is here so the channel is a
+    complete record of who got linked and how, and so a wrong one can be
+    spotted and undone with Remove a link.
+    """
+    cfg = bot.account_links.review_settings(guild.id)
+    channel = guild.get_channel(cfg["channel"]) if cfg["channel"] else None
+    if not isinstance(channel, discord.TextChannel):
+        return False
+    embed = discord.Embed(colour=0x2ECC71, description=(
+        f"<@{discord_id}> linked to **{discord.utils.escape_markdown(name)}**\n"
+        f"Game identity: `{identity}`\n\n"
+        "Matched one tracked player that nobody had claimed, so it went through "
+        "without review. Use **Remove a link** if that is wrong."))
+    embed.set_footer(text="OYB • Linked automatically")
+    try:
+        await channel.send(embed=embed, silent=True,
+                           allowed_mentions=discord.AllowedMentions.none())
+        return True
+    except discord.HTTPException:
+        LOG.warning("Could not post the auto-link notice for %s", discord_id)
+        return False
 
 
 async def prepare_review_channel(bot, guild):
