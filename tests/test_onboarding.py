@@ -1,5 +1,6 @@
 """The Start here panel: verifying, picking a side, and reporting progress."""
 import os
+import sqlite3
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -185,3 +186,62 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(grantable(self.guild, role(30, 'Booster', managed=True)))
         self.guild.me.guild_permissions.manage_roles = False
         self.assertFalse(grantable(self.guild, self.member_role))
+
+
+class ReviewerFallbackTests(unittest.TestCase):
+    """A name the tracker cannot place goes to a reviewer, not a dead end."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / 'links.db'
+        self.links = AccountLinks(self.path)
+        self.addCleanup(self.links.close)
+
+    def test_a_request_can_wait_without_a_matched_account(self):
+        token = self.links.submit_unresolved(1, 5, 'NeverPlayed', 'SomeNick')
+        discord_id, identity, name, status, discord_name = self.links.request(1, token)
+        self.assertEqual((discord_id, identity, name, status), (5, None, 'NeverPlayed', 'pending'))
+        self.assertEqual(discord_name, 'SomeNick')
+        self.assertEqual([r[0] for r in self.links.pending(1)], [token])
+
+    def test_approving_one_with_nothing_matched_says_to_force_link(self):
+        from bot.storage.account_links import LinkConflict
+        token = self.links.submit_unresolved(1, 5, 'NeverPlayed')
+        with self.assertRaises(LinkConflict) as caught:
+            self.links.review(1, token, 99, True)
+        self.assertIn('Force-link', str(caught.exception))
+        # Still pending, so the reviewer has not lost it.
+        self.assertEqual(self.links.request(1, token)[3], 'pending')
+
+    def test_rejecting_one_closes_it(self):
+        token = self.links.submit_unresolved(1, 5, 'NeverPlayed')
+        self.links.review(1, token, 99, False)
+        self.assertEqual(self.links.request(1, token)[3], 'rejected')
+
+    def test_force_linking_closes_whatever_they_asked_for(self):
+        token = self.links.submit_unresolved(1, 5, 'NeverPlayed')
+        self.links.verified_link(1, 5, IDENTITY, 'admin:99')
+        self.links.close_requests(1, 5)
+        self.assertEqual(self.links.request(1, token)[3], 'approved')
+        self.assertEqual(self.links.pending(1), [])
+
+    def test_an_old_database_is_rebuilt_to_allow_it(self):
+        # The live database predates this and declared identity NOT NULL, so
+        # the migration has to run against that exact shape.
+        self.links.close()
+        old = Path(self.tmp.name) / 'old.db'
+        db = sqlite3.connect(old)
+        db.executescript('''CREATE TABLE link_requests (
+            token TEXT PRIMARY KEY, guild INTEGER NOT NULL, discord_id INTEGER NOT NULL,
+            identity TEXT NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL,
+            created REAL NOT NULL, reviewer INTEGER);''')
+        db.execute("INSERT INTO link_requests VALUES ('t',1,5,?,'Old','approved',0,9)", (IDENTITY,))
+        db.commit(); db.close()
+        links = AccountLinks(old)
+        self.addCleanup(links.close)
+        # The existing row survived...
+        self.assertEqual(links.request(1, 't')[1], IDENTITY)
+        # ...and an unmatched one can now be stored.
+        token = links.submit_unresolved(1, 6, 'NeverPlayed')
+        self.assertIsNone(links.request(1, token)[1])

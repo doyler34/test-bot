@@ -332,11 +332,17 @@ async def post_request_alert(bot, guild, token):
     discord_id, identity, name, _status, discord_name = request
     role = guild.get_role(cfg["reviewer_role"]) if cfg["reviewer_role"] else None
     who = discord.utils.escape_markdown(discord_name) + " " if discord_name else ""
+    if identity:
+        detail = (f"**Game identity:** `{identity}`\n\n"
+                  "Confirm ownership in-game before approving — a matching name alone is not proof.")
+    else:
+        detail = ("**Game identity:** not matched\n\n"
+                  "The tracker has no single player under that name, so there is nothing to "
+                  "approve. Use **Force-link** to pick their account, or **Reject** if they have "
+                  "not played here.")
     embed = discord.Embed(title="🔗 New link request", colour=0xF1C40F, description=(
         f"**Member:** {who}<@{discord_id}> (`{discord_id}`)\n"
-        f"**Reforger name:** {discord.utils.escape_markdown(name)}\n"
-        f"**Game identity:** `{identity}`\n\n"
-        "Confirm ownership in-game before approving — a matching name alone is not proof."))
+        f"**Reforger name:** {discord.utils.escape_markdown(name)}\n" + detail))
     embed.set_footer(text=TOKEN_PREFIX + token)
     await channel.send(
         content=role.mention if role else None, embed=embed, view=ReviewButtons(bot),

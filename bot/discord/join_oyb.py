@@ -132,6 +132,21 @@ class LinkModal(discord.ui.Modal, title="Link your Reforger account"):
                 "Your kills, deaths and playtime count from now on, and everything you have "
                 "already played is counted too.")
 
+    async def _ask_a_reviewer(self, interaction, typed, reason):
+        """Queue what they typed for an admin to place by hand."""
+        try:
+            token = self.bot.account_links.submit_unresolved(
+                interaction.guild_id, interaction.user.id, typed, interaction.user.display_name)
+        except LinkConflict as exc:
+            return str(exc)
+        try:
+            from bot.discord.link_review import post_request_alert
+            await post_request_alert(self.bot, interaction.guild, token)
+        except Exception:
+            LOG.exception("Could not post link-request alert for %s", interaction.user.id)
+        return (f"{reason}\n\nI've passed it to an admin to sort out — they'll match you up "
+                "and you'll hear back. Use **My progress** to check.")
+
     async def on_submit(self, interaction):
         if interaction.guild_id != self.bot.config.guild_id:
             await interaction.response.send_message("Use this in the OYB server.", ephemeral=True)
@@ -142,10 +157,13 @@ class LinkModal(discord.ui.Modal, title="Link your Reforger account"):
             identity = resolve_identity(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"), typed)
             name = known_name(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3"), identity) or typed
             # The tracker matched one player and nobody has claimed them, so
-            # there is nothing for an admin to weigh up. Anything less certain
-            # still goes to the queue below.
+            # there is nothing for an admin to weigh up.
             text = await self._link_now(interaction, identity, name)
-        except (ValueError, LinkConflict) as exc:
+        except ValueError as exc:
+            # No match, or more than one. Neither is the member's problem to
+            # solve, so a reviewer picks it up rather than them hitting a wall.
+            text = await self._ask_a_reviewer(interaction, typed, str(exc))
+        except LinkConflict as exc:
             text = str(exc)
         except sqlite3.Error:
             text = "The playtime tracker is not ready yet. Please try again shortly."
@@ -300,6 +318,10 @@ class ForceLinkChoice(discord.ui.View):
             try:
                 bot.account_links.verified_link(interaction.guild_id, self.discord_id, identity,
                                                 f"admin:{interaction.user.id}")
+                # Whatever they asked for is now settled, and the link is what
+                # opens the server up.
+                bot.account_links.close_requests(interaction.guild_id, self.discord_id)
+                await grant_member(bot, interaction.guild, self.discord_id)
                 text = f"✅ Linked <@{self.discord_id}> to `{identity}`."
             except LinkConflict as exc:
                 text = f"⚠️ {exc}\nUse **Admin: remove a link** first if you need to move it."

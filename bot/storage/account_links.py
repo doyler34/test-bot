@@ -34,7 +34,7 @@ class AccountLinks:
         self._widen_links()
         self.db.executescript('''CREATE TABLE IF NOT EXISTS link_requests (
             token TEXT PRIMARY KEY, guild INTEGER NOT NULL, discord_id INTEGER NOT NULL,
-            identity TEXT NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL,
+            identity TEXT, name TEXT NOT NULL, status TEXT NOT NULL,
             created REAL NOT NULL, reviewer INTEGER);
             CREATE TABLE IF NOT EXISTS join_channel (
             guild INTEGER PRIMARY KEY, channel INTEGER NOT NULL, message INTEGER);
@@ -47,6 +47,7 @@ class AccountLinks:
             guild INTEGER NOT NULL, faction TEXT NOT NULL, role INTEGER NOT NULL,
             PRIMARY KEY(guild, faction));
         ''')
+        self._open_requests()
         # Older databases predate the stored Discord display name.
         if "discord_name" not in {r[1] for r in self.db.execute("PRAGMA table_info(link_requests)")}:
             self.db.execute("ALTER TABLE link_requests ADD COLUMN discord_name TEXT")
@@ -69,6 +70,49 @@ class AccountLinks:
             self.db.execute("DROP TABLE account_links")
             self.db.execute("ALTER TABLE account_links_v2 RENAME TO account_links")
         LOG.info("account_links rebuilt: a member may now hold one identity per platform")
+
+    def _open_requests(self):
+        """Older databases demanded an identity on every request, which left
+        nowhere to put one the tracker could not match. Those are exactly the
+        ones a reviewer needs to see, so let the column be empty."""
+        sql = self.db.execute("SELECT sql FROM sqlite_master WHERE name='link_requests'").fetchone()
+        if not sql or "identityTEXTNOTNULL" not in sql[0].replace(" ", ""):
+            return
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            columns = [r[1] for r in self.db.execute("PRAGMA table_info(link_requests)")]
+            self.db.execute("""CREATE TABLE link_requests_v2 (
+                token TEXT PRIMARY KEY, guild INTEGER NOT NULL, discord_id INTEGER NOT NULL,
+                identity TEXT, name TEXT NOT NULL, status TEXT NOT NULL,
+                created REAL NOT NULL, reviewer INTEGER, discord_name TEXT)""")
+            names = ",".join(columns)
+            extra = "" if "discord_name" in columns else ",NULL"
+            self.db.execute(f"INSERT INTO link_requests_v2 SELECT {names}{extra} FROM link_requests")
+            self.db.execute("DROP TABLE link_requests")
+            self.db.execute("ALTER TABLE link_requests_v2 RENAME TO link_requests")
+        LOG.info("link_requests rebuilt: a request may now wait without a matched account")
+
+    def submit_unresolved(self, guild, discord_id, name, discord_name=""):
+        """Queue a request for a member the tracker cannot place, so a reviewer
+        sees it instead of the member hitting a dead end."""
+        token = uuid.uuid4().hex
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            if len(self.identities(guild, discord_id)) >= MAX_IDENTITIES:
+                raise LinkConflict(f"You already have {MAX_IDENTITIES} linked game accounts.")
+            self.db.execute("UPDATE link_requests SET status='replaced' WHERE guild=? AND discord_id=? AND status='pending'", (guild, discord_id))
+            self.db.execute("INSERT INTO link_requests"
+                            "(token,guild,discord_id,identity,name,status,created,reviewer,discord_name)"
+                            " VALUES (?,?,?,NULL,?,'pending',?,NULL,?)",
+                            (token, guild, discord_id, name, time.time(), discord_name))
+        return token
+
+    def close_requests(self, guild, discord_id):
+        """Mark a member's pending request handled, for when an admin links them
+        by hand rather than pressing Approve."""
+        with self.db:
+            self.db.execute("UPDATE link_requests SET status='approved' WHERE guild=? AND discord_id=? AND status='pending'",
+                            (guild, discord_id))
 
     def identities(self, guild, discord_id):
         """Every game account this member holds, oldest link first. The first
@@ -163,6 +207,9 @@ class AccountLinks:
             if not row:
                 raise LinkConflict("This request has already been handled or replaced.")
             if approve:
+                if row[1] is None:
+                    raise LinkConflict("No game account was matched for this one. "
+                                       "Use Force-link to pick their account, which closes this request.")
                 self._insert_link(guild, row[0], row[1], f"admin:{reviewer}")
             self.db.execute("UPDATE link_requests SET status=?,reviewer=? WHERE token=?",
                             ("approved" if approve else "rejected", reviewer, token))

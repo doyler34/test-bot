@@ -131,7 +131,7 @@ class JoinTests(unittest.IsolatedAsyncioTestCase):
                                candidates=[dict(identity=ident, seconds=5400, servers="s1")])
         select = view.children[0]
         select._values = [ident]
-        i = SimpleNamespace(guild_id=1, user=SimpleNamespace(id=1),
+        i = SimpleNamespace(guild_id=1, guild=None, user=SimpleNamespace(id=1),
             permissions=SimpleNamespace(manage_guild=True, administrator=False),
             followup=SimpleNamespace(send=AsyncMock()),
             edit_original_response=AsyncMock(), response=responding())
