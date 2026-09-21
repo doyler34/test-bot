@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import discord
 
 from bot.storage.account_links import AccountLinks
-from bot.discord.onboarding import MARKER, by_name, grantable, panel_embed, progress, verify
+from bot.discord.onboarding import (MARKER, by_name, ensure_member_role, grantable,
+                                    panel_embed, progress, verify)
 
 IDENTITY = '11111111-2222-3333-4444-555555555555'
 
@@ -110,6 +111,34 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
                      '**3. Link your Reforger account.**'):
             self.assertIn(step, embed.description)
         self.assertLessEqual(len(embed.description), 4096)
+
+    async def test_the_member_role_is_created_when_it_is_missing(self):
+        # A new role lands below the bot's own, so it is grantable straight away.
+        made = role(40, 'OYB Member')
+        self.guild.roles = [self.unverified]
+        self.guild.create_role = AsyncMock(return_value=made)
+        self.assertIs(await ensure_member_role(self.guild), made)
+        self.assertEqual(self.guild.create_role.await_args.kwargs['name'], 'OYB Member')
+        self.assertEqual(self.guild.create_role.await_args.kwargs['permissions'],
+                         discord.Permissions.none())
+
+    async def test_an_existing_member_role_is_adopted_not_duplicated(self):
+        self.guild.create_role = AsyncMock()
+        self.assertIs(await ensure_member_role(self.guild), self.member_role)
+        self.guild.create_role.assert_not_awaited()
+
+    async def test_duplicates_are_left_alone_rather_than_made_worse(self):
+        self.guild.roles = [role(10, 'OYB Member'), role(20, 'OYB Member')]
+        self.guild.create_role = AsyncMock()
+        self.assertIsNone(await ensure_member_role(self.guild))
+        self.guild.create_role.assert_not_awaited()
+
+    async def test_no_manage_roles_means_no_role_and_no_crash(self):
+        self.guild.roles = []
+        self.guild.me.guild_permissions.manage_roles = False
+        self.guild.create_role = AsyncMock()
+        self.assertIsNone(await ensure_member_role(self.guild))
+        self.guild.create_role.assert_not_awaited()
 
     def test_grantable_refuses_managed_and_missing_roles(self):
         self.assertTrue(grantable(self.guild, self.member_role))

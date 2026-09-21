@@ -34,6 +34,28 @@ def grantable(guild, role):
             and not role.managed and role < me.top_role)
 
 
+async def ensure_member_role(guild):
+    """Create the member role if it is missing, the way the rank and faction
+    roles are already handled. A new role lands at the bottom of the list,
+    which is below the bot's own, so granting it works without anyone having
+    to reorder anything by hand.
+    """
+    name = member_role_name()
+    existing = by_name(guild, name)
+    if existing is not None:
+        return existing
+    if any(r.name == name for r in guild.roles):
+        return None  # Duplicates: by_name already warned, do not add a third.
+    me = guild.me
+    if me is None or not me.guild_permissions.manage_roles:
+        LOG.warning('Cannot create %r without Manage Roles', name)
+        return None
+    role = await guild.create_role(name=name, permissions=discord.Permissions.none(),
+                                   mentionable=False, reason='OYB onboarding: member role')
+    LOG.info('Created the %r role; point your channel permissions at it', name)
+    return role
+
+
 async def verify(bot, guild, member):
     """Give the member role, take the unverified one. Returns a message to show."""
     member_role = by_name(guild, member_role_name())
@@ -148,6 +170,7 @@ def panel_embed():
 
 async def prepare_onboarding(bot, guild, channel):
     """Post or refresh the panel. Edits our own message rather than piling up."""
+    await ensure_member_role(guild)
     embed, view = panel_embed(), OnboardingView(bot)
     async for message in channel.history(limit=50):
         if message.author.id == bot.user.id and any(
