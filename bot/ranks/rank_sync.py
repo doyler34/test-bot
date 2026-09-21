@@ -35,7 +35,13 @@ class RankSync:
         for tier, name in enumerate(RANKS):
             row = self.db.execute("SELECT role FROM rank_roles_v2 WHERE guild=? AND tier=?",
                                   (guild.id, tier)).fetchone()
-            role = next((r for r in roles if row and r.id == row[0]), None)
+            # The saved id is only trusted while it still carries the rank's
+            # name. A role renamed since - to the member role, say - would
+            # otherwise keep being treated as that rank and stripped off
+            # everybody whose rank has moved on.
+            role = next((r for r in roles if row and r.id == row[0] and r.name == name), None)
+            if row and role is None:
+                LOG.warning("Rank role for %s is no longer called that; finding it again", name)
             if role is None:
                 matches = [r for r in roles if r.name == name]
                 if len(matches) > 1:

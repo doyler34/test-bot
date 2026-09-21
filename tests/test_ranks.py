@@ -73,6 +73,27 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("0 XP", self.sync.status(10))
         self.assertEqual(self.source.execute("SELECT seconds FROM totals").fetchone()[0], 1200)
 
+    async def test_a_renamed_rank_role_is_not_kept_as_that_rank(self):
+        # A rank role renamed to something else - the member role, say - was
+        # still treated as that rank, so it was stripped off everyone whose
+        # rank had moved on. The saved id is only good while the name matches.
+        from bot.ranks.rank_sync import RANKS
+        impostor = role(500, "OYB Member")
+        self.sync.db.execute("INSERT OR REPLACE INTO rank_roles_v2 VALUES (1,0,500)")
+        self.sync.db.commit()
+        self.sync.roles = []
+        proper = role(501, RANKS[0])
+        guild = SimpleNamespace(
+            id=1, me=SimpleNamespace(top_role=role(999, "Bot"),
+                                     guild_permissions=discord.Permissions(manage_roles=True)),
+            fetch_roles=AsyncMock(return_value=[impostor, proper] +
+                                  [role(600 + i, n) for i, n in enumerate(RANKS[1:], 1)]),
+            create_role=AsyncMock())
+        await self.sync.prepare(guild)
+        # Tier 0 is the role actually called that, not the renamed one.
+        self.assertEqual(self.sync.roles[0].id, 501)
+        self.assertNotIn(500, [r.id for r in self.sync.roles])
+
     async def test_no_faction_stays_renegade_however_much_xp(self):
         self.links.db.execute("DELETE FROM faction_choice")
         self.links.db.commit()
