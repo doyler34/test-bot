@@ -59,6 +59,47 @@ async def ensure_member_role(guild):
     return role
 
 
+async def ensure_unverified_role(guild):
+    """Create the label role if it is wanted and missing. Nothing gates on it,
+    so a server that leaves UNVERIFIED_ROLE_NAME blank simply has none."""
+    name = unverified_role_name()
+    if not name:
+        return None
+    existing = by_name(guild, name)
+    if existing is not None:
+        return existing
+    if any(r.name == name for r in guild.roles):
+        return None
+    me = guild.me
+    if me is None or not me.guild_permissions.manage_roles:
+        LOG.warning('Cannot create %r without Manage Roles', name)
+        return None
+    return await guild.create_role(name=name, permissions=discord.Permissions.none(),
+                                   mentionable=False, reason='OYB onboarding: unverified label')
+
+
+async def mark_unverified(bot, guild, member):
+    """Label somebody who has arrived but not linked yet.
+
+    Only a label. Channel access hangs off the member role instead, because a
+    role handed out on join is simply absent while the bot is down, and a gate
+    built on an absent role lets everyone through.
+    """
+    if member.bot:
+        return False
+    if by_name(guild, member_role_name()) in member.roles:
+        return False
+    role = by_name(guild, unverified_role_name())
+    if not grantable(guild, role) or role in member.roles:
+        return False
+    try:
+        await member.add_roles(role, reason='OYB onboarding: not linked yet')
+        return True
+    except discord.HTTPException:
+        LOG.warning('Could not label %s unverified', member.id)
+        return False
+
+
 async def verify(bot, guild, member):
     """Give the member role, take the unverified one. Returns a message to show."""
     member_role = by_name(guild, member_role_name())
@@ -193,6 +234,7 @@ def panel_embed():
 async def prepare_onboarding(bot, guild, channel):
     """Post or refresh the panel. Edits our own message rather than piling up."""
     await ensure_member_role(guild)
+    await ensure_unverified_role(guild)
     embed, view = panel_embed(), OnboardingView(bot)
     async for message in channel.history(limit=50):
         if message.author.id == bot.user.id and any(

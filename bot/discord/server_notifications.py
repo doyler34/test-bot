@@ -140,6 +140,17 @@ class NotificationBot(TimerBot):
         self.add_view(OnboardingView(self))
         self._jobs.append(asyncio.create_task(self.rank_command.register()))
 
+    async def on_member_join(self, member):
+        """Label an arrival so staff can see who is still at the gate. Needs
+        ENABLE_MEMBERS_INTENT; without it Discord never sends this event."""
+        if member.guild.id != self.config.guild_id:
+            return
+        try:
+            from bot.discord.onboarding import mark_unverified
+            await mark_unverified(self, member.guild, member)
+        except Exception:
+            logger.exception("Could not label %s unverified", member.id)
+
     async def on_message(self, message):
         await award_message(self, message)
 

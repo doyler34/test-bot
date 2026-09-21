@@ -7,6 +7,11 @@ changes nothing until you pass --apply. Run on the bot host:
     cd ~/Arma-bot && .venv/bin/python dev/grant_role.py "OYB Member"
     cd ~/Arma-bot && .venv/bin/python dev/grant_role.py "OYB Member" --apply
 
+--unless skips anyone who already holds another role, which is how you label
+only the members who have not been let in yet:
+
+    .venv/bin/python dev/grant_role.py "Unverified" --unless "OYB Member" --apply
+
 Needs ENABLE_MEMBERS_INTENT=true in .env and the Server Members Intent ticked
 in the Developer Portal, otherwise Discord will not hand over the member list.
 Bots are skipped unless you pass --bots.
@@ -26,6 +31,10 @@ flags = {a for a in sys.argv[1:] if a.startswith("--")}
 name = args[0] if args else "OYB Member"
 apply = "--apply" in flags
 include_bots = "--bots" in flags
+skip_holders_of = None
+for index, arg in enumerate(sys.argv):
+    if arg == "--unless" and index + 1 < len(sys.argv):
+        skip_holders_of = sys.argv[index + 1]
 
 token = os.getenv("DISCORD_BOT_TOKEN")
 guild_id = os.getenv("GUILD_ID")
@@ -59,10 +68,21 @@ async def on_ready():
             print(f"{name!r} sits at or above the bot's own role; move the bot above it first.")
             return
 
+        spared = None
+        if skip_holders_of:
+            found = [r for r in roles if r.name == skip_holders_of]
+            if len(found) != 1:
+                print(f"--unless {skip_holders_of!r}: found {len(found)} roles by that name.")
+                return
+            spared = found[0]
+
         members = [m async for m in guild.fetch_members(limit=None)]
-        missing = [m for m in members if role not in m.roles and (include_bots or not m.bot)]
+        missing = [m for m in members if role not in m.roles and (include_bots or not m.bot)
+                   and (spared is None or spared not in m.roles)]
         bots = sum(1 for m in members if m.bot)
         print(f"role     : {name} ({role.id})")
+        if spared is not None:
+            print(f"skipping : anyone with {spared.name}")
         print(f"members  : {len(members)} ({bots} bots{'' if include_bots else ', skipped'})")
         print(f"have it  : {len(members) - len(missing) - (0 if include_bots else bots)}")
         print(f"to add   : {len(missing)}")

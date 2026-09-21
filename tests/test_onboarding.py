@@ -180,6 +180,68 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
             self.links.auto_link(1, 6, IDENTITY, 'Impostor')
         self.assertEqual(self.links.owner(1, IDENTITY), 5)
 
+    async def test_an_arrival_is_labelled_unverified(self):
+        from bot.discord.onboarding import mark_unverified
+        self.member.bot = False
+        self.member.roles = []
+        self.assertTrue(await mark_unverified(self.bot, self.guild, self.member))
+        self.assertIs(self.member.add_roles.await_args.args[0], self.unverified)
+
+    async def test_somebody_already_linked_is_not_labelled(self):
+        from bot.discord.onboarding import mark_unverified
+        self.member.bot = False
+        self.member.roles = [self.member_role]
+        self.assertFalse(await mark_unverified(self.bot, self.guild, self.member))
+        self.member.add_roles.assert_not_awaited()
+
+    async def test_bots_and_repeat_labels_are_left_alone(self):
+        from bot.discord.onboarding import mark_unverified
+        self.member.bot = True
+        self.assertFalse(await mark_unverified(self.bot, self.guild, self.member))
+        self.member.bot = False
+        self.member.roles = [self.unverified]        # already carries it
+        self.assertFalse(await mark_unverified(self.bot, self.guild, self.member))
+        self.member.add_roles.assert_not_awaited()
+
+    async def test_no_label_role_configured_is_not_an_error(self):
+        from bot.discord.onboarding import mark_unverified
+        self.member.bot = False
+        self.member.roles = []
+        with patch.dict(os.environ, {'UNVERIFIED_ROLE_NAME': ''}):
+            self.assertFalse(await mark_unverified(self.bot, self.guild, self.member))
+        self.member.add_roles.assert_not_awaited()
+
+    async def test_an_arrival_is_labelled_unverified(self):
+        from bot.discord.onboarding import mark_unverified
+        self.member.bot = False
+        self.member.roles = []
+        self.assertTrue(await mark_unverified(self.bot, self.guild, self.member))
+        self.assertIs(self.member.add_roles.await_args.args[0], self.unverified)
+
+    async def test_somebody_already_linked_is_not_labelled(self):
+        from bot.discord.onboarding import mark_unverified
+        self.member.bot = False
+        self.member.roles = [self.member_role]
+        self.assertFalse(await mark_unverified(self.bot, self.guild, self.member))
+        self.member.add_roles.assert_not_awaited()
+
+    async def test_bots_and_repeat_labels_are_left_alone(self):
+        from bot.discord.onboarding import mark_unverified
+        self.member.bot = True
+        self.assertFalse(await mark_unverified(self.bot, self.guild, self.member))
+        self.member.bot = False
+        self.member.roles = [self.unverified]        # already carries it
+        self.assertFalse(await mark_unverified(self.bot, self.guild, self.member))
+        self.member.add_roles.assert_not_awaited()
+
+    async def test_no_label_role_configured_is_not_an_error(self):
+        from bot.discord.onboarding import mark_unverified
+        self.member.bot = False
+        self.member.roles = []
+        with patch.dict(os.environ, {'UNVERIFIED_ROLE_NAME': ''}):
+            self.assertFalse(await mark_unverified(self.bot, self.guild, self.member))
+        self.member.add_roles.assert_not_awaited()
+
     def test_grantable_refuses_managed_and_missing_roles(self):
         self.assertTrue(grantable(self.guild, self.member_role))
         self.assertFalse(grantable(self.guild, None))
