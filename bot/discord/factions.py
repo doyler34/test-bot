@@ -61,7 +61,12 @@ async def ensure_faction_roles(bot, guild):
 
 
 async def apply_faction(bot, guild, member, faction):
-    """Give the member the chosen faction role, drop the others, and save the pick."""
+    """Give the member the chosen faction role, drop the others, and save the pick.
+
+    Returns the role applied, or None when there is no such role to give. The
+    caller has to say which, because saving a pick the member cannot see any
+    sign of is worse than telling them it did not work.
+    """
     links = bot.account_links
     chosen, remove = None, []
     for name, _, _ in FACTIONS:
@@ -73,11 +78,15 @@ async def apply_faction(bot, guild, member, faction):
             chosen = role
         elif role in member.roles:
             remove.append(role)
+    if chosen is None:
+        LOG.warning("No %s role on this server; not saving the pick", faction)
+        return None
     if remove:
         await member.remove_roles(*remove, reason="OYB faction change")
-    if chosen is not None and chosen not in member.roles:
+    if chosen not in member.roles:
         await member.add_roles(chosen, reason="OYB faction pick")
     links.set_faction(guild.id, member.id, faction)
+    return chosen
 
 
 class FactionView(discord.ui.View):
@@ -103,7 +112,10 @@ class FactionView(discord.ui.View):
                           f"You're locked to **{held}**. Ask an admin if you need to switch sides.")
                 return
             try:
-                await apply_faction(self.bot, interaction.guild, interaction.user, name)
+                if await apply_faction(self.bot, interaction.guild, interaction.user, name) is None:
+                    await say(interaction, f"The **{name}** role is missing on this server. "
+                                           'Ask an admin to restart the bot so it can make it.')
+                    return
                 text = (f"You're **{name}** now, and locked to it. You've got access to the "
                         f"{name} channels — see you out there.")
             except discord.Forbidden:

@@ -125,6 +125,33 @@ class ApplyTests(unittest.IsolatedAsyncioTestCase):
             await view.children[0].callback(interaction)
         applied.assert_awaited_once()
 
+    async def test_a_missing_role_is_not_reported_as_success(self):
+        # It used to save the pick and say "you're US now" with no role given,
+        # so the member saw nothing happen and nobody knew why.
+        from bot.discord.factions import apply_faction
+        self.links.db.execute('DELETE FROM faction_roles')
+        self.links.db.commit()
+        member = SimpleNamespace(id=10, roles=[], add_roles=AsyncMock(), remove_roles=AsyncMock())
+        self.assertIsNone(await apply_faction(self.bot, self.guild, member, 'US'))
+        member.add_roles.assert_not_awaited()
+        # And the pick is not saved, so nothing claims they are US.
+        self.assertIsNone(self.links.faction(1, 10))
+
+    async def test_the_button_says_so_rather_than_claiming_it_worked(self):
+        self.links.db.execute('DELETE FROM faction_roles')
+        self.links.db.commit()
+        view = FactionView(self.bot)
+        interaction = clicked(self.guild, SimpleNamespace(id=10, roles=[]))
+        await view.children[0].callback(interaction)
+        self.assertIn('role is missing', interaction.reply())
+
+    async def test_a_successful_pick_returns_the_role_it_gave(self):
+        from bot.discord.factions import apply_faction
+        member = SimpleNamespace(id=10, roles=[], add_roles=AsyncMock(), remove_roles=AsyncMock())
+        given = await apply_faction(self.bot, self.guild, member, 'US')
+        self.assertIsNotNone(given)
+        self.assertEqual(self.links.faction(1, 10), 'US')
+
     async def test_picker_emoji_are_the_three_flags(self):
         from bot.discord.factions import FACTIONS
         self.assertEqual([e for _, _, e in FACTIONS], ["🇺🇸", "🇷🇺", "🏳️"])

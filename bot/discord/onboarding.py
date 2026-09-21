@@ -9,7 +9,7 @@ import logging
 import discord
 
 from bot.config import member_role_name, unverified_role_name
-from bot.discord.factions import FACTIONS, apply_faction, current_faction
+from bot.discord.factions import FACTIONS, apply_faction, current_faction, ensure_faction_roles
 from bot.discord.interactions import ack, say
 from bot.discord.join_oyb import LinkModal
 
@@ -175,9 +175,11 @@ class OnboardingView(discord.ui.View):
                           f"You're locked to **{held}**. Ask an admin if you need to switch sides.")
                 return
             try:
-                await apply_faction(self.bot, interaction.guild, interaction.user, name)
-                text = (f"You're **{name}** now, and locked to it. That's you off Renegade — "
-                        'step 3, link your game account.')
+                if await apply_faction(self.bot, interaction.guild, interaction.user, name) is None:
+                    await say(interaction, f'The **{name}** role is missing on this server. '
+                                           'Ask an admin to restart the bot so it can make it.')
+                    return
+                text = f"You're **{name}** now, and locked to it. That's you off Renegade."
             except discord.Forbidden:
                 text = 'I need Manage Roles, and my role must sit above the faction roles. Ask an admin.'
             await say(interaction, text)
@@ -235,6 +237,10 @@ async def prepare_onboarding(bot, guild, channel):
     """Post or refresh the panel. Edits our own message rather than piling up."""
     await ensure_member_role(guild)
     await ensure_unverified_role(guild)
+    # The panel offers the faction buttons, so it owns making sure the roles
+    # they hand out exist. They used to be created only by the separate faction
+    # picker, which a server without one configured never sets up.
+    await ensure_faction_roles(bot, guild)
     embed, view = panel_embed(), OnboardingView(bot)
     async for message in channel.history(limit=50):
         if message.author.id == bot.user.id and any(
