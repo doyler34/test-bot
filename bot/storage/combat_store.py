@@ -49,6 +49,10 @@ def migrate(db):
             db.execute('ALTER TABLE combat_events ADD COLUMN damage_type TEXT')
         # Every window query filters on time first.
         db.execute('CREATE INDEX IF NOT EXISTS combat_events_occurred ON combat_events(occurred)')
+        # A match asks for one server over one span. Without this the planner
+        # falls back to the primary key, which narrows by server and then scans
+        # every kill on it - once per match, per member, on every rank tick.
+        db.execute('CREATE INDEX IF NOT EXISTS combat_events_span ON combat_events(server,occurred)')
         # Combat XP is recomputed per member on every rank tick, so both sides
         # of a kill need to be reachable without scanning the table.
         db.execute('CREATE INDEX IF NOT EXISTS combat_events_killer ON combat_events(killer)')

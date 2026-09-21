@@ -45,7 +45,9 @@ def interaction(*, admin=True, user=99, embeds=None, guild=None):
         user=SimpleNamespace(id=user),
         permissions=discord.Permissions(manage_guild=True) if admin else discord.Permissions.none(),
         message=SimpleNamespace(embeds=embeds or [], edit=AsyncMock()),
-        response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+        followup=SimpleNamespace(send=AsyncMock()),
+        response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock(),
+                                 defer=AsyncMock(), is_done=lambda: False))
 
 
 def alert_embed(token):
@@ -220,7 +222,9 @@ class AlertTests(unittest.IsolatedAsyncioTestCase):
         guild = SimpleNamespace(get_role=lambda i: self.role)
         i = SimpleNamespace(guild_id=1, guild=guild, user=member,
                             permissions=discord.Permissions(manage_guild=True),
-                            response=SimpleNamespace(send_message=AsyncMock()))
+                            followup=SimpleNamespace(send=AsyncMock()),
+                            response=SimpleNamespace(send_message=AsyncMock(),
+                                                     defer=AsyncMock(), is_done=lambda: False))
         view = AdminPanelView(self.bot)
         await view.toggle.callback(i)
         member.add_roles.assert_awaited_once()

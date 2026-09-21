@@ -97,6 +97,10 @@ class RankSync:
             # of opening a connection per linked member.
             snapshot = self.wallet.snapshot(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3")) if self._ready() else None
             for member_id, identity in rows:
+                # Hand the loop back between members. The XP read is synchronous,
+                # so a long roster would otherwise hold Discord off for the whole
+                # batch and clicks would die on the three-second deadline.
+                await asyncio.sleep(0)
                 try:
                     xp = self.progress(member_id, identity, snapshot)
                     # Renegade is the no-faction rank, so a member's side decides

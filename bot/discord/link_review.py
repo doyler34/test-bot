@@ -20,6 +20,25 @@ REVIEWER_ROLE_NAME = "OYB Link Reviewer"
 STAFF_PERMS = ("administrator", "manage_guild", "manage_channels", "manage_messages", "moderate_members")
 
 
+async def ack(interaction):
+    """Take the click inside Discord's three-second window.
+
+    Everything after this can take as long as it needs; without it a click that
+    lands while the bot is busy dies with "didn't respond in time". A modal has
+    to be the first response, so the force-link button never calls this.
+    """
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+
+
+async def say(interaction, text, **kwargs):
+    """Reply whether or not the click was already acknowledged."""
+    if interaction.response.is_done():
+        await interaction.followup.send(text, ephemeral=True, **kwargs)
+    else:
+        await interaction.response.send_message(text, ephemeral=True, **kwargs)
+
+
 def can_review(interaction, guild_id):
     return (interaction.guild_id == guild_id and
             (interaction.permissions.manage_guild or interaction.permissions.administrator))
@@ -57,19 +76,20 @@ class AdminPanelView(discord.ui.View):
     async def _guard(self, interaction, what):
         if can_review(interaction, self.bot.config.guild_id):
             return True
-        await interaction.response.send_message(f"Only staff with Manage Server can {what}.", ephemeral=True)
+        await say(interaction, f"Only staff with Manage Server can {what}.")
         return False
 
     @discord.ui.button(label="Pending requests", emoji="📋", style=discord.ButtonStyle.primary,
                        custom_id="oyb:admin:pending")
     async def pending(self, interaction, button):
+        await ack(interaction)
         if not await self._guard(interaction, "review requests"):
             return
         from bot.discord.join_oyb import ReviewList
         rows = self.bot.account_links.pending(interaction.guild_id)
-        await interaction.response.send_message(
-            "Pending requests (up to 25; reopen after reviewing for more)." if rows else "No pending requests.",
-            view=ReviewList(self.bot, rows, interaction.user.id) if rows else None, ephemeral=True)
+        await say(interaction,
+                  "Pending requests (up to 25; reopen after reviewing for more)." if rows else "No pending requests.",
+                  view=ReviewList(self.bot, rows, interaction.user.id) if rows else None)
 
     @discord.ui.button(label="Force-link", emoji="➕", style=discord.ButtonStyle.secondary,
                        custom_id="oyb:admin:forcelink")
@@ -82,23 +102,24 @@ class AdminPanelView(discord.ui.View):
     @discord.ui.button(label="Remove a link", emoji="🗑", style=discord.ButtonStyle.danger,
                        custom_id="oyb:admin:unlink")
     async def unlink(self, interaction, button):
+        await ack(interaction)
         if not await self._guard(interaction, "remove links"):
             return
         from bot.discord.join_oyb import UnlinkView
-        await interaction.response.send_message(
-            "Remove a member's Reforger link (use for abuse or a bad link).",
-            view=UnlinkView(self.bot, interaction.user.id), ephemeral=True)
+        await say(interaction, "Remove a member's Reforger link (use for abuse or a bad link).",
+                  view=UnlinkView(self.bot, interaction.user.id))
 
     @discord.ui.button(label="Toggle my alerts", emoji="🔔", style=discord.ButtonStyle.secondary,
                        custom_id="oyb:linkalerts:toggle")
     async def toggle(self, interaction, button):
+        await ack(interaction)
         if not can_review(interaction, self.bot.config.guild_id):
-            await interaction.response.send_message("Only staff with Manage Server can subscribe.", ephemeral=True)
+            await say(interaction, "Only staff with Manage Server can subscribe.")
             return
         cfg = self.bot.account_links.review_settings(interaction.guild_id)
         role = interaction.guild.get_role(cfg["reviewer_role"]) if cfg["reviewer_role"] else None
         if role is None:
-            await interaction.response.send_message("Reviewer role is missing; ask an admin to restart the bot.", ephemeral=True)
+            await say(interaction, "Reviewer role is missing; ask an admin to restart the bot.")
             return
         member = interaction.user
         try:
@@ -110,7 +131,7 @@ class AdminPanelView(discord.ui.View):
                 text = "🔔 You'll be pinged here on each new link request."
         except discord.Forbidden:
             text = "I need Manage Roles, and my role must sit above the reviewer role."
-        await interaction.response.send_message(text, ephemeral=True)
+        await say(interaction, text)
 
 
 class ReviewButtons(discord.ui.View):
@@ -152,16 +173,16 @@ class ReviewButtons(discord.ui.View):
 
     async def _decide(self, interaction, approve):
         if not can_review(interaction, self.bot.config.guild_id):
-            await interaction.response.send_message("Only staff with Manage Server can review requests.", ephemeral=True)
+            await say(interaction, "Only staff with Manage Server can review requests.")
             return
         token = self._token(interaction.message)
         if not token:
-            await interaction.response.send_message("This request has already been handled.", ephemeral=True)
+            await say(interaction, "This request has already been handled.")
             return
         try:
             self.bot.account_links.review(interaction.guild_id, token, interaction.user.id, approve)
         except LinkConflict as exc:
-            await interaction.response.send_message(str(exc), ephemeral=True)
+            await say(interaction, str(exc))
             await self._settle_conflict(interaction, token, str(exc))
             return
         embed = interaction.message.embeds[0]
@@ -169,6 +190,8 @@ class ReviewButtons(discord.ui.View):
         embed.add_field(name="✅ Approved" if approve else "🚫 Rejected",
                         value=f"by <@{interaction.user.id}>", inline=False)
         embed.set_footer(text="OYB • Link request • handled")
+        # Editing the alert in place is the response, so this one is not
+        # deferred: the write above is a single indexed row.
         await interaction.response.edit_message(embed=embed, view=None,
                                                 allowed_mentions=discord.AllowedMentions.none())
 

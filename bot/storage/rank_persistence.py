@@ -57,6 +57,11 @@ def record_interval(db, identity, start, end):
 class XPStore:
     def __init__(self, db):
         self.db = db
+        # Combat XP is derived from the whole event history, so the answer only
+        # moves when the ingestor records something. Remember it per identity
+        # and throw the lot away the moment the history grows.
+        self._combat = {}
+        self._combat_at = None
         self._migrate_posts()
         with db:
             db.execute('CREATE INDEX IF NOT EXISTS discord_post_events_day ON discord_post_events(guild,member,created)')
@@ -179,11 +184,28 @@ class XPStore:
                   + sum(self.combat_xp(r[2]) for r in rows))
         return banked + self.post_xp(guild, member)
 
+    def combat_generation(self):
+        """A cheap stamp that moves whenever combat XP could have changed.
+
+        MAX(rowid) is O(1) in SQLite and rises on every recorded kill; the match
+        count covers a game ending without one. A duplicate kill is ignored on
+        insert and moves neither, which is correct - it changes no total.
+        """
+        events = self.db.execute('SELECT MAX(rowid) FROM combat_events').fetchone()[0]
+        matches = self.db.execute('SELECT COUNT(*) FROM combat_matches').fetchone()[0]
+        return (events, matches)
+
     def combat_xp(self, identity):
         # Imported here because combat_store needs backup_before from this module.
         from bot.storage.combat_store import combat_xp
         try:
-            return combat_xp(self.db, identity)
+            generation = self.combat_generation()
+            if generation != self._combat_at:
+                self._combat = {}
+                self._combat_at = generation
+            if identity not in self._combat:
+                self._combat[identity] = combat_xp(self.db, identity)
+            return self._combat[identity]
         except sqlite3.Error:
             return 0  # Combat tables absent on a links-only database.
 
