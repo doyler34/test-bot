@@ -12,6 +12,7 @@ import logging
 import discord
 from discord import app_commands
 
+from bot.config import mortar_map_config, mortar_session_ttl, mortar_web_base_url
 from bot.mortar.plot import render
 from bot.mortar.solution import (OUT_OF_RANGE, bearing, parse_grid, profile, profiles,
                                  solution, swap, weapons)
@@ -202,6 +203,18 @@ class MortarModal(discord.ui.Modal, title='Mortar firing solution'):
             await interaction.response.send_message(text, ephemeral=True)
 
 
+class OpenMap(discord.ui.View):
+    """What /mortar offers when the map is up: open it, or type grids instead."""
+
+    def __init__(self, url):
+        super().__init__(timeout=600)
+        self.add_item(discord.ui.Button(label='🗺️ Open Mortar Map', url=url))
+
+    @discord.ui.button(label='Enter grids instead', style=discord.ButtonStyle.secondary)
+    async def by_grid(self, interaction, button):
+        await interaction.response.send_modal(MortarModal(next(iter(profiles()))))
+
+
 class MortarCommand:
     def __init__(self, bot):
         self.bot = bot
@@ -230,6 +243,14 @@ class MortarCommand:
         if not loaded:
             await interaction.response.send_message(
                 'No mortar tubes are configured. See `assets/mortar/README.md`.', ephemeral=True)
+            return
+        link = self.bot.mortar_web.link(interaction.user.id) if self.bot.mortar_web else None
+        if link:
+            # A map link is a one-off; it cannot be shared or reused after it
+            # expires, so it goes out privately.
+            await interaction.response.send_message(
+                'Tap the map to place your mortar, then the target.',
+                view=OpenMap(link), ephemeral=True)
             return
         await interaction.response.send_modal(
             MortarModal(tube if tube in loaded else next(iter(loaded))))

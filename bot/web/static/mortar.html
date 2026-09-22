@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>OYB Mortar Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/mortar.css">
+</head>
+<body data-token="__TOKEN__">
+  <header>
+    <label class="pick">
+      <span>Tube</span>
+      <select id="tube"></select>
+    </label>
+    <label class="pick">
+      <span>Round</span>
+      <select id="round"></select>
+    </label>
+  </header>
+
+  <div id="map"></div>
+  <div id="hint">Tap the map to place your mortar</div>
+  <div id="cursor" hidden></div>
+
+  <section id="panel" class="empty">
+    <h2>🎯 Mortar solution</h2>
+    <p id="loadout" class="loadout"></p>
+    <div class="grids">
+      <div><span>📍 Mortar</span><b id="gunGrid">—</b></div>
+      <div><span>🎯 Target</span><b id="targetGrid">—</b></div>
+    </div>
+    <div class="figures">
+      <div><span>Range</span><b id="range">—</b></div>
+      <div><span>Azimuth</span><b id="azimuth">—</b></div>
+      <div><span>Ring</span><b id="ring">—</b></div>
+      <div><span>Elevation</span><b id="elevation">—</b></div>
+      <div><span>Flight</span><b id="tof">—</b></div>
+      <div><span>Dispersion</span><b id="dispersion">—</b></div>
+    </div>
+    <p id="problem" class="problem" hidden></p>
+    <div class="buttons">
+      <button id="copy" type="button">Copy solution</button>
+      <button id="resetTarget" type="button">Reset target</button>
+      <button id="swap" type="button">Swap</button>
+      <button id="resetAll" type="button">Reset all</button>
+    </div>
+  </section>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/mortar.js"></script>
+</body>
+</html>
