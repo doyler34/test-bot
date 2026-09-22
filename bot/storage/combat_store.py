@@ -62,6 +62,11 @@ def migrate(db):
         db.execute('''CREATE TABLE IF NOT EXISTS combat_matches (
             server TEXT NOT NULL, started TEXT NOT NULL, ended TEXT NOT NULL,
             name TEXT, PRIMARY KEY(server, started))''')
+        # Each match's number on its own server, so a board can say which game
+        # it is. Allocated when the match opens, before it has an end to record.
+        db.execute('''CREATE TABLE IF NOT EXISTS combat_match_numbers (
+            server TEXT NOT NULL, started TEXT NOT NULL, number INTEGER NOT NULL,
+            PRIMARY KEY(server, started))''')
         # Who took the field, whether or not they scored. A results board built
         # from kills alone leaves out everyone who had a quiet game.
         db.execute('''CREATE TABLE IF NOT EXISTS combat_presence (
@@ -222,6 +227,32 @@ def record_match(db, server, name, start, end):
     with db:
         db.execute('INSERT OR REPLACE INTO combat_matches VALUES (?,?,?,?)',
                    (server, stamp(start), stamp(end), name))
+
+
+# A restart recovers the match's start from the log, a few seconds off at most,
+# so a start this close to one already numbered is that same match resuming.
+RESUME = 300
+TIMESTAMP = '%Y-%m-%dT%H:%M:%S.%f'
+
+
+def match_number(db, server, started):
+    """This match's number on its own server, counting from 1.
+
+    Allocated the first time it is asked for and handed back unchanged after
+    that, so a restart carries on with the board's own number.
+    """
+    moment = stamp(started)
+    row = db.execute('SELECT started, number FROM combat_match_numbers WHERE server=?'
+                     ' ORDER BY number DESC LIMIT 1', (server,)).fetchone()
+    if row is not None:
+        gap = datetime.strptime(moment, TIMESTAMP) - datetime.strptime(row[0], TIMESTAMP)
+        if abs(gap.total_seconds()) <= RESUME:
+            return row[1]
+    number = (row[1] if row else 0) + 1
+    with db:
+        db.execute('INSERT OR REPLACE INTO combat_match_numbers VALUES (?,?,?)',
+                   (server, moment, number))
+    return number
 
 
 def recent_matches(db, identity, limit=10, scan=80):

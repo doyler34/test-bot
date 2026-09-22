@@ -51,6 +51,11 @@ class RenderTests(unittest.TestCase):
         # Numbering runs on across the break rather than restarting.
         self.assertIn('128', embeds[-1].description)
 
+    def test_the_match_number_heads_the_board(self):
+        embed, = match_embeds('OYB Classic', rows(3), START, END, '#0012A')
+        self.assertIn('#0012A', embed.title)
+        self.assertIn('OYB Classic', embed.title)
+
     def test_names_cannot_escape_the_table(self):
         embed, = match_embeds('OYB', [('```\n@everyone\r\n' + 'X' * 90, 1, 0)], START, END)
         self.assertEqual(embed.description.count('```'), 2)
@@ -95,6 +100,12 @@ class PublishTests(unittest.IsolatedAsyncioTestCase):
         embed = self.channel.send.await_args.kwargs['embed']
         # One kill, not three: the earlier and later ones belong to other matches.
         self.assertRegex(embed.description, r'Test Player\s+1\s+0')
+
+    async def test_the_post_carries_the_matchs_number(self):
+        # Past games name the same match the live board did, so the two line up.
+        self.kill('during', START + timedelta(minutes=10), OTHER, self.identity)
+        await self.publish()
+        self.assertIn('#0001S', self.channel.send.await_args.kwargs['embed'].title)
 
     async def test_another_servers_kills_stay_off_this_board(self):
         # OYB runs several servers at once, so the same minutes exist on each.

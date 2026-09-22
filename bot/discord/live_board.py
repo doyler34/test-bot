@@ -14,8 +14,8 @@ import discord
 from bot.config import live_board_channel_id
 from bot.discord.leaderboard_command import table
 from bot.discord.leaderboard_display import retry_delay
-from bot.discord.match_results import CHUNK, duration
-from bot.storage.combat_store import window_standings
+from bot.discord.match_results import CHUNK, duration, match_tag, titled
+from bot.storage.combat_store import match_number, window_standings
 
 LOG = logging.getLogger('reforger.liveboard')
 POLL = 30
@@ -27,7 +27,7 @@ MARKER = 'OYB-LIVE'
 # fits inside two embeds in a single message with room to spare.
 
 
-def board_embeds(server_name, rows, start, end=None):
+def board_embeds(server_name, rows, start, end=None, tag=None):
     """The board as embeds for one message: live while `end` is None."""
     blocks, position = [], 0
     while position < len(rows):
@@ -40,8 +40,8 @@ def board_embeds(server_name, rows, start, end=None):
     for index, block in enumerate(blocks or ['```text\nNo linked players yet\n```']):
         embed = discord.Embed(colour=0xA9BC8C if end else 0xC0504D, description=block)
         if index == 0:
-            embed.title = (f'🏁 Match results — {server_name}' if end
-                           else f'🔴 LIVE — {server_name}')[:256]
+            embed.title = titled('🏁 Match results' if end else '🔴 LIVE',
+                                 tag, server_name)
         embeds.append(embed)
     closed = end or start
     span = duration(start, end or datetime.now())
@@ -72,8 +72,19 @@ class LiveBoard:
         linked player has actually taken the field."""
         if live_board_channel_id() is None:
             return
-        self.matches[server_id] = dict(name=server_name, started=started,
-                                       message=None, rows=None, searched=False)
+        self.matches[server_id] = dict(name=server_name, started=started, message=None,
+                                       rows=None, searched=False,
+                                       tag=self.tag(server_id, started))
+
+    def tag(self, server_id, started):
+        """This match's own name, #0001A upwards per server. A match that cannot
+        be numbered still gets a board - it just goes out without the number."""
+        try:
+            return match_tag(server_id, match_number(self.bot.account_links.db,
+                                                     server_id, started))
+        except Exception:
+            LOG.exception('Could not number the %s match', server_id)
+            return None
 
     def finish(self, server_id):
         if server_id not in self.matches:
@@ -95,7 +106,7 @@ class LiveBoard:
                 rows = self.rows(guild, server_id, match['started'], datetime.fromtimestamp(ended))
                 await match['message'].edit(
                     embeds=board_embeds(match['name'], rows, match['started'],
-                                        datetime.fromtimestamp(ended)),
+                                        datetime.fromtimestamp(ended), match['tag']),
                     allowed_mentions=discord.AllowedMentions.none())
             LOG.info('Live board finalised for %s (%s players)', match['name'], len(rows))
         except asyncio.CancelledError:
@@ -153,7 +164,8 @@ class LiveBoard:
                     rows = self.rows(guild, server_id, match['started'])
                     if not rows or rows == match['rows']:
                         continue
-                    embeds = board_embeds(match['name'], rows, match['started'])
+                    embeds = board_embeds(match['name'], rows, match['started'],
+                                          tag=match['tag'])
                     if match['message'] is None and not match['searched']:
                         match['message'] = await self.adopt(channel, match)
                     if match['message'] is None:
