@@ -32,8 +32,9 @@ class RankCommand:
             try:
                 await self.tree.sync(guild=self.guild)
                 LOG.info("OYB /rank command ready")
-                if self.tree.get_command('stats', guild=self.guild):
-                    LOG.info("OYB /stats command ready")
+                for name in ('stats', 'mortar'):
+                    if self.tree.get_command(name, guild=self.guild):
+                        LOG.info("OYB /%s command ready", name)
                 return
             except discord.HTTPException:
                 LOG.exception("Could not register /rank; check applications.commands authorization")

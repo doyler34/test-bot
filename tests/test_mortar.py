@@ -4,6 +4,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+from bot.discord.mortar_command import MortarModal, MortarView, solution_embed
 from bot.mortar.plot import render
 from bot.mortar.solution import bearing, has_table, interpolate, parse_grid, solution, tube_names
 
@@ -89,6 +93,86 @@ class PlotTests(unittest.TestCase):
         # Two points a few metres apart must not collapse the scale to zero.
         data = render((5000, 5000), (5005, 5002), 1200, 5.4, 'M252 81mm (US)')
         self.assertTrue(data.startswith(b'\x89PNG'))
+
+
+def responding():
+    state = {'done': False}
+
+    async def done(*_, **__):
+        state['done'] = True
+
+    return SimpleNamespace(send_message=AsyncMock(side_effect=done),
+                           edit_message=AsyncMock(side_effect=done),
+                           send_modal=AsyncMock(side_effect=done),
+                           defer=AsyncMock(side_effect=done),
+                           is_done=lambda: state['done'])
+
+
+def interaction(attach=True):
+    return SimpleNamespace(guild_id=1, user=SimpleNamespace(id=7), response=responding(),
+                           followup=SimpleNamespace(send=AsyncMock()),
+                           edit_original_response=AsyncMock(),
+                           app_permissions=SimpleNamespace(attach_files=attach))
+
+
+class CommandTests(unittest.IsolatedAsyncioTestCase):
+    async def submit(self, gun, target, attach=True):
+        modal = MortarModal('m252')
+        modal.gun_input._value, modal.target_input._value = gun, target
+        sent = interaction(attach)
+        await modal.on_submit(sent)
+        return sent
+
+    async def test_two_grids_come_back_as_a_bearing_and_a_range(self):
+        sent = await self.submit('0428 1183', '0512 1096')
+        # The click is taken first, so the render cannot run out the clock.
+        sent.response.defer.assert_awaited()
+        embed = sent.followup.send.await_args.kwargs['embed']
+        self.assertEqual(embed.fields[0].value.splitlines()[0], '**2418** mils')
+        self.assertEqual(embed.fields[1].value, '**1209** m')
+        # Private, and the plot rides along with it.
+        self.assertTrue(sent.followup.send.await_args.kwargs['ephemeral'])
+        self.assertEqual(sent.followup.send.await_args.kwargs['file'].filename, 'mortar.png')
+
+    async def test_a_typo_is_explained_not_swallowed(self):
+        sent = await self.submit('not a grid', '0512 1096')
+        text = sent.response.send_message.await_args.args[0]
+        self.assertIn('4, 6, 8 or 10 digits', text)
+        self.assertTrue(sent.response.send_message.await_args.kwargs['ephemeral'])
+
+    async def test_firing_on_your_own_position_is_refused(self):
+        sent = await self.submit('0428 1183', '04281183')
+        self.assertIn('same grid', sent.response.send_message.await_args.args[0])
+
+    async def test_without_attach_files_the_numbers_still_arrive(self):
+        sent = await self.submit('0428 1183', '0512 1096', attach=False)
+        self.assertNotIn('file', sent.followup.send.await_args.kwargs)
+        self.assertIn('Azimuth', [f.name for f in
+                                  sent.followup.send.await_args.kwargs['embed'].fields])
+
+    async def test_changing_tube_edits_the_same_private_message(self):
+        view = MortarView('m252', (4280, 11830), (5120, 10960))
+        sent = interaction()
+        select = view.children[0]
+        select._values = ['2b14']
+        await select.callback(sent)
+        sent.edit_original_response.assert_awaited()
+        self.assertEqual(view.tube, '2b14')
+
+    def test_a_loaded_table_is_read_out_charge_by_charge(self):
+        from bot.mortar.solution import Charge
+        with patch('bot.discord.mortar_command.solution', return_value=[
+                Charge('0', None, 'out of range (100-400 m)'), Charge('1', 1455.4)]):
+            embed = solution_embed('m252', 'M252 81mm (US)', (4280, 11830), (5120, 10960), 2418, 1209)
+        elevation = next(f.value for f in embed.fields if f.name == 'Elevation')
+        self.assertIn('`Charge 1`  **1455** mils', elevation)
+        self.assertIn('out of range (100-400 m)', elevation)
+
+    def test_a_tube_with_no_table_says_so_rather_than_guessing(self):
+        embed = solution_embed('m252', 'M252 81mm (US)', (4280, 11830), (5120, 10960), 2418, 1209)
+        elevation = next(f.value for f in embed.fields if f.name == 'Elevation')
+        self.assertIn('No range table', elevation)
+        self.assertNotIn('mils', elevation)
 
 
 if __name__ == '__main__':
