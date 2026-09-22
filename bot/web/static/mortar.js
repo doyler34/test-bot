@@ -16,14 +16,34 @@ let map, layer, gun = null, target = null, line = null, ring = null, label = nul
 let pending = 0;
 
 /* --- coordinates ----------------------------------------------------
- * The page works in the game's own world X/Z metres. Leaflet carries them as
- * (lat, lng) = (Z, X) with half a tile added, because a generated tile is
- * named for the camera at its centre. This mirrors Calibration.leaflet() and
- * Calibration.world() in bot/mortar/calibration.py, which is where the rule
- * is defined and tested.
+ * GeNeFRAG's transform, as his mapEngine.js applies it:
+ *
+ *   gameX = (lng + lng.offset) * lng.cof
+ *   gameZ = (lat + lat.offset) * lat.cof
+ *
+ * plus, where the map sets it, an earth correction that pulls towards the
+ * middle and is zero at the centre. This mirrors Calibration.world() and
+ * Calibration.leaflet() in bot/mortar/calibration.py, which is where the rule
+ * is defined and tested; the figures on the panel come from the server.
  */
-const toWorld = (latlng) => ({ east: latlng.lng - MAP.offset, north: latlng.lat - MAP.offset });
-const toLatLng = (east, north) => L.latLng(north + MAP.offset, east + MAP.offset);
+const corrected = (metres, size) => (MAP.earthCorrection
+  ? metres + ((size / 2 - metres) / size) * MAP.correction : metres);
+const uncorrected = (metres, size) => (MAP.earthCorrection
+  ? (metres - MAP.correction / 2) / (1 - MAP.correction / size) : metres);
+
+function toWorld(latlng) {
+  const t = MAP.transform;
+  return {
+    east: corrected((latlng.lng + t.lng.offset) * t.lng.cof, MAP.size[0]),
+    north: corrected((latlng.lat + t.lat.offset) * t.lat.cof, MAP.size[1]),
+  };
+}
+
+function toLatLng(east, north) {
+  const t = MAP.transform;
+  return L.latLng(uncorrected(north, MAP.size[1]) / t.lat.cof - t.lat.offset,
+                  uncorrected(east, MAP.size[0]) / t.lng.cof - t.lng.offset);
+}
 
 function gridText(east, north) {
   const step = Math.pow(10, 5 - MAP.digits);
@@ -32,16 +52,11 @@ function gridText(east, north) {
   return `${part(east)} ${part(north)}`;
 }
 
-/* The tile pyramid's own CRS: one Leaflet unit per metre once scaled, north
- * up, and rows counted the way the generator wrote them. */
-function enfusionCRS(scale) {
-  return L.Util.extend({}, L.CRS, {
-    projection: L.Projection.LonLat,
-    transformation: new L.Transformation(1 / scale, 0, -1 / scale, 0),
-    scale: (zoom) => Math.pow(2, zoom),
-    zoom: (value) => Math.log(value) / Math.LN2,
-    distance: (a, b) => Math.hypot(b.lng - a.lng, b.lat - a.lat),
-    infinite: true,
+/* The tile pyramid's CRS: Simple, but without Leaflet's usual y flip, because
+ * the tiles are written with row 0 at the top like any web map. */
+function tileCRS() {
+  return L.extend({}, L.CRS.Simple, {
+    transformation: new L.Transformation(1, 0, 1, 0),
   });
 }
 
@@ -80,9 +95,9 @@ function draw() {
   if (!gun || !target) return;
   const a = gun.getLatLng(), b = target.getLatLng();
   line = L.polyline([a, b], { color: '#d9a441', weight: 2 }).addTo(map);
-  /* Map units are world metres, so the label needs no scaling. The figure the
-   * panel shows is still the engine's own. */
-  const metres = Math.hypot(b.lng - a.lng, b.lat - a.lat);
+  /* A rough label while dragging; the figure on the panel is the engine's. */
+  const from = toWorld(a), to = toWorld(b);
+  const metres = Math.hypot(to.east - from.east, to.north - from.north);
   label = L.marker(L.latLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2), {
     interactive: false,
     icon: L.divIcon({ className: '', html: `<span class="range-label">${Math.round(metres)} m</span>` }),
@@ -94,7 +109,7 @@ function drawRing() {
   const shell = currentRound();
   if (!gun || !shell) return;
   ring = L.circle(gun.getLatLng(), {
-    radius: shell.maxRange,                        // map units are world metres
+    radius: shell.maxRange / MAP.metresPerUnit,    // the circle is drawn in map units
     color: '#d9a441', weight: 1, opacity: .5, fill: false, dashArray: '6 6',
     interactive: false,
   }).addTo(map);
@@ -231,39 +246,28 @@ async function start() {
   fillTubes();
   wire();
 
-  const bounds = L.latLngBounds(toLatLng(0, 0), toLatLng(MAP.size, MAP.size));
+  const bounds = L.latLngBounds(L.latLng(0, 0), L.latLng(MAP.span[1], MAP.span[0]));
   map = L.map('map', {
-    crs: enfusionCRS(MAP.scale),
-    minZoom: 0, maxZoom: MAP.tiles ? MAP.tiles.maxZoom : 4,
+    crs: tileCRS(),
+    minZoom: MAP.tiles ? MAP.tiles.minZoom : 0,
+    maxZoom: MAP.maxZoom,
     zoomSnap: .25, attributionControl: false, tap: true,
   });
 
   if (MAP.tiles) {
-    /* Tile rows count up with Z where Leaflet counts down, and the deepest
-     * zoom is LOD 0, so both axes are turned around on the way out. */
-    const Inverted = L.TileLayer.extend({
-      getTileUrl(coords) {
-        coords.y = -(coords.y + 1);
-        return L.TileLayer.prototype.getTileUrl.call(this, coords);
-      },
-    });
-    const url = `/mortar/${TOKEN}/tiles/{z}/{x}/{y}`;
-    layer = new (MAP.tiles.invertY ? Inverted : L.TileLayer)(url, {
-      tileSize: MAP.tiles.tileSize, minZoom: 0, maxZoom: MAP.tiles.maxZoom,
-      zoomReverse: true, bounds, noWrap: true,
+    layer = L.tileLayer(`/mortar/${TOKEN}/tiles/{z}/{x}/{y}`, {
+      tileSize: MAP.tiles.tileSize, minZoom: MAP.tiles.minZoom, maxZoom: MAP.maxZoom,
+      bounds, noWrap: true,
     }).addTo(map);
   } else {
-    const box = L.latLngBounds(toLatLng(...MAP.image.southWest),
-                               toLatLng(...MAP.image.northEast));
-    layer = L.imageOverlay(`/mortar/${TOKEN}/map`, box).addTo(map);
+    layer = L.imageOverlay(`/mortar/${TOKEN}/map`, bounds).addTo(map);
   }
 
   map.fitBounds(bounds);
   map.setMaxBounds(bounds.pad(0.2));
   map.on('click', (event) => {
+    if (!bounds.contains(event.latlng)) return;
     const where = toWorld(event.latlng);
-    if (where.east < 0 || where.north < 0
-        || where.east > MAP.size || where.north > MAP.size) return;
     place(where.east, where.north);
   });
   if (window.matchMedia('(hover: hover)').matches) {

@@ -65,88 +65,94 @@ than offered with nothing behind it.
 
 ## The map page (`map.json`)
 
-`/mortar` works from typed grids with no map at all. Add map imagery and it
-also offers a page you tap instead - same engine, same tables, just a different
-way in.
+`/mortar` works from typed grids with no map at all. Add map tiles and it also
+offers a page you tap instead - same engine, same tables, just a different way
+in.
 
-The page works in the game's own world X/Z metres from the click onwards.
-There is no eyeballing and no two-point calibration to do: the coordinate
-system is fixed by how the tiles are generated, and it is already written down
-below for Everon.
+The map layer is **GeNeFRAG's**, from
+[ArmaReforger](https://github.com/GeNeFRAG/ArmaReforger) (MIT, © 2025 Gerhard
+Fröhlich). `map.json` is his `maps_core/all_arma_maps.json` entry copied as it
+stands, plus where our own tiles live - so there is nothing to recalibrate and
+nothing to measure:
 
 ```json
 {
   "name": "Everon",
+  "namespace": "everon",
+  "size": [12800, 12800],
+  "max_zoom": 7,
+  "coordinate_transform": {
+    "lng": { "cof": 50.0, "offset": 0.0 },
+    "lat": { "cof": -50.0, "offset": -256.0 }
+  },
+  "earth_correction": true,
   "digits": 3,
-  "world": { "size": 12800, "offset": 50 },
-  "tiles": {
-    "directory": "assets/mortar/everon",
-    "pattern": "{z}/{x}/{y}/tile.jpg",
-    "tileSize": 256,
-    "maxZoom": 5,
-    "metresPerTile": 100,
-    "invertY": true
-  }
+  "tiles": { "directory": "data/map-tiles/everon_sat",
+             "pattern": "{z}/{x}/{y}.webp", "tileSize": 256 }
 }
 ```
 
-- `world.size` is the island, metres on a side. Bohemia document Everon as
-  12.8 km square.
-- `world.offset` is half a tile. A generated tile is named for the camera at
-  its **centre**, not its corner, so world coordinates carry half a tile on the
-  way into the map and lose it on the way out.
-- `tiles.metresPerTile` is the ground one tile covers at the deepest zoom - one
-  downward screenshot, 100 m for a Reforger set.
-- `tiles.maxZoom` is how many LOD levels there are above LOD 0.
-- `tiles.invertY` because tile rows count upwards with Z while Leaflet counts
-  them down.
-- `digits` is how many digits a grid readout uses per axis: 3 gives `047 063`,
-  100 m squares, the same rule the typed grids follow.
+`mapEngine.js` reads that transform as
 
-The map scale is **not** a constant anybody chose. It falls out of the above:
+    gameX = (lng + lng.offset) * lng.cof
+    gameZ = (lat + lat.offset) * lat.cof
 
-    metres per map unit at zoom 0 = metresPerTile * 2 ** maxZoom / tileSize
+and `earth_correction` adds a pull towards the middle worth 100 m across the
+span and nothing at the centre. `bot/mortar/calibration.py` implements both
+directions and the tests check them: Everon's centre lands on exactly
+**6400, 6400**, and the imagery runs from **50 m to 12750 m** on each axis -
+the outermost 50 m of the island is not clickable, which is the correction
+doing its job rather than a bug.
 
-which for a Reforger tile set is `100 * 32 / 256` = exactly **12.5**. Change
-the tile size or the number of LODs and the scale follows on its own.
+- `size` is the island in metres.
+- `max_zoom` is the deepest zoom the pyramid was built to. Everon at z7 is
+  128×128 tiles at the bottom level.
+- `digits` is how many digits a grid readout uses per axis: 3 gives `047 063`.
+- `tiles.directory` may be absolute; a full pyramid is a lot of files.
 
 ### Getting the tiles
 
-The tiles are generated from the game itself with
-[EnfusionMapMaker](https://github.com/nickludlam/EnfusionMapMaker): its
-Enfusion Workbench tool drives the camera over the island taking one downward
-screenshot per 100 m, then `Scripts/crop_screenshots.py` cuts them to tiles and
-`Scripts/create_zoom_levels.py` builds the LODs above. Point `directory` at the
-result - the folder holding `0/`, `1/` … - and the page works. It can be an
-absolute path; a full Everon set is a lot of files.
+```
+bash dev/fetch_map_tiles.sh everon
+```
 
-No tiles yet means no map page: `/mortar` keeps to its grid boxes and the log
-says what is missing, rather than drawing on nothing.
+That clones GeNeFRAG's project and runs **his** `maps_core/generate_tiles.py`,
+which downloads the map image and cuts the pyramid, then moves the result to
+`data/map-tiles/everon_sat`. Run it on the box that will serve the map, in
+tmux - it is a large download and a long job. Tiles are gitignored: they are
+generated where they are served, never committed.
+
+Once they exist, restart the bot. Until then the page stays off and `/mortar`
+keeps to its grid boxes, with the reason in the log.
+
+Nothing is fetched from another site while the bot runs - the tiles are served
+from our own disk.
 
 ### An image instead of tiles
 
-A single picture works too, and still needs no reference points - the world
-square is the calibration and the image is stretched over it:
+A single picture works too, with the same transform:
 
 ```json
-{ "name": "Everon", "world": { "size": 12800, "offset": 0 },
-  "image": { "path": "assets/mortar/everon.jpg" } }
+{ ...same map entry..., "image": { "path": "assets/mortar/everon.jpg" } }
 ```
 
-Add `"southWest"` and `"northEast"` in world metres if the picture covers only
-part of the island. Tiles are better on a phone - a full-island image has to be
-downloaded whole before anything is drawn - but an image needs no game tools.
+Worse zoom quality and a slower first load, but it needs no generation step.
 
 ### Credit and licensing
 
-The coordinate scheme, and the tooling that generates the tiles, come from
-[EnfusionMapMaker](https://github.com/nickludlam/EnfusionMapMaker) by Nick
-Ludlam, published under the
-[Arma Public License Share Alike](https://www.bohemia.net/community/licenses/arma-public-license-share-alike).
-Tiles generated with it are made from Bohemia's game content and carry the same
-licence: non-commercial, Arma-only, share-alike, with attribution. Keep that
-attribution wherever the map is served, and do not redistribute a tile set
-under anything else.
+- **Coordinate system and tile tooling**: GeNeFRAG's
+  [ArmaReforger](https://github.com/GeNeFRAG/ArmaReforger), MIT, © 2025 Gerhard
+  Fröhlich. Keep that credit.
+- **The map imagery itself is a different matter.** It is a render of Bohemia
+  Interactive's Everon terrain, downloaded from the project's CDN. An MIT
+  licence covers that project's code, not Bohemia's content, and neither the
+  repository nor the CDN states terms for the imagery. Bohemia's own
+  [APL-SA](https://www.bohemia.net/community/licenses/arma-public-license-share-alike)
+  is what normally covers game-derived assets: non-commercial, Arma-only,
+  share-alike, with attribution - which a community Discord bot fits, but we
+  are asserting that rather than being granted it.
 
-Do not point `directory` at somebody else's live tile server. Generate a set,
-host it yourself.
+  Treat the tiles accordingly: keep them non-commercial and Arma-only, credit
+  both Bohemia and GeNeFRAG wherever the map is shown, and do not redistribute
+  the set. If in doubt, ask Gerhard Fröhlich - he is contactable through the
+  repository and through armamortars.org.

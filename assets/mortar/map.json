@@ -1,16 +1,19 @@
 {
   "name": "Everon",
-  "digits": 3,
-  "world": {
-    "size": 12800,
-    "offset": 50
+  "namespace": "everon",
+  "size": [12800, 12800],
+  "max_zoom": 7,
+  "coordinate_transform": {
+    "lng": { "cof": 50.0, "offset": 0.0 },
+    "lat": { "cof": -50.0, "offset": -256.0 }
   },
+  "earth_correction": true,
+  "digits": 3,
   "tiles": {
-    "directory": "assets/mortar/everon",
-    "pattern": "{z}/{x}/{y}/tile.jpg",
+    "directory": "data/map-tiles/everon_sat",
+    "pattern": "{z}/{x}/{y}.webp",
     "tileSize": 256,
-    "maxZoom": 5,
-    "metresPerTile": 100,
-    "invertY": true
-  }
+    "minZoom": 0
+  },
+  "_source": "Map entry and coordinate_transform from GeNeFRAG/ArmaReforger maps_core/all_arma_maps.json (MIT, (c) 2025 Gerhard Froehlich). Tiles are generated locally with that project's generate_tiles.py and served from our own disk; see assets/mortar/README.md for provenance and licensing of the imagery itself."
 }
