@@ -113,7 +113,7 @@ doing its job rather than a bug.
 ### Getting the tiles
 
 ```
-bash dev/fetch_map_tiles.sh everon
+bash dev/fetch_map_tiles.sh everon 6
 ```
 
 That clones GeNeFRAG's project and runs **his** `maps_core/generate_tiles.py`,
@@ -121,6 +121,13 @@ which downloads the map image and cuts the pyramid, then moves the result to
 `data/map-tiles/everon_sat`. Run it on the box that will serve the map, in
 tmux - it is a large download and a long job. Tiles are gitignored: they are
 generated where they are served, never committed.
+
+The second argument is the deepest zoom. Everon's own entry says 7, which
+means a 32768px source: a 632MB download and about **3.2GB of memory** while
+it is cut up, which will kill a small VPS. Zoom 6 is a 16384px source, 0.8GB
+of memory, and still 0.78m per pixel - far finer than anyone needs to drop a
+marker. **Whatever zoom is generated must match `max_zoom` in `map.json`**;
+the script prints the number when it finishes.
 
 Once they exist, restart the bot. Until then the page stays off and `/mortar`
 keeps to its grid boxes, with the reason in the log.
