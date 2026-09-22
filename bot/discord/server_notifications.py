@@ -26,6 +26,7 @@ from bot.discord.rank_command import RankCommand
 from bot.storage.combat_store import migrate as migrate_combat
 from bot.tracking.combat_ingestor import CombatIngestor
 from bot.discord.stats_command import StatsCommand
+from bot.discord.mortar_command import MortarCommand
 from bot.discord.leaderboard_display import LeaderboardDisplay
 from bot.discord.weekly_winners import WeeklyWinners
 from bot.discord.live_board import LiveBoard
@@ -141,6 +142,7 @@ class NotificationBot(TimerBot):
         self.rank_command = RankCommand(self)
         migrate_combat(self.account_links.db)
         self.stats_command = StatsCommand(self)
+        self.mortar_command = MortarCommand(self)
         self.leaderboard_display = LeaderboardDisplay(self)
         self.weekly_winners = WeeklyWinners(self)
         self.match_results = MatchResults(self)
