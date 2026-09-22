@@ -57,8 +57,15 @@ class Ring:
 
 @dataclass(frozen=True)
 class Profile:
-    """One weapon: its sight, its shell and the table it fires off."""
+    """One weapon loaded with one round: the sight, and the table it fires off.
+
+    A tube firing smoke is a different profile from the same tube firing HE -
+    different rings, different reach - so the engine is handed the pairing and
+    never has to know which weapon or which round it is working on.
+    """
     key: str
+    weapon: str
+    round_key: str
     name: str
     faction: str
     shell: str
@@ -70,20 +77,24 @@ class Profile:
         return f'{self.faction} {self.name}' if self.faction else self.name
 
     @property
-    def loaded(self):
-        return bool(self.rings)
-
-    @property
     def span(self):
-        """The shortest and longest range any of its rings covers."""
-        if not self.rings:
-            return None
+        """The shortest and longest range any of its rings covers. A profile is
+        only ever built with at least one usable ring, so this always answers."""
         return (min(rows[0][0] for _, _, rows in self.rings),
                 max(rows[-1][0] for _, _, rows in self.rings))
 
 
-def build(key, entry):
-    """One weapon, or None when it is not fit to fire off.
+def ring_rows(block):
+    rings = []
+    for ring in sorted(block or {}, key=lambda r: (len(r), r)):
+        rows = sorted(tuple(row) for row in block[ring].get('rows') or [])
+        if len(rows) >= 2:
+            rings.append((ring, block[ring].get('dispersion'), tuple(rows)))
+    return tuple(rings)
+
+
+def build(weapon, entry):
+    """Every round this weapon carries, or nothing when it is not fit to fire.
 
     A sight with no mil circle is the dangerous case: guessing one would put
     every azimuth out by the difference between 6400 and 6000, so such a tube
@@ -92,34 +103,64 @@ def build(key, entry):
     try:
         mils = int(entry['mils'])
     except (KeyError, TypeError, ValueError):
-        return None
+        return
     if mils <= 0:
-        return None
-    rings = []
-    for ring in sorted(entry.get('rings') or {}, key=lambda r: (len(r), r)):
-        block = entry['rings'][ring]
-        rows = sorted(tuple(row) for row in block.get('rows') or [])
-        if len(rows) >= 2:
-            rings.append((ring, block.get('dispersion'), tuple(rows)))
-    return Profile(key=key, name=entry.get('name', key), faction=entry.get('faction', ''),
-                   shell=entry.get('shell', ''), mils=mils, rings=tuple(rings))
+        return
+    for round_key, shell in (entry.get('shells') or {}).items():
+        rings = ring_rows(shell.get('rings'))
+        if not rings:
+            continue
+        yield Profile(key=f'{weapon}:{round_key}', weapon=weapon, round_key=round_key,
+                      name=entry.get('name', weapon), faction=entry.get('faction', ''),
+                      shell=shell.get('name', round_key), mils=mils, rings=rings)
 
 
 @lru_cache(maxsize=4)
 def profiles(path=None):
-    """Every weapon in the table file, in the order it is written."""
+    """Every weapon-and-round pairing in the table file, in the order written.
+
+    Keyed "<weapon>:<round>", so "m252:smoke" is the M252 loaded with smoke.
+    """
     try:
         data = json.loads(Path(path or TABLES).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return {}
     if not isinstance(data, dict):
         return {}
-    built = ((key, build(key, entry)) for key, entry in data.items() if isinstance(entry, dict))
-    return {key: weapon for key, weapon in built if weapon is not None}
+    found = {}
+    for weapon, entry in data.items():
+        if isinstance(entry, dict):
+            found.update({p.key: p for p in build(weapon, entry)})
+    return found
 
 
 def profile(key, path=None):
     return profiles(path).get(key)
+
+
+def weapons(path=None):
+    """The rounds each weapon carries, keyed by weapon."""
+    found = {}
+    for loaded in profiles(path).values():
+        found.setdefault(loaded.weapon, []).append(loaded)
+    return found
+
+
+def swap(current, weapon=None, round_key=None, path=None):
+    """The profile you get by changing one half of the pairing.
+
+    Changing tube keeps the round in hand where that tube carries it, so
+    picking the 2B14 while holding smoke does not silently hand back HE.
+    """
+    loaded = profiles(path)
+    wanted = weapon or (current.weapon if current else None)
+    shell = round_key or (current.round_key if current else None)
+    if f'{wanted}:{shell}' in loaded:
+        return loaded[f'{wanted}:{shell}']
+    for candidate in loaded.values():
+        if candidate.weapon == wanted:
+            return candidate
+    return next(iter(loaded.values()), None)
 
 
 def between(rows, distance, column):

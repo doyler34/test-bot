@@ -9,21 +9,26 @@ from unittest.mock import AsyncMock
 from bot.discord.mortar_command import MortarModal, MortarView, height, solution_embed
 from bot.mortar.plot import render
 from bot.mortar.solution import (OUT_OF_RANGE, bearing, between, parse_grid, profile,
-                                 profiles, rings, solution)
+                                 profiles, rings, solution, swap, weapons)
 
 # range, elevation, flight time, mils per 100m of height
 ROWS = {'1': {'dispersion': 14, 'rows': [[100, 1500, 10.0, 20], [200, 1400, 11.0, 24]]},
         '2': {'dispersion': 24, 'rows': [[100, 1550, 14.0, 30], [400, 1300, 16.0, 40]]}}
 
 
+def written(tubes):
+    path = Path(tempfile.mkdtemp()) / 'tables.json'
+    path.write_text(json.dumps(tubes))
+    return str(path)
+
+
 def made_up(rings_block=None, mils=6400, **extra):
     """A profile built from a table file of our own, so the engine is tested
     without leaning on whatever the shipped tables happen to say."""
-    entry = {'name': 'Test tube', 'faction': 'US', 'shell': 'HE TEST', 'mils': mils,
-             'rings': ROWS if rings_block is None else rings_block, **extra}
-    path = Path(tempfile.mkdtemp()) / 'tables.json'
-    path.write_text(json.dumps({'test': entry}))
-    return profile('test', str(path))
+    entry = {'name': 'Test tube', 'faction': 'US', 'mils': mils,
+             'shells': {'he': {'name': 'HE TEST',
+                               'rings': ROWS if rings_block is None else rings_block}}, **extra}
+    return profile('test:he', written({'test': entry}))
 
 
 class GridTests(unittest.TestCase):
@@ -100,23 +105,26 @@ class EngineTests(unittest.TestCase):
         self.assertAlmostEqual(ring.flight, 10.5)
         self.assertEqual(ring.dispersion, 14)
 
-    def test_a_ring_with_one_row_is_not_usable(self):
-        weapon = made_up({'0': {'dispersion': 6, 'rows': [[100, 1500, 10.0, 20]]}})
-        self.assertFalse(weapon.loaded)
-        self.assertIsNone(weapon.span)
-        self.assertEqual(solution(weapon, 100), (None, []))
+    def test_a_round_with_nothing_to_interpolate_is_not_offered(self):
+        # One row cannot be read between, so that round never reaches the list
+        # rather than sitting in the dropdown with nothing behind it.
+        path = written({'test': {'name': 'Test tube', 'mils': 6400, 'shells': {
+            'he': {'name': 'HE TEST', 'rings': ROWS},
+            'smoke': {'name': 'Smoke TEST',
+                      'rings': {'0': {'dispersion': 6, 'rows': [[100, 1500, 10.0, 20]]}}}}}})
+        self.assertEqual(list(profiles(path)), ['test:he'])
 
     def test_a_tube_with_no_mil_circle_is_not_offered(self):
         # Guessing 6400 would throw every azimuth out by the 6400/6000 gap, so
         # the tube is left out rather than assumed to be NATO.
-        path = Path(tempfile.mkdtemp()) / 'tables.json'
-        path.write_text(json.dumps({'nosight': {'name': 'No sight', 'rings': ROWS},
-                                    'good': {'name': 'Good', 'mils': 6000, 'rings': ROWS}}))
-        self.assertEqual(list(profiles(str(path))), ['good'])
+        shells = {'he': {'name': 'HE TEST', 'rings': ROWS}}
+        path = written({'nosight': {'name': 'No sight', 'shells': shells},
+                        'good': {'name': 'Good', 'mils': 6000, 'shells': shells}})
+        self.assertEqual(list(profiles(path)), ['good:he'])
 
     def test_a_missing_file_leaves_no_profiles(self):
         self.assertEqual(profiles('/nonexistent/tables.json'), {})
-        self.assertIsNone(profile('m252', '/nonexistent/tables.json'))
+        self.assertIsNone(profile('m252:he', '/nonexistent/tables.json'))
         self.assertEqual(solution(None, 900), (None, []))
 
 
@@ -124,7 +132,7 @@ class ProfileTests(unittest.TestCase):
     """The shipped tables: two weapons, each entirely its own."""
 
     def test_both_tubes_load_with_their_own_sight_shell_and_reach(self):
-        us, ru = profile('m252'), profile('2b14')
+        us, ru = profile('m252:he'), profile('2b14:he')
         self.assertEqual((us.faction, us.mils, us.shell), ('US', 6400, 'HE M821'))
         self.assertEqual((ru.faction, ru.mils, ru.shell), ('USSR', 6000, 'HE O-832DU'))
         self.assertEqual(us.span, (50, 2900))
@@ -134,12 +142,13 @@ class ProfileTests(unittest.TestCase):
 
     def test_the_two_tables_are_not_the_same_numbers(self):
         # Same target, different weapon: nothing may be shared or converted.
-        us, ru = solution(profile('m252'), 1200)[0], solution(profile('2b14'), 1200)[0]
+        us = solution(profile('m252:he'), 1200)[0]
+        ru = solution(profile('2b14:he'), 1200)[0]
         self.assertNotAlmostEqual(us.elevation, ru.elevation, places=0)
         self.assertNotAlmostEqual(us.flight, ru.flight, places=0)
 
     def test_each_tube_stops_at_its_own_maximum(self):
-        for key, reach in (('m252', 2900), ('2b14', 2300)):
+        for key, reach in (('m252:he', 2900), ('2b14:he', 2300)):
             weapon = profile(key)
             self.assertIsNotNone(solution(weapon, reach)[0], key)
             self.assertIsNone(solution(weapon, reach + 1)[0], key)
@@ -148,7 +157,7 @@ class ProfileTests(unittest.TestCase):
 
     def test_every_ring_reads_lower_as_the_range_grows(self):
         # A flatter tube throws further; a table that climbed would be corrupt.
-        for key in ('m252', '2b14'):
+        for key in profiles():
             for ring, _, rows in profile(key).rings:
                 elevations = [row[1] for row in rows]
                 self.assertEqual(elevations, sorted(elevations, reverse=True),
@@ -176,7 +185,7 @@ def interaction(attach=True):
 
 
 class CommandTests(unittest.IsolatedAsyncioTestCase):
-    async def submit(self, gun, target, attach=True, gun_alt='', target_alt='', tube='m252'):
+    async def submit(self, gun, target, attach=True, gun_alt='', target_alt='', tube='m252:he'):
         modal = MortarModal(tube)
         modal.gun_input._value, modal.target_input._value = gun, target
         modal.gun_height._value, modal.target_height._value = gun_alt, target_alt
@@ -199,7 +208,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sent.followup.send.await_args.kwargs['file'].filename, 'mortar.png')
 
     async def test_the_soviet_tube_answers_on_its_own_sight_and_table(self):
-        sent = await self.submit('0428 1183', '0512 1096', tube='2b14')
+        sent = await self.submit('0428 1183', '0512 1096', tube='2b14:he')
         fields = self.fields(sent)
         self.assertEqual(fields['Azimuth'].splitlines()[0], '**2267** mils')   # 6000 circle
         self.assertIn('6000 mil sight', fields['Tube'])
@@ -226,17 +235,32 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('file', sent.followup.send.await_args.kwargs)
 
     async def test_changing_tube_edits_the_same_private_message(self):
-        view = MortarView('m252', (4280, 11830), (5120, 10960))
-        select = view.children[0]
-        self.assertEqual([option.value for option in select.options], ['m252', '2b14'])
-        select._values = ['2b14']
+        view = MortarView('m252:he', (4280, 11830), (5120, 10960))
+        tube = view.children[0]
+        self.assertEqual([option.value for option in tube.options], ['m252', '2b14'])
+        tube._values = ['2b14']
         sent = interaction()
-        await select.callback(sent)
+        await tube.callback(sent)
         sent.edit_original_response.assert_awaited()
-        self.assertEqual(view.tube, '2b14')
+        self.assertEqual(view.tube, '2b14:he')
+
+    async def test_the_round_in_hand_survives_a_change_of_tube(self):
+        view = MortarView('m252:smoke', (4280, 11830), (5120, 10960))
+        rounds = view.children[1]
+        self.assertEqual([option.value for option in rounds.options], ['he', 'smoke', 'illum'])
+        view.children[0]._values = ['2b14']
+        await view.children[0].callback(interaction())
+        self.assertEqual(view.tube, '2b14:smoke')
+
+    async def test_changing_round_keeps_the_tube(self):
+        view = MortarView('2b14:he', (4280, 11830), (5120, 10960))
+        rounds = view.children[1]
+        rounds._values = ['illum']
+        await rounds.callback(interaction())
+        self.assertEqual(view.tube, '2b14:illum')
 
     def test_out_of_range_names_the_reach_of_that_tube(self):
-        weapon = profile('2b14')
+        weapon = profile('2b14:he')
         embed = solution_embed(weapon, (4280, 11830), (4280, 14330), 0, 2500)
         elevation = next(f.value for f in embed.fields if f.name == 'Elevation')
         self.assertIn(OUT_OF_RANGE, elevation)
