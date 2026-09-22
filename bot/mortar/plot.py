@@ -73,7 +73,7 @@ def north(draw):
     draw.text((x - 5, y + 26), 'N', font=font(15, True), fill=MUTED)
 
 
-def render(gun, target, mils, distance, tube):
+def render(gun, target, mils, distance, tube, circle=6400):
     """The plot as PNG bytes, ready to attach."""
     image = Image.new('RGB', (SIZE, SIZE), BACK)
     draw = ImageDraw.Draw(image)
@@ -87,7 +87,7 @@ def render(gun, target, mils, distance, tube):
     # The header sits over the top row of grid labels; clear it first.
     draw.rectangle([0, 0, SIZE, 74], fill=BACK)
     draw.text((MARGIN / 3, 18), tube, font=font(20, True), fill=INK)
-    draw.text((MARGIN / 3, 46), f'{mils:.0f} mils   {mils * 360 / 6400:.1f}°   {distance:.0f} m',
+    draw.text((MARGIN / 3, 46), f'{mils:.0f} mils   {mils * 360 / circle:.1f}°   {distance:.0f} m',
               font=font(20), fill=TARGET)
     draw.text((MARGIN / 3, SIZE - 42), f'Grid squares {step:.0f} m', font=font(14), fill=MUTED)
     buffer = BytesIO()
