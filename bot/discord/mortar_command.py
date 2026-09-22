@@ -13,7 +13,8 @@ import discord
 from discord import app_commands
 
 from bot.mortar.plot import render
-from bot.mortar.solution import OUT_OF_RANGE, bearing, parse_grid, profile, profiles, solution
+from bot.mortar.solution import (OUT_OF_RANGE, bearing, parse_grid, profile, profiles,
+                                 solution, swap, weapons)
 
 LOG = logging.getLogger('reforger.mortar')
 HELP = ('Grids are 4, 6, 8 or 10 digits - half easting, half northing. '
@@ -33,11 +34,8 @@ def height(text):
 
 def elevation_field(weapon, best, every):
     if best is None:
-        if not weapon.loaded:
-            return f'**{OUT_OF_RANGE}** — no range table is loaded for this tube.'
-        low, high = weapon.span
         return (f'**{OUT_OF_RANGE}** — no ring reaches that far. '
-                f'This tube covers {low:.0f}-{high:.0f} m.')
+                f'This round covers {reach(weapon)}.')
     lines = [f'**{best.elevation:.0f}** mils on **ring {best.ring}**',
              f'Flight {best.flight:.0f}s · dispersion {best.dispersion:.0f} m']
     others = [r for r in every if r.ring != best.ring]
@@ -54,50 +52,88 @@ def solution_embed(weapon, gun, target, mils, distance, climb=0.0):
                           colour=0xC0504D if best is None else 0xD9A441)
     embed.add_field(name='Azimuth', value=f'**{mils:.0f}** mils\n{mils * 360 / weapon.mils:.1f}°')
     embed.add_field(name='Range', value=f'**{distance:.0f}** m')
-    embed.add_field(name='Tube', value=f'{weapon.label}\n{weapon.mils} mil sight')
+    embed.add_field(name='Tube', value=f'{weapon.label}\n{weapon.shell}\n'
+                    f'{weapon.mils} mil sight')
     embed.add_field(name='Elevation', value=elevation_field(weapon, best, every), inline=False)
     embed.add_field(name='Gun', value=f'`{gun[0]:05d} {gun[1]:05d}`')
     embed.add_field(name='Target', value=f'`{target[0]:05d} {target[1]:05d}`')
     if climb:
         correction = f'\n{best.correction:+.0f} mils' if best else ''
         embed.add_field(name='Height', value=f'Target {climb:+.0f} m{correction}')
-    span = weapon.span
-    reach = f' · {span[0]:.0f}-{span[1]:.0f} m' if span else ''
-    embed.set_footer(text=f'{weapon.shell}{reach} · in-game range table'.strip(' ·'))
+    embed.set_footer(text=f'{weapon.shell} · {reach(weapon)} · in-game range table')
     return embed
 
 
+def reach(loaded):
+    low, high = loaded.span
+    return f'{low:.0f}-{high:.0f} m'
+
+
 class TubeSelect(discord.ui.Select):
-    def __init__(self, chosen):
-        super().__init__(placeholder='Change tube', options=[
-            discord.SelectOption(label=weapon.label, value=key, description=weapon.shell or None,
-                                 default=key == chosen)
-            for key, weapon in profiles().items()][:25])
+    """Which weapon. The round in hand is kept where the new tube carries it."""
+
+    def __init__(self, loaded):
+        first = {key: shells[0] for key, shells in weapons().items()}
+        super().__init__(placeholder='Change tube', row=0, options=[
+            discord.SelectOption(label=shells.label, value=key,
+                                 description=f'{shells.mils} mil sight',
+                                 default=key == loaded.weapon)
+            for key, shells in first.items()][:25])
 
     async def callback(self, interaction):
         # Take the click before rendering; Discord allows three seconds.
         await interaction.response.defer()
-        await self.view.show(interaction, self.values[0], edit=True)
+        chosen = swap(profile(self.view.tube), weapon=self.values[0])
+        await self.view.show(interaction, chosen.key, edit=True)
+
+
+class RoundSelect(discord.ui.Select):
+    """Which round. Each one has its own rings and its own reach."""
+
+    def __init__(self, loaded):
+        super().__init__(placeholder='Change round', row=1, options=[
+            discord.SelectOption(label=shell.shell, value=shell.round_key,
+                                 description=reach(shell),
+                                 default=shell.round_key == loaded.round_key)
+            for shell in weapons().get(loaded.weapon, [])][:25])
+
+    async def callback(self, interaction):
+        await interaction.response.defer()
+        chosen = swap(profile(self.view.tube), round_key=self.values[0])
+        await self.view.show(interaction, chosen.key, edit=True)
 
 
 class MortarView(discord.ui.View):
     def __init__(self, tube, gun, target, climb=0.0):
         super().__init__(timeout=600)
         self.tube, self.gun, self.target, self.climb = tube, gun, target, climb
-        if len(profiles()) > 1:
-            self.add_item(TubeSelect(tube))
+        self.controls(profile(tube))
+
+    def controls(self, loaded):
+        """The two pickers, rebuilt whenever the pairing changes - a new tube
+        may carry a different set of rounds."""
+        for item in list(self.children):
+            if isinstance(item, discord.ui.Select):
+                self.remove_item(item)
+        if loaded is None:
+            return
+        if len(weapons()) > 1:
+            self.add_item(TubeSelect(loaded))
+        if len(weapons().get(loaded.weapon, [])) > 1:
+            self.add_item(RoundSelect(loaded))
 
     async def show(self, interaction, tube, edit=False):
         """Render and deliver the solution. The caller has already acknowledged
         the interaction, so this goes out as a followup or an edit."""
-        self.tube = tube
-        weapon = profile(tube)
+        weapon = profile(tube) or swap(None)
+        if weapon is None:
+            await interaction.followup.send(
+                'No mortar tubes are configured. See `assets/mortar/README.md`.', ephemeral=True)
+            return
+        self.tube = weapon.key
         mils, distance = bearing(self.gun, self.target, weapon.mils)
         embed = solution_embed(weapon, self.gun, self.target, mils, distance, self.climb)
-        for item in self.children:
-            if isinstance(item, discord.ui.Select):
-                for option in item.options:
-                    option.default = option.value == tube
+        self.controls(weapon)
         picture = None
         if interaction.app_permissions.attach_files:
             picture = await asyncio.to_thread(render, self.gun, self.target, mils,
