@@ -73,8 +73,9 @@ def north(draw):
     draw.text((x - 5, y + 26), 'N', font=font(15, True), fill=MUTED)
 
 
-def render(gun, target, mils, distance, tube, circle=6400):
-    """The plot as PNG bytes, ready to attach."""
+def render(gun, target, mils, distance, tube, circle):
+    """The plot as PNG bytes, ready to attach. ``circle`` is the sight's own
+    mils to a full turn, so the degrees line matches the tube in hand."""
     image = Image.new('RGB', (SIZE, SIZE), BACK)
     draw = ImageDraw.Draw(image)
     scale, centre = frame(gun, target)
