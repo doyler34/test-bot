@@ -1,0 +1,11 @@
+{
+  "name": "Everon",
+  "image": "",
+  "width": 0,
+  "height": 0,
+  "digits": 3,
+  "reference": [
+    {"image": [0, 0], "world": [0, 0]},
+    {"image": [0, 0], "world": [0, 0]}
+  ]
+}

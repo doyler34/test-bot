@@ -10,7 +10,8 @@ from pathlib import Path
 
 import discord
 
-from bot.config import staging_enabled
+from bot.config import (mortar_map_config, mortar_session_ttl, mortar_web_base_url,
+                        mortar_web_host, mortar_web_port, staging_enabled)
 from bot.storage.notification_store import NotificationStore
 from bot.discord.server_stats import label_for, format_elapsed
 from bot.tracking.reforger_monitor import ReforgerMonitor
@@ -24,6 +25,7 @@ from bot.storage.combat_store import migrate as migrate_combat
 from bot.tracking.combat_ingestor import CombatIngestor
 from bot.discord.stats_command import StatsCommand
 from bot.discord.mortar_command import MortarCommand
+from bot.web.server import MortarWeb
 from bot.discord.leaderboard_display import LeaderboardDisplay
 from bot.discord.live_board import LiveBoard
 from bot.discord.match_results import MatchResults
@@ -121,6 +123,9 @@ class NotificationBot(TimerBot):
         self.rank_command = RankCommand(self)
         migrate_combat(self.account_links.db)
         self.stats_command = StatsCommand(self)
+        self.mortar_web = MortarWeb(
+            base_url=mortar_web_base_url(), host=mortar_web_host(), port=mortar_web_port(),
+            ttl=mortar_session_ttl(), config=mortar_map_config())
         self.mortar_command = MortarCommand(self)
         self.leaderboard_display = LeaderboardDisplay(self)
         self.match_results = MatchResults(self)
@@ -297,6 +302,7 @@ class NotificationBot(TimerBot):
             self._jobs.append(asyncio.create_task(self.live_board.run()))
             self._jobs.append(asyncio.create_task(self.server_stats.run()))
             self._jobs.append(asyncio.create_task(self.maintenance.run()))
+            self._jobs.append(asyncio.create_task(self.mortar_web.run()))
             logger.info("Ready: one combined servers card + announcements channel; %s active game monitors",
                         len(self.monitors))
 
@@ -493,6 +499,7 @@ class NotificationBot(TimerBot):
     async def close(self):
         await self.match_results.close()
         await self.live_board.close()
+        await self.mortar_web.close()
         for task in self._jobs:
             task.cancel()
         if self._jobs:

@@ -90,6 +90,47 @@ def live_board_channel_id() -> int | None:
     return _channel_id("LIVE_BOARD_CHANNEL_ID", None)
 
 
+def mortar_web_enabled() -> bool:
+    """Serve the /mortar map page. Off unless a base URL is set as well."""
+    return os.getenv("MORTAR_WEB_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def mortar_web_base_url() -> str:
+    """The public address the map is reached at, e.g. https://mortar.example.com.
+    Unset, the map stays off and /mortar keeps to the grid boxes."""
+    if not mortar_web_enabled():
+        return ""
+    return os.getenv("MORTAR_WEB_BASE_URL", "").strip().rstrip("/")
+
+
+def mortar_web_host() -> str:
+    """Where to listen. Loopback by default: put a reverse proxy in front."""
+    return os.getenv("MORTAR_WEB_HOST", "").strip() or "127.0.0.1"
+
+
+def mortar_web_port() -> int:
+    raw = os.getenv("MORTAR_WEB_PORT", "8085").strip()
+    try:
+        port = int(raw)
+    except ValueError:
+        return 8085
+    return port if 1 <= port <= 65535 else 8085
+
+
+def mortar_session_ttl() -> int:
+    """How long a map link lasts. An hour by default; a minute at the least."""
+    raw = os.getenv("MORTAR_SESSION_TTL", "3600").strip()
+    try:
+        return max(60, int(raw))
+    except ValueError:
+        return 3600
+
+
+def mortar_map_config() -> str | None:
+    """Where the map calibration lives, if not the usual assets/mortar/map.json."""
+    return os.getenv("MORTAR_MAP_CONFIG", "").strip() or None
+
+
 def command_auto_clear_seconds() -> int:
     """Seconds before a /rank or /stats card auto-deletes (0 = keep). Default 5 min."""
     raw = os.getenv("COMMAND_AUTO_CLEAR_SECONDS", "300").strip()

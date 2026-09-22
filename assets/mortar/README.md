@@ -62,3 +62,40 @@ Add an entry with its own `mils` and `shells`, and say in `source` where the
 rows came from. It appears in the `/mortar` dropdowns on the next restart; no
 code changes. A round whose rings hold fewer than two rows is left out rather
 than offered with nothing behind it.
+
+## The map page (`map.json`)
+
+`/mortar` works from typed grids with no map at all. Add a calibrated map and
+it also offers a page you tap instead - same engine, same tables, just a
+different way in. `map.json` is what calibrates it:
+
+```json
+{
+  "name": "Everon",
+  "image": "assets/mortar/everon.jpg",
+  "width": 8192,
+  "height": 8192,
+  "digits": 3,
+  "reference": [
+    {"image": [412, 7780], "world": [1000, 1000]},
+    {"image": [7766, 430], "world": [12000, 12000]}
+  ]
+}
+```
+
+- `image` is the map picture, as a path inside this project.
+- `width` and `height` are that picture's real pixel size.
+- `digits` is how many digits a grid readout uses per axis: 3 gives `047 063`,
+  which is 100 m squares, the same rule the typed grids follow.
+- `reference` is two points, each pairing a pixel position with the world
+  coordinate it sits on. Their difference gives metres per pixel on each axis,
+  and the **sign** of that gives the axis direction - so a north-up image comes
+  out with a negative north-per-pixel on its own, with nothing assumed.
+
+Pick the two points far apart, ideally near opposite corners: the further
+apart they are, the less a pixel of error in either one matters. They must
+differ in both x and y, and sit on different eastings and northings.
+
+Nothing is guessed. A config that is missing, incomplete or self-contradictory
+turns the map page off and leaves `/mortar` on its grid boxes, rather than
+drawing on bounds nobody checked.
