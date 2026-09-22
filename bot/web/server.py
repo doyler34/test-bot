@@ -13,7 +13,7 @@ from pathlib import Path
 
 from aiohttp import web
 
-from bot.mortar.calibration import calibration, image_path, reason
+from bot.mortar.calibration import calibration, image_path, reason, tile_path
 from bot.mortar.solution import bearing, profile, profiles, solution, swap, weapons
 from bot.web.sessions import Sessions
 
@@ -36,23 +36,20 @@ def number(value):
 
 
 def point(entry, mapped):
-    """One end of the shot, as world metres.
+    """One end of the shot, in the game's own world X/Z metres.
 
-    The page works in image pixels, so that is what it sends and this converts
-    - one calibration, server side, rather than a second copy in JavaScript.
-    World coordinates are taken directly when something else asks.
+    The page works in world coordinates from the click onwards - that is what
+    the map's own coordinate system gives it - so there is nothing to convert
+    here beyond checking the point is on the island.
     """
     if not isinstance(entry, dict):
         return None
     east, north = number(entry.get('east')), number(entry.get('north'))
-    if east is not None and north is not None:
-        return east, north
-    x, y = number(entry.get('x')), number(entry.get('y'))
-    if x is None or y is None or mapped is None:
+    if east is None or north is None:
         return None
-    if not (0 <= x <= mapped.width and 0 <= y <= mapped.height):
+    if mapped is not None and not mapped.inside(east, north):
         return None
-    return mapped.world(x, y)
+    return east, north
 
 
 def loadout(body):
@@ -143,6 +140,7 @@ class MortarWeb:
         app.add_routes([
             web.get('/mortar/{token}', self.page),
             web.get('/mortar/{token}/map', self.picture),
+            web.get('/mortar/{token}/tiles/{z}/{x}/{y}', self.tile),
             web.get('/mortar/{token}/loadouts', self.loadouts),
             web.get('/static/{name}', self.asset),
             web.post('/api/mortar/calculate', self.solve),
@@ -171,6 +169,16 @@ class MortarWeb:
         if path is None:
             raise web.HTTPNotFound()
         return web.FileResponse(path, headers={'Cache-Control': 'private, max-age=86400'})
+
+    async def tile(self, request):
+        mapped = calibration(self.config)
+        if not self.known(request) or mapped is None:
+            raise web.HTTPNotFound()
+        path = tile_path(mapped, request.match_info['z'], request.match_info['x'],
+                         request.match_info['y'])
+        if path is None:
+            raise web.HTTPNotFound()
+        return web.FileResponse(path, headers={'Cache-Control': 'private, max-age=604800'})
 
     async def loadouts(self, request):
         mapped = calibration(self.config)

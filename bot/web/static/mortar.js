@@ -15,42 +15,58 @@ let TUBES = [];
 let map, layer, gun = null, target = null, line = null, ring = null, label = null;
 let pending = 0;
 
-/* --- coordinates ---------------------------------------------------- */
-/* Leaflet's CRS.Simple counts y upwards; the image counts it downwards. */
-const toImage = (latlng) => ({ x: latlng.lng, y: MAP.height - latlng.lat });
-const toLatLng = (x, y) => L.latLng(MAP.height - y, x);
+/* --- coordinates ----------------------------------------------------
+ * The page works in the game's own world X/Z metres. Leaflet carries them as
+ * (lat, lng) = (Z, X) with half a tile added, because a generated tile is
+ * named for the camera at its centre. This mirrors Calibration.leaflet() and
+ * Calibration.world() in bot/mortar/calibration.py, which is where the rule
+ * is defined and tested.
+ */
+const toWorld = (latlng) => ({ east: latlng.lng - MAP.offset, north: latlng.lat - MAP.offset });
+const toLatLng = (east, north) => L.latLng(north + MAP.offset, east + MAP.offset);
 
-function gridText(x, y) {
-  const east = MAP.originWorld[0] + (x - MAP.originPixel[0]) * MAP.eastPerPixel;
-  const north = MAP.originWorld[1] + (y - MAP.originPixel[1]) * MAP.northPerPixel;
+function gridText(east, north) {
   const step = Math.pow(10, 5 - MAP.digits);
   const part = (v) => String(Math.floor(v / step) % Math.pow(10, MAP.digits))
     .padStart(MAP.digits, '0');
   return `${part(east)} ${part(north)}`;
 }
 
+/* The tile pyramid's own CRS: one Leaflet unit per metre once scaled, north
+ * up, and rows counted the way the generator wrote them. */
+function enfusionCRS(scale) {
+  return L.Util.extend({}, L.CRS, {
+    projection: L.Projection.LonLat,
+    transformation: new L.Transformation(1 / scale, 0, -1 / scale, 0),
+    scale: (zoom) => Math.pow(2, zoom),
+    zoom: (value) => Math.log(value) / Math.LN2,
+    distance: (a, b) => Math.hypot(b.lng - a.lng, b.lat - a.lat),
+    infinite: true,
+  });
+}
+
 /* --- markers -------------------------------------------------------- */
-function marker(x, y, kind) {
+function marker(east, north, kind) {
   const icon = L.divIcon({
     className: '', iconSize: [34, 34],
     html: `<div class="marker ${kind}">${kind === 'gun' ? '📍' : '🎯'}</div>`,
   });
-  const pin = L.marker(toLatLng(x, y), { icon, draggable: true, autoPan: true })
+  const pin = L.marker(toLatLng(east, north), { icon, draggable: true, autoPan: true })
     .addTo(map);
   pin.on('drag', draw);
   pin.on('dragend', solve);
   return pin;
 }
 
-function place(x, y) {
+function place(east, north) {
   if (!gun) {
-    gun = marker(x, y, 'gun');
+    gun = marker(east, north, 'gun');
     el('hint').textContent = 'Now tap the target';
   } else if (!target) {
-    target = marker(x, y, 'target');
+    target = marker(east, north, 'target');
     el('hint').hidden = true;
   } else {
-    target.setLatLng(toLatLng(x, y));   // the gun stays put between targets
+    target.setLatLng(toLatLng(east, north));   // the gun stays put between targets
   }
   draw();
   solve();
@@ -64,8 +80,9 @@ function draw() {
   if (!gun || !target) return;
   const a = gun.getLatLng(), b = target.getLatLng();
   line = L.polyline([a, b], { color: '#d9a441', weight: 2 }).addTo(map);
-  const pa = toImage(a), pb = toImage(b);
-  const metres = Math.hypot(pb.x - pa.x, pb.y - pa.y) * MAP.metresPerPixel;
+  /* Map units are world metres, so the label needs no scaling. The figure the
+   * panel shows is still the engine's own. */
+  const metres = Math.hypot(b.lng - a.lng, b.lat - a.lat);
   label = L.marker(L.latLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2), {
     interactive: false,
     icon: L.divIcon({ className: '', html: `<span class="range-label">${Math.round(metres)} m</span>` }),
@@ -77,7 +94,7 @@ function drawRing() {
   const shell = currentRound();
   if (!gun || !shell) return;
   ring = L.circle(gun.getLatLng(), {
-    radius: shell.maxRange / MAP.metresPerPixel,   // CRS.Simple: radius is in pixels
+    radius: shell.maxRange,                        // map units are world metres
     color: '#d9a441', weight: 1, opacity: .5, fill: false, dashArray: '6 6',
     interactive: false,
   }).addTo(map);
@@ -139,7 +156,7 @@ async function solve() {
   const mine = ++pending;
   const body = {
     token: TOKEN, tube: el('tube').value, round: el('round').value,
-    gun: toImage(gun.getLatLng()), target: toImage(target.getLatLng()),
+    gun: toWorld(gun.getLatLng()), target: toWorld(target.getLatLng()),
   };
   try {
     const reply = await fetch('/api/mortar/calculate', {
@@ -214,25 +231,47 @@ async function start() {
   fillTubes();
   wire();
 
-  const bounds = [[0, 0], [MAP.height, MAP.width]];
+  const bounds = L.latLngBounds(toLatLng(0, 0), toLatLng(MAP.size, MAP.size));
   map = L.map('map', {
-    crs: L.CRS.Simple, minZoom: -5, maxZoom: 3, zoomSnap: .25,
-    attributionControl: false, tap: true,
+    crs: enfusionCRS(MAP.scale),
+    minZoom: 0, maxZoom: MAP.tiles ? MAP.tiles.maxZoom : 4,
+    zoomSnap: .25, attributionControl: false, tap: true,
   });
-  layer = L.imageOverlay(`/mortar/${TOKEN}/map`, bounds).addTo(map);
-  map.setMaxBounds(bounds);
+
+  if (MAP.tiles) {
+    /* Tile rows count up with Z where Leaflet counts down, and the deepest
+     * zoom is LOD 0, so both axes are turned around on the way out. */
+    const Inverted = L.TileLayer.extend({
+      getTileUrl(coords) {
+        coords.y = -(coords.y + 1);
+        return L.TileLayer.prototype.getTileUrl.call(this, coords);
+      },
+    });
+    const url = `/mortar/${TOKEN}/tiles/{z}/{x}/{y}`;
+    layer = new (MAP.tiles.invertY ? Inverted : L.TileLayer)(url, {
+      tileSize: MAP.tiles.tileSize, minZoom: 0, maxZoom: MAP.tiles.maxZoom,
+      zoomReverse: true, bounds, noWrap: true,
+    }).addTo(map);
+  } else {
+    const box = L.latLngBounds(toLatLng(...MAP.image.southWest),
+                               toLatLng(...MAP.image.northEast));
+    layer = L.imageOverlay(`/mortar/${TOKEN}/map`, box).addTo(map);
+  }
+
   map.fitBounds(bounds);
+  map.setMaxBounds(bounds.pad(0.2));
   map.on('click', (event) => {
-    const point = toImage(event.latlng);
-    if (point.x < 0 || point.y < 0 || point.x > MAP.width || point.y > MAP.height) return;
-    place(point.x, point.y);
+    const where = toWorld(event.latlng);
+    if (where.east < 0 || where.north < 0
+        || where.east > MAP.size || where.north > MAP.size) return;
+    place(where.east, where.north);
   });
   if (window.matchMedia('(hover: hover)').matches) {
     const cursor = el('cursor');
     cursor.hidden = false;
     map.on('mousemove', (event) => {
-      const point = toImage(event.latlng);
-      cursor.textContent = gridText(point.x, point.y);
+      const where = toWorld(event.latlng);
+      cursor.textContent = gridText(where.east, where.north);
     });
   }
 }

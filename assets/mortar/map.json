@@ -1,11 +1,16 @@
 {
   "name": "Everon",
-  "image": "",
-  "width": 0,
-  "height": 0,
   "digits": 3,
-  "reference": [
-    {"image": [0, 0], "world": [0, 0]},
-    {"image": [0, 0], "world": [0, 0]}
-  ]
+  "world": {
+    "size": 12800,
+    "offset": 50
+  },
+  "tiles": {
+    "directory": "assets/mortar/everon",
+    "pattern": "{z}/{x}/{y}/tile.jpg",
+    "tileSize": 256,
+    "maxZoom": 5,
+    "metresPerTile": 100,
+    "invertY": true
+  }
 }

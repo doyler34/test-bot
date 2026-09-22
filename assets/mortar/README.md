@@ -65,37 +65,88 @@ than offered with nothing behind it.
 
 ## The map page (`map.json`)
 
-`/mortar` works from typed grids with no map at all. Add a calibrated map and
-it also offers a page you tap instead - same engine, same tables, just a
-different way in. `map.json` is what calibrates it:
+`/mortar` works from typed grids with no map at all. Add map imagery and it
+also offers a page you tap instead - same engine, same tables, just a different
+way in.
+
+The page works in the game's own world X/Z metres from the click onwards.
+There is no eyeballing and no two-point calibration to do: the coordinate
+system is fixed by how the tiles are generated, and it is already written down
+below for Everon.
 
 ```json
 {
   "name": "Everon",
-  "image": "assets/mortar/everon.jpg",
-  "width": 8192,
-  "height": 8192,
   "digits": 3,
-  "reference": [
-    {"image": [412, 7780], "world": [1000, 1000]},
-    {"image": [7766, 430], "world": [12000, 12000]}
-  ]
+  "world": { "size": 12800, "offset": 50 },
+  "tiles": {
+    "directory": "assets/mortar/everon",
+    "pattern": "{z}/{x}/{y}/tile.jpg",
+    "tileSize": 256,
+    "maxZoom": 5,
+    "metresPerTile": 100,
+    "invertY": true
+  }
 }
 ```
 
-- `image` is the map picture, as a path inside this project.
-- `width` and `height` are that picture's real pixel size.
+- `world.size` is the island, metres on a side. Bohemia document Everon as
+  12.8 km square.
+- `world.offset` is half a tile. A generated tile is named for the camera at
+  its **centre**, not its corner, so world coordinates carry half a tile on the
+  way into the map and lose it on the way out.
+- `tiles.metresPerTile` is the ground one tile covers at the deepest zoom - one
+  downward screenshot, 100 m for a Reforger set.
+- `tiles.maxZoom` is how many LOD levels there are above LOD 0.
+- `tiles.invertY` because tile rows count upwards with Z while Leaflet counts
+  them down.
 - `digits` is how many digits a grid readout uses per axis: 3 gives `047 063`,
-  which is 100 m squares, the same rule the typed grids follow.
-- `reference` is two points, each pairing a pixel position with the world
-  coordinate it sits on. Their difference gives metres per pixel on each axis,
-  and the **sign** of that gives the axis direction - so a north-up image comes
-  out with a negative north-per-pixel on its own, with nothing assumed.
+  100 m squares, the same rule the typed grids follow.
 
-Pick the two points far apart, ideally near opposite corners: the further
-apart they are, the less a pixel of error in either one matters. They must
-differ in both x and y, and sit on different eastings and northings.
+The map scale is **not** a constant anybody chose. It falls out of the above:
 
-Nothing is guessed. A config that is missing, incomplete or self-contradictory
-turns the map page off and leaves `/mortar` on its grid boxes, rather than
-drawing on bounds nobody checked.
+    metres per map unit at zoom 0 = metresPerTile * 2 ** maxZoom / tileSize
+
+which for a Reforger tile set is `100 * 32 / 256` = exactly **12.5**. Change
+the tile size or the number of LODs and the scale follows on its own.
+
+### Getting the tiles
+
+The tiles are generated from the game itself with
+[EnfusionMapMaker](https://github.com/nickludlam/EnfusionMapMaker): its
+Enfusion Workbench tool drives the camera over the island taking one downward
+screenshot per 100 m, then `Scripts/crop_screenshots.py` cuts them to tiles and
+`Scripts/create_zoom_levels.py` builds the LODs above. Point `directory` at the
+result - the folder holding `0/`, `1/` … - and the page works. It can be an
+absolute path; a full Everon set is a lot of files.
+
+No tiles yet means no map page: `/mortar` keeps to its grid boxes and the log
+says what is missing, rather than drawing on nothing.
+
+### An image instead of tiles
+
+A single picture works too, and still needs no reference points - the world
+square is the calibration and the image is stretched over it:
+
+```json
+{ "name": "Everon", "world": { "size": 12800, "offset": 0 },
+  "image": { "path": "assets/mortar/everon.jpg" } }
+```
+
+Add `"southWest"` and `"northEast"` in world metres if the picture covers only
+part of the island. Tiles are better on a phone - a full-island image has to be
+downloaded whole before anything is drawn - but an image needs no game tools.
+
+### Credit and licensing
+
+The coordinate scheme, and the tooling that generates the tiles, come from
+[EnfusionMapMaker](https://github.com/nickludlam/EnfusionMapMaker) by Nick
+Ludlam, published under the
+[Arma Public License Share Alike](https://www.bohemia.net/community/licenses/arma-public-license-share-alike).
+Tiles generated with it are made from Bohemia's game content and carry the same
+licence: non-commercial, Arma-only, share-alike, with attribution. Keep that
+attribution wherever the map is served, and do not redistribute a tile set
+under anything else.
+
+Do not point `directory` at somebody else's live tile server. Generate a set,
+host it yourself.

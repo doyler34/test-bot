@@ -20,16 +20,22 @@ A page served by the bot itself: tap your mortar, tap the target, read the
 solution. Markers drag, the target moves on the next tap while the gun stays
 put, and the dashed ring is the selected round's own maximum range.
 
-The page does no ballistics. It sends two pixel positions and a loadout, and
+The page does no ballistics. It sends two world positions and a loadout, and
 the bot answers from the same engine the Discord command uses. There is one
 ballistic implementation and one set of tables.
+
+It works in Reforger's own world X/Z metres throughout - no latitude, no
+longitude, no geographic projection. Leaflet is bent to the game's coordinates
+rather than the map being bent to Leaflet's; `bot/mortar/calibration.py` holds
+that conversion and the tests check it against known Everon positions.
 
 ### Routes
 
 | Route | What it is |
 | --- | --- |
 | `GET /mortar/{token}` | the page, for a link that has not expired |
-| `GET /mortar/{token}/map` | the map picture |
+| `GET /mortar/{token}/map` | the map picture, when an image is configured |
+| `GET /mortar/{token}/tiles/{z}/{x}/{y}` | one map tile, when tiles are configured |
 | `GET /mortar/{token}/loadouts` | tubes, rounds, each round's reach, map calibration |
 | `POST /api/mortar/calculate` | a firing solution |
 | `GET /static/{name}` | the page's own stylesheet and script |
@@ -38,12 +44,13 @@ ballistic implementation and one set of tables.
 
 ```json
 {"token": "...", "tube": "m252", "round": "smoke",
- "gun": {"x": 412, "y": 7780}, "target": {"x": 1980, "y": 6402}, "climb": 0}
+ "gun": {"east": 4500, "north": 10776}, "target": {"east": 5200, "north": 10100},
+ "climb": 0}
 ```
 
-`x` and `y` are image pixels, converted server side off the one calibration.
-`{"east": ..., "north": ...}` is taken directly instead if you have world
-coordinates. `climb` is how much higher the target is than the gun, in metres.
+`east` and `north` are the game's own world X and Z in metres - the same
+numbers the map shows - and they must be on the island. `climb` is how much
+higher the target is than the gun, in metres.
 
 It answers:
 
@@ -71,8 +78,12 @@ expired or unknown link gets a plain "this link has expired" page.
 
 ## Turning it on
 
-1. Put a calibrated map in `assets/mortar/map.json` - see
-   `assets/mortar/README.md`. Without this the page stays off.
+1. Generate an Everon tile set with
+   [EnfusionMapMaker](https://github.com/nickludlam/EnfusionMapMaker) and point
+   `assets/mortar/map.json` at it - the coordinate system for Everon is already
+   filled in, so there is nothing to measure. A single image works too. See
+   `assets/mortar/README.md`, including the licensing that comes with tiles
+   made from game content. Without imagery the page stays off.
 2. Set `MORTAR_WEB_ENABLED=true` and `MORTAR_WEB_BASE_URL` in `.env`.
 3. Point a reverse proxy at `MORTAR_WEB_HOST:MORTAR_WEB_PORT` (127.0.0.1:8085
    by default) and give it HTTPS. The bot listens on loopback only, so the
