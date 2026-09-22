@@ -1,11 +1,13 @@
 # Mortar range tables
 
-`tables.json` holds one entry per tube. Azimuth and range never use this file -
-they come straight from the grids - but everything about elevation does.
+One entry per weapon. The engine in `bot/mortar/solution.py` knows nothing
+about any particular tube - it reads a profile from here and works everything
+out from that, so a new mortar is a change to this file and nothing else.
 
 ```json
 "m252": {
-  "name": "M252 81mm (US)",
+  "name": "M252 81mm",
+  "faction": "US",
   "shell": "HE M821",
   "mils": 6400,
   "source": "where the numbers came from, so they can be checked",
@@ -15,23 +17,36 @@ they come straight from the grids - but everything about elevation does.
 }
 ```
 
-- `mils` is the tube's own circle: 6400 on the M252 sight, 6000 on the 2B14.
-  Azimuth is worked out with it, so the two must never share a table.
+- `mils` is that sight's own full circle: 6400 on the M252, 6000 on the 2B14.
+  Azimuth is worked out with it, so two tubes can never share a table.
 - Each row is `[range m, elevation mils, time of flight s, mils per 100 m of
-  height difference]`, lowest range first.
+  height difference]`, lowest range first. A ring needs two rows to be usable.
 - Between two rows every column is interpolated. Outside a ring's first and
   last row that ring does not reach, and when no ring reaches, the answer is
   OUT OF RANGE. Nothing is ever extrapolated past the ends of a ring.
+- The lowest ring that reaches is the one offered - tightest group, shortest
+  flight - with the higher rings listed under it for a steeper arc.
 - Height: a target above the gun is met earlier in the shell's fall, so the
   tube has to throw further and the elevation comes down. The per-100 m column
   is what that correction is worked out from.
 
-## Where the M252 numbers came from
+## Where the numbers came from
 
-Copied out of the game by vova_4104 and published at
+Both tables were copied out of the game by vova_4104 and published at
 github.com/147888sf/ArmA-Reforger-mortar-calculator (commit 89f8c21), whose
-readme grants reuse. HE M821, rings 0-4, 50-2900 m. Real-world M252 data does
-not apply - Reforger's ballistics are its own.
+readme grants reuse:
 
-The 2B14 entry is deliberately empty until its own table is put in. It fires
-O-832DU on a 6000 mil circle and must not borrow anything from the M252.
+| Tube | Faction | Shell | Sight | Rings | Reach |
+| --- | --- | --- | --- | --- | --- |
+| M252 81mm | US | HE M821 | 6400 mils | 0-4 | 50-2900 m |
+| 2B14 Podnos 82mm | USSR | HE O-832DU | 6000 mils | 0-4 | 50-2300 m |
+
+Real-world figures for either weapon do not apply - Reforger's ballistics are
+its own. Smoke, illumination and practice rounds have their own tables in that
+repository if they are ever wanted here.
+
+## Adding another tube
+
+Add an entry with its own `mils`, `shell` and `rings`, and say in `source`
+where the rows came from. It appears in the `/mortar` dropdown on the next
+restart; no code changes.

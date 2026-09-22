@@ -1,9 +1,8 @@
 """/mortar - two grids in, a firing solution out.
 
-Azimuth and range come from the grids; elevation comes from the game's range
-tables, read at the tube's own mil circle. The lowest ring that reaches is the
-one to use - tightest grouping, shortest time of flight - and the rest are
-listed underneath in case a higher arc is wanted over a ridge.
+The command holds no ballistics of its own. Picking a tube loads that weapon's
+profile - sight, shell, rings and the ranges they cover - and the engine works
+the rest out, so a new tube is a line in assets/mortar/tables.json.
 """
 import asyncio
 from contextlib import closing
@@ -14,8 +13,7 @@ import discord
 from discord import app_commands
 
 from bot.mortar.plot import render
-from bot.mortar.solution import (OUT_OF_RANGE, bearing, mil_circle, parse_grid,
-                                 solution, tube, tube_names)
+from bot.mortar.solution import OUT_OF_RANGE, bearing, parse_grid, profile, profiles, solution
 
 LOG = logging.getLogger('reforger.mortar')
 HELP = ('Grids are 4, 6, 8 or 10 digits - half easting, half northing. '
@@ -33,10 +31,13 @@ def height(text):
         raise ValueError('Altitudes are in metres, as numbers.')
 
 
-def elevation_field(best, every):
+def elevation_field(weapon, best, every):
     if best is None:
+        if not weapon.loaded:
+            return f'**{OUT_OF_RANGE}** — no range table is loaded for this tube.'
+        low, high = weapon.span
         return (f'**{OUT_OF_RANGE}** — no ring reaches that far. '
-                'Move the gun up, or pick a nearer target.')
+                f'This tube covers {low:.0f}-{high:.0f} m.')
     lines = [f'**{best.elevation:.0f}** mils on **ring {best.ring}**',
              f'Flight {best.flight:.0f}s · dispersion {best.dispersion:.0f} m']
     others = [r for r in every if r.ring != best.ring]
@@ -47,29 +48,31 @@ def elevation_field(best, every):
     return '\n'.join(lines)
 
 
-def solution_embed(name, label, gun, target, mils, distance, climb, circle):
-    best, every = solution(name, distance, climb)
+def solution_embed(weapon, gun, target, mils, distance, climb=0.0):
+    best, every = solution(weapon, distance, climb)
     embed = discord.Embed(title='MORTAR FIRING SOLUTION',
                           colour=0xC0504D if best is None else 0xD9A441)
-    embed.add_field(name='Azimuth', value=f'**{mils:.0f}** mils\n{mils * 360 / circle:.1f}°')
+    embed.add_field(name='Azimuth', value=f'**{mils:.0f}** mils\n{mils * 360 / weapon.mils:.1f}°')
     embed.add_field(name='Range', value=f'**{distance:.0f}** m')
-    embed.add_field(name='Tube', value=f'{label}\n{circle} mil circle')
-    embed.add_field(name='Elevation', value=elevation_field(best, every), inline=False)
+    embed.add_field(name='Tube', value=f'{weapon.label}\n{weapon.mils} mil sight')
+    embed.add_field(name='Elevation', value=elevation_field(weapon, best, every), inline=False)
     embed.add_field(name='Gun', value=f'`{gun[0]:05d} {gun[1]:05d}`')
     embed.add_field(name='Target', value=f'`{target[0]:05d} {target[1]:05d}`')
     if climb:
         correction = f'\n{best.correction:+.0f} mils' if best else ''
         embed.add_field(name='Height', value=f'Target {climb:+.0f} m{correction}')
-    shell = tube(name).get('shell')
-    embed.set_footer(text=f'{shell} · in-game range table' if shell else 'In-game range table')
+    span = weapon.span
+    reach = f' · {span[0]:.0f}-{span[1]:.0f} m' if span else ''
+    embed.set_footer(text=f'{weapon.shell}{reach} · in-game range table'.strip(' ·'))
     return embed
 
 
 class TubeSelect(discord.ui.Select):
     def __init__(self, chosen):
         super().__init__(placeholder='Change tube', options=[
-            discord.SelectOption(label=name, value=key, default=key == chosen)
-            for key, name in tube_names().items()][:25])
+            discord.SelectOption(label=weapon.label, value=key, description=weapon.shell or None,
+                                 default=key == chosen)
+            for key, weapon in profiles().items()][:25])
 
     async def callback(self, interaction):
         # Take the click before rendering; Discord allows three seconds.
@@ -78,29 +81,27 @@ class TubeSelect(discord.ui.Select):
 
 
 class MortarView(discord.ui.View):
-    def __init__(self, name, gun, target, climb=0.0):
+    def __init__(self, tube, gun, target, climb=0.0):
         super().__init__(timeout=600)
-        self.tube, self.gun, self.target, self.climb = name, gun, target, climb
-        if len(tube_names()) > 1:
-            self.add_item(TubeSelect(name))
+        self.tube, self.gun, self.target, self.climb = tube, gun, target, climb
+        if len(profiles()) > 1:
+            self.add_item(TubeSelect(tube))
 
-    async def show(self, interaction, name, edit=False):
+    async def show(self, interaction, tube, edit=False):
         """Render and deliver the solution. The caller has already acknowledged
         the interaction, so this goes out as a followup or an edit."""
-        self.tube = name
-        label = tube_names().get(name, name)
-        circle = mil_circle(name)
-        mils, distance = bearing(self.gun, self.target, circle)
-        embed = solution_embed(name, label, self.gun, self.target, mils, distance,
-                               self.climb, circle)
+        self.tube = tube
+        weapon = profile(tube)
+        mils, distance = bearing(self.gun, self.target, weapon.mils)
+        embed = solution_embed(weapon, self.gun, self.target, mils, distance, self.climb)
         for item in self.children:
             if isinstance(item, discord.ui.Select):
                 for option in item.options:
-                    option.default = option.value == name
+                    option.default = option.value == tube
         picture = None
         if interaction.app_permissions.attach_files:
             picture = await asyncio.to_thread(render, self.gun, self.target, mils,
-                                              distance, label, circle)
+                                              distance, weapon.label, weapon.mils)
         if picture is None:
             if edit:
                 await interaction.edit_original_response(embed=embed, view=self)
@@ -136,9 +137,9 @@ class MortarModal(discord.ui.Modal, title='Mortar firing solution'):
     target_height = discord.ui.TextInput(label='Target altitude (m)', placeholder='Optional',
                                          required=False, max_length=6)
 
-    def __init__(self, name):
+    def __init__(self, tube):
         super().__init__()
-        self.tube = name
+        self.tube = tube
 
     async def on_submit(self, interaction):
         try:
@@ -184,14 +185,15 @@ class MortarCommand:
         else:
             await interaction.response.send_message(text, ephemeral=True)
 
-    async def show(self, interaction: discord.Interaction):
+    async def show(self, interaction: discord.Interaction, tube: str | None = None):
         if interaction.guild_id != self.bot.config.guild_id:
             await interaction.response.send_message('Use /mortar in the OYB Discord server.',
                                                     ephemeral=True)
             return
-        tubes = tube_names()
-        if not tubes:
+        loaded = profiles()
+        if not loaded:
             await interaction.response.send_message(
                 'No mortar tubes are configured. See `assets/mortar/README.md`.', ephemeral=True)
             return
-        await interaction.response.send_modal(MortarModal(next(iter(tubes))))
+        await interaction.response.send_modal(
+            MortarModal(tube if tube in loaded else next(iter(loaded))))

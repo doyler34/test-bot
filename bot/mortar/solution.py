@@ -1,13 +1,13 @@
-"""Firing solution from two map grids: azimuth, range and tube elevation.
+"""The ballistic engine: one shared calculation, one profile per weapon.
 
-Azimuth and range fall out of the grid difference. Elevation does not - it is
-read from the game's own range tables in assets/mortar/tables.json, one block
-per ring, and only ever interpolated between two rows that are actually in the
-table. Past a ring's first or last row that ring simply does not reach; when
-no ring reaches, the answer is OUT OF RANGE rather than a guess.
+Nothing here knows what a mortar is called or how many mils are in its circle.
+A tube is a profile loaded from assets/mortar/tables.json - its sight, its
+shell, its rings and the ranges each ring covers - and the same code works any
+of them out. Adding a tube is a change to that file, not to this one.
 
-Mil circles differ by tube: the M252 sight reads 6400 to the circle, the 2B14
-reads 6000, so azimuth is always worked out with the tube's own circle.
+Elevation is only ever read between two rows the profile actually holds. Past
+a ring's ends that ring does not reach, and when none of them reach the answer
+is OUT OF RANGE.
 """
 from dataclasses import dataclass
 from functools import lru_cache
@@ -17,7 +17,6 @@ import math
 
 TABLES = Path(__file__).resolve().parents[2] / 'assets/mortar/tables.json'
 OUT_OF_RANGE = 'OUT OF RANGE'
-NATO_MILS = 6400
 
 
 def parse_grid(text):
@@ -35,38 +34,16 @@ def parse_grid(text):
     return int(digits[:half]) * step, int(digits[half:]) * step
 
 
-def bearing(gun, target, circle=NATO_MILS):
-    """Azimuth in the tube's mils, and range in metres, north-up."""
+def bearing(gun, target, circle):
+    """Azimuth in the sight's own mils, and range in metres, north-up.
+
+    ``circle`` is how many mils that sight puts in a full turn - 6400 on the
+    M252, 6000 on the 2B14 - and it always comes from the profile.
+    """
     east, north = target[0] - gun[0], target[1] - gun[1]
     distance = math.hypot(east, north)
     mils = math.atan2(east, north) * circle / (2 * math.pi) % circle
     return mils, distance
-
-
-@lru_cache(maxsize=4)
-def tables(path=None):
-    try:
-        data = json.loads(Path(path or TABLES).read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def tube(name, path=None):
-    return tables(path).get(name) or {}
-
-
-def tube_names(path=None):
-    return {key: value.get('name', key) for key, value in tables(path).items()}
-
-
-def mil_circle(name, path=None):
-    return tube(name, path).get('mils') or NATO_MILS
-
-
-def has_table(name, path=None):
-    return any(len(block.get('rows') or []) >= 2
-               for block in (tube(name, path).get('rings') or {}).values())
 
 
 @dataclass(frozen=True)
@@ -78,8 +55,75 @@ class Ring:
     correction: float = 0.0
 
 
+@dataclass(frozen=True)
+class Profile:
+    """One weapon: its sight, its shell and the table it fires off."""
+    key: str
+    name: str
+    faction: str
+    shell: str
+    mils: int
+    rings: tuple
+
+    @property
+    def label(self):
+        return f'{self.faction} {self.name}' if self.faction else self.name
+
+    @property
+    def loaded(self):
+        return bool(self.rings)
+
+    @property
+    def span(self):
+        """The shortest and longest range any of its rings covers."""
+        if not self.rings:
+            return None
+        return (min(rows[0][0] for _, _, rows in self.rings),
+                max(rows[-1][0] for _, _, rows in self.rings))
+
+
+def build(key, entry):
+    """One weapon, or None when it is not fit to fire off.
+
+    A sight with no mil circle is the dangerous case: guessing one would put
+    every azimuth out by the difference between 6400 and 6000, so such a tube
+    is left out of the list entirely rather than quietly assumed to be NATO.
+    """
+    try:
+        mils = int(entry['mils'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if mils <= 0:
+        return None
+    rings = []
+    for ring in sorted(entry.get('rings') or {}, key=lambda r: (len(r), r)):
+        block = entry['rings'][ring]
+        rows = sorted(tuple(row) for row in block.get('rows') or [])
+        if len(rows) >= 2:
+            rings.append((ring, block.get('dispersion'), tuple(rows)))
+    return Profile(key=key, name=entry.get('name', key), faction=entry.get('faction', ''),
+                   shell=entry.get('shell', ''), mils=mils, rings=tuple(rings))
+
+
+@lru_cache(maxsize=4)
+def profiles(path=None):
+    """Every weapon in the table file, in the order it is written."""
+    try:
+        data = json.loads(Path(path or TABLES).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    built = ((key, build(key, entry)) for key, entry in data.items() if isinstance(entry, dict))
+    return {key: weapon for key, weapon in built if weapon is not None}
+
+
+def profile(key, path=None):
+    return profiles(path).get(key)
+
+
 def between(rows, distance, column):
-    """One column read off the table at this range.
+    """One column read off a ring at this range.
 
     Only ever between two rows the table actually holds; outside that span the
     ring does not reach and there is nothing to read.
@@ -95,30 +139,29 @@ def between(rows, distance, column):
     return None
 
 
-def rings(name, distance, climb=0.0, path=None):
-    """Every ring that reaches this range, lowest ring first.
+def rings(weapon, distance, climb=0.0):
+    """Every ring of this weapon that reaches, lowest ring first.
 
     ``climb`` is how much higher the target sits than the gun, in metres. A
     target above the gun is met earlier in the shell's fall, so the tube has to
-    throw further and the elevation comes down; the table's own mils-per-100m
-    column is what that is worked out from.
+    throw further and the elevation comes down; each row's own mils-per-100m
+    figure is what that is worked out from.
     """
-    blocks = tube(name, path).get('rings') or {}
+    if weapon is None:
+        return []
     found = []
-    for key in sorted(blocks, key=lambda k: (len(k), k)):
-        rows = sorted(blocks[key].get('rows') or [])
+    for ring, dispersion, rows in weapon.rings:
         elevation = between(rows, distance, 1)
         if elevation is None:
             continue
-        per_100 = between(rows, distance, 3) or 0.0
-        correction = -climb * per_100 / 100
-        found.append(Ring(key, elevation + correction, between(rows, distance, 2),
-                          blocks[key].get('dispersion'), correction))
+        correction = -climb * (between(rows, distance, 3) or 0.0) / 100
+        found.append(Ring(ring, elevation + correction, between(rows, distance, 2),
+                          dispersion, correction))
     return found
 
 
-def solution(name, distance, climb=0.0, path=None):
+def solution(weapon, distance, climb=0.0):
     """The rings that reach, and the one to use: the lowest that reaches, which
     is the tightest grouping and the shortest time of flight."""
-    found = rings(name, distance, climb, path)
+    found = rings(weapon, distance, climb)
     return found[0] if found else None, found
