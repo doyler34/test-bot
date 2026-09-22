@@ -4,10 +4,10 @@ The API is tested against the engine itself rather than against numbers typed
 in here, so a table change can never leave the page and the Discord command
 disagreeing.
 
-The Everon figures - 12.8 km square, 100 m tiles centred on the camera, six
-LODs - and the town coordinates used to check them come from EnfusionMapMaker
-(https://github.com/nickludlam/EnfusionMapMaker, APL-SA), which is what
-generates the tile sets this reads.
+The Everon map layer - its size, its coordinate_transform and the earth
+correction - is GeNeFRAG's, from ArmaReforger/maps_core/all_arma_maps.json
+(MIT, (c) 2025 Gerhard Froehlich). The town coordinates used to check it come
+from EnfusionMapMaker's everon-locations.js (APL-SA).
 """
 import json
 from pathlib import Path
@@ -16,19 +16,23 @@ import unittest
 
 from aiohttp.test_utils import AioHTTPTestCase
 
-from bot.mortar.calibration import (Calibration, NotCalibrated, Picture, Tiles, calibration,
-                                    image_path, read, reason, tile_path)
+from bot.mortar.calibration import (Axis, Calibration, NotCalibrated, Picture, Tiles,
+                                    calibration, image_path, read, reason, tile_path)
 from bot.mortar.solution import bearing, profile, solution
 from bot.web.server import MortarWeb, calculate, catalogue, loadout, point
 from bot.web.sessions import Sessions
 
-# Everon as EnfusionMapMaker captures it: 12.8 km square, LOD0 tiles one 100 m
-# screenshot each, drawn 256 px across, six zoom levels.
-EVERON = Tiles(directory='assets/mortar/everon', pattern='{z}/{x}/{y}/tile.jpg',
-               tile_size=256, max_zoom=5, metres_per_tile=100)
-MAP = Calibration(name='Everon', size=12800, offset=50, digits=3, tiles=EVERON)
+# GeNeFRAG's Everon entry, copied as it stands in all_arma_maps.json.
+EVERON = {'name': 'Everon', 'namespace': 'everon', 'size': [12800, 12800], 'max_zoom': 7,
+          'coordinate_transform': {'lng': {'cof': 50.0, 'offset': 0.0},
+                                   'lat': {'cof': -50.0, 'offset': -256.0}},
+          'earth_correction': True, 'digits': 3}
 
-# Named places from EnfusionMapMaker's own everon-locations.js, as world X/Z.
+MAP = Calibration(name='Everon', width=12800, height=12800, max_zoom=7,
+                  lng=Axis(50.0, 0.0), lat=Axis(-50.0, -256.0), earth_correction=True,
+                  tiles=Tiles(directory='/nowhere'))
+
+# Named places from EnfusionMapMaker's everon-locations.js, as world X/Z.
 TOWNS = {'Saint Phillipe': (4500.872, 10776.053),
          'Montignac': (4775.641, 7086.945),
          'Entre-Deux': (5760.571, 7061.821),
@@ -36,51 +40,46 @@ TOWNS = {'Saint Phillipe': (4500.872, 10776.053),
          'Saint Pierre': (9689.432, 1558.166)}
 
 
-def written(entry, root=None):
-    folder = Path(tempfile.mkdtemp())
-    path = folder / 'map.json'
+def written(entry):
+    path = Path(tempfile.mkdtemp()) / 'map.json'
     path.write_text(json.dumps(entry))
     return str(path)
 
 
-def with_tiles():
-    """A config pointing at a tile directory that exists, with one tile in it."""
+def with_tiles(extra=None):
+    """A config pointing at a pyramid that exists, with one tile in it."""
     root = Path(tempfile.mkdtemp())
-    tile = root / 'tiles' / '5' / '45' / '108'
+    tile = root / 'everon_sat' / '7' / '64'
     tile.mkdir(parents=True)
-    (tile / 'tile.jpg').write_bytes(b'\xff\xd8\xff')
-    # Absolute, because a config's relative paths are read from the project
-    # root and this pyramid is off in a temporary directory.
-    entry = {'name': 'Everon', 'digits': 3, 'world': {'size': 12800, 'offset': 50},
-             'tiles': {'directory': str(root / 'tiles'), 'pattern': '{z}/{x}/{y}/tile.jpg',
-                       'tileSize': 256, 'maxZoom': 5, 'metresPerTile': 100}}
-    (root / 'map.json').write_text(json.dumps(entry))
-    return str(root / 'map.json'), str(root), entry
+    (tile / '64.webp').write_bytes(b'RIFF....WEBP')
+    entry = {**EVERON, 'tiles': {'directory': str(root / 'everon_sat'),
+                                 'pattern': '{z}/{x}/{y}.webp', 'tileSize': 256}}
+    entry.update(extra or {})
+    path = root / 'map.json'
+    path.write_text(json.dumps(entry))
+    return str(path), str(root), entry
 
 
-class ScaleTests(unittest.TestCase):
-    """The scale is arithmetic off the tile geometry, not an eyeballed number."""
+class TransformTests(unittest.TestCase):
+    """GeNeFRAG's coordinate_transform, both ways."""
 
-    def test_the_reforger_tile_set_scales_to_exactly_twelve_and_a_half(self):
-        # One LOD0 tile is 100 m of world drawn 256 px across, and there are
-        # five doublings above it: 100 * 32 / 256.
-        self.assertEqual(EVERON.scale, 12.5)
-        self.assertEqual(MAP.scale, 12.5)
+    def test_the_centre_of_the_map_is_the_centre_of_the_island(self):
+        # The earth correction is zero in the middle, so this is the one point
+        # that pins the transform with nothing else in the way.
+        self.assertEqual(MAP.world(128, 128), (6400.0, 6400.0))
+        self.assertEqual(MAP.leaflet(6400, 6400), (128.0, 128.0))
 
-    def test_the_scale_follows_the_tiles_rather_than_being_fixed(self):
-        # Halve the tile size and the scale halves with it; nothing is baked in.
-        self.assertEqual(EVERON.__class__(**{**EVERON.__dict__, 'tile_size': 128}).scale, 25.0)
-        self.assertEqual(EVERON.__class__(**{**EVERON.__dict__, 'max_zoom': 4}).scale, 6.25)
-        self.assertEqual(EVERON.__class__(**{**EVERON.__dict__, 'metres_per_tile': 50}).scale,
-                         6.25)
+    def test_the_imagery_stops_where_the_correction_pulls_it(self):
+        # 100 m comes off the span, 50 m at each end.
+        self.assertEqual(MAP.world(256, 0), (50.0, 50.0))
+        self.assertEqual(MAP.world(0, 256), (12750.0, 12750.0))
+        self.assertEqual(MAP.corners, ((50.0, 50.0), (12750.0, 12750.0)))
 
-    def test_an_untiled_map_is_drawn_a_metre_to_the_unit(self):
-        plain = Calibration(name='Flat', size=1000, offset=0)
-        self.assertEqual(plain.scale, 1.0)
-
-
-class EveronCoordinateTests(unittest.TestCase):
-    """World X/Z in, world X/Z out, through the map's own coordinate system."""
+    def test_north_is_up_and_east_is_right(self):
+        south, north = MAP.leaflet(6400, 1000), MAP.leaflet(6400, 12000)
+        west, east = MAP.leaflet(1000, 6400), MAP.leaflet(12000, 6400)
+        self.assertLess(north[0], south[0])   # lat grows downwards on this map
+        self.assertLess(west[1], east[1])
 
     def test_known_towns_survive_the_round_trip(self):
         for name, (east, north) in TOWNS.items():
@@ -88,37 +87,6 @@ class EveronCoordinateTests(unittest.TestCase):
             back = MAP.world(lat, lng)
             self.assertAlmostEqual(back[0], east, places=9, msg=name)
             self.assertAlmostEqual(back[1], north, places=9, msg=name)
-
-    def test_known_towns_survive_the_round_trip_through_pixels(self):
-        # Every zoom level, because the projection is where a scale error hides.
-        for name, (east, north) in TOWNS.items():
-            for zoom in range(0, 6):
-                x, y = MAP.projected(east, north, zoom)
-                back = MAP.unprojected(x, y, zoom)
-                self.assertAlmostEqual(back[0], east, places=6, msg=f'{name} @ z{zoom}')
-                self.assertAlmostEqual(back[1], north, places=6, msg=f'{name} @ z{zoom}')
-
-    def test_the_corners_of_the_island_land_where_they_should(self):
-        # Half a tile is added because tiles are named for their centre camera.
-        self.assertEqual(MAP.leaflet(0, 0), (50, 50))
-        self.assertEqual(MAP.leaflet(12800, 12800), (12850, 12850))
-        self.assertEqual(MAP.world(50, 50), (0, 0))
-        self.assertEqual(MAP.bounds, ((0.0, 0.0), (12800.0, 12800.0)))
-
-    def test_a_world_point_falls_in_the_tile_that_holds_it(self):
-        # At the deepest zoom a tile is 100 m, centred on a multiple of 100, so
-        # the index is the coordinate in hundreds.
-        self.assertEqual(MAP.tile(0, 0), (0, 0))
-        self.assertEqual(MAP.tile(100, 0), (1, 0))
-        self.assertEqual(MAP.tile(0, 12800), (0, 128))
-        self.assertEqual(MAP.tile(4500.872, 10776.053), (45, 108))
-        # One zoom out, a tile covers twice the ground.
-        self.assertEqual(MAP.tile(4500.872, 10776.053, zoom=4), (22, 54))
-
-    def test_north_is_up_and_east_is_right(self):
-        middle = MAP.projected(6400, 6400, 5)
-        self.assertGreater(MAP.projected(7400, 6400, 5)[0], middle[0])   # east  -> right
-        self.assertLess(MAP.projected(6400, 7400, 5)[1], middle[1])      # north -> up
 
     def test_a_kilometre_on_the_map_is_a_kilometre_to_the_engine(self):
         # Two points exactly 1000 m apart must reach the engine as 1000 m.
@@ -133,77 +101,99 @@ class EveronCoordinateTests(unittest.TestCase):
                                 'target': {'east': target[0], 'north': target[1]}}, MAP)
             self.assertEqual(answer['range_m'], 1000)
 
+    def test_a_kilometre_of_map_is_a_kilometre_of_world(self):
+        # The same distance measured through the map rather than around it.
+        a, b = MAP.leaflet(6000, 6000), MAP.leaflet(7000, 6000)
+        first, second = MAP.world(*a), MAP.world(*b)
+        self.assertAlmostEqual(second[0] - first[0], 1000, places=6)
+
+    def test_a_world_point_falls_in_the_tile_that_holds_it(self):
+        # 128 tiles across at the deepest zoom; the centre sits on the seam.
+        self.assertEqual(MAP.tile(6400, 6400), (64, 64))
+        self.assertEqual(MAP.tile(60, 60), (0, 127))
+        self.assertEqual(MAP.tile(12740, 12740), (127, 0))
+        # One zoom out, a tile covers twice the ground.
+        self.assertEqual(MAP.tile(6400, 6400, zoom=6), (32, 32))
+        self.assertEqual(MAP.tile(6400, 6400, zoom=0), (0, 0))
+
+    def test_a_map_without_the_correction_spans_the_whole_island(self):
+        plain = Calibration(name='Plain', width=12800, height=12800, max_zoom=7,
+                            lng=Axis(50.0, 0.0), lat=Axis(-50.0, -256.0),
+                            tiles=Tiles(directory='/nowhere'))
+        self.assertEqual(plain.world(128, 128), (6400.0, 6400.0))
+        self.assertEqual(plain.corners, ((0.0, 0.0), (12800.0, 12800.0)))
+
+    def test_points_off_the_imagery_are_not_on_the_map(self):
+        self.assertTrue(MAP.inside(6400, 6400))
+        self.assertTrue(MAP.inside(50, 50))
+        self.assertFalse(MAP.inside(49, 6400))
+        self.assertFalse(MAP.inside(6400, 12751))
+        self.assertFalse(MAP.inside(-100, 0))
+
     def test_a_town_reads_as_its_grid(self):
         self.assertEqual(MAP.grid(*TOWNS['Saint Phillipe']), '045 107')
         self.assertEqual(MAP.grid(*TOWNS['Saint Pierre']), '096 015')
 
-    def test_points_off_the_island_are_not_on_the_map(self):
-        self.assertTrue(MAP.inside(0, 0))
-        self.assertTrue(MAP.inside(12800, 12800))
-        self.assertTrue(MAP.inside(-50, -50))        # the outermost tile centres
-        self.assertFalse(MAP.inside(-51, 0))
-        self.assertFalse(MAP.inside(0, 12851))
-
 
 class CalibrationTests(unittest.TestCase):
-    def test_a_config_with_tiles_on_disk_loads(self):
+    def test_genefrags_entry_loads_as_it_stands(self):
         path, root, entry = with_tiles()
-        mapped = read(entry, root)
-        self.assertEqual(mapped.scale, 12.5)
-        self.assertEqual(mapped.size, 12800)
-        self.assertIsNotNone(tile_path(mapped, 5, 45, 108))
+        mapped = read(entry)
+        self.assertEqual(mapped.size, (12800.0, 12800.0))
+        self.assertEqual(mapped.max_zoom, 7)
+        self.assertEqual((mapped.lng.cof, mapped.lng.offset), (50.0, 0.0))
+        self.assertEqual((mapped.lat.cof, mapped.lat.offset), (-50.0, -256.0))
+        self.assertTrue(mapped.earth_correction)
+        self.assertEqual(mapped.world(128, 128), (6400.0, 6400.0))
+        self.assertIsNotNone(tile_path(mapped, 7, 64, 64))
 
     def test_tiles_that_have_not_been_generated_are_not_pretended_into_existence(self):
-        entry = {'world': {'size': 12800}, 'tiles': {'directory': 'not/generated/yet'}}
+        entry = {**EVERON, 'tiles': {'directory': 'not/generated/yet'}}
         with self.assertRaises(NotCalibrated) as caught:
             read(entry)
-        self.assertIn('generate them first', str(caught.exception))
+        self.assertIn('generate_tiles.py', str(caught.exception))
 
     def test_a_config_that_cannot_be_trusted_is_refused(self):
         for broken, complaint in [
-                ({}, 'world'),
-                ({'world': {}}, 'size'),
-                ({'world': {'size': 0}}, 'greater than zero'),
-                ({'world': {'size': 'big'}}, 'number'),
-                ({'world': {'size': 12800}}, 'no imagery'),
-                ({'world': {'size': 12800}, 'image': {}}, 'needs a "path"'),
-                ({'world': {'size': 12800}, 'image': {'path': 'nope.png'}}, 'No map image')]:
+                ({}, 'size'),
+                ({**EVERON, 'size': [0, 0]}, 'greater than zero'),
+                ({**EVERON, 'size': 'big'}, 'size'),
+                ({k: v for k, v in EVERON.items() if k != 'coordinate_transform'},
+                 'coordinate_transform'),
+                ({**EVERON, 'coordinate_transform': {'lng': {'cof': 50}}}, '"lat"'),
+                ({**EVERON, 'coordinate_transform': {'lng': {'cof': 0}, 'lat': {'cof': -50}}},
+                 'cannot be zero'),
+                (EVERON, 'no imagery'),
+                ({**EVERON, 'image': {}}, 'needs a "path"'),
+                ({**EVERON, 'image': {'path': 'nope.png'}}, 'No map image')]:
             with self.assertRaises(NotCalibrated) as caught:
                 read(broken)
             self.assertIn(complaint, str(caught.exception))
 
     def test_a_tile_pattern_must_name_all_three_indices(self):
         path, root, entry = with_tiles()
-        entry['tiles']['pattern'] = '{z}/{x}/tile.jpg'
+        entry['tiles']['pattern'] = '{z}/{x}.webp'
         with self.assertRaises(NotCalibrated) as caught:
-            read(entry, root)
+            read(entry)
         self.assertIn('{z}, {x} and {y}', str(caught.exception))
 
-    def test_an_image_map_needs_no_reference_points(self):
-        # The world square is the calibration; an image is just stretched over it.
-        entry = {'world': {'size': 12800}, 'image': {'path': 'assets/mortar/tables.json'}}
-        mapped = read(entry)
-        self.assertEqual(mapped.picture.south_west, (0.0, 0.0))
-        self.assertEqual(mapped.picture.north_east, (12800.0, 12800.0))
+    def test_an_image_works_in_place_of_tiles(self):
+        mapped = read({**EVERON, 'image': {'path': 'assets/mortar/tables.json'}})
+        self.assertIsNone(mapped.tiles)
         self.assertIsNotNone(image_path(mapped))
+        self.assertEqual(mapped.world(128, 128), (6400.0, 6400.0))
 
-    def test_an_image_can_cover_part_of_the_world(self):
-        entry = {'world': {'size': 12800},
-                 'image': {'path': 'assets/mortar/tables.json',
-                           'southWest': [2000, 3000], 'northEast': [6000, 7000]}}
-        self.assertEqual(read(entry).picture.south_west, (2000.0, 3000.0))
-        entry['image']['northEast'] = [1000, 7000]
-        with self.assertRaises(NotCalibrated):
-            read(entry)
-
-    def test_the_shipped_config_carries_everon_but_no_imagery_yet(self):
+    def test_the_shipped_config_is_genefrags_everon_awaiting_tiles(self):
         shipped = json.loads(Path('assets/mortar/map.json').read_text())
-        self.assertEqual(shipped['world'], {'size': 12800, 'offset': 50})
-        self.assertEqual(shipped['tiles']['metresPerTile'], 100)
-        self.assertEqual(shipped['tiles']['maxZoom'], 5)
-        # No tiles generated, so the page stays off rather than drawing nothing.
+        self.assertEqual(shipped['size'], [12800, 12800])
+        self.assertEqual(shipped['max_zoom'], 7)
+        self.assertEqual(shipped['coordinate_transform'],
+                         EVERON['coordinate_transform'])
+        self.assertTrue(shipped['earth_correction'])
+        self.assertIn('GeNeFRAG', shipped['_source'])
+        # No tiles generated yet, so the page stays off rather than drawing nothing.
         self.assertIsNone(calibration())
-        self.assertIn('generate them first', reason())
+        self.assertIn('generate_tiles.py', reason())
 
     def test_an_uncalibrated_map_turns_the_page_off_rather_than_guessing(self):
         self.assertIsNone(calibration(written({'name': 'Nothing yet'})))
@@ -212,21 +202,20 @@ class CalibrationTests(unittest.TestCase):
 
     def test_a_tile_request_cannot_walk_out_of_its_directory(self):
         path, root, entry = with_tiles()
-        mapped = read(entry, root)
-        for z, x, y in [('../../etc', 45, 108), (5, '../..', 108), (5, 45, '../../../etc/passwd'),
-                        ('nope', 1, 1), (-1, 45, 108), (99, 45, 108), (5, -1, 108)]:
+        mapped = read(entry)
+        for z, x, y in [('../../etc', 64, 64), (7, '../..', 64), (7, 64, '../../../etc/passwd'),
+                        ('nope', 1, 1), (-1, 64, 64), (99, 64, 64), (7, -1, 64)]:
             self.assertIsNone(tile_path(mapped, z, x, y))
         # A tile that simply is not there is a miss, not an error.
-        self.assertIsNone(tile_path(mapped, 5, 44, 108))
+        self.assertIsNone(tile_path(mapped, 7, 63, 64))
 
-    def test_a_configured_location_may_sit_outside_the_project(self):
-        # A tile pyramid is large and may well live on another disk.
+    def test_a_tile_pyramid_may_sit_outside_the_project(self):
         path, root, entry = with_tiles()
         mapped = read(entry)
         self.assertTrue(Path(mapped.tiles.directory).is_absolute())
-        self.assertIsNotNone(tile_path(mapped, 5, 45, 108))
-        self.assertIsNone(image_path(Calibration(name='x', size=1, offset=0,
-                                                 picture=Picture('/nowhere.png', (0, 0), (1, 1)))))
+        self.assertIsNone(image_path(Calibration(
+            name='x', width=1, height=1, max_zoom=1, lng=Axis(1, 0), lat=Axis(1, 0),
+            picture=Picture('/nowhere.png'))))
 
 
 class SessionTests(unittest.TestCase):
@@ -358,9 +347,11 @@ class EngineAgreementTests(unittest.TestCase):
             self.assertEqual(answer['reason'], 'bad_request')
 
     def test_a_point_off_the_island_is_refused(self):
-        self.assertIsNone(point({'east': -500, 'north': 0}, self.mapped))
-        self.assertIsNone(point({'east': 0, 'north': 99999}, self.mapped))
-        self.assertEqual(point({'east': 0, 'north': 0}, self.mapped), (0, 0))
+        self.assertIsNone(point({'east': -500, 'north': 6400}, self.mapped))
+        self.assertIsNone(point({'east': 6400, 'north': 99999}, self.mapped))
+        # The earth correction pulls the imagery in, so the last 50 m is off it.
+        self.assertIsNone(point({'east': 0, 'north': 0}, self.mapped))
+        self.assertEqual(point({'east': 6400, 'north': 6400}, self.mapped), (6400, 6400))
         # With no map loaded there is nothing to bound it against.
         self.assertEqual(point({'east': 1, 'north': 2}, None), (1, 2))
 
@@ -428,9 +419,11 @@ class ApiTests(AioHTTPTestCase):
     async def test_the_loadouts_come_with_the_map_and_need_a_link(self):
         reply = await self.client.get(f'/mortar/{self.token}/loadouts')
         data = await reply.json()
-        self.assertEqual(data['map']['size'], 12800)
-        self.assertEqual(data['map']['scale'], 12.5)
-        self.assertEqual(data['map']['offset'], 50)
+        self.assertEqual(data['map']['size'], [12800, 12800])
+        self.assertEqual(data['map']['maxZoom'], 7)
+        self.assertEqual(data['map']['metresPerUnit'], 50)
+        self.assertEqual(data['map']['transform']['lat'], {'cof': -50.0, 'offset': -256.0})
+        self.assertTrue(data['map']['earthCorrection'])
         self.assertEqual({t['key'] for t in data['tubes']}, {'m252', '2b14'})
         self.assertEqual((await self.client.get('/mortar/nope/loadouts')).status, 404)
 

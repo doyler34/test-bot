@@ -19,3 +19,6 @@ data/
 .oyb-backups/
 .oyb-service-backup-*
 .oyb-validate-*/
+
+# Map tiles are generated on the box that serves them, never committed.
+data/map-tiles/

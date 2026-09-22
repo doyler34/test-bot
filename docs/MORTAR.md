@@ -25,9 +25,11 @@ the bot answers from the same engine the Discord command uses. There is one
 ballistic implementation and one set of tables.
 
 It works in Reforger's own world X/Z metres throughout - no latitude, no
-longitude, no geographic projection. Leaflet is bent to the game's coordinates
-rather than the map being bent to Leaflet's; `bot/mortar/calibration.py` holds
-that conversion and the tests check it against known Everon positions.
+longitude, no geographic projection. The map layer, including the Everon
+coordinate transform, is GeNeFRAG's from
+[ArmaReforger](https://github.com/GeNeFRAG/ArmaReforger);
+`bot/mortar/calibration.py` implements it in both directions and the tests
+check it against known Everon positions. Tiles are served from our own disk.
 
 ### Routes
 
@@ -78,12 +80,11 @@ expired or unknown link gets a plain "this link has expired" page.
 
 ## Turning it on
 
-1. Generate an Everon tile set with
-   [EnfusionMapMaker](https://github.com/nickludlam/EnfusionMapMaker) and point
-   `assets/mortar/map.json` at it - the coordinate system for Everon is already
-   filled in, so there is nothing to measure. A single image works too. See
-   `assets/mortar/README.md`, including the licensing that comes with tiles
-   made from game content. Without imagery the page stays off.
+1. Generate the Everon tiles on the box that will serve them:
+   `bash dev/fetch_map_tiles.sh everon`. Everon's coordinate system is already
+   in `assets/mortar/map.json` - GeNeFRAG's own map entry - so there is nothing
+   to calibrate. See `assets/mortar/README.md`, including what the imagery's
+   licensing does and does not cover. Without tiles the page stays off.
 2. Set `MORTAR_WEB_ENABLED=true` and `MORTAR_WEB_BASE_URL` in `.env`.
 3. Point a reverse proxy at `MORTAR_WEB_HOST:MORTAR_WEB_PORT` (127.0.0.1:8085
    by default) and give it HTTPS. The bot listens on loopback only, so the
