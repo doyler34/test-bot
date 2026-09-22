@@ -6,7 +6,7 @@ import discord
 
 from bot.config import game_leaderboard_channel_id, live_board_channel_id
 from bot.discord.leaderboard_command import table
-from bot.storage.combat_store import record_match, window_standings
+from bot.storage.combat_store import match_number, record_match, window_standings
 
 LOG = logging.getLogger('reforger.match')
 # The log ingestor polls every 15s, so wait a few cycles for the closing kills
@@ -23,6 +23,22 @@ def duration(start, end):
     return f'{hours}h {minutes}m' if hours else f'{minutes}m'
 
 
+def server_letter(server_id):
+    """One fixed letter per server. server-1 is A, server-2 is B, and so on."""
+    digits = ''.join(c for c in server_id if c.isdigit())
+    return chr(ord('A') + (int(digits) - 1) % 26) if digits else (server_id[:1] or '?').upper()
+
+
+def match_tag(server_id, number):
+    """How a match is named on its board: the count on that server, then its
+    letter, so #0007B is the seventh game on server 2."""
+    return f'#{number:04d}{server_letter(server_id)}'
+
+
+def titled(heading, tag, server_name):
+    return (f'{heading} {tag} — {server_name}' if tag else f'{heading} — {server_name}')[:256]
+
+
 def pages(rows):
     """Split the board so each block fits one embed. Everyone who fought is
     listed - an end-of-game board that stops at the top 25 is half a board."""
@@ -36,14 +52,14 @@ def pages(rows):
     return result
 
 
-def match_embeds(server_name, rows, start, end):
+def match_embeds(server_name, rows, start, end, tag=None):
     blocks = pages(rows)
     closed = f'{end:%H:%M}' if start.date() == end.date() else f'{end:%d %b %H:%M}'
     embeds = []
     for index, block in enumerate(blocks):
         embed = discord.Embed(colour=0xA9BC8C, description=block)
         if index == 0:
-            embed.title = f'🏁 Match results — {server_name}'[:256]
+            embed.title = titled('🏁 Match results', tag, server_name)
         if index == len(blocks) - 1:
             embed.set_footer(text=f'{len(rows)} players • {duration(start, end)} • '
                                   f'{start:%d %b %H:%M}–{closed}\n'
@@ -67,6 +83,15 @@ class MatchResults:
         task = asyncio.create_task(self.publish(server_id, server_name, start, end))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+    def tag(self, server_id, start):
+        """The match's number, read back the same way the live board wrote it so
+        one game carries the same name in both channels."""
+        try:
+            return match_tag(server_id, match_number(self.bot.account_links.db, server_id, start))
+        except Exception:
+            LOG.exception('Could not number the %s match', server_id)
+            return None
 
     def rows(self, guild, start, end, server_id):
         result = []
@@ -112,7 +137,7 @@ class MatchResults:
                 return
             # One message per block: several embeds in a single message share a
             # 6000-character budget that a full server would blow through.
-            for embed in match_embeds(server_name, rows, start, end):
+            for embed in match_embeds(server_name, rows, start, end, self.tag(server_id, start)):
                 await channel.send(embed=embed, silent=True,
                                    allowed_mentions=discord.AllowedMentions.none())
             LOG.info('Posted match results for %s (%s players)', server_name, len(rows))
