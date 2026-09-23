@@ -111,12 +111,18 @@ readme grants reuse:
 | M252 81mm | US | 6400 mils | Smoke M819 | 1-4 | 200-2400 m |
 | M252 81mm | US | 6400 mils | Illumination M853A1 | 1-4 | 200-2400 m |
 | 2B14 Podnos 82mm | USSR | 6000 mils | HE O-832DU | 0-4 | 50-2300 m |
-| 2B14 Podnos 82mm | USSR | 6000 mils | Smoke D-832DU | 0-3 | 50-1600 m |
+| 2B14 Podnos 82mm | USSR | 6000 mils | Smoke D-832DU | 0-3 | 50-1700 m |
 | 2B14 Podnos 82mm | USSR | 6000 mils | Illumination S-832C | 1-4 | 100-2200 m |
 
 Real-world figures for either weapon do not apply - Reforger's ballistics are
 its own. Practice rounds (M879) have their own table in that repository if
 they are ever wanted here.
+
+The D-832DU ring 3 table includes its current 1700 m endpoint. That endpoint
+is independently corroborated by the vanilla wind table for the same round
+and ring, which also carries a 1700 m sample. No other range-table row was
+removed or replaced during this audit because the available online
+transcription omitted ranges that vanilla's wind data still covers.
 
 ## Adding another tube
 

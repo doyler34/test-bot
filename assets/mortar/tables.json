@@ -3635,6 +3635,12 @@
                 896,
                 22.3,
                 50
+              ],
+              [
+                1700,
+                753,
+                19.8,
+                50
               ]
             ],
             "wind": {
@@ -3715,7 +3721,8 @@
             }
           }
         },
-        "wind_source_name": "A-832AY"
+        "wind_source_name": "A-832AY",
+        "range_audit": "Ring 3 at 1700 m restored from the current in-game table; independently corroborated by the vanilla wind table for the same round and ring reaching 1700 m. All September 2025 rows retained pending a lossless current-table source."
       },
       "illum": {
         "name": "Illumination S-832C",

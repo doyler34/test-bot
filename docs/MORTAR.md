@@ -93,7 +93,7 @@ decomposition happens there, once.
 and when nothing reaches:
 
 ```json
-{"valid": false, "reason": "out_of_range", "min_range_m": 50, "max_range_m": 1600}
+{"valid": false, "reason": "out_of_range", "min_range_m": 50, "max_range_m": 1700}
 ```
 
 The limits are the loaded round's own, not the tube's.
