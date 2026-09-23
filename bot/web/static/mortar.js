@@ -212,13 +212,20 @@ function showWind(answer) {
     ? `${baseSolution.azimuth_mils} mils` : '—';
   el('baseRange').textContent = baseSolution.range_m != null
     ? `${baseSolution.range_m.toLocaleString()} m` : '—';
-  el('azimuthCorr').textContent = signed(wind.azimuth_correction_mils, 'mils');
-  el('rangeCorr').textContent = signed(-wind.range_correction_m, 'm');
-  note.hidden = wind.has_data;
-  note.textContent = wind.has_data ? ''
-    : `Wind from ${wind.from_degrees}° at ${wind.speed_mps} m/s, split against your line of `
-      + 'fire. No measured drift table exists for this round yet, so no correction has been '
-      + 'applied — the settings above are still-air figures.';
+  el('azimuthCorr').textContent = signed(wind.azimuth_correction_weapon_mils, 'mils');
+  el('rangeCorr').textContent = signed(-wind.parallel_range_correction_m, 'm');
+  note.hidden = wind.applied;
+  if (!wind.has_data) {
+    note.textContent = `Wind from ${wind.from_degrees}° at ${wind.speed_mps} m/s, split `
+      + 'against your line of fire. Reforger\'s wind table for this round has not been '
+      + 'supplied yet, so no correction is applied — the settings above are still-air '
+      + 'figures.';
+  } else if (!wind.measured) {
+    note.textContent = 'This range or wind speed is outside the samples measured for this '
+      + 'round, so no correction is applied rather than reaching past them.';
+  } else {
+    note.textContent = '';
+  }
 }
 
 const signed = (value, unit) => `${value > 0 ? '+' : ''}${value} ${unit}`;

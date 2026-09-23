@@ -15,7 +15,8 @@ import json
 from pathlib import Path
 import math
 
-from bot.mortar.wind import Wind, components, drift_mils
+from bot.mortar.wind import (CROSS_MRAD, PARALLEL_M, Table, Wind, build_table,
+                             components, sight_mils)
 
 TABLES = Path(__file__).resolve().parents[2] / 'assets/mortar/tables.json'
 OUT_OF_RANGE = 'OUT OF RANGE'
@@ -73,21 +74,20 @@ class Profile:
     shell: str
     mils: int
     rings: tuple
-    winds: tuple = ()      # (ring, rows) for the rings that have wind data
+    winds: tuple = ()      # (ring, Table) - Reforger's own wind samples
 
-    def wind_rows(self, ring):
-        """How this shell is pushed about on that ring, or nothing.
+    def wind_table(self, ring):
+        """That ring's Reforger wind table, or an empty one.
 
-        Each row is [range m, metres of drift per m/s of crosswind, metres of
-        range gained per m/s of tailwind]. Measured in game and written beside
-        the elevations; never worked out here.
+        The ring is what sets the charge, and the charge is what sets the
+        projectile's initSpeedCoef, so the table belongs to the ring.
         """
-        return next((rows for name, rows in self.winds if name == ring), ())
+        return next((table for name, table in self.winds if name == ring), Table())
 
     @property
     def windy(self):
-        """Does this shell have wind data at all?"""
-        return any(rows for _, rows in self.winds)
+        """Does this shell have wind samples at all?"""
+        return any(table.loaded for _, table in self.winds)
 
     @property
     def label(self):
@@ -108,9 +108,9 @@ def ring_rows(block):
         if len(rows) < 2:
             continue
         rings.append((ring, block[ring].get('dispersion'), tuple(rows)))
-        gusts = sorted(tuple(row) for row in (block[ring].get('wind') or {}).get('rows') or [])
-        if len(gusts) >= 2:
-            winds.append((ring, tuple(gusts)))
+        table = build_table(block[ring].get('wind'))
+        if table.loaded:
+            winds.append((ring, table))
     return tuple(rings), tuple(winds)
 
 
@@ -235,57 +235,60 @@ class Corrected:
     """A firing solution with the wind in it, and the plain one beside it."""
     base: Ring                  # the ring the still-air range asks for
     final: Ring                 # the ring to actually fire, or None
-    every: tuple                # every ring that reaches the corrected range
+    every: tuple = ()           # every ring reaching the corrected range
     parallel: float = 0.0       # m/s, + tailwind
     crosswind: float = 0.0      # m/s, + towards the shooter's right
-    azimuth_mils: float = 0.0   # signed, to be ADDED to the base azimuth
-    range_m: float = 0.0        # signed, how far the wind carries the round
+    crosswind_mrad: float = 0.0  # Reforger's own figure, signed, milliradians
+    azimuth_mils: float = 0.0   # the same angle on this sight, to be ADDED
+    range_m: float = 0.0        # metres the wind carries the round, signed
     effective_range: float = 0.0
-    has_data: bool = False      # whether this shell has wind rows at all
+    has_data: bool = False      # this ring has Reforger samples
+    measured: bool = True       # ...and they cover this range and wind speed
 
     @property
-    def corrected(self):
-        return self.has_data and (self.azimuth_mils or self.range_m)
+    def applied(self):
+        return bool(self.has_data and self.measured
+                    and (self.azimuth_mils or self.range_m))
 
 
 def apply_wind(weapon, distance, bearing_degrees, wind=None, climb=0.0):
-    """The solution to fire, once the wind is accounted for.
+    """The solution to fire, once Reforger's wind table is accounted for.
 
-    The wind moves the round, so the gun is laid against it: a tailwind
-    carries it long, so the table is read at a SHORTER range, and the
-    elevation comes from the range table we already have rather than from any
-    formula of ours. A crosswind pushes the round towards the shooter's right,
-    so the azimuth correction is negative - traverse left to meet it.
+    Crosswind comes back from the table as an azimuth correction in
+    milliradians and is converted to this sight's own mils; head or tail wind
+    comes back as metres of range, and the elevation for it is read from the
+    range table we already have. No elevation is invented here.
 
-    With no wind, or no wind rows for this shell, the base solution is handed
+    With no wind, or no samples for this ring, the base solution is handed
     back untouched.
     """
     base, every = solution(weapon, distance, climb)
     wind = wind or Wind()
-    rows = weapon.wind_rows(base.ring) if base is not None else ()
     # The split is geometry and always holds, so it is reported even when
-    # there is no measured data to correct with - the gunner can see what the
-    # wind is doing to him even while the bot declines to guess at it.
+    # there is nothing measured to correct with.
     split = components(wind, bearing_degrees)
-    if base is None or wind.calm or not rows:
-        return Corrected(base=base, final=base, every=tuple(every),
-                         parallel=split.parallel, crosswind=split.crosswind,
-                         effective_range=distance, has_data=bool(rows))
+    table = weapon.wind_table(base.ring) if base is not None else Table()
+    plain = Corrected(base=base, final=base, every=tuple(every),
+                      parallel=split.parallel, crosswind=split.crosswind,
+                      effective_range=distance, has_data=table.loaded)
+    if base is None or wind.calm or not table.loaded:
+        return plain
 
-    # Column 2 is metres of range per m/s of tailwind: what the wind adds, and
-    # therefore what has to come off the range the gun is laid for.
-    carry = split.parallel * (between(rows, distance, 2) or 0.0)
-    effective = distance - carry
+    # Each component is looked up at its own strength, in the game's units.
+    mrad = table.at(distance, abs(split.crosswind), CROSS_MRAD)
+    carry = table.at(distance, abs(split.parallel), PARALLEL_M)
+    if mrad is None or carry is None:
+        # The samples do not cover this range or this wind; say so rather
+        # than reaching past the ends of what was measured.
+        return Corrected(**{**plain.__dict__, 'measured': False})
+
+    carry = math.copysign(carry, split.parallel)
+    effective = distance - carry          # a tailwind carries it long
     final, reaching = solution(weapon, effective, climb)
-
-    # Column 1 is metres of drift per m/s of crosswind, read at the range the
-    # round will actually fly.
-    drift_rows = weapon.wind_rows(final.ring) if final is not None else rows
-    drift = split.crosswind * (between(drift_rows or rows, effective, 1)
-                               or between(rows, distance, 1) or 0.0)
-    azimuth = -drift_mils(drift, distance, weapon.mils)
+    mrad = math.copysign(mrad, split.crosswind)
+    azimuth = -sight_mils(mrad, weapon.mils)   # pushed right, traverse left
 
     return Corrected(base=base, final=final, every=tuple(reaching),
                      parallel=split.parallel, crosswind=split.crosswind,
-                     azimuth_mils=azimuth, range_m=carry, effective_range=effective,
-                     has_data=True)
+                     crosswind_mrad=mrad, azimuth_mils=azimuth, range_m=carry,
+                     effective_range=effective, has_data=True)

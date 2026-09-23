@@ -39,43 +39,66 @@ out from that, so a new mortar is a change to this file and nothing else.
 
 ## Wind
 
-Each ring carries an optional `wind` block beside its elevations:
+Reforger keeps wind correction **per projectile**, not as one formula, and
+hands it over through `SCR_ProjectileWindTable.GetDataByDistance()`. That
+shape is what is stored here, unconverted:
 
 ```json
 "2": {
   "dispersion": 24,
   "rows": [[200, 1490, 20.6, 12], [300, 1468, 20.5, 12]],
   "wind": {
-    "source": "where these were measured",
-    "rows": [[200, 0.9, 1.8], [300, 1.4, 2.6]]
+    "source": "where these were dumped from",
+    "initSpeedCoef": 1.0,
+    "samples": {
+      "5": [[0.95, 200, 150.0, 2.0, 20.0, 1.05],
+            [0.80, 1600, 900.0, 6.0, 55.0, 1.20]]
+    }
   }
 }
 ```
 
-Each wind row is `[range m, metres of drift per m/s of crosswind, metres of
-range gained per m/s of tailwind]`, lowest range first, interpolated between
-rows exactly like the elevations and never extrapolated past the ends.
+Each sample is, in the game's own order:
 
-**Every one of these is empty.** No verified Reforger wind figures exist in
-any source we have, so none are shipped. Until they do, the page reports the
-wind split against your line of fire and says plainly that no correction has
-been applied. Do not fill these in with estimates: a wrong correction is worse
-than none, because it looks like an answer.
+| # | Figure | Unit |
+| --- | --- | --- |
+| 0 | firing angle | radians |
+| 1 | distance | metres |
+| 2 | peak altitude | metres |
+| 3 | **crosswind azimuth correction** | **milliradians** |
+| 4 | **parallel wind range correction** | **metres** |
+| 5 | impact angle | radians |
 
-To measure them, for one ring at one range: fire a solution in still air and
-confirm the fall of shot, then fire the same solution with a known crosswind
-and measure how far downwind it lands. Drift divided by wind speed is the
-middle column. Repeat with a head or tail wind, measuring how much short or
-long it falls, for the third. Record where the figures came from in `source`.
+`samples` is keyed by wind speed in m/s. `initSpeedCoef` belongs to the ring,
+because the charge is what changes the projectile's launch speed.
 
-The correction is applied like this, and only like this:
+**Milliradians are not mils.** A circle is 2000·pi mrad, 6400 mils on the
+M252's sight and 6000 on the 2B14's. The conversion lives in one function,
+`sight_mils()` in `bot/mortar/wind.py`, and happens only when the operator's
+figure is produced - never in this file.
 
-- **Crosswind** moves the round sideways, so it becomes an azimuth
-  correction - worked out as an angle at the gun **in that tube's own mil
-  circle**, 6400 on the M252 and 6000 on the 2B14.
-- **Head or tail wind** changes how far the round flies, so it becomes a range
-  correction: the gun is laid for the corrected range and the elevation comes
-  out of the range table above. No separate elevation formula exists.
+Lookups interpolate between samples on both axes and never past them, except
+downwards to zero wind, which is a certainty rather than an assumption. Above
+the fastest sample, no correction is offered at all.
+
+How each half is used:
+
+- **Crosswind** - column 3 straight out of the table, converted to the sight's
+  own mils, signed against the wind: a round pushed right means traverse left.
+- **Head or tail wind** - column 4, metres, applied to the range the gun is
+  laid for. The elevation then comes out of the range table above, read at
+  that corrected range. **No elevation is calculated from wind anywhere.**
+
+**Every `samples` block is empty.** No vanilla wind table has been dumped
+yet, so none is shipped, and the page says so rather than applying anything.
+Do not fill these in with estimates.
+
+To get them, dump them - do not transcribe them. Reforger ships
+`SCR_ProjectileWindageDataGeneratorPlugin`, which generates this data from the
+projectile simulation itself; that is the tool to run, per projectile and per
+charge, rather than reading figures off a gadget one screen at a time. When
+the numbers land, confirm the sign of column 3 against one live shot before
+trusting the direction.
 
 ## Where the numbers came from
 
