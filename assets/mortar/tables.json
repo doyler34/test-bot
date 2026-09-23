@@ -2425,7 +2425,7 @@
     "tables": {
       "captured": "September 2025, before Reforger 1.7",
       "status": "provisional",
-      "note": "Elevations and flight times predate the 1.7/1.8 ballistics work and have not been compared against the current in-game ballistic table. Treat as provisional until re-checked round by round."
+      "note": "Official patch notes from 1.6 through 1.9.0.9 announce no mortar elevation, flight-time, or dElev data changes. Values remain provisional pending direct comparison with the current in-game ballistic table or lossless game-data extraction."
     },
     "wind_note": "Rows are [range m, crosswind correction in THIS SIGHT'S MILS at 10 m/s, longitudinal range correction in metres at 10 m/s]. Scale linearly by component/10 and take the sign from the wind geometry. The crosswind figure is already in weapon mils - it must never be run through a milliradian conversion."
   },
@@ -4372,7 +4372,7 @@
     "tables": {
       "captured": "September 2025, before Reforger 1.7",
       "status": "provisional",
-      "note": "Elevations and flight times predate the 1.7/1.8 ballistics work and have not been compared against the current in-game ballistic table. Treat as provisional until re-checked round by round."
+      "note": "Official patch notes from 1.6 through 1.9.0.9 announce no mortar elevation, flight-time, or dElev data changes. Values remain provisional pending direct comparison with the current in-game ballistic table or lossless game-data extraction."
     },
     "wind_note": "Rows are [range m, crosswind correction in THIS SIGHT'S MILS at 10 m/s, longitudinal range correction in metres at 10 m/s]. Scale linearly by component/10 and take the sign from the wind geometry. The crosswind figure is already in weapon mils - it must never be run through a milliradian conversion."
   }
