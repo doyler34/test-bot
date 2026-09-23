@@ -61,9 +61,50 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M821.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  50,
+                  72.0,
+                  4.0
+                ],
+                [
+                  100,
+                  36.0,
+                  4.0
+                ],
+                [
+                  150,
+                  24.0,
+                  4.0
+                ],
+                [
+                  200,
+                  18.0,
+                  4.0
+                ],
+                [
+                  250,
+                  15.0,
+                  5.0
+                ],
+                [
+                  300,
+                  12.0,
+                  5.0
+                ],
+                [
+                  350,
+                  10.0,
+                  5.0
+                ],
+                [
+                  400,
+                  8.0,
+                  6.0
+                ]
+              ]
             }
           },
           "1": {
@@ -125,9 +166,55 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M821.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  100,
+                  114.0,
+                  11.0
+                ],
+                [
+                  200,
+                  58.0,
+                  12.0
+                ],
+                [
+                  300,
+                  39.0,
+                  13.0
+                ],
+                [
+                  400,
+                  30.0,
+                  14.0
+                ],
+                [
+                  500,
+                  24.0,
+                  15.0
+                ],
+                [
+                  600,
+                  20.0,
+                  16.0
+                ],
+                [
+                  700,
+                  17.0,
+                  17.0
+                ],
+                [
+                  800,
+                  14.0,
+                  18.0
+                ],
+                [
+                  900,
+                  12.0,
+                  18.0
+                ]
+              ]
             }
           },
           "2": {
@@ -225,9 +312,85 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M821.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  200,
+                  133.0,
+                  26.0
+                ],
+                [
+                  300,
+                  88.0,
+                  27.0
+                ],
+                [
+                  400,
+                  66.0,
+                  28.0
+                ],
+                [
+                  500,
+                  53.0,
+                  29.0
+                ],
+                [
+                  600,
+                  45.0,
+                  30.0
+                ],
+                [
+                  700,
+                  39.0,
+                  31.0
+                ],
+                [
+                  800,
+                  34.0,
+                  33.0
+                ],
+                [
+                  900,
+                  30.0,
+                  34.0
+                ],
+                [
+                  1000,
+                  27.0,
+                  36.0
+                ],
+                [
+                  1100,
+                  25.0,
+                  37.0
+                ],
+                [
+                  1200,
+                  22.0,
+                  38.0
+                ],
+                [
+                  1300,
+                  20.0,
+                  39.0
+                ],
+                [
+                  1400,
+                  19.0,
+                  40.0
+                ],
+                [
+                  1500,
+                  17.0,
+                  40.0
+                ],
+                [
+                  1600,
+                  15.0,
+                  40.0
+                ]
+              ]
             }
           },
           "3": {
@@ -361,9 +524,115 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M821.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  300,
+                  146.0,
+                  44.0
+                ],
+                [
+                  400,
+                  109.0,
+                  44.0
+                ],
+                [
+                  500,
+                  88.0,
+                  45.0
+                ],
+                [
+                  600,
+                  73.0,
+                  46.0
+                ],
+                [
+                  700,
+                  63.0,
+                  48.0
+                ],
+                [
+                  800,
+                  55.0,
+                  49.0
+                ],
+                [
+                  900,
+                  49.0,
+                  50.0
+                ],
+                [
+                  1000,
+                  45.0,
+                  52.0
+                ],
+                [
+                  1100,
+                  41.0,
+                  53.0
+                ],
+                [
+                  1200,
+                  37.0,
+                  55.0
+                ],
+                [
+                  1300,
+                  34.0,
+                  56.0
+                ],
+                [
+                  1400,
+                  32.0,
+                  58.0
+                ],
+                [
+                  1500,
+                  30.0,
+                  59.0
+                ],
+                [
+                  1600,
+                  28.0,
+                  60.0
+                ],
+                [
+                  1700,
+                  26.0,
+                  62.0
+                ],
+                [
+                  1800,
+                  24.0,
+                  63.0
+                ],
+                [
+                  1900,
+                  23.0,
+                  64.0
+                ],
+                [
+                  2000,
+                  21.0,
+                  64.0
+                ],
+                [
+                  2100,
+                  19.0,
+                  65.0
+                ],
+                [
+                  2200,
+                  18.0,
+                  64.0
+                ],
+                [
+                  2300,
+                  15.0,
+                  60.0
+                ]
+              ]
             }
           },
           "4": {
@@ -527,12 +796,144 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M821.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  400,
+                  159.0,
+                  64.0
+                ],
+                [
+                  500,
+                  128.0,
+                  65.0
+                ],
+                [
+                  600,
+                  107.0,
+                  66.0
+                ],
+                [
+                  700,
+                  92.0,
+                  67.0
+                ],
+                [
+                  800,
+                  80.0,
+                  68.0
+                ],
+                [
+                  900,
+                  72.0,
+                  69.0
+                ],
+                [
+                  1000,
+                  65.0,
+                  71.0
+                ],
+                [
+                  1100,
+                  59.0,
+                  72.0
+                ],
+                [
+                  1200,
+                  54.0,
+                  74.0
+                ],
+                [
+                  1300,
+                  50.0,
+                  75.0
+                ],
+                [
+                  1400,
+                  46.0,
+                  77.0
+                ],
+                [
+                  1500,
+                  43.0,
+                  78.0
+                ],
+                [
+                  1600,
+                  41.0,
+                  80.0
+                ],
+                [
+                  1700,
+                  38.0,
+                  81.0
+                ],
+                [
+                  1800,
+                  36.0,
+                  83.0
+                ],
+                [
+                  1900,
+                  34.0,
+                  84.0
+                ],
+                [
+                  2000,
+                  32.0,
+                  86.0
+                ],
+                [
+                  2100,
+                  31.0,
+                  87.0
+                ],
+                [
+                  2200,
+                  29.0,
+                  88.0
+                ],
+                [
+                  2300,
+                  28.0,
+                  89.0
+                ],
+                [
+                  2400,
+                  26.0,
+                  90.0
+                ],
+                [
+                  2500,
+                  25.0,
+                  91.0
+                ],
+                [
+                  2600,
+                  23.0,
+                  91.0
+                ],
+                [
+                  2700,
+                  22.0,
+                  91.0
+                ],
+                [
+                  2800,
+                  20.0,
+                  91.0
+                ],
+                [
+                  2900,
+                  18.0,
+                  88.0
+                ]
+              ]
             }
           }
-        }
+        },
+        "wind_source_name": "M821"
       },
       "smoke": {
         "name": "Smoke M819",
@@ -614,9 +1015,70 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M819.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  200,
+                  69.0,
+                  15.0
+                ],
+                [
+                  250,
+                  55.0,
+                  15.0
+                ],
+                [
+                  300,
+                  46.0,
+                  16.0
+                ],
+                [
+                  350,
+                  40.0,
+                  17.0
+                ],
+                [
+                  400,
+                  35.0,
+                  17.0
+                ],
+                [
+                  450,
+                  31.0,
+                  18.0
+                ],
+                [
+                  500,
+                  28.0,
+                  19.0
+                ],
+                [
+                  550,
+                  25.0,
+                  20.0
+                ],
+                [
+                  600,
+                  23.0,
+                  20.0
+                ],
+                [
+                  650,
+                  21.0,
+                  21.0
+                ],
+                [
+                  700,
+                  18.0,
+                  21.0
+                ],
+                [
+                  750,
+                  15.0,
+                  20.0
+                ]
+              ]
             }
           },
           "2": {
@@ -702,9 +1164,75 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M819.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  200,
+                  172.0,
+                  35.0
+                ],
+                [
+                  300,
+                  116.0,
+                  36.0
+                ],
+                [
+                  400,
+                  88.0,
+                  37.0
+                ],
+                [
+                  500,
+                  71.0,
+                  39.0
+                ],
+                [
+                  600,
+                  59.0,
+                  41.0
+                ],
+                [
+                  700,
+                  51.0,
+                  43.0
+                ],
+                [
+                  800,
+                  44.0,
+                  45.0
+                ],
+                [
+                  900,
+                  39.0,
+                  47.0
+                ],
+                [
+                  1000,
+                  35.0,
+                  48.0
+                ],
+                [
+                  1100,
+                  32.0,
+                  50.0
+                ],
+                [
+                  1200,
+                  28.0,
+                  51.0
+                ],
+                [
+                  1300,
+                  25.0,
+                  51.0
+                ],
+                [
+                  1400,
+                  20.0,
+                  48.0
+                ]
+              ]
             }
           },
           "3": {
@@ -814,9 +1342,95 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M819.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  300,
+                  190.0,
+                  58.0
+                ],
+                [
+                  400,
+                  143.0,
+                  59.0
+                ],
+                [
+                  500,
+                  115.0,
+                  60.0
+                ],
+                [
+                  600,
+                  96.0,
+                  62.0
+                ],
+                [
+                  700,
+                  83.0,
+                  64.0
+                ],
+                [
+                  800,
+                  73.0,
+                  66.0
+                ],
+                [
+                  900,
+                  65.0,
+                  68.0
+                ],
+                [
+                  1000,
+                  58.0,
+                  70.0
+                ],
+                [
+                  1100,
+                  53.0,
+                  72.0
+                ],
+                [
+                  1200,
+                  48.0,
+                  74.0
+                ],
+                [
+                  1300,
+                  44.0,
+                  75.0
+                ],
+                [
+                  1400,
+                  41.0,
+                  77.0
+                ],
+                [
+                  1500,
+                  38.0,
+                  79.0
+                ],
+                [
+                  1600,
+                  35.0,
+                  80.0
+                ],
+                [
+                  1700,
+                  32.0,
+                  81.0
+                ],
+                [
+                  1800,
+                  29.0,
+                  80.0
+                ],
+                [
+                  1900,
+                  26.0,
+                  79.0
+                ]
+              ]
             }
           },
           "4": {
@@ -950,12 +1564,119 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M819.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  400,
+                  202.0,
+                  82.0
+                ],
+                [
+                  500,
+                  161.0,
+                  83.0
+                ],
+                [
+                  600,
+                  135.0,
+                  84.0
+                ],
+                [
+                  700,
+                  116.0,
+                  86.0
+                ],
+                [
+                  800,
+                  102.0,
+                  88.0
+                ],
+                [
+                  900,
+                  91.0,
+                  90.0
+                ],
+                [
+                  1000,
+                  82.0,
+                  92.0
+                ],
+                [
+                  1100,
+                  75.0,
+                  94.0
+                ],
+                [
+                  1200,
+                  68.0,
+                  96.0
+                ],
+                [
+                  1300,
+                  63.0,
+                  98.0
+                ],
+                [
+                  1400,
+                  58.0,
+                  100.0
+                ],
+                [
+                  1500,
+                  54.0,
+                  101.0
+                ],
+                [
+                  1600,
+                  51.0,
+                  103.0
+                ],
+                [
+                  1700,
+                  48.0,
+                  105.0
+                ],
+                [
+                  1800,
+                  45.0,
+                  107.0
+                ],
+                [
+                  1900,
+                  42.0,
+                  108.0
+                ],
+                [
+                  2000,
+                  39.0,
+                  109.0
+                ],
+                [
+                  2100,
+                  36.0,
+                  110.0
+                ],
+                [
+                  2200,
+                  34.0,
+                  110.0
+                ],
+                [
+                  2300,
+                  31.0,
+                  109.0
+                ],
+                [
+                  2400,
+                  28.0,
+                  106.0
+                ]
+              ]
             }
           }
-        }
+        },
+        "wind_source_name": "M819"
       },
       "illum": {
         "name": "Illumination M853A1",
@@ -1037,9 +1758,70 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M853A1.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  200,
+                  137.0,
+                  29.0
+                ],
+                [
+                  250,
+                  110.0,
+                  30.0
+                ],
+                [
+                  300,
+                  92.0,
+                  31.0
+                ],
+                [
+                  350,
+                  79.0,
+                  32.0
+                ],
+                [
+                  400,
+                  70.0,
+                  34.0
+                ],
+                [
+                  450,
+                  62.0,
+                  35.0
+                ],
+                [
+                  500,
+                  55.0,
+                  36.0
+                ],
+                [
+                  550,
+                  50.0,
+                  38.0
+                ],
+                [
+                  600,
+                  45.0,
+                  39.0
+                ],
+                [
+                  650,
+                  40.0,
+                  39.0
+                ],
+                [
+                  700,
+                  36.0,
+                  39.0
+                ],
+                [
+                  750,
+                  30.0,
+                  38.0
+                ]
+              ]
             }
           },
           "2": {
@@ -1125,9 +1907,75 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M853A1.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  200,
+                  354.0,
+                  73.0
+                ],
+                [
+                  300,
+                  241.0,
+                  75.0
+                ],
+                [
+                  400,
+                  183.0,
+                  77.0
+                ],
+                [
+                  500,
+                  147.0,
+                  80.0
+                ],
+                [
+                  600,
+                  123.0,
+                  82.0
+                ],
+                [
+                  700,
+                  106.0,
+                  85.0
+                ],
+                [
+                  800,
+                  92.0,
+                  88.0
+                ],
+                [
+                  900,
+                  82.0,
+                  90.0
+                ],
+                [
+                  1000,
+                  73.0,
+                  93.0
+                ],
+                [
+                  1100,
+                  65.0,
+                  95.0
+                ],
+                [
+                  1200,
+                  58.0,
+                  96.0
+                ],
+                [
+                  1300,
+                  52.0,
+                  96.0
+                ],
+                [
+                  1400,
+                  44.0,
+                  94.0
+                ]
+              ]
             }
           },
           "3": {
@@ -1237,9 +2085,95 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M853A1.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  300,
+                  373.0,
+                  116.0
+                ],
+                [
+                  400,
+                  283.0,
+                  118.0
+                ],
+                [
+                  500,
+                  230.0,
+                  120.0
+                ],
+                [
+                  600,
+                  192.0,
+                  122.0
+                ],
+                [
+                  700,
+                  165.0,
+                  124.0
+                ],
+                [
+                  800,
+                  145.0,
+                  127.0
+                ],
+                [
+                  900,
+                  129.0,
+                  129.0
+                ],
+                [
+                  1000,
+                  116.0,
+                  131.0
+                ],
+                [
+                  1100,
+                  105.0,
+                  134.0
+                ],
+                [
+                  1200,
+                  95.0,
+                  136.0
+                ],
+                [
+                  1300,
+                  87.0,
+                  138.0
+                ],
+                [
+                  1400,
+                  80.0,
+                  139.0
+                ],
+                [
+                  1500,
+                  74.0,
+                  141.0
+                ],
+                [
+                  1600,
+                  68.0,
+                  141.0
+                ],
+                [
+                  1700,
+                  62.0,
+                  141.0
+                ],
+                [
+                  1800,
+                  56.0,
+                  140.0
+                ],
+                [
+                  1900,
+                  50.0,
+                  136.0
+                ]
+              ]
             }
           },
           "4": {
@@ -1373,12 +2307,119 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_M853A1.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  400,
+                  392.0,
+                  164.0
+                ],
+                [
+                  500,
+                  317.0,
+                  165.0
+                ],
+                [
+                  600,
+                  268.0,
+                  167.0
+                ],
+                [
+                  700,
+                  231.0,
+                  169.0
+                ],
+                [
+                  800,
+                  203.0,
+                  171.0
+                ],
+                [
+                  900,
+                  180.0,
+                  173.0
+                ],
+                [
+                  1000,
+                  163.0,
+                  175.0
+                ],
+                [
+                  1100,
+                  148.0,
+                  177.0
+                ],
+                [
+                  1200,
+                  135.0,
+                  179.0
+                ],
+                [
+                  1300,
+                  124.0,
+                  181.0
+                ],
+                [
+                  1400,
+                  115.0,
+                  183.0
+                ],
+                [
+                  1500,
+                  107.0,
+                  184.0
+                ],
+                [
+                  1600,
+                  99.0,
+                  186.0
+                ],
+                [
+                  1700,
+                  93.0,
+                  187.0
+                ],
+                [
+                  1800,
+                  86.0,
+                  188.0
+                ],
+                [
+                  1900,
+                  81.0,
+                  188.0
+                ],
+                [
+                  2000,
+                  75.0,
+                  188.0
+                ],
+                [
+                  2100,
+                  70.0,
+                  188.0
+                ],
+                [
+                  2200,
+                  65.0,
+                  186.0
+                ],
+                [
+                  2300,
+                  60.0,
+                  183.0
+                ],
+                [
+                  2400,
+                  54.0,
+                  177.0
+                ]
+              ]
             }
           }
-        }
+        },
+        "wind_source_name": "M853A1"
       }
     },
     "tables": {
@@ -1386,7 +2427,7 @@
       "status": "provisional",
       "note": "Elevations and flight times predate the 1.7/1.8 ballistics work and have not been compared against the current in-game ballistic table. Treat as provisional until re-checked round by round."
     },
-    "wind_note": "Reforger's own shape, from SCR_ProjectileWindTable.GetDataByDistance(): each sample is [firing angle rad, range m, peak altitude m, crosswind azimuth correction mrad, parallel wind range correction m, impact angle rad]. Samples are keyed by wind speed in m/s. Stored in native milliradians and converted to the sight's own mils for display only. Empty until dumped from the game - see assets/mortar/README.md. Never estimate these."
+    "wind_note": "Rows are [range m, crosswind correction in THIS SIGHT'S MILS at 10 m/s, longitudinal range correction in metres at 10 m/s]. Scale linearly by component/10 and take the sign from the wind geometry. The crosswind figure is already in weapon mils - it must never be run through a milliradian conversion."
   },
   "2b14": {
     "name": "2B14 Podnos 82mm",
@@ -1462,9 +2503,60 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_0-832Ay.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  50,
+                  167.0,
+                  9.0
+                ],
+                [
+                  100,
+                  82.0,
+                  9.0
+                ],
+                [
+                  150,
+                  55.0,
+                  9.0
+                ],
+                [
+                  200,
+                  42.0,
+                  10.0
+                ],
+                [
+                  250,
+                  33.0,
+                  11.0
+                ],
+                [
+                  300,
+                  28.0,
+                  11.0
+                ],
+                [
+                  350,
+                  24.0,
+                  12.0
+                ],
+                [
+                  400,
+                  21.0,
+                  13.0
+                ],
+                [
+                  450,
+                  18.0,
+                  13.0
+                ],
+                [
+                  500,
+                  15.0,
+                  14.0
+                ]
+              ]
             }
           },
           "1": {
@@ -1520,9 +2612,50 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_0-832Ay.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  100,
+                  171.0,
+                  18.0
+                ],
+                [
+                  200,
+                  86.0,
+                  19.0
+                ],
+                [
+                  300,
+                  58.0,
+                  20.0
+                ],
+                [
+                  400,
+                  44.0,
+                  22.0
+                ],
+                [
+                  500,
+                  35.0,
+                  24.0
+                ],
+                [
+                  600,
+                  29.0,
+                  26.0
+                ],
+                [
+                  700,
+                  25.0,
+                  27.0
+                ],
+                [
+                  800,
+                  20.0,
+                  28.0
+                ]
+              ]
             }
           },
           "2": {
@@ -1608,9 +2741,75 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_0-832Ay.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  200,
+                  169.0,
+                  37.0
+                ],
+                [
+                  300,
+                  114.0,
+                  38.0
+                ],
+                [
+                  400,
+                  86.0,
+                  39.0
+                ],
+                [
+                  500,
+                  69.0,
+                  41.0
+                ],
+                [
+                  600,
+                  58.0,
+                  43.0
+                ],
+                [
+                  700,
+                  50.0,
+                  45.0
+                ],
+                [
+                  800,
+                  44.0,
+                  47.0
+                ],
+                [
+                  900,
+                  39.0,
+                  49.0
+                ],
+                [
+                  1000,
+                  35.0,
+                  50.0
+                ],
+                [
+                  1100,
+                  31.0,
+                  52.0
+                ],
+                [
+                  1200,
+                  28.0,
+                  53.0
+                ],
+                [
+                  1300,
+                  24.0,
+                  53.0
+                ],
+                [
+                  1400,
+                  19.0,
+                  50.0
+                ]
+              ]
             }
           },
           "3": {
@@ -1714,9 +2913,90 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_0-832Ay.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  300,
+                  175.0,
+                  57.0
+                ],
+                [
+                  400,
+                  132.0,
+                  58.0
+                ],
+                [
+                  500,
+                  106.0,
+                  60.0
+                ],
+                [
+                  600,
+                  89.0,
+                  61.0
+                ],
+                [
+                  700,
+                  76.0,
+                  63.0
+                ],
+                [
+                  800,
+                  67.0,
+                  65.0
+                ],
+                [
+                  900,
+                  60.0,
+                  67.0
+                ],
+                [
+                  1000,
+                  54.0,
+                  69.0
+                ],
+                [
+                  1100,
+                  49.0,
+                  71.0
+                ],
+                [
+                  1200,
+                  44.0,
+                  73.0
+                ],
+                [
+                  1300,
+                  41.0,
+                  75.0
+                ],
+                [
+                  1400,
+                  37.0,
+                  77.0
+                ],
+                [
+                  1500,
+                  34.0,
+                  78.0
+                ],
+                [
+                  1600,
+                  31.0,
+                  79.0
+                ],
+                [
+                  1700,
+                  29.0,
+                  79.0
+                ],
+                [
+                  1800,
+                  25.0,
+                  78.0
+                ]
+              ]
             }
           },
           "4": {
@@ -1844,12 +3124,114 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_0-832Ay.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  400,
+                  186.0,
+                  81.0
+                ],
+                [
+                  500,
+                  150.0,
+                  82.0
+                ],
+                [
+                  600,
+                  126.0,
+                  84.0
+                ],
+                [
+                  700,
+                  108.0,
+                  86.0
+                ],
+                [
+                  800,
+                  95.0,
+                  88.0
+                ],
+                [
+                  900,
+                  84.0,
+                  90.0
+                ],
+                [
+                  1000,
+                  76.0,
+                  92.0
+                ],
+                [
+                  1100,
+                  69.0,
+                  94.0
+                ],
+                [
+                  1200,
+                  63.0,
+                  96.0
+                ],
+                [
+                  1300,
+                  58.0,
+                  98.0
+                ],
+                [
+                  1400,
+                  54.0,
+                  100.0
+                ],
+                [
+                  1500,
+                  50.0,
+                  101.0
+                ],
+                [
+                  1600,
+                  47.0,
+                  103.0
+                ],
+                [
+                  1700,
+                  44.0,
+                  105.0
+                ],
+                [
+                  1800,
+                  41.0,
+                  106.0
+                ],
+                [
+                  1900,
+                  38.0,
+                  107.0
+                ],
+                [
+                  2000,
+                  36.0,
+                  108.0
+                ],
+                [
+                  2100,
+                  33.0,
+                  108.0
+                ],
+                [
+                  2200,
+                  30.0,
+                  108.0
+                ],
+                [
+                  2300,
+                  27.0,
+                  105.0
+                ]
+              ]
             }
           }
-        }
+        },
+        "wind_source_name": "0-832Ay"
       },
       "smoke": {
         "name": "Smoke D-832DU",
@@ -1913,9 +3295,55 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_A-832AY.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  50,
+                  129.0,
+                  7.0
+                ],
+                [
+                  100,
+                  65.0,
+                  7.0
+                ],
+                [
+                  150,
+                  44.0,
+                  8.0
+                ],
+                [
+                  200,
+                  33.0,
+                  8.0
+                ],
+                [
+                  250,
+                  27.0,
+                  9.0
+                ],
+                [
+                  300,
+                  22.0,
+                  9.0
+                ],
+                [
+                  350,
+                  19.0,
+                  10.0
+                ],
+                [
+                  400,
+                  16.0,
+                  11.0
+                ],
+                [
+                  450,
+                  13.0,
+                  11.0
+                ]
+              ]
             }
           },
           "1": {
@@ -1965,9 +3393,45 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_A-832AY.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  200,
+                  72.0,
+                  16.0
+                ],
+                [
+                  300,
+                  48.0,
+                  17.0
+                ],
+                [
+                  400,
+                  37.0,
+                  19.0
+                ],
+                [
+                  500,
+                  29.0,
+                  21.0
+                ],
+                [
+                  600,
+                  24.0,
+                  22.0
+                ],
+                [
+                  700,
+                  20.0,
+                  23.0
+                ],
+                [
+                  800,
+                  15.0,
+                  23.0
+                ]
+              ]
             }
           },
           "2": {
@@ -2035,9 +3499,60 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_A-832AY.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  300,
+                  95.0,
+                  32.0
+                ],
+                [
+                  400,
+                  71.0,
+                  33.0
+                ],
+                [
+                  500,
+                  58.0,
+                  35.0
+                ],
+                [
+                  600,
+                  48.0,
+                  37.0
+                ],
+                [
+                  700,
+                  41.0,
+                  38.0
+                ],
+                [
+                  800,
+                  36.0,
+                  40.0
+                ],
+                [
+                  900,
+                  32.0,
+                  42.0
+                ],
+                [
+                  1000,
+                  28.0,
+                  44.0
+                ],
+                [
+                  1100,
+                  25.0,
+                  45.0
+                ],
+                [
+                  1200,
+                  22.0,
+                  45.0
+                ]
+              ]
             }
           },
           "3": {
@@ -2123,12 +3638,84 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_A-832AY.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  400,
+                  109.0,
+                  48.0
+                ],
+                [
+                  500,
+                  88.0,
+                  50.0
+                ],
+                [
+                  600,
+                  73.0,
+                  52.0
+                ],
+                [
+                  700,
+                  63.0,
+                  54.0
+                ],
+                [
+                  800,
+                  55.0,
+                  55.0
+                ],
+                [
+                  900,
+                  49.0,
+                  57.0
+                ],
+                [
+                  1000,
+                  44.0,
+                  59.0
+                ],
+                [
+                  1100,
+                  40.0,
+                  61.0
+                ],
+                [
+                  1200,
+                  36.0,
+                  63.0
+                ],
+                [
+                  1300,
+                  33.0,
+                  65.0
+                ],
+                [
+                  1400,
+                  30.0,
+                  66.0
+                ],
+                [
+                  1500,
+                  27.0,
+                  67.0
+                ],
+                [
+                  1600,
+                  24.0,
+                  66.0
+                ],
+                [
+                  1700,
+                  20.0,
+                  62.0
+                ]
+              ]
             }
           }
-        }
+        },
+        "wind_source_name": "A-832AY"
       },
       "illum": {
         "name": "Illumination S-832C",
@@ -2204,9 +3791,65 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_C-832C.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  100,
+                  260.0,
+                  28.0
+                ],
+                [
+                  150,
+                  175.0,
+                  29.0
+                ],
+                [
+                  200,
+                  133.0,
+                  31.0
+                ],
+                [
+                  250,
+                  107.0,
+                  32.0
+                ],
+                [
+                  300,
+                  89.0,
+                  34.0
+                ],
+                [
+                  350,
+                  76.0,
+                  35.0
+                ],
+                [
+                  400,
+                  66.0,
+                  37.0
+                ],
+                [
+                  450,
+                  58.0,
+                  38.0
+                ],
+                [
+                  500,
+                  51.0,
+                  39.0
+                ],
+                [
+                  550,
+                  44.0,
+                  40.0
+                ],
+                [
+                  600,
+                  36.0,
+                  38.0
+                ]
+              ]
             }
           },
           "2": {
@@ -2274,9 +3917,60 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_C-832C.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  200,
+                  337.0,
+                  75.0
+                ],
+                [
+                  300,
+                  231.0,
+                  78.0
+                ],
+                [
+                  400,
+                  175.0,
+                  80.0
+                ],
+                [
+                  500,
+                  140.0,
+                  83.0
+                ],
+                [
+                  600,
+                  117.0,
+                  86.0
+                ],
+                [
+                  700,
+                  100.0,
+                  89.0
+                ],
+                [
+                  800,
+                  86.0,
+                  92.0
+                ],
+                [
+                  900,
+                  75.0,
+                  94.0
+                ],
+                [
+                  1000,
+                  65.0,
+                  95.0
+                ],
+                [
+                  1100,
+                  55.0,
+                  93.0
+                ]
+              ]
             }
           },
           "3": {
@@ -2368,9 +4062,80 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_C-832C.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  300,
+                  376.0,
+                  126.0
+                ],
+                [
+                  400,
+                  287.0,
+                  128.0
+                ],
+                [
+                  500,
+                  232.0,
+                  131.0
+                ],
+                [
+                  600,
+                  194.0,
+                  133.0
+                ],
+                [
+                  700,
+                  167.0,
+                  136.0
+                ],
+                [
+                  800,
+                  146.0,
+                  138.0
+                ],
+                [
+                  900,
+                  129.0,
+                  141.0
+                ],
+                [
+                  1000,
+                  115.0,
+                  143.0
+                ],
+                [
+                  1100,
+                  104.0,
+                  145.0
+                ],
+                [
+                  1200,
+                  94.0,
+                  146.0
+                ],
+                [
+                  1300,
+                  85.0,
+                  147.0
+                ],
+                [
+                  1400,
+                  76.0,
+                  147.0
+                ],
+                [
+                  1500,
+                  68.0,
+                  145.0
+                ],
+                [
+                  1600,
+                  59.0,
+                  139.0
+                ]
+              ]
             }
           },
           "4": {
@@ -2492,12 +4257,109 @@
               ]
             ],
             "wind": {
-              "source": "",
-              "initSpeedCoef": null,
-              "samples": {}
+              "source": "Vanilla Arma Reforger data007.pak WindData_Shell_C-832C.conf, extracted with m_aFiringSolution[i] paired to m_aValues[i] by array index and cross-checked against projectile simulation. Crosswind is ALREADY in this sight's mils - never convert it again.",
+              "referenceSpeedMps": 10,
+              "rows": [
+                [
+                  400,
+                  440.0,
+                  201.0
+                ],
+                [
+                  500,
+                  361.0,
+                  202.0
+                ],
+                [
+                  600,
+                  304.0,
+                  204.0
+                ],
+                [
+                  700,
+                  263.0,
+                  205.0
+                ],
+                [
+                  800,
+                  230.0,
+                  207.0
+                ],
+                [
+                  900,
+                  205.0,
+                  209.0
+                ],
+                [
+                  1000,
+                  184.0,
+                  210.0
+                ],
+                [
+                  1100,
+                  167.0,
+                  212.0
+                ],
+                [
+                  1200,
+                  153.0,
+                  213.0
+                ],
+                [
+                  1300,
+                  140.0,
+                  215.0
+                ],
+                [
+                  1400,
+                  129.0,
+                  216.0
+                ],
+                [
+                  1500,
+                  119.0,
+                  216.0
+                ],
+                [
+                  1600,
+                  110.0,
+                  216.0
+                ],
+                [
+                  1700,
+                  102.0,
+                  216.0
+                ],
+                [
+                  1800,
+                  95.0,
+                  215.0
+                ],
+                [
+                  1900,
+                  88.0,
+                  214.0
+                ],
+                [
+                  2000,
+                  81.0,
+                  211.0
+                ],
+                [
+                  2100,
+                  74.0,
+                  207.0
+                ],
+                [
+                  2200,
+                  66.0,
+                  199.0
+                ]
+              ]
             }
           }
-        }
+        },
+        "wind_source_name": "C-832C"
       }
     },
     "tables": {
@@ -2505,6 +4367,6 @@
       "status": "provisional",
       "note": "Elevations and flight times predate the 1.7/1.8 ballistics work and have not been compared against the current in-game ballistic table. Treat as provisional until re-checked round by round."
     },
-    "wind_note": "Reforger's own shape, from SCR_ProjectileWindTable.GetDataByDistance(): each sample is [firing angle rad, range m, peak altitude m, crosswind azimuth correction mrad, parallel wind range correction m, impact angle rad]. Samples are keyed by wind speed in m/s. Stored in native milliradians and converted to the sight's own mils for display only. Empty until dumped from the game - see assets/mortar/README.md. Never estimate these."
+    "wind_note": "Rows are [range m, crosswind correction in THIS SIGHT'S MILS at 10 m/s, longitudinal range correction in metres at 10 m/s]. Scale linearly by component/10 and take the sign from the wind geometry. The crosswind figure is already in weapon mils - it must never be run through a milliradian conversion."
   }
 }

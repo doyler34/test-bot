@@ -15,8 +15,7 @@ import json
 from pathlib import Path
 import math
 
-from bot.mortar.wind import (CROSS_MRAD, PARALLEL_M, Table, Wind, build_table,
-                             components, sight_mils)
+from bot.mortar.wind import Table, Wind, build_table, components
 
 TABLES = Path(__file__).resolve().parents[2] / 'assets/mortar/tables.json'
 OUT_OF_RANGE = 'OUT OF RANGE'
@@ -238,8 +237,8 @@ class Corrected:
     every: tuple = ()           # every ring reaching the corrected range
     parallel: float = 0.0       # m/s, + tailwind
     crosswind: float = 0.0      # m/s, + towards the shooter's right
-    crosswind_mrad: float = 0.0  # Reforger's own figure, signed, milliradians
-    azimuth_mils: float = 0.0   # the same angle on this sight, to be ADDED
+    crosswind_mils: float = 0.0  # vanilla's figure, scaled and signed, this sight's mils
+    azimuth_mils: float = 0.0   # the correction to be ADDED to the base azimuth
     range_m: float = 0.0        # metres the wind carries the round, signed
     effective_range: float = 0.0
     has_data: bool = False      # this ring has Reforger samples
@@ -274,21 +273,22 @@ def apply_wind(weapon, distance, bearing_degrees, wind=None, climb=0.0):
     if base is None or wind.calm or not table.loaded:
         return plain
 
-    # Each component is looked up at its own strength, in the game's units.
-    mrad = table.at(distance, abs(split.crosswind), CROSS_MRAD)
-    carry = table.at(distance, abs(split.parallel), PARALLEL_M)
-    if mrad is None or carry is None:
-        # The samples do not cover this range or this wind; say so rather
-        # than reaching past the ends of what was measured.
+    # Each component is looked up at its own strength. The table gives the
+    # magnitude; the component's sign gives it a direction.
+    sideways = table.crosswind(distance, split.crosswind)
+    carry = table.carry(distance, split.parallel)
+    if sideways is None or carry is None:
+        # This range is outside the ring's wind rows; say so rather than
+        # reaching past the ends of what vanilla measured.
         return Corrected(**{**plain.__dict__, 'measured': False})
 
-    carry = math.copysign(carry, split.parallel)
     effective = distance - carry          # a tailwind carries it long
     final, reaching = solution(weapon, effective, climb)
-    mrad = math.copysign(mrad, split.crosswind)
-    azimuth = -sight_mils(mrad, weapon.mils)   # pushed right, traverse left
+    # Pushed towards the shooter's right, so the gun traverses left. These
+    # figures are already this sight's mils - nothing is converted here.
+    azimuth = -sideways
 
     return Corrected(base=base, final=final, every=tuple(reaching),
                      parallel=split.parallel, crosswind=split.crosswind,
-                     crosswind_mrad=mrad, azimuth_mils=azimuth, range_m=carry,
+                     crosswind_mils=sideways, azimuth_mils=azimuth, range_m=carry,
                      effective_range=effective, has_data=True)

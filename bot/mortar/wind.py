@@ -5,24 +5,23 @@ Two halves, kept apart on purpose.
 The first half is geometry and is exact: turning the wind a spotter reports
 into components along and across the line of fire. It owes the game nothing.
 
-The second half is the game's own data. Reforger keeps wind correction per
-projectile, not as one formula, and hands it back through
-SCR_ProjectileWindTable.GetDataByDistance() as six figures per sample:
+The second half is the game's own data, pulled out of vanilla's
+WindData_Shell_*.conf. Each row of a ring's table is
 
-    [0] firing angle                              radians
-    [1] distance                                  metres
-    [2] peak altitude                             metres
-    [3] crosswind azimuth correction              MILLIRADIANS
-    [4] parallel wind range correction            METRES
-    [5] impact angle                              radians
+    [range m, crosswind correction at 10 m/s, range correction at 10 m/s]
 
-That shape is what is stored, unconverted, keyed by wind speed and by the
-ring whose charge sets the projectile's initSpeedCoef. Milliradians are not
-either sight's mils, so the one conversion lives in `sight_mils()` below and
-nowhere else.
+where the crosswind figure is **already in that sight's mils** - 6400-mil
+figures for the M252, 6000-mil for the 2B14 - and the range figure is metres.
+Nothing here converts milliradians: the extraction did that, and doing it
+again would be a silent factor of about six. There is deliberately no
+milliradian helper in this module for anything to reach for.
 
-A ring with no samples reports that it has none. A made-up drift figure is
-worse than no correction at all, because it looks like an answer.
+Both columns are quoted for a full 10 m/s of that component, so a component
+of any other strength scales linearly:
+
+    correction = value_at_10 * component / 10
+
+The table supplies MAGNITUDE. The geometry below supplies DIRECTION.
 
 CONVENTIONS, fixed here and nowhere else
 ----------------------------------------
@@ -42,32 +41,22 @@ it right of the target and the gun traverses LEFT: the azimuth correction
 carries the opposite sign to the crosswind. A tailwind carries the round
 long, so the gun is laid for a SHORTER range.
 
-The stored table holds magnitudes for a wind of a given speed; the signs
-above are applied to them here. When real samples arrive, confirm the sign of
-column [3] against one live shot before trusting the direction.
+The stored table holds magnitudes only; the signs above are what give them a
+direction.
 """
 from dataclasses import dataclass
 import math
 
 # A gale in Reforger is a few metres a second; a bound, not a forecast.
 MAX_SPEED = 60.0
-# Column numbers, named once, in GetDataByDistance order.
-ANGLE, DISTANCE, PEAK, CROSS_MRAD, PARALLEL_M, IMPACT = range(6)
+# Columns of a wind row, named once.
+RANGE, CROSS_MILS, RANGE_M = range(3)
+# What the extracted figures are quoted for.
+REFERENCE_SPEED = 10.0
 
 
 class BadWind(Exception):
     """The wind as given cannot be used."""
-
-
-def sight_mils(milliradians, circle):
-    """Reforger's milliradians as the mils on a particular sight.
-
-    A full circle is 2000*pi milliradians. The M252's sight divides the circle
-    into 6400 and the 2B14's into 6000, so the same angle reads differently on
-    each and a correction can never be carried from one to the other. This is
-    the only place the two ever meet.
-    """
-    return milliradians / 1000.0 * circle / (2 * math.pi)
 
 
 @dataclass(frozen=True)
@@ -124,82 +113,71 @@ def components(wind, bearing_degrees):
 
 @dataclass(frozen=True)
 class Table:
-    """One ring's wind data, as Reforger hands it over."""
-    init_speed_coef: float = None
+    """One ring's wind data, as vanilla quotes it at 10 m/s."""
     source: str = ''
-    # ((wind speed m/s, ((six figures per sample), ...)), ...), speeds ascending
-    speeds: tuple = ()
+    reference: float = REFERENCE_SPEED
+    rows: tuple = ()        # (range m, crosswind mils at reference, metres at reference)
 
     @property
     def loaded(self):
-        return bool(self.speeds)
+        return len(self.rows) >= 2
 
     @property
-    def fastest(self):
-        return self.speeds[-1][0] if self.speeds else 0.0
+    def span(self):
+        return (self.rows[0][RANGE], self.rows[-1][RANGE]) if self.rows else None
 
-    def at(self, distance, speed, column):
-        """One column, read at a distance and a wind speed.
+    def at(self, distance, column):
+        """One column read at a range, between the rows either side.
 
-        Interpolated between the samples either side on both axes, and never
-        past them - except downwards to nothing, because no wind is no
-        correction and that is certain rather than assumed.
+        Never past the ends: a solution outside this ring's wind data gets no
+        correction rather than an invented one.
         """
-        if not self.speeds or speed <= 0:
-            return 0.0
-        if speed > self.fastest:
-            return None          # beyond what was measured; do not guess
-        below, above = (0.0, None), None
-        for listed, samples in self.speeds:
-            if listed <= speed:
-                below = (listed, samples)
-            elif above is None:
-                above = (listed, samples)
-        low = 0.0 if below[1] is None else by_distance(below[1], distance, column)
-        if low is None:
+        if not self.loaded or not self.rows[0][RANGE] <= distance <= self.rows[-1][RANGE]:
             return None
-        if below[0] == speed or above is None:
-            return low if below[0] == speed else None
-        high = by_distance(above[1], distance, column)
-        if high is None:
-            return None
-        share = (speed - below[0]) / (above[0] - below[0])
-        return low + (high - low) * share
-
-
-def by_distance(samples, distance, column):
-    """A column read off one wind speed's samples, by range.
-
-    This is GetDataByDistance's job: find the samples either side of the range
-    and split between them. Outside their span there is nothing to read.
-    """
-    if len(samples) < 2 or not samples[0][DISTANCE] <= distance <= samples[-1][DISTANCE]:
+        for low, high in zip(self.rows, self.rows[1:]):
+            if low[RANGE] <= distance <= high[RANGE]:
+                span = high[RANGE] - low[RANGE]
+                if span == 0:
+                    return low[column]
+                share = (distance - low[RANGE]) / span
+                return low[column] + (high[column] - low[column]) * share
         return None
-    for low, high in zip(samples, samples[1:]):
-        if low[DISTANCE] <= distance <= high[DISTANCE]:
-            span = high[DISTANCE] - low[DISTANCE]
-            if span == 0:
-                return low[column]
-            share = (distance - low[DISTANCE]) / span
-            return low[column] + (high[column] - low[column]) * share
-    return None
+
+    def scaled(self, distance, component, column):
+        """The correction for a wind component of any strength.
+
+        The table is quoted for a full 10 m/s, so this is linear in the
+        component - and the component's sign comes through it, which is what
+        turns a magnitude into a direction.
+        """
+        value = self.at(distance, column)
+        if value is None:
+            return None
+        return value * component / self.reference
+
+    def crosswind(self, distance, component):
+        """Sideways correction, in this sight's own mils. Already converted."""
+        return self.scaled(distance, component, CROSS_MILS)
+
+    def carry(self, distance, component):
+        """How far a parallel wind carries the round, in metres."""
+        return self.scaled(distance, component, RANGE_M)
 
 
 def build_table(block):
     """A ring's wind block from the table file, or an empty table."""
     if not isinstance(block, dict):
         return Table()
-    speeds = []
-    for listed, samples in (block.get('samples') or {}).items():
-        try:
-            speed = float(listed)
-        except (TypeError, ValueError):
-            continue
-        rows = tuple(tuple(float(v) for v in sample) for sample in samples or []
-                     if len(sample) >= 6)
-        if speed > 0 and len(rows) >= 2:
-            speeds.append((speed, tuple(sorted(rows, key=lambda r: r[DISTANCE]))))
-    coef = block.get('initSpeedCoef')
-    return Table(init_speed_coef=None if coef is None else float(coef),
-                 source=str(block.get('source') or ''),
-                 speeds=tuple(sorted(speeds)))
+    rows = []
+    for row in block.get('rows') or []:
+        if len(row) >= 3:
+            rows.append(tuple(float(v) for v in row[:3]))
+    reference = block.get('referenceSpeedMps', REFERENCE_SPEED)
+    try:
+        reference = float(reference)
+    except (TypeError, ValueError):
+        return Table()
+    if reference <= 0:
+        return Table()
+    return Table(source=str(block.get('source') or ''), reference=reference,
+                 rows=tuple(sorted(rows)))
