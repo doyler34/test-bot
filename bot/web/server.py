@@ -14,7 +14,8 @@ from pathlib import Path
 from aiohttp import web
 
 from bot.mortar.calibration import calibration, image_path, reason, tile_path
-from bot.mortar.solution import bearing, profile, profiles, solution, swap, weapons
+from bot.mortar.solution import (apply_wind, bearing, profile, profiles, swap, weapons)
+from bot.mortar.wind import BadWind, read as read_wind
 from bot.web.sessions import Sessions
 
 LOG = logging.getLogger('reforger.mortarweb')
@@ -77,6 +78,11 @@ def catalogue():
     return listing
 
 
+def ring_json(ring):
+    return {'ring': ring.ring, 'elevation_mils': round(ring.elevation),
+            'tof_seconds': round(ring.flight), 'dispersion_m': ring.dispersion}
+
+
 def calculate(body, mapped):
     """One firing solution, straight off the engine."""
     weapon = loadout(body)
@@ -85,9 +91,14 @@ def calculate(body, mapped):
     gun, target = point(body.get('gun'), mapped), point(body.get('target'), mapped)
     if gun is None or target is None:
         return {'valid': False, 'reason': 'bad_request'}
+    try:
+        wind = read_wind(body.get('wind'))
+    except BadWind as exc:
+        return {'valid': False, 'reason': 'bad_wind', 'detail': str(exc)}
     climb = number(body.get('climb')) or 0.0
     mils, distance = bearing(gun, target, weapon.mils)
-    best, every = solution(weapon, distance, climb)
+    # The wind is split against the line of fire once, here, in degrees.
+    shot = apply_wind(weapon, distance, mils * 360 / weapon.mils, wind, climb)
     low, high = weapon.span
     answer = {
         'tube': weapon.weapon, 'round': weapon.round_key,
@@ -96,20 +107,33 @@ def calculate(body, mapped):
         'min_range_m': low, 'max_range_m': high,
         'gun': {'east': round(gun[0]), 'north': round(gun[1])},
         'target': {'east': round(target[0]), 'north': round(target[1])},
+        'wind': {'speed_mps': wind.speed, 'from_degrees': wind.bearing,
+                 'crosswind_mps': round(shot.crosswind, 2),
+                 'parallel_mps': round(shot.parallel, 2),
+                 'azimuth_correction_mils': round(shot.azimuth_mils),
+                 'range_correction_m': round(shot.range_m),
+                 'effective_range_m': round(shot.effective_range),
+                 'has_data': shot.has_data, 'applied': bool(shot.corrected)},
     }
     if mapped is not None:
         answer['mortar_grid'] = mapped.grid(*gun)
         answer['target_grid'] = mapped.grid(*target)
-    if best is None:
+    if shot.base is not None:
+        answer['base_solution'] = {'azimuth_mils': round(mils), 'range_m': round(distance),
+                                   **ring_json(shot.base)}
+    if shot.final is None:
+        # The wind can carry a shot out of every ring's reach; say so plainly.
         answer.update(valid=False, reason='out_of_range')
         return answer
-    answer.update(valid=True, ring=best.ring, elevation_mils=round(best.elevation),
-                  tof_seconds=round(best.flight), dispersion_m=best.dispersion,
-                  rings=[{'ring': r.ring, 'elevation_mils': round(r.elevation),
-                          'tof_seconds': round(r.flight), 'dispersion_m': r.dispersion}
-                         for r in every])
+    laid = (mils + shot.azimuth_mils) % weapon.mils
+    answer['final_solution'] = {'azimuth_mils': round(laid), **ring_json(shot.final)}
+    answer.update(valid=True, ring=shot.final.ring,
+                  elevation_mils=round(shot.final.elevation),
+                  tof_seconds=round(shot.final.flight), dispersion_m=shot.final.dispersion,
+                  azimuth_mils=round(laid),
+                  rings=[ring_json(r) for r in shot.every])
     if climb:
-        answer['height_correction_mils'] = round(best.correction)
+        answer['height_correction_mils'] = round(shot.final.correction)
     return answer
 
 

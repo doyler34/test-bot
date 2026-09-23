@@ -24,20 +24,58 @@
   <div id="cursor" hidden></div>
 
   <section id="panel" class="empty">
+    <div class="wind">
+      <h3>🌬 Wind <small>(direction it blows FROM)</small></h3>
+      <div class="windrow">
+        <label class="stepper">
+          <span>Speed</span>
+          <div>
+            <button type="button" id="windDown" aria-label="Less wind">−</button>
+            <input id="windSpeed" type="number" inputmode="decimal" min="0" max="60"
+                   step="1" value="0"><i>m/s</i>
+            <button type="button" id="windUp" aria-label="More wind">+</button>
+          </div>
+        </label>
+        <label class="stepper">
+          <span>Wind from</span>
+          <div>
+            <input id="windFrom" type="number" inputmode="numeric" min="0" max="359"
+                   step="5" value="0"><i>°</i>
+          </div>
+        </label>
+      </div>
+      <div id="compass" class="compass"></div>
+    </div>
+
     <h2>🎯 Mortar solution</h2>
     <p id="loadout" class="loadout"></p>
     <div class="grids">
       <div><span>📍 Mortar</span><b id="gunGrid">—</b></div>
       <div><span>🎯 Target</span><b id="targetGrid">—</b></div>
-    </div>
-    <div class="figures">
       <div><span>Range</span><b id="range">—</b></div>
-      <div><span>Azimuth</span><b id="azimuth">—</b></div>
-      <div><span>Ring</span><b id="ring">—</b></div>
-      <div><span>Elevation</span><b id="elevation">—</b></div>
-      <div><span>Flight</span><b id="tof">—</b></div>
-      <div><span>Dispersion</span><b id="dispersion">—</b></div>
     </div>
+    <div class="final">
+      <h3>Final settings</h3>
+      <div class="figures big">
+        <div><span>Azimuth</span><b id="azimuth">—</b></div>
+        <div><span>Elevation</span><b id="elevation">—</b></div>
+      </div>
+      <div class="figures">
+        <div><span>Ring</span><b id="ring">—</b></div>
+        <div><span>Flight</span><b id="tof">—</b></div>
+        <div><span>Dispersion</span><b id="dispersion">—</b></div>
+      </div>
+    </div>
+
+    <div id="base" class="base" hidden>
+      <div><span>Crosswind</span><b id="crosswind">—</b></div>
+      <div><span>Head/tail</span><b id="parallel">—</b></div>
+      <div><span>Base azimuth</span><b id="baseAzimuth">—</b></div>
+      <div><span>Azimuth corr.</span><b id="azimuthCorr">—</b></div>
+      <div><span>Base range</span><b id="baseRange">—</b></div>
+      <div><span>Range corr.</span><b id="rangeCorr">—</b></div>
+    </div>
+    <p id="windNote" class="note" hidden></p>
     <p id="problem" class="problem" hidden></p>
     <div class="buttons">
       <button id="copy" type="button">Copy solution</button>

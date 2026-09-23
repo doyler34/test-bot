@@ -59,7 +59,11 @@
                 10.7,
                 151
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "1": {
             "dispersion": 14,
@@ -118,7 +122,11 @@
                 16.1,
                 148
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "2": {
             "dispersion": 24,
@@ -213,7 +221,11 @@
                 20.9,
                 109
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "3": {
             "dispersion": 33,
@@ -344,7 +356,11 @@
                 22.7,
                 46
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "4": {
             "dispersion": 42,
@@ -505,7 +521,11 @@
                 27.7,
                 64
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           }
         }
       },
@@ -587,7 +607,11 @@
                 13.0,
                 160
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "2": {
             "dispersion": 20,
@@ -670,7 +694,11 @@
                 18.0,
                 58
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "3": {
             "dispersion": 28,
@@ -777,7 +805,11 @@
                 23.0,
                 84
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "4": {
             "dispersion": 35,
@@ -908,7 +940,11 @@
                 25.8,
                 67
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           }
         }
       },
@@ -990,7 +1026,11 @@
                 13.3,
                 151
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "2": {
             "dispersion": 21,
@@ -1073,7 +1113,11 @@
                 20.5,
                 98
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "3": {
             "dispersion": 29,
@@ -1180,7 +1224,11 @@
                 24.1,
                 67
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "4": {
             "dispersion": 36,
@@ -1311,11 +1359,16 @@
                 27.4,
                 52
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           }
         }
       }
-    }
+    },
+    "wind_note": "Measured in game: [range m, metres of drift per m/s of crosswind, metres of range gained per m/s of tailwind]. Empty until real figures exist - see assets/mortar/README.md. Never estimate these."
   },
   "2b14": {
     "name": "2B14 Podnos 82mm",
@@ -1389,7 +1442,11 @@
                 12.4,
                 101
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "1": {
             "dispersion": 12,
@@ -1442,7 +1499,11 @@
                 16.4,
                 81
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "2": {
             "dispersion": 19,
@@ -1525,7 +1586,11 @@
                 17.8,
                 55
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "3": {
             "dispersion": 29,
@@ -1626,7 +1691,11 @@
                 22.8,
                 68
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "4": {
             "dispersion": 34,
@@ -1751,7 +1820,11 @@
                 25.3,
                 65
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           }
         }
       },
@@ -1815,7 +1888,11 @@
                 11.4,
                 122
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "1": {
             "dispersion": 12,
@@ -1862,7 +1939,11 @@
                 13.9,
                 67
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "2": {
             "dispersion": 18,
@@ -1927,7 +2008,11 @@
                 19.2,
                 64
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "3": {
             "dispersion": 27,
@@ -2010,7 +2095,11 @@
                 22.3,
                 50
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           }
         }
       },
@@ -2086,7 +2175,11 @@
                 12.3,
                 146
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "2": {
             "dispersion": 17,
@@ -2151,7 +2244,11 @@
                 18.9,
                 89
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "3": {
             "dispersion": 24,
@@ -2240,7 +2337,11 @@
                 22.3,
                 43
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           },
           "4": {
             "dispersion": 34,
@@ -2359,10 +2460,15 @@
                 26.9,
                 34
               ]
-            ]
+            ],
+            "wind": {
+              "source": "",
+              "rows": []
+            }
           }
         }
       }
-    }
+    },
+    "wind_note": "Measured in game: [range m, metres of drift per m/s of crosswind, metres of range gained per m/s of tailwind]. Empty until real figures exist - see assets/mortar/README.md. Never estimate these."
   }
 }

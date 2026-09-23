@@ -37,6 +37,46 @@ out from that, so a new mortar is a change to this file and nothing else.
   tube has to throw further and the elevation comes down. The per-100 m column
   is what that correction is worked out from.
 
+## Wind
+
+Each ring carries an optional `wind` block beside its elevations:
+
+```json
+"2": {
+  "dispersion": 24,
+  "rows": [[200, 1490, 20.6, 12], [300, 1468, 20.5, 12]],
+  "wind": {
+    "source": "where these were measured",
+    "rows": [[200, 0.9, 1.8], [300, 1.4, 2.6]]
+  }
+}
+```
+
+Each wind row is `[range m, metres of drift per m/s of crosswind, metres of
+range gained per m/s of tailwind]`, lowest range first, interpolated between
+rows exactly like the elevations and never extrapolated past the ends.
+
+**Every one of these is empty.** No verified Reforger wind figures exist in
+any source we have, so none are shipped. Until they do, the page reports the
+wind split against your line of fire and says plainly that no correction has
+been applied. Do not fill these in with estimates: a wrong correction is worse
+than none, because it looks like an answer.
+
+To measure them, for one ring at one range: fire a solution in still air and
+confirm the fall of shot, then fire the same solution with a known crosswind
+and measure how far downwind it lands. Drift divided by wind speed is the
+middle column. Repeat with a head or tail wind, measuring how much short or
+long it falls, for the third. Record where the figures came from in `source`.
+
+The correction is applied like this, and only like this:
+
+- **Crosswind** moves the round sideways, so it becomes an azimuth
+  correction - worked out as an angle at the gun **in that tube's own mil
+  circle**, 6400 on the M252 and 6000 on the 2B14.
+- **Head or tail wind** changes how far the round flies, so it becomes a range
+  correction: the gun is laid for the corrected range and the elevation comes
+  out of the range table above. No separate elevation formula exists.
+
 ## Where the numbers came from
 
 Both tables were copied out of the game by vova_4104 and published at
