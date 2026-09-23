@@ -13,7 +13,13 @@ const el = (id) => document.getElementById(id);
 let MAP = null;          // the calibration the server handed us
 let TUBES = [];
 let map, layer, gun = null, target = null, line = null, ring = null, label = null;
+let arrow = null;
 let pending = 0;
+/* The wind as the spotter reports it: the bearing it blows FROM. Everything
+ * else about wind - components, corrections, signs - is the backend's work. */
+const WIND = { speed: 0, from: 0 };
+const POINTS = [['N', 0], ['NE', 45], ['E', 90], ['SE', 135],
+                ['S', 180], ['SW', 225], ['W', 270], ['NW', 315]];
 
 /* --- coordinates ----------------------------------------------------
  * GeNeFRAG's transform, as his mapEngine.js applies it:
@@ -92,6 +98,7 @@ function draw() {
   if (line) { line.remove(); line = null; }
   if (label) { label.remove(); label = null; }
   drawRing();
+  drawArrow();
   if (!gun || !target) return;
   const a = gun.getLatLng(), b = target.getLatLng();
   line = L.polyline([a, b], { color: '#d9a441', weight: 2 }).addTo(map);
@@ -101,6 +108,21 @@ function draw() {
   label = L.marker(L.latLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2), {
     interactive: false,
     icon: L.divIcon({ className: '', html: `<span class="range-label">${Math.round(metres)} m</span>` }),
+  }).addTo(map);
+}
+
+function drawArrow() {
+  if (arrow) { arrow.remove(); arrow = null; }
+  if (!gun || !WIND.speed) return;
+  /* The text says where the wind comes FROM; the arrow shows where the air is
+   * going, which is the opposite way. */
+  const travelling = (WIND.from + 180) % 360;
+  arrow = L.marker(gun.getLatLng(), {
+    interactive: false,
+    icon: L.divIcon({
+      className: '', iconSize: [30, 30],
+      html: `<div class="wind-arrow" style="transform:rotate(${travelling}deg)">↑</div>`,
+    }),
   }).addTo(map);
 }
 
@@ -147,23 +169,59 @@ function show(answer) {
   el('gunGrid').textContent = answer.mortar_grid || '—';
   el('targetGrid').textContent = answer.target_grid || '—';
   el('range').textContent = `${answer.range_m.toLocaleString()} m`;
-  el('azimuth').textContent = `${answer.azimuth_mils} mils`;
+  showWind(answer);
   const problem = el('problem');
   if (answer.valid) {
     problem.hidden = true;
+    el('azimuth').textContent = `${answer.azimuth_mils} mils`;
     el('ring').textContent = answer.ring;
     el('elevation').textContent = `${answer.elevation_mils} mils`;
     el('tof').textContent = `${answer.tof_seconds} sec`;
     el('dispersion').textContent = `${answer.dispersion_m} m`;
     return;
   }
-  ['ring', 'elevation', 'tof', 'dispersion'].forEach((id) => { el(id).textContent = '—'; });
+  ['azimuth', 'ring', 'elevation', 'tof', 'dispersion'].forEach((id) => {
+    el(id).textContent = '—';
+  });
   problem.hidden = false;
-  problem.innerHTML = answer.reason === 'out_of_range'
-    ? `<b>OUT OF RANGE</b>No valid ring reaches this target. This round covers
-       ${answer.min_range_m}–${answer.max_range_m} m.`
-    : '<b>NO SOLUTION</b>That could not be worked out. Try again in a moment.';
+  if (answer.reason === 'bad_wind') {
+    problem.innerHTML = `<b>WIND NOT USABLE</b>${answer.detail || 'Check the wind figures.'}`;
+  } else if (answer.reason === 'out_of_range') {
+    problem.innerHTML = `<b>OUT OF RANGE</b>No valid ring reaches this target. This round
+       covers ${answer.min_range_m}–${answer.max_range_m} m.`;
+  } else {
+    problem.innerHTML = '<b>NO SOLUTION</b>That could not be worked out. Try again in a moment.';
+  }
 }
+
+/* The backend does the wind. This only prints what it sent back. */
+function showWind(answer) {
+  const wind = answer.wind;
+  const base = el('base');
+  const note = el('windNote');
+  if (!wind || !wind.speed_mps) {
+    base.hidden = true;
+    note.hidden = true;
+    return;
+  }
+  base.hidden = false;
+  el('crosswind').textContent = `${wind.crosswind_mps.toFixed(2)} m/s`;
+  el('parallel').textContent = `${wind.parallel_mps.toFixed(2)} m/s`;
+  const baseSolution = answer.base_solution || {};
+  el('baseAzimuth').textContent = baseSolution.azimuth_mils != null
+    ? `${baseSolution.azimuth_mils} mils` : '—';
+  el('baseRange').textContent = baseSolution.range_m != null
+    ? `${baseSolution.range_m.toLocaleString()} m` : '—';
+  el('azimuthCorr').textContent = signed(wind.azimuth_correction_mils, 'mils');
+  el('rangeCorr').textContent = signed(-wind.range_correction_m, 'm');
+  note.hidden = wind.has_data;
+  note.textContent = wind.has_data ? ''
+    : `Wind from ${wind.from_degrees}° at ${wind.speed_mps} m/s, split against your line of `
+      + 'fire. No measured drift table exists for this round yet, so no correction has been '
+      + 'applied — the settings above are still-air figures.';
+}
+
+const signed = (value, unit) => `${value > 0 ? '+' : ''}${value} ${unit}`;
 
 async function solve() {
   if (!gun || !target) return;
@@ -172,6 +230,7 @@ async function solve() {
   const body = {
     token: TOKEN, tube: el('tube').value, round: el('round').value,
     gun: toWorld(gun.getLatLng()), target: toWorld(target.getLatLng()),
+    wind: { speed_mps: WIND.speed, from_degrees: WIND.from },
   };
   try {
     const reply = await fetch('/api/mortar/calculate', {
@@ -220,11 +279,43 @@ function wire() {
     draw(); solve();
   });
 
+  const speed = el('windSpeed');
+  const from = el('windFrom');
+
+  function windChanged() {
+    WIND.speed = Math.min(60, Math.max(0, Number(speed.value) || 0));
+    WIND.from = ((Number(from.value) || 0) % 360 + 360) % 360;
+    speed.value = WIND.speed;
+    from.value = WIND.from;
+    [...el('compass').children].forEach((button) => {
+      button.classList.toggle('on', Number(button.dataset.deg) === WIND.from && WIND.speed > 0);
+    });
+    drawArrow();
+    solve();
+  }
+
+  el('compass').innerHTML = POINTS
+    .map(([name, deg]) => `<button type="button" data-deg="${deg}">${name}</button>`).join('');
+  el('compass').addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    from.value = button.dataset.deg;      // degrees stay the stored value
+    if (!WIND.speed) speed.value = 1;
+    windChanged();
+  });
+  el('windUp').addEventListener('click', () => { speed.value = Number(speed.value) + 1; windChanged(); });
+  el('windDown').addEventListener('click', () => { speed.value = Number(speed.value) - 1; windChanged(); });
+  speed.addEventListener('change', windChanged);
+  speed.addEventListener('input', windChanged);
+  from.addEventListener('change', windChanged);
+
   el('copy').addEventListener('click', async () => {
     const text = [el('loadout').textContent,
       `Mortar ${el('gunGrid').textContent} → Target ${el('targetGrid').textContent}`,
-      `Range ${el('range').textContent} · Azimuth ${el('azimuth').textContent}`,
-      `Ring ${el('ring').textContent} · Elevation ${el('elevation').textContent} · Flight ${el('tof').textContent}`,
+      `Range ${el('range').textContent}`,
+      WIND.speed ? `Wind from ${WIND.from}° at ${WIND.speed} m/s` : 'No wind',
+      `Azimuth ${el('azimuth').textContent} · Elevation ${el('elevation').textContent}`,
+      `Ring ${el('ring').textContent} · Flight ${el('tof').textContent}`,
     ].join('\n');
     try {
       await navigator.clipboard.writeText(text);

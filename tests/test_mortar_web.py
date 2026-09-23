@@ -436,7 +436,8 @@ class ApiTests(AioHTTPTestCase):
 
     async def test_the_javascript_does_no_ballistics_of_its_own(self):
         page = await (await self.client.get('/static/mortar.js')).text()
-        for giveaway in ('dispersion:', 'elevation =', 'Math.atan2', '6400', '6000', '12.5'):
+        for giveaway in ('dispersion:', 'elevation =', 'Math.atan2', '6400', '6000', '12.5',
+                         'Math.cos', 'Math.sin', 'crosswind =', 'DRIFT', 'COEFFICIENT'):
             self.assertNotIn(giveaway, page)
 
 
