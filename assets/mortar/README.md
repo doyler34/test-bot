@@ -39,66 +39,65 @@ out from that, so a new mortar is a change to this file and nothing else.
 
 ## Wind
 
-Reforger keeps wind correction **per projectile**, not as one formula, and
-hands it over through `SCR_ProjectileWindTable.GetDataByDistance()`. That
-shape is what is stored here, unconverted:
+Reforger keeps wind correction **per projectile**, not as one formula. These
+figures come out of vanilla's `data007.pak`, `WindData_Shell_*.conf`, with
+`m_aFiringSolution[i]` paired to `m_aValues[i]` by array index and cross-checked
+against projectile simulation. They sit beside the elevations, per ring:
 
 ```json
 "2": {
   "dispersion": 24,
   "rows": [[200, 1490, 20.6, 12], [300, 1468, 20.5, 12]],
   "wind": {
-    "source": "where these were dumped from",
-    "initSpeedCoef": 1.0,
-    "samples": {
-      "5": [[0.95, 200, 150.0, 2.0, 20.0, 1.05],
-            [0.80, 1600, 900.0, 6.0, 55.0, 1.20]]
-    }
+    "source": "...WindData_Shell_M821.conf...",
+    "referenceSpeedMps": 10,
+    "rows": [[200, 133.0, 26.0], [300, 88.0, 27.0]]
   }
 }
 ```
 
-Each sample is, in the game's own order:
+Each wind row is `[range m, crosswind correction, range correction]` where:
 
-| # | Figure | Unit |
-| --- | --- | --- |
-| 0 | firing angle | radians |
-| 1 | distance | metres |
-| 2 | peak altitude | metres |
-| 3 | **crosswind azimuth correction** | **milliradians** |
-| 4 | **parallel wind range correction** | **metres** |
-| 5 | impact angle | radians |
+- the **crosswind** figure is **already in that sight's own mils** - 6400-mil
+  values for the M252, 6000-mil for the 2B14. **It must never be put through a
+  milliradian conversion.** The extraction did that once; doing it again is a
+  silent factor of about six, so there is deliberately no milliradian helper
+  anywhere in `bot/mortar/wind.py` for anything to reach for.
+- the **range** figure is metres.
 
-`samples` is keyed by wind speed in m/s. `initSpeedCoef` belongs to the ring,
-because the charge is what changes the projectile's launch speed.
+Both are quoted for a full **10 m/s** of that component, which is what
+`referenceSpeedMps` records. Anything else scales linearly:
 
-**Milliradians are not mils.** A circle is 2000·pi mrad, 6400 mils on the
-M252's sight and 6000 on the 2B14's. The conversion lives in one function,
-`sight_mils()` in `bot/mortar/wind.py`, and happens only when the operator's
-figure is produced - never in this file.
+    correction = value_at_10 * component / 10
 
-Lookups interpolate between samples on both axes and never past them, except
-downwards to zero wind, which is a certainty rather than an assumption. Above
-the fastest sample, no correction is offered at all.
+The table supplies **magnitude**. The wind geometry supplies **direction**.
+
+Lookups interpolate between the rows either side, within one ring, and never
+past their ends and never across rings. A solution outside a ring's wind rows
+reports that the wind is not covered rather than inventing a figure.
 
 How each half is used:
 
-- **Crosswind** - column 3 straight out of the table, converted to the sight's
-  own mils, signed against the wind: a round pushed right means traverse left.
-- **Head or tail wind** - column 4, metres, applied to the range the gun is
-  laid for. The elevation then comes out of the range table above, read at
-  that corrected range. **No elevation is calculated from wind anywhere.**
+- **Crosswind** - straight out of the table, scaled, signed against the wind: a
+  round pushed towards the shooter's right means traverse left.
+- **Head or tail wind** - metres, applied to the range the gun is laid for. The
+  elevation then comes out of the range table above, read at that corrected
+  range. **No elevation is calculated from wind anywhere.**
 
-**Every `samples` block is empty.** No vanilla wind table has been dumped
-yet, so none is shipped, and the page says so rather than applying anything.
-Do not fill these in with estimates.
+### Coverage
 
-To get them, dump them - do not transcribe them. Reforger ships
-`SCR_ProjectileWindageDataGeneratorPlugin`, which generates this data from the
-projectile simulation itself; that is the tool to run, per projectile and per
-charge, rather than reading figures off a gadget one screen at a time. When
-the numbers land, confirm the sign of column 3 against one live shot before
-trusting the direction.
+| Tube | Round | Source name | Rings with wind data |
+| --- | --- | --- | --- |
+| M252 | HE M821 | `M821` | 0-4 |
+| M252 | Smoke M819 | `M819` | 1-4 |
+| M252 | Illumination M853A1 | `M853A1` | 1-4 |
+| 2B14 | HE O-832DU | `0-832Ay` | 0-4 |
+| 2B14 | Smoke D-832DU | `A-832AY` | 0-3 |
+| 2B14 | Illumination S-832C | `C-832C` | 1-4 |
+
+Every ring that has a range table has a wind table, and a test holds that
+true. The source names are the extraction's own and are never shown to
+anyone - the rounds keep their proper names in Discord and on the map.
 
 ## Where the numbers came from
 

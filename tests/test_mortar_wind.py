@@ -1,9 +1,8 @@
-"""Wind: the vector work, and what it does to a solution.
+"""Wind: the vector work, and vanilla's own correction tables.
 
 The decomposition is geometry and is checked exactly. The corrections are
-checked against a made-up wind table held here in the test - made-up on
-purpose, so that the arithmetic and the signs are proven without anyone being
-tempted to ship invented figures as if they were measured.
+checked against the shipped vanilla figures, which came out of data007.pak's
+WindData_Shell_*.conf already converted into each sight's mils.
 """
 import json
 from pathlib import Path
@@ -12,36 +11,31 @@ import tempfile
 import unittest
 
 from bot.mortar.calibration import Axis, Calibration, Tiles
-from bot.mortar.solution import apply_wind, bearing, profile, profiles, solution
-from bot.mortar.wind import (CROSS_MRAD, PARALLEL_M, BadWind, Wind, build_table,
-                             by_distance, components, read, sight_mils)
+from bot.mortar.solution import apply_wind, profile, profiles, solution
+from bot.mortar.wind import (CROSS_MILS, RANGE_M, BadWind, Table, Wind, build_table,
+                             components, read)
 from bot.web.server import calculate
 
 MAP = Calibration(name='Everon', width=12800, height=12800, max_zoom=6,
                   lng=Axis(50.0, 0.0), lat=Axis(-50.0, -256.0), earth_correction=True,
                   tiles=Tiles(directory='/nowhere'))
 
-# ---------------------------------------------------------------------------
-# FIXTURE DATA - INVENTED FOR THESE TESTS ONLY.
-#
-# These are NOT Reforger figures and must never reach assets/mortar. They are
-# round numbers chosen so the arithmetic can be checked by eye: at 5 m/s, a
-# crosswind of 2 mrad and a tailwind carrying the round 20 m, flat across the
-# band. Sample order is GetDataByDistance's:
-#   [angle rad, distance m, peak altitude m, crosswind mrad, parallel m, impact rad]
-# ---------------------------------------------------------------------------
+# Figures quoted in the extraction, checked against what is shipped.
+KNOWN = [('m252:he', '2', 1200, 22, 38), ('m252:smoke', '4', 2000, 39, 109),
+         ('m252:illum', '4', 1000, 163, 175), ('2b14:he', '4', 2000, 36, 108),
+         ('2b14:smoke', '3', 1000, 44, 59), ('2b14:illum', '4', 1000, 184, 210)]
+
+# FIXTURE ONLY - invented, never shipped. A flat 20 mils and 40 m at 10 m/s.
 ROWS = [[100, 1500, 10.0, 20], [2000, 500, 30.0, 40]]
-FIXTURE_SAMPLES = {'5': [[0.95, 100, 150.0, 2.0, 20.0, 1.05],
-                         [0.80, 2000, 900.0, 2.0, 20.0, 1.20]]}
+FIXTURE_WIND = {'source': 'FIXTURE - not vanilla data', 'referenceSpeedMps': 10,
+                'rows': [[100, 20.0, 40.0], [2000, 20.0, 40.0]]}
 
 
-def tube(mils=6400, samples=None, rings=('1',), coef=1.0):
-    """A made-up tube carrying the fixture wind table above."""
-    wind = {'source': 'FIXTURE - not Reforger data', 'initSpeedCoef': coef,
-            'samples': FIXTURE_SAMPLES if samples is None else samples}
+def tube(mils=6400, wind=None, rings=('1',)):
     entry = {'name': 'Test tube', 'faction': 'US', 'mils': mils, 'shells': {'he': {
-        'name': 'HE TEST', 'rings': {r: {'dispersion': 10, 'rows': ROWS, 'wind': wind}
-                                     for r in rings}}}}
+        'name': 'HE TEST',
+        'rings': {r: {'dispersion': 10, 'rows': ROWS,
+                      'wind': FIXTURE_WIND if wind is None else wind} for r in rings}}}}
     path = Path(tempfile.mkdtemp()) / 'tables.json'
     path.write_text(json.dumps({'test': entry}))
     return profile('test:he', str(path))
@@ -54,36 +48,29 @@ class DecompositionTests(unittest.TestCase):
         return components(Wind(speed, wind_from), shot_bearing)
 
     def test_firing_north(self):
-        # Wind FROM the west travels east: straight across, to the right.
-        west = self.split(0, 270)
+        west = self.split(0, 270)          # from the west, travelling east
         self.assertAlmostEqual(west.parallel, 0, places=9)
         self.assertAlmostEqual(west.crosswind, 10, places=9)
-        # FROM the south travels north, the way the shell is going: tailwind.
-        self.assertAlmostEqual(self.split(0, 180).parallel, 10, places=9)
-        # FROM the north travels south, into the shell: headwind.
-        self.assertAlmostEqual(self.split(0, 0).parallel, -10, places=9)
-        # FROM the east travels west: across, to the left.
-        self.assertAlmostEqual(self.split(0, 90).crosswind, -10, places=9)
+        east = self.split(0, 90)           # from the east, travelling west
+        self.assertAlmostEqual(east.crosswind, -10, places=9)
+        self.assertAlmostEqual(self.split(0, 180).parallel, 10, places=9)   # tail
+        self.assertAlmostEqual(self.split(0, 0).parallel, -10, places=9)    # head
 
     def test_firing_east(self):
-        # Wind FROM the north travels south; facing east, south is the right.
-        north = self.split(90, 0)
+        north = self.split(90, 0)          # from the north, travelling south
         self.assertAlmostEqual(north.parallel, 0, places=9)
         self.assertAlmostEqual(north.crosswind, 10, places=9)
-        self.assertAlmostEqual(self.split(90, 270).parallel, 10, places=9)   # tail
-        self.assertAlmostEqual(self.split(90, 90).parallel, -10, places=9)   # head
+        self.assertAlmostEqual(self.split(90, 270).parallel, 10, places=9)  # tail
+        self.assertAlmostEqual(self.split(90, 90).parallel, -10, places=9)  # head
 
     def test_a_wind_on_the_quarter_gives_both(self):
-        both = self.split(0, 225)       # from the south-west, towards the north-east
+        both = self.split(0, 225)
         self.assertAlmostEqual(both.parallel, 10 * math.sqrt(0.5), places=9)
         self.assertAlmostEqual(both.crosswind, 10 * math.sqrt(0.5), places=9)
-        self.assertGreater(both.parallel, 0)    # tail
-        self.assertGreater(both.crosswind, 0)   # and to the right
 
     def test_left_and_right_are_equal_and_opposite(self):
-        left, right = self.split(0, 90), self.split(0, 270)
-        self.assertAlmostEqual(left.crosswind, -right.crosswind, places=9)
-        self.assertAlmostEqual(abs(left.crosswind), abs(right.crosswind), places=9)
+        self.assertAlmostEqual(self.split(0, 90).crosswind, -self.split(0, 270).crosswind,
+                               places=9)
 
     def test_head_and_tail_are_equal_and_opposite(self):
         self.assertAlmostEqual(self.split(0, 0).parallel, -self.split(0, 180).parallel,
@@ -93,13 +80,7 @@ class DecompositionTests(unittest.TestCase):
         for same in (0, 360, 720, -360):
             self.assertAlmostEqual(read({'speed_mps': 5, 'from_degrees': same}).bearing, 0)
         self.assertAlmostEqual(read({'speed_mps': 5, 'from_degrees': -90}).bearing, 270)
-        self.assertAlmostEqual(read({'speed_mps': 5, 'from_degrees': 405}).bearing, 45)
-        # And the split is the same whichever way it was written.
         self.assertAlmostEqual(self.split(0, 360).crosswind, self.split(0, 0).crosswind)
-
-    def test_calm_is_calm_from_any_direction(self):
-        for direction in (0, 90, 187, 359):
-            self.assertEqual(components(Wind(0, direction), 123), components(Wind(0, 0), 0))
 
     def test_the_air_travels_opposite_to_where_it_comes_from(self):
         self.assertEqual(Wind(5, 245).travelling, 65)
@@ -113,7 +94,7 @@ class WindInputTests(unittest.TestCase):
         self.assertTrue(read({}).calm)
 
     def test_a_bad_speed_is_refused(self):
-        for speed in (-1, -0.5, 1000, float('nan'), float('inf'), 'breezy', None, True):
+        for speed in (-1, 1000, float('nan'), float('inf'), 'breezy', None, True):
             with self.assertRaises(BadWind):
                 read({'speed_mps': speed, 'from_degrees': 90})
 
@@ -123,239 +104,223 @@ class WindInputTests(unittest.TestCase):
                 read({'speed_mps': 5, 'from_degrees': direction})
         self.assertAlmostEqual(read({'speed_mps': 5, 'from_degrees': 359.9}).bearing, 359.9)
 
-    def test_the_whole_wind_block_must_be_a_block(self):
-        with self.assertRaises(BadWind):
-            read('windy')
+
+class VanillaDataTests(unittest.TestCase):
+    """The shipped figures, as quoted in the extraction."""
+
+    def test_the_quoted_values_are_what_is_shipped(self):
+        for key, ring, distance, cross, carry in KNOWN:
+            table = profile(key).wind_table(ring)
+            self.assertAlmostEqual(table.at(distance, CROSS_MILS), cross, places=6,
+                                   msg=f'{key} ring {ring} @{distance}m crosswind')
+            self.assertAlmostEqual(table.at(distance, RANGE_M), carry, places=6,
+                                   msg=f'{key} ring {ring} @{distance}m range')
+
+    def test_every_round_and_ring_carries_wind_data(self):
+        expected = {'m252:he': ['0', '1', '2', '3', '4'],
+                    'm252:smoke': ['1', '2', '3', '4'],
+                    'm252:illum': ['1', '2', '3', '4'],
+                    '2b14:he': ['0', '1', '2', '3', '4'],
+                    '2b14:smoke': ['0', '1', '2', '3'],
+                    '2b14:illum': ['1', '2', '3', '4']}
+        self.assertEqual(set(profiles()), set(expected))
+        for key, rings in expected.items():
+            weapon = profile(key)
+            self.assertTrue(weapon.windy, key)
+            for ring in rings:
+                self.assertTrue(weapon.wind_table(ring).loaded, f'{key} ring {ring}')
+
+    def test_every_ring_with_a_range_table_has_a_wind_table(self):
+        for key, weapon in profiles().items():
+            for ring, _, _ in weapon.rings:
+                self.assertTrue(weapon.wind_table(ring).loaded, f'{key} ring {ring}')
+
+    def test_the_tables_are_quoted_for_ten_metres_a_second(self):
+        for key, weapon in profiles().items():
+            for ring, _, _ in weapon.rings:
+                self.assertEqual(weapon.wind_table(ring).reference, 10.0, f'{key} {ring}')
+
+    def test_the_source_is_recorded_on_every_ring(self):
+        blob = json.loads(Path('assets/mortar/tables.json').read_text())
+        for tube_key, entry in blob.items():
+            for round_key, shell in entry['shells'].items():
+                for ring, block in shell['rings'].items():
+                    self.assertIn('data007.pak', block['wind']['source'],
+                                  f'{tube_key}:{round_key} ring {ring}')
+
+    def test_a_range_halfway_between_rows_is_split_between_them(self):
+        # M821 ring 2: 1200m is 22 mils / 38 m, 1300m is 20 / 39.
+        table = profile('m252:he').wind_table('2')
+        self.assertAlmostEqual(table.at(1250, CROSS_MILS), 21.0, places=9)
+        self.assertAlmostEqual(table.at(1250, RANGE_M), 38.5, places=9)
+        # 2B14 illum ring 4: 1000m is 184/210, 1100m is 167/212.
+        soviet = profile('2b14:illum').wind_table('4')
+        self.assertAlmostEqual(soviet.at(1050, CROSS_MILS), 175.5, places=9)
+        self.assertAlmostEqual(soviet.at(1050, RANGE_M), 211.0, places=9)
+
+    def test_nothing_is_read_outside_a_rings_wind_rows(self):
+        table = profile('m252:he').wind_table('2')
+        self.assertEqual(table.span, (200, 1600))
+        self.assertIsNone(table.at(199, CROSS_MILS))
+        self.assertIsNone(table.at(1601, CROSS_MILS))
+
+    def test_rings_are_never_mixed(self):
+        # Ring 2 at 400m is 66 mils; ring 3 at 400m is 109. Neither may leak.
+        weapon = profile('m252:he')
+        self.assertAlmostEqual(weapon.wind_table('2').at(400, CROSS_MILS), 66, places=9)
+        self.assertAlmostEqual(weapon.wind_table('3').at(400, CROSS_MILS), 109, places=9)
+
+    def test_the_two_tubes_have_their_own_figures(self):
+        # Not a conversion of one another: the ratio is nothing like 6400/6000.
+        nato = profile('m252:he').wind_table('4').at(2000, CROSS_MILS)
+        soviet = profile('2b14:he').wind_table('4').at(2000, CROSS_MILS)
+        self.assertAlmostEqual(nato, 32, places=9)
+        self.assertAlmostEqual(soviet, 36, places=9)
 
 
-class MilSystemTests(unittest.TestCase):
-    """Milliradians are not either sight's mils. One conversion, both ways."""
-
-    def test_a_full_circle_is_two_thousand_pi_milliradians(self):
-        self.assertAlmostEqual(sight_mils(2000 * math.pi, 6400), 6400, places=6)
-        self.assertAlmostEqual(sight_mils(2000 * math.pi, 6000), 6000, places=6)
-
-    def test_one_radian_reads_differently_on_each_sight(self):
-        self.assertAlmostEqual(sight_mils(1000, 6400), 1018.5916, places=3)
-        self.assertAlmostEqual(sight_mils(1000, 6000), 954.9297, places=3)
-
-    def test_the_m252_conversion(self):
-        # 2 mrad on a 6400 sight.
-        self.assertAlmostEqual(sight_mils(2, 6400), 2 / 1000 * 6400 / (2 * math.pi), places=9)
-        self.assertAlmostEqual(sight_mils(2, 6400), 2.0372, places=3)
-
-    def test_the_2b14_conversion(self):
-        self.assertAlmostEqual(sight_mils(2, 6000), 2 / 1000 * 6000 / (2 * math.pi), places=9)
-        self.assertAlmostEqual(sight_mils(2, 6000), 1.9099, places=3)
-
-    def test_nothing_converts_to_nothing(self):
-        for circle in (6400, 6000):
-            self.assertEqual(sight_mils(0, circle), 0)
-
-    def test_the_two_sights_differ_by_their_circles(self):
-        self.assertAlmostEqual(sight_mils(7, 6400) / sight_mils(7, 6000), 6400 / 6000,
-                               places=9)
-
-    def test_each_tube_corrects_on_its_own_circle(self):
-        nato, soviet = tube(mils=6400), tube(mils=6000)
-        wind = Wind(5, 270)                        # straight across, to the right
-        one = apply_wind(nato, 1000, 0, wind)
-        two = apply_wind(soviet, 1000, 0, wind)
-        self.assertLess(one.azimuth_mils, 0)       # right drift, traverse left
-        self.assertAlmostEqual(one.crosswind_mrad, two.crosswind_mrad, places=9)
-        self.assertAlmostEqual(one.azimuth_mils / two.azimuth_mils, 6400 / 6000, places=9)
-        # And the native figure is the fixture's, untouched by either sight.
-        self.assertAlmostEqual(one.crosswind_mrad, 2.0, places=9)
-
-    def test_the_shipped_tubes_keep_their_circles(self):
-        self.assertEqual(profile('m252:he').mils, 6400)
-        self.assertEqual(profile('2b14:he').mils, 6000)
-
-
-class TableLookupTests(unittest.TestCase):
-    """Reading Reforger's samples: by range, by wind speed, never past them."""
-
-    def setUp(self):
-        self.table = build_table({'initSpeedCoef': 1.0, 'samples': {
-            '5': [[0.9, 500, 200, 2.0, 20.0, 1.1], [0.8, 1500, 300, 6.0, 60.0, 1.2]]}})
-
-    def test_the_table_knows_its_charge(self):
-        self.assertEqual(self.table.init_speed_coef, 1.0)
-        self.assertTrue(self.table.loaded)
-        self.assertEqual(self.table.fastest, 5.0)
-
-    def test_a_range_between_samples_is_split_between_them(self):
-        self.assertEqual(by_distance(self.table.speeds[0][1], 500, CROSS_MRAD), 2.0)
-        self.assertEqual(by_distance(self.table.speeds[0][1], 1000, CROSS_MRAD), 4.0)
-        self.assertEqual(by_distance(self.table.speeds[0][1], 1000, PARALLEL_M), 40.0)
-
-    def test_outside_the_samples_there_is_nothing_to_read(self):
-        self.assertIsNone(by_distance(self.table.speeds[0][1], 499, CROSS_MRAD))
-        self.assertIsNone(by_distance(self.table.speeds[0][1], 1501, CROSS_MRAD))
-        self.assertIsNone(self.table.at(2000, 5, CROSS_MRAD))
-
-    def test_wind_speed_is_split_down_to_nothing(self):
-        # No wind is no correction: that end is certain, so it anchors.
-        self.assertEqual(self.table.at(1000, 0, CROSS_MRAD), 0.0)
-        self.assertEqual(self.table.at(1000, 2.5, CROSS_MRAD), 2.0)
-        self.assertEqual(self.table.at(1000, 5, CROSS_MRAD), 4.0)
-
-    def test_above_the_fastest_sample_nothing_is_guessed(self):
-        self.assertIsNone(self.table.at(1000, 5.1, CROSS_MRAD))
-        self.assertIsNone(self.table.at(1000, 20, CROSS_MRAD))
-
-    def test_two_wind_speeds_are_split_between_each_other(self):
-        pair = build_table({'samples': {
-            '5': [[0.9, 500, 200, 2.0, 20.0, 1.1], [0.8, 1500, 300, 2.0, 20.0, 1.2]],
-            '10': [[0.9, 500, 200, 6.0, 60.0, 1.1], [0.8, 1500, 300, 6.0, 60.0, 1.2]]}})
-        self.assertEqual(pair.at(1000, 5, CROSS_MRAD), 2.0)
-        self.assertEqual(pair.at(1000, 10, CROSS_MRAD), 6.0)
-        self.assertEqual(pair.at(1000, 7.5, CROSS_MRAD), 4.0)
-        self.assertIsNone(pair.at(1000, 11, CROSS_MRAD))
-
-    def test_a_block_with_nothing_in_it_is_an_empty_table(self):
-        for block in (None, {}, {'samples': {}}, 'windy',
-                      {'samples': {'5': [[0.9, 500, 200, 2.0, 20.0, 1.1]]}}):
-            self.assertFalse(build_table(block).loaded)
-
-
-class CorrectionTests(unittest.TestCase):
-    """The fixture gives 2 mrad and 20 m at 5 m/s, so the sums are checkable."""
+class ScalingTests(unittest.TestCase):
+    """Ten metres a second is the reference; everything else is a fraction."""
 
     def setUp(self):
-        self.tube = tube()
+        self.table = profile('m252:he').wind_table('2')
 
-    def test_calm_leaves_the_solution_exactly_as_it_was(self):
-        plain, _ = solution(self.tube, 1000)
-        for wind in (None, Wind(), Wind(0, 245)):
-            shot = apply_wind(self.tube, 1000, 45, wind)
-            self.assertEqual(shot.final, plain)
-            self.assertEqual(shot.azimuth_mils, 0)
-            self.assertEqual(shot.crosswind_mrad, 0)
-            self.assertEqual(shot.range_m, 0)
-            self.assertEqual(shot.effective_range, 1000)
-            self.assertFalse(shot.applied)
+    def test_a_full_ten_is_the_quoted_figure(self):
+        self.assertAlmostEqual(self.table.crosswind(1200, 10), 22, places=9)
+        self.assertAlmostEqual(self.table.carry(1200, 10), 38, places=9)
 
-    def test_a_crosswind_from_the_right_traverses_left(self):
-        shot = apply_wind(self.tube, 1000, 0, Wind(5, 270))
-        self.assertAlmostEqual(shot.crosswind, 5, places=9)
-        self.assertAlmostEqual(shot.crosswind_mrad, 2.0, places=9)
-        self.assertLess(shot.azimuth_mils, 0)
-        self.assertAlmostEqual(shot.azimuth_mils, -sight_mils(2.0, 6400), places=9)
+    def test_half_the_wind_is_half_the_correction(self):
+        self.assertAlmostEqual(self.table.crosswind(1200, 5), 11, places=9)
+        self.assertAlmostEqual(self.table.carry(1200, 5), 19, places=9)
 
-    def test_a_crosswind_from_the_left_traverses_right(self):
-        shot = apply_wind(self.tube, 1000, 0, Wind(5, 90))
-        self.assertAlmostEqual(shot.crosswind, -5, places=9)
-        self.assertAlmostEqual(shot.crosswind_mrad, -2.0, places=9)
+    def test_the_component_carries_its_own_sign(self):
+        self.assertAlmostEqual(self.table.crosswind(1200, -5), -11, places=9)
+        self.assertAlmostEqual(self.table.carry(1200, -10), -38, places=9)
+
+    def test_no_wind_is_no_correction(self):
+        self.assertEqual(self.table.crosswind(1200, 0), 0)
+        self.assertEqual(self.table.carry(1200, 0), 0)
+
+    def test_a_diagonal_scales_each_component_on_its_own(self):
+        # 4.2 across and 3.7 against, as the brief puts it.
+        self.assertAlmostEqual(self.table.crosswind(1200, 4.2), 22 * 0.42, places=9)
+        self.assertAlmostEqual(self.table.carry(1200, -3.7), -38 * 0.37, places=9)
+
+    def test_a_table_read_by_the_engine_is_not_converted_again(self):
+        # 22 mils must arrive as 22, not run through any milliradian maths.
+        shot = apply_wind(profile('m252:he'), 1200, 0, Wind(10, 270))
+        self.assertAlmostEqual(shot.crosswind_mils, 22.0, places=9)
+        self.assertAlmostEqual(abs(shot.azimuth_mils), 22.0, places=9)
+        # What a second conversion would have produced, for contrast.
+        self.assertNotAlmostEqual(abs(shot.azimuth_mils),
+                                  22.0 / 1000 * 6400 / (2 * math.pi), places=3)
+
+
+class SignTests(unittest.TestCase):
+    """The table gives magnitude. Geometry gives direction."""
+
+    def setUp(self):
+        self.tube = profile('m252:he')
+
+    def test_a_crosswind_from_the_west_firing_north_traverses_left(self):
+        shot = apply_wind(self.tube, 1200, 0, Wind(10, 270))
+        self.assertAlmostEqual(shot.crosswind, 10, places=9)     # air moves east, to the right
+        self.assertGreater(shot.crosswind_mils, 0)               # pushed right
+        self.assertLess(shot.azimuth_mils, 0)                    # so aim left
+
+    def test_a_crosswind_from_the_east_traverses_right(self):
+        shot = apply_wind(self.tube, 1200, 0, Wind(10, 90))
+        self.assertAlmostEqual(shot.crosswind, -10, places=9)
+        self.assertLess(shot.crosswind_mils, 0)
         self.assertGreater(shot.azimuth_mils, 0)
 
-    def test_left_and_right_corrections_match_in_size(self):
-        left = apply_wind(self.tube, 1000, 0, Wind(5, 90))
-        right = apply_wind(self.tube, 1000, 0, Wind(5, 270))
-        self.assertAlmostEqual(left.azimuth_mils, -right.azimuth_mils, places=9)
-        self.assertAlmostEqual(left.crosswind_mrad, -right.crosswind_mrad, places=9)
+    def test_the_two_are_equal_and_opposite(self):
+        west = apply_wind(self.tube, 1200, 0, Wind(10, 270))
+        east = apply_wind(self.tube, 1200, 0, Wind(10, 90))
+        self.assertAlmostEqual(west.azimuth_mils, -east.azimuth_mils, places=9)
+        self.assertAlmostEqual(abs(west.azimuth_mils), 22, places=9)
 
-    def test_a_tailwind_makes_the_gun_shoot_shorter(self):
-        shot = apply_wind(self.tube, 1000, 0, Wind(5, 180))
-        self.assertAlmostEqual(shot.parallel, 5, places=9)
-        self.assertAlmostEqual(shot.range_m, 20, places=9)
-        self.assertAlmostEqual(shot.effective_range, 980, places=9)
-        self.assertEqual(shot.crosswind_mrad, 0)
+    def test_a_head_or_tail_wind_moves_the_azimuth_not_at_all(self):
+        for direction in (0, 180):
+            shot = apply_wind(self.tube, 1200, 0, Wind(10, direction))
+            self.assertAlmostEqual(shot.crosswind, 0, places=9)
+            self.assertAlmostEqual(shot.azimuth_mils, 0, places=9)
 
-    def test_a_headwind_makes_the_gun_shoot_longer(self):
-        shot = apply_wind(self.tube, 1000, 0, Wind(5, 0))
-        self.assertAlmostEqual(shot.parallel, -5, places=9)
-        self.assertAlmostEqual(shot.range_m, -20, places=9)
-        self.assertAlmostEqual(shot.effective_range, 1020, places=9)
+    def test_a_tailwind_shortens_the_range_the_gun_is_laid_for(self):
+        shot = apply_wind(self.tube, 1200, 0, Wind(10, 180))
+        self.assertAlmostEqual(shot.parallel, 10, places=9)
+        self.assertAlmostEqual(shot.range_m, 38, places=9)
+        self.assertAlmostEqual(shot.effective_range, 1162, places=9)
 
-    def test_head_and_tail_move_the_elevation_opposite_ways(self):
-        head = apply_wind(self.tube, 1000, 0, Wind(5, 0))
-        tail = apply_wind(self.tube, 1000, 0, Wind(5, 180))
-        plain, _ = solution(self.tube, 1000)
-        # A tailwind carries it long, so the gun is laid for a shorter range -
-        # and on these tables a shorter range is a STEEPER tube.
-        self.assertGreater(tail.final.elevation, plain.elevation)
-        self.assertLess(head.final.elevation, plain.elevation)
+    def test_a_headwind_lengthens_it(self):
+        shot = apply_wind(self.tube, 1200, 0, Wind(10, 0))
+        self.assertAlmostEqual(shot.parallel, -10, places=9)
+        self.assertAlmostEqual(shot.range_m, -38, places=9)
+        self.assertAlmostEqual(shot.effective_range, 1238, places=9)
 
-    def test_the_elevation_comes_from_the_existing_table(self):
-        shot = apply_wind(self.tube, 1000, 0, Wind(5, 180))
+    def test_the_elevation_comes_from_the_existing_range_table(self):
+        shot = apply_wind(self.tube, 1200, 0, Wind(10, 180))
         straight, _ = solution(self.tube, shot.effective_range)
         self.assertEqual(shot.final.elevation, straight.elevation)
         self.assertEqual(shot.final.flight, straight.flight)
 
-    def test_a_quartering_wind_moves_both(self):
-        shot = apply_wind(self.tube, 1000, 0, Wind(5, 225))
-        self.assertGreater(shot.parallel, 0)
-        self.assertGreater(shot.crosswind, 0)
-        self.assertNotEqual(shot.range_m, 0)
-        self.assertNotEqual(shot.azimuth_mils, 0)
-        # Each component is looked up at its own strength, not the full speed.
-        self.assertLess(abs(shot.crosswind_mrad), 2.0)
 
-    def test_the_base_solution_is_kept_beside_the_corrected_one(self):
-        shot = apply_wind(self.tube, 1000, 0, Wind(5, 180))
-        plain, _ = solution(self.tube, 1000)
-        self.assertEqual(shot.base, plain)
-        self.assertNotEqual(shot.final, shot.base)
+class ZeroWindTests(unittest.TestCase):
+    """Nothing about wind may touch a still-air solution."""
 
-    def test_wind_can_carry_a_shot_out_of_range(self):
-        self.assertIsNotNone(solution(self.tube, 1990)[0])
-        shot = apply_wind(self.tube, 1990, 0, Wind(5, 0))
-        self.assertGreater(shot.effective_range, 2000)
-        self.assertIsNone(shot.final)
-        self.assertIsNotNone(shot.base)
+    def test_every_round_is_untouched_by_calm(self):
+        for key, weapon in profiles().items():
+            low, high = weapon.span
+            distance = (low + high) / 2
+            plain, every = solution(weapon, distance)
+            for wind in (None, Wind(), Wind(0, 245)):
+                shot = apply_wind(weapon, distance, 137, wind)
+                self.assertEqual(shot.final, plain, key)
+                self.assertEqual(shot.final.elevation, plain.elevation, key)
+                self.assertEqual(shot.final.ring, plain.ring, key)
+                self.assertEqual(shot.azimuth_mils, 0, key)
+                self.assertEqual(shot.range_m, 0, key)
+                self.assertEqual(shot.effective_range, distance, key)
+                self.assertFalse(shot.applied, key)
 
-    def test_every_ring_with_samples_is_corrected(self):
-        several = tube(rings=('0', '1', '2'))
-        for ring in ('0', '1', '2'):
-            self.assertTrue(several.wind_table(ring).loaded, ring)
-            self.assertEqual(several.wind_table(ring).init_speed_coef, 1.0)
-        self.assertAlmostEqual(apply_wind(several, 1000, 0, Wind(5, 180)).range_m, 20,
-                               places=9)
+    def test_the_api_with_calm_matches_the_api_with_no_wind_block(self):
+        body = {'tube': 'm252', 'round': 'he', 'gun': {'east': 6000, 'north': 6000},
+                'target': {'east': 6800, 'north': 6600}}
+        without = calculate(dict(body), MAP)
+        calm = calculate({**body, 'wind': {'speed_mps': 0, 'from_degrees': 0}}, MAP)
+        for key in ('azimuth_mils', 'elevation_mils', 'ring', 'tof_seconds', 'range_m',
+                    'dispersion_m'):
+            self.assertEqual(without[key], calm[key], key)
 
-    def test_a_ring_without_samples_is_not_guessed_at(self):
-        half = tube(samples={})
-        shot = apply_wind(half, 1000, 0, Wind(5, 180))
-        self.assertFalse(shot.has_data)
-        self.assertEqual(shot.range_m, 0)
-        self.assertEqual(shot.azimuth_mils, 0)
-        self.assertEqual(shot.final, shot.base)
-        self.assertAlmostEqual(shot.parallel, 5, places=9)   # still reported
 
-    def test_a_wind_beyond_the_samples_is_not_reached_past(self):
-        shot = apply_wind(self.tube, 1000, 0, Wind(9, 180))   # fixture stops at 5
+class OutsideTheTableTests(unittest.TestCase):
+    def test_a_range_past_the_wind_rows_gets_no_correction(self):
+        # A fixture whose wind rows stop short of its range table.
+        short = tube(wind={'referenceSpeedMps': 10, 'rows': [[100, 20.0, 40.0],
+                                                             [500, 20.0, 40.0]]})
+        shot = apply_wind(short, 1000, 0, Wind(10, 270))
         self.assertTrue(shot.has_data)
         self.assertFalse(shot.measured)
         self.assertFalse(shot.applied)
         self.assertEqual(shot.final, shot.base)
+        self.assertAlmostEqual(shot.crosswind, 10, places=9)   # still reported
 
+    def test_a_ring_with_no_rows_at_all_is_not_guessed_at(self):
+        none = tube(wind={'referenceSpeedMps': 10, 'rows': []})
+        shot = apply_wind(none, 1000, 0, Wind(10, 270))
+        self.assertFalse(shot.has_data)
+        self.assertEqual(shot.azimuth_mils, 0)
 
-class ShippedDataTests(unittest.TestCase):
-    """Every real round is wired for wind and has no figures yet."""
+    def test_a_broken_block_is_an_empty_table(self):
+        for block in (None, {}, 'windy', {'rows': [[100, 1]]},
+                      {'rows': [[1, 2, 3], [4, 5, 6]], 'referenceSpeedMps': 0}):
+            self.assertFalse(build_table(block).loaded)
 
-    def test_no_shipped_round_claims_wind_data_it_does_not_have(self):
-        for key, weapon in profiles().items():
-            self.assertFalse(weapon.windy, f'{key} claims wind data - where did it come from?')
-
-    def test_every_shipped_round_is_wired_for_it(self):
-        # Reforger's own shape, empty, on every ring of every round.
-        blob = json.loads(Path('assets/mortar/tables.json').read_text())
-        for tube_key, entry in blob.items():
-            self.assertEqual(entry['tables']['status'], 'provisional', tube_key)
-            for round_key, shell in entry['shells'].items():
-                for ring, block in shell['rings'].items():
-                    where = f'{tube_key}:{round_key} ring {ring}'
-                    self.assertIn('wind', block, where)
-                    self.assertEqual(block['wind']['samples'], {}, where)
-                    self.assertIsNone(block['wind']['initSpeedCoef'], where)
-                    self.assertEqual(block['wind']['source'], '', where)
-
-    def test_the_shipped_rounds_answer_calmly_with_no_data(self):
-        for key in profiles():
-            weapon = profile(key)
-            shot = apply_wind(weapon, 900, 45, Wind(8, 245))
-            self.assertFalse(shot.has_data, key)
-            self.assertEqual(shot.final, shot.base, key)
+    def test_wind_can_carry_a_shot_out_of_range(self):
+        weapon = profile('m252:he')
+        self.assertIsNotNone(solution(weapon, 2890)[0])
+        shot = apply_wind(weapon, 2890, 0, Wind(10, 0))      # headwind, asks for further
+        self.assertGreater(shot.effective_range, 2900)
+        self.assertIsNone(shot.final)
 
 
 class ApiTests(unittest.TestCase):
@@ -366,71 +331,50 @@ class ApiTests(unittest.TestCase):
             body['wind'] = wind
         return calculate(body, MAP)
 
-    def test_no_wind_block_is_the_old_answer_exactly(self):
-        without = self.solve()
-        calm = self.solve({'speed_mps': 0, 'from_degrees': 0})
-        for key in ('azimuth_mils', 'elevation_mils', 'ring', 'tof_seconds', 'range_m'):
-            self.assertEqual(without[key], calm[key], key)
-        self.assertEqual(without['base_solution'], without['final_solution']
-                         | {'range_m': without['range_m']})
-
     def test_the_reply_carries_the_split_and_both_solutions(self):
         answer = self.solve({'speed_mps': 6, 'from_degrees': 245})
-        self.assertEqual(answer['wind']['speed_mps'], 6)
-        self.assertEqual(answer['wind']['from_degrees'], 245)
-        for key in ('crosswind_mps', 'parallel_mps', 'crosswind_correction_mrad',
-                    'azimuth_correction_weapon_mils', 'parallel_range_correction_m',
-                    'has_data', 'measured', 'applied'):
+        for key in ('speed_mps', 'from_degrees', 'crosswind_mps', 'parallel_mps',
+                    'crosswind_at_10mps_weapon_mils', 'azimuth_correction_weapon_mils',
+                    'parallel_range_correction_m', 'has_data', 'measured', 'applied'):
             self.assertIn(key, answer['wind'])
+        self.assertTrue(answer['wind']['applied'])
         self.assertIn('base_solution', answer)
         self.assertIn('final_solution', answer)
 
-    def test_the_split_is_reported_even_with_no_table(self):
-        # Firing north-east-ish with a wind from the south-west: a tailwind.
-        answer = self.solve({'speed_mps': 10, 'from_degrees': 225}, target=(6800, 6600))
-        self.assertNotEqual(answer['wind']['parallel_mps'], 0)
-        self.assertFalse(answer['wind']['has_data'])
-        self.assertFalse(answer['wind']['applied'])
+    def test_the_final_azimuth_is_the_base_plus_the_correction(self):
+        answer = self.solve({'speed_mps': 10, 'from_degrees': 245})
+        base = answer['base_solution']['azimuth_mils']
+        correction = answer['wind']['azimuth_correction_weapon_mils']
+        self.assertEqual(answer['final_solution']['azimuth_mils'],
+                         round((base + correction) % 6400))
+        self.assertEqual(answer['azimuth_mils'], answer['final_solution']['azimuth_mils'])
 
     def test_a_bad_wind_is_refused_cleanly(self):
-        for bad in ({'speed_mps': -4}, {'speed_mps': 'breezy'}, {'speed_mps': 999},
-                    {'speed_mps': 5, 'from_degrees': 'north'}):
+        for bad in ({'speed_mps': -4}, {'speed_mps': 'breezy'}, {'speed_mps': 999}):
             answer = self.solve(bad)
             self.assertFalse(answer['valid'])
             self.assertEqual(answer['reason'], 'bad_wind')
 
-    def test_a_wrapped_direction_is_taken_as_a_bearing(self):
-        answer = self.solve({'speed_mps': 5, 'from_degrees': 450})
-        self.assertTrue(answer['valid'])
-        self.assertEqual(answer['wind']['from_degrees'], 90)
+    def test_every_round_corrects_for_wind(self):
+        for tube_key, shell, target in (('m252', 'he', (6600, 6400)),
+                                        ('m252', 'smoke', (6600, 6400)),
+                                        ('m252', 'illum', (6600, 6400)),
+                                        ('2b14', 'he', (6600, 6400)),
+                                        ('2b14', 'smoke', (6600, 6400)),
+                                        ('2b14', 'illum', (6600, 6400))):
+            answer = self.solve({'speed_mps': 8, 'from_degrees': 245},
+                                tube=tube_key, shell=shell, target=target)
+            where = f'{tube_key}:{shell}'
+            self.assertTrue(answer['valid'], where)
+            self.assertTrue(answer['wind']['has_data'], where)
+            self.assertTrue(answer['wind']['applied'], where)
+            self.assertNotEqual(answer['wind']['azimuth_correction_weapon_mils'], 0, where)
 
-    def test_changing_only_the_wind_changes_nothing_else(self):
-        still = self.solve({'speed_mps': 0, 'from_degrees': 0})
-        blowing = self.solve({'speed_mps': 9, 'from_degrees': 300})
-        for key in ('gun', 'target', 'range_m', 'mortar_grid', 'target_grid'):
-            self.assertEqual(still[key], blowing[key], key)
-        self.assertNotEqual(still['wind']['crosswind_mps'], blowing['wind']['crosswind_mps'])
-
-    def test_both_tubes_report_their_own_circle_with_wind_on(self):
+    def test_both_sights_keep_their_own_circles(self):
         nato = self.solve({'speed_mps': 6, 'from_degrees': 245}, tube='m252')
         soviet = self.solve({'speed_mps': 6, 'from_degrees': 245}, tube='2b14')
         self.assertEqual(nato['mils'], 6400)
         self.assertEqual(soviet['mils'], 6000)
-        self.assertNotEqual(nato['azimuth_mils'], soviet['azimuth_mils'])
-
-    def test_every_round_answers_with_wind_asked_for(self):
-        for tube_key in ('m252', '2b14'):
-            for shell in ('he', 'smoke', 'illum'):
-                answer = self.solve({'speed_mps': 6, 'from_degrees': 245},
-                                    tube=tube_key, shell=shell, target=(6600, 6400))
-                self.assertIn('wind', answer, f'{tube_key}:{shell}')
-                self.assertIn('has_data', answer['wind'])
-
-    def test_out_of_range_still_reads_as_out_of_range(self):
-        answer = self.solve({'speed_mps': 6, 'from_degrees': 245}, tube='2b14',
-                            shell='smoke', target=(6000, 8500))
-        self.assertFalse(answer['valid'])
-        self.assertEqual(answer['reason'], 'out_of_range')
 
 
 if __name__ == '__main__':

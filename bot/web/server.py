@@ -78,6 +78,13 @@ def catalogue():
     return listing
 
 
+def crosswind_reference(shot):
+    """What the table quotes for a full 10 m/s, for anyone checking the sums."""
+    if not shot.applied or not shot.crosswind:
+        return None
+    return round(shot.crosswind_mils * 10 / shot.crosswind, 1)
+
+
 def ring_json(ring):
     return {'ring': ring.ring, 'elevation_mils': round(ring.elevation),
             'tof_seconds': round(ring.flight), 'dispersion_m': ring.dispersion}
@@ -110,8 +117,8 @@ def calculate(body, mapped):
         'wind': {'speed_mps': wind.speed, 'from_degrees': wind.bearing,
                  'crosswind_mps': round(shot.crosswind, 2),
                  'parallel_mps': round(shot.parallel, 2),
-                 # Reforger's own figure, then the same angle on this sight.
-                 'crosswind_correction_mrad': round(shot.crosswind_mrad, 2),
+                 # Vanilla's own figures, in this sight's mils and in metres.
+                 'crosswind_at_10mps_weapon_mils': crosswind_reference(shot),
                  'azimuth_correction_weapon_mils': round(shot.azimuth_mils),
                  'parallel_range_correction_m': round(shot.range_m),
                  'effective_range_m': round(shot.effective_range),
