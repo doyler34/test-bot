@@ -62,7 +62,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "1": {
@@ -125,7 +126,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "2": {
@@ -224,7 +226,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "3": {
@@ -359,7 +362,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "4": {
@@ -524,7 +528,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           }
         }
@@ -610,7 +615,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "2": {
@@ -697,7 +703,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "3": {
@@ -808,7 +815,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "4": {
@@ -943,7 +951,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           }
         }
@@ -1029,7 +1038,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "2": {
@@ -1116,7 +1126,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "3": {
@@ -1227,7 +1238,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "4": {
@@ -1362,13 +1374,19 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           }
         }
       }
     },
-    "wind_note": "Measured in game: [range m, metres of drift per m/s of crosswind, metres of range gained per m/s of tailwind]. Empty until real figures exist - see assets/mortar/README.md. Never estimate these."
+    "tables": {
+      "captured": "September 2025, before Reforger 1.7",
+      "status": "provisional",
+      "note": "Elevations and flight times predate the 1.7/1.8 ballistics work and have not been compared against the current in-game ballistic table. Treat as provisional until re-checked round by round."
+    },
+    "wind_note": "Reforger's own shape, from SCR_ProjectileWindTable.GetDataByDistance(): each sample is [firing angle rad, range m, peak altitude m, crosswind azimuth correction mrad, parallel wind range correction m, impact angle rad]. Samples are keyed by wind speed in m/s. Stored in native milliradians and converted to the sight's own mils for display only. Empty until dumped from the game - see assets/mortar/README.md. Never estimate these."
   },
   "2b14": {
     "name": "2B14 Podnos 82mm",
@@ -1445,7 +1463,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "1": {
@@ -1502,7 +1521,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "2": {
@@ -1589,7 +1609,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "3": {
@@ -1694,7 +1715,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "4": {
@@ -1823,7 +1845,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           }
         }
@@ -1891,7 +1914,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "1": {
@@ -1942,7 +1966,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "2": {
@@ -2011,7 +2036,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "3": {
@@ -2098,7 +2124,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           }
         }
@@ -2178,7 +2205,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "2": {
@@ -2247,7 +2275,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "3": {
@@ -2340,7 +2369,8 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           },
           "4": {
@@ -2463,12 +2493,18 @@
             ],
             "wind": {
               "source": "",
-              "rows": []
+              "initSpeedCoef": null,
+              "samples": {}
             }
           }
         }
       }
     },
-    "wind_note": "Measured in game: [range m, metres of drift per m/s of crosswind, metres of range gained per m/s of tailwind]. Empty until real figures exist - see assets/mortar/README.md. Never estimate these."
+    "tables": {
+      "captured": "September 2025, before Reforger 1.7",
+      "status": "provisional",
+      "note": "Elevations and flight times predate the 1.7/1.8 ballistics work and have not been compared against the current in-game ballistic table. Treat as provisional until re-checked round by round."
+    },
+    "wind_note": "Reforger's own shape, from SCR_ProjectileWindTable.GetDataByDistance(): each sample is [firing angle rad, range m, peak altitude m, crosswind azimuth correction mrad, parallel wind range correction m, impact angle rad]. Samples are keyed by wind speed in m/s. Stored in native milliradians and converted to the sight's own mils for display only. Empty until dumped from the game - see assets/mortar/README.md. Never estimate these."
   }
 }

@@ -72,15 +72,19 @@ With wind, the reply also carries the split and both solutions:
 
 ```json
 {"wind": {"speed_mps": 6, "from_degrees": 245, "crosswind_mps": 2.05,
-          "parallel_mps": 5.64, "azimuth_correction_mils": -12,
-          "range_correction_m": 14, "has_data": false, "applied": false},
+          "parallel_mps": 5.64, "crosswind_correction_mrad": -2.4,
+          "azimuth_correction_weapon_mils": -2, "parallel_range_correction_m": 14,
+          "has_data": false, "measured": true, "applied": false},
  "base_solution": {"azimuth_mils": 2418, "range_m": 1209, "ring": "2", ...},
  "final_solution": {"azimuth_mils": 2406, "ring": "2", "elevation_mils": 1183, ...}}
 ```
 
 The top-level figures are the final ones, so anything reading them already
-gets the corrected settings. `has_data` says whether a measured wind table
-exists for that round; `applied` says whether a correction was actually made.
+gets the corrected settings. `crosswind_correction_mrad` is Reforger's own figure, in milliradians;
+`azimuth_correction_weapon_mils` is that same angle on the selected sight.
+`has_data` says whether a wind table exists for that round, `measured` whether
+its samples cover this range and wind speed, and `applied` whether a
+correction was actually made.
 The signs: crosswind positive means the air is moving towards the shooter's
 right, parallel positive means a tailwind. See `bot/mortar/wind.py` - the
 decomposition happens there, once.

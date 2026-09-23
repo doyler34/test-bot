@@ -110,10 +110,13 @@ def calculate(body, mapped):
         'wind': {'speed_mps': wind.speed, 'from_degrees': wind.bearing,
                  'crosswind_mps': round(shot.crosswind, 2),
                  'parallel_mps': round(shot.parallel, 2),
-                 'azimuth_correction_mils': round(shot.azimuth_mils),
-                 'range_correction_m': round(shot.range_m),
+                 # Reforger's own figure, then the same angle on this sight.
+                 'crosswind_correction_mrad': round(shot.crosswind_mrad, 2),
+                 'azimuth_correction_weapon_mils': round(shot.azimuth_mils),
+                 'parallel_range_correction_m': round(shot.range_m),
                  'effective_range_m': round(shot.effective_range),
-                 'has_data': shot.has_data, 'applied': bool(shot.corrected)},
+                 'has_data': shot.has_data, 'measured': shot.measured,
+                 'applied': shot.applied},
     }
     if mapped is not None:
         answer['mortar_grid'] = mapped.grid(*gun)
