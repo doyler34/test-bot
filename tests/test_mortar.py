@@ -163,6 +163,12 @@ class ProfileTests(unittest.TestCase):
                 self.assertEqual(elevations, sorted(elevations, reverse=True),
                                  f'{key} ring {ring} elevation is not falling')
 
+    def test_d832du_ring_three_reaches_its_wind_tables_1700m_endpoint(self):
+        weapon = profile('2b14:smoke')
+        ring = next(rows for name, _, rows in weapon.rings if name == '3')
+        self.assertEqual(ring[-1], (1700, 753, 19.8, 50))
+        self.assertEqual(weapon.wind_table('3').span[1], 1700)
+
 
 def responding():
     state = {'done': False}

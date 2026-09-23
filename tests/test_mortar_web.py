@@ -297,12 +297,12 @@ class EngineAgreementTests(unittest.TestCase):
         self.assertNotEqual(he['elevation_mils'], smoke['elevation_mils'])
 
     def test_out_of_range_reports_that_rounds_own_limits(self):
-        # 2B14 smoke stops at 1600m where its HE carries on to 2300m.
+        # 2B14 smoke stops at 1700m where its HE carries on to 2300m.
         far = ((6000, 6000), (8000, 6000))   # 2000 m apart
         smoke = self.solve('2b14', 'smoke', *far)
         self.assertFalse(smoke['valid'])
         self.assertEqual(smoke['reason'], 'out_of_range')
-        self.assertEqual((smoke['min_range_m'], smoke['max_range_m']), (50, 1600))
+        self.assertEqual((smoke['min_range_m'], smoke['max_range_m']), (50, 1700))
         self.assertNotIn('elevation_mils', smoke)
         # The same shot on HE is inside that round's reach.
         self.assertTrue(self.solve('2b14', 'he', *far)['valid'])
@@ -334,7 +334,7 @@ class EngineAgreementTests(unittest.TestCase):
         self.assertEqual(listing['m252']['mils'], 6400)
         self.assertEqual(listing['2b14']['mils'], 6000)
         rounds = {r['key']: r for r in listing['2b14']['rounds']}
-        self.assertEqual((rounds['smoke']['minRange'], rounds['smoke']['maxRange']), (50, 1600))
+        self.assertEqual((rounds['smoke']['minRange'], rounds['smoke']['maxRange']), (50, 1700))
         self.assertEqual((rounds['he']['minRange'], rounds['he']['maxRange']), (50, 2300))
 
     def test_rubbish_coordinates_are_refused_not_guessed(self):
