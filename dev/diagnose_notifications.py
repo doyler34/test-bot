@@ -8,9 +8,11 @@ unless --fix is given, which posts the panel and creates the roles for real.
     cd ~/Arma-bot && .venv/bin/python dev/diagnose_notifications.py --fix
 """
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import discord  # noqa: E402
@@ -26,10 +28,18 @@ if not token or not guild_id:
 client = discord.Client(intents=discord.Intents.default())
 
 
+def read_servers():
+    """id, name and enabled only - the bits the panel is built from."""
+    path = os.getenv("SERVERS_CONFIG", "servers.json")
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return tuple(SimpleNamespace(id=e["id"], name=e["name"],
+                                 enabled=e.get("enabled", True)) for e in data)
+
+
 @client.event
 async def on_ready():
     try:
-        from bot.config import faction_channel_id, load_config
+        from bot.config import faction_channel_id
         from bot.discord.notification_roles import NAMES, PANEL_MARKER, prepare_notifications
         from bot.discord.server_stats import label_for
         from bot.storage.notification_store import NotificationStore
@@ -56,17 +66,20 @@ async def on_ready():
             print("  MISSING PERMISSIONS - the panel cannot be posted or found.")
             return
 
-        config = load_config()
+        # Only the server list matters here, so read it straight from
+        # SERVERS_CONFIG rather than through the full loader - that one also
+        # demands log directories this check has no use for.
+        servers = read_servers()
         print("\nservers:")
-        for server in config.servers:
+        for server in servers:
             print(f"  {server.id:10} enabled={server.enabled} label={label_for(server)}"
                   f" role={NAMES.get(server.id, server.name + ' Notifications')!r}")
-        if not any(s.enabled for s in config.servers):
+        if not any(s.enabled for s in servers):
             print("  NO SERVER IS ENABLED - the panel has no buttons, so it is skipped.")
             return
 
         print("\nexisting roles with those names:")
-        for server in config.servers:
+        for server in servers:
             name = NAMES.get(server.id, server.name + " Notifications")
             for role in [r for r in guild.roles if r.name == name]:
                 print(f"  {name!r} id={role.id} position={role.position}"
@@ -86,8 +99,9 @@ async def on_ready():
             print("\nRead-only. Re-run with --fix to create the roles and post the panel.")
             return
 
-        client.store = NotificationStore(config.state_path)
-        client.config = config
+        client.store = NotificationStore(
+            os.getenv("NOTIFICATION_STATE_DB", "data/notifications.sqlite3"))
+        client.config = SimpleNamespace(guild_id=guild.id, servers=servers)
         client.roles_by_server = {}
         client.notification_role_lock = asyncio.Lock()
         try:
