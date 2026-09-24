@@ -11,7 +11,7 @@ import discord
 
 from bot.storage.account_links import AccountLinks
 from bot.storage.combat_store import migrate, record_presence, stamp
-from bot.discord.live_board import MARKER, LiveBoard, board_embeds, ours
+from bot.discord.live_board import HOUSE, LIVE, MARKER, LiveBoard, board_embeds, ours
 
 OTHER = '99999999-9999-9999-9999-999999999999'
 START = datetime(2026, 9, 14, 20, 0)
@@ -46,6 +46,13 @@ class RenderTests(unittest.TestCase):
         # The same board keeps that number once it stands as the result.
         done, = board_embeds('OYB Classic', rows(3), START, END, tag='#0007B')
         self.assertIn('#0007B', done.title)
+
+    def test_a_running_board_is_green_and_a_finished_one_is_not(self):
+        running, = board_embeds('OYB Classic', rows(3), START)
+        done, = board_embeds('OYB Classic', rows(3), START, END)
+        self.assertEqual(running.colour.value, LIVE)
+        self.assertEqual(done.colour.value, HOUSE)
+        self.assertNotEqual(running.colour.value, done.colour.value)
 
     def test_a_full_server_still_fits_one_message(self):
         # Everyone who played is listed, and Discord allows 6000 characters

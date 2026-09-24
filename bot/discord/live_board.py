@@ -19,6 +19,10 @@ from bot.storage.combat_store import match_number, window_standings
 
 LOG = logging.getLogger('reforger.liveboard')
 POLL = 30
+# A running match is green so it reads as on air at a glance; a finished one
+# goes back to the house colour every other OYB board uses.
+LIVE = 0x3BA55D
+HOUSE = 0xA9BC8C
 # Wait for the ingestor's closing pass before the board is called final.
 SETTLE = 45
 MARKER = 'OYB-LIVE'
@@ -38,7 +42,7 @@ def board_embeds(server_name, rows, start, end=None, tag=None):
         position += size
     embeds = []
     for index, block in enumerate(blocks or ['```text\nNo linked players yet\n```']):
-        embed = discord.Embed(colour=0xA9BC8C if end else 0xC0504D, description=block)
+        embed = discord.Embed(colour=HOUSE if end else LIVE, description=block)
         if index == 0:
             embed.title = titled('🏁 Match results' if end else '🔴 LIVE',
                                  tag, server_name)
