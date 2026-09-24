@@ -5,11 +5,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 import discord
-from bot.discord.notification_roles import NotificationView, prepare_role
+from bot.discord.notification_roles import (PANEL_MARKER, NotificationView,
+                                            prepare_notifications, prepare_role)
 from bot.storage.notification_store import NotificationStore
 
 
-class RoleTests(unittest.IsolatedAsyncioTestCase):
+class Fixture:
+    """Shared guild/store doubles for the role and panel tests."""
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.store = NotificationStore(Path(self.tmp.name) / "state.sqlite3")
@@ -33,6 +35,8 @@ class RoleTests(unittest.IsolatedAsyncioTestCase):
         self.store.close()
         self.tmp.cleanup()
 
+
+class RoleTests(Fixture, unittest.IsolatedAsyncioTestCase):
     async def test_create_and_reuse_after_restart(self):
         await prepare_role(self.bot, self.guild, self.server)
         self.bot.roles_by_server.clear()
@@ -79,3 +83,41 @@ class RoleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(view.children), 1)
         self.assertEqual(view.children[0].label, "Toggle match notifications")
         self.assertTrue(view.is_persistent())
+
+
+class PanelTests(Fixture, unittest.IsolatedAsyncioTestCase):
+    """The opt-in panel lives in the faction-roles channel, one message forever."""
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.bot.user = SimpleNamespace(id=5)
+        self.bot.config = SimpleNamespace(guild_id=1, servers=(
+            SimpleNamespace(id="server-1", name="Server 1", enabled=True),
+            SimpleNamespace(id="server-3", name="Server 3", enabled=False)))
+        self.channel = Mock(spec=discord.TextChannel)
+        self.channel.send = AsyncMock()
+        self.history = []
+        self.channel.history = Mock(side_effect=lambda limit: self.replay())
+
+    def replay(self):
+        async def cursor():
+            for message in self.history:
+                yield message
+        return cursor()
+
+    async def test_posts_once_then_edits_on_restart(self):
+        await prepare_notifications(self.bot, self.guild, self.channel)
+        self.channel.send.assert_awaited_once()
+        embed = self.channel.send.await_args.kwargs["embed"]
+        self.assertEqual(embed.footer.text, PANEL_MARKER)
+        view = self.channel.send.await_args.kwargs["view"]
+        self.assertEqual(len(view.children), 1)
+        self.assertFalse(self.channel.send.await_args.kwargs["allowed_mentions"].everyone)
+        posted = SimpleNamespace(author=SimpleNamespace(id=5), embeds=[embed], edit=AsyncMock())
+        self.history = [posted]
+        await prepare_notifications(self.bot, self.guild, self.channel)
+        self.channel.send.assert_awaited_once()
+        posted.edit.assert_awaited_once()
+
+    async def test_only_enabled_servers_get_a_role(self):
+        await prepare_notifications(self.bot, self.guild, self.channel)
+        self.assertEqual(list(self.bot.roles_by_server), ["server-1"])

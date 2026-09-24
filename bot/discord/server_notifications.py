@@ -54,8 +54,9 @@ def servers_embed(bot):
     """One combined card: every server's live status and settings."""
     embed = discord.Embed(
         title="🎮 OYB Servers",
-        description="Live status for all OYB servers. **@everyone** is pinged in the "
-                    "announcements channel when a match starts. This channel is read-only.",
+        description="Live status for all OYB servers. When a match starts, the "
+                    "announcements channel pings whoever opted in to that server's "
+                    "alerts. This channel is read-only.",
         colour=0x2ECC71)
     for server in bot.config.servers:
         value = f"{server_status_line(bot, server)}\n**Settings:** {server.settings}"
@@ -134,6 +135,8 @@ class NotificationBot(TimerBot):
         from bot.discord.link_review import AdminPanelView, ReviewButtons
         from bot.discord.factions import FactionView
         from bot.discord.onboarding import OnboardingView
+        from bot.discord.notification_roles import ServersNotificationView
+        self.add_view(ServersNotificationView(self))
         self.add_view(AdminPanelView(self))
         self.add_view(ReviewButtons(self))
         self.add_view(FactionView(self))
@@ -206,6 +209,15 @@ class NotificationBot(TimerBot):
                         await prepare_faction_picker(self, guild, target)
                 except Exception:
                     logger.exception("Faction picker unavailable; check Manage Roles")
+                    target = None
+                try:
+                    # The channel people pick a faction in is also where they
+                    # pick which servers are allowed to ping them.
+                    if isinstance(target, discord.TextChannel):
+                        from bot.discord.notification_roles import prepare_notifications
+                        await prepare_notifications(self, guild, target)
+                except Exception:
+                    logger.exception("Match-notification roles unavailable; check Manage Roles")
                 try:
                     from bot.config import onboarding_channel_id
                     from bot.discord.onboarding import prepare_onboarding
@@ -475,9 +487,15 @@ class NotificationBot(TimerBot):
             )
             embed.timestamp = datetime.fromtimestamp(int(row["started"]), timezone.utc)
             embed.set_footer(text="OYB • Match notifications")
-            message = await channel.send(content="@everyone", embed=embed,
-                                         allowed_mentions=discord.AllowedMentions(
-                                             everyone=True, users=False, roles=False, replied_user=False))
+            # Only the people who asked for this server's alerts. With no role
+            # to mention the card still goes up, quietly, rather than falling
+            # back to pinging the whole guild.
+            role = self.roles_by_server.get(row["server"])
+            message = await channel.send(
+                content=role.mention if role is not None else None, embed=embed,
+                allowed_mentions=discord.AllowedMentions(
+                    everyone=False, users=False, roles=[role] if role else False,
+                    replied_user=False))
             logger.info("Discord accepted match announcement for %s", row["server"])
         expires = row["started"] + ANNOUNCEMENT_TTL
         self.store.sent(row, message.id, expires)

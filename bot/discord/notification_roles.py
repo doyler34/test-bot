@@ -1,5 +1,13 @@
-"""Persistent self-service notification roles; no gameplay permissions."""
+"""Persistent self-service notification roles; no gameplay permissions.
+
+A match starting is worth a ping to the people who want one and nobody else.
+Each server gets its own mentionable role with no permissions, members opt in
+from a panel of buttons, and the match alert mentions that role rather than
+everyone in the guild.
+"""
 import discord
+
+PANEL_MARKER = "OYB • Match notifications"
 
 NAMES = {"server-1": "Server One", "server-2": "Server Two", "server-3": "Server Three"}
 
@@ -94,3 +102,39 @@ class ServersNotificationView(discord.ui.View):
         async def handler(interaction):
             await toggle_notification(self.bot, interaction, server_id)
         return handler
+
+
+async def prepare_notifications(bot, guild, channel):
+    """Make sure the roles exist and the opt-in panel is in that channel.
+
+    Posted once and edited afterwards, the way the faction picker is, so the
+    panel stays a single message however many times the bot restarts.
+    """
+    from bot.discord.server_stats import label_for
+    ready = []
+    for server in bot.config.servers:
+        if server.enabled:
+            await prepare_role(bot, guild, server)
+            ready.append(label_for(server))
+    if not ready:
+        return
+    embed = discord.Embed(title="Match notifications", colour=0x5865F2, description=(
+        "Get a ping when a match starts on the servers you actually play.\n\n"
+        "Press a button to turn that server's alerts on, press it again to turn "
+        "them off. No ping unless you ask for one, and nobody is pinged who "
+        "did not.\n\n"
+        + "\n".join(f"🔔 **{name}**" for name in ready)))
+    embed.set_footer(text=PANEL_MARKER)
+    view = ServersNotificationView(bot)
+    existing = None
+    async for message in channel.history(limit=50):
+        if message.author.id == bot.user.id and any(
+                e.footer and e.footer.text == PANEL_MARKER for e in message.embeds):
+            existing = message
+            break
+    if existing is None:
+        await channel.send(embed=embed, view=view, silent=True,
+                           allowed_mentions=discord.AllowedMentions.none())
+    else:
+        await existing.edit(embed=embed, view=view,
+                            allowed_mentions=discord.AllowedMentions.none())
