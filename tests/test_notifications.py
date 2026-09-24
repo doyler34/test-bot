@@ -212,8 +212,8 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         with patch("bot.discord.server_notifications.time.time", return_value=1000):
             await self.bot.deliver_or_delete(row)
         kwargs = self.channel.send.await_args.kwargs
-        self.assertTrue(kwargs["allowed_mentions"].everyone)
-        self.assertEqual(kwargs["content"], "@everyone")
+        self.assertFalse(kwargs["allowed_mentions"].everyone)
+        self.assertIsNone(kwargs["content"])
         self.assertFalse(kwargs["allowed_mentions"].users)
         self.assertIn("<t:970:R>", kwargs["embed"].description)
         sent = self.bot.store.pending()[0]
@@ -228,6 +228,19 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         deletion.assert_awaited_once()
         self.channel.get_partial_message.assert_called_once_with(100)
         self.assertEqual(self.bot.store.pending(), [])
+
+    async def test_alert_pings_only_that_server_role(self):
+        role = Mock(spec=discord.Role)
+        role.mention = "<@&777>"
+        self.bot.roles_by_server["server-1"] = role
+        self.bot.roles_by_server["server-2"] = Mock(spec=discord.Role)
+        row = self.enqueue()
+        with patch("bot.discord.server_notifications.time.time", return_value=1000):
+            await self.bot.deliver_or_delete(row)
+        kwargs = self.channel.send.await_args.kwargs
+        self.assertEqual(kwargs["content"], "<@&777>")
+        self.assertEqual(kwargs["allowed_mentions"].roles, [role])
+        self.assertFalse(kwargs["allowed_mentions"].everyone)
 
     async def test_deletion_resumes_after_restart(self):
         row = self.enqueue()
