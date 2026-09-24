@@ -179,7 +179,8 @@ class OnboardingView(discord.ui.View):
                     await say(interaction, f'The **{name}** role is missing on this server. '
                                            'Ask an admin to restart the bot so it can make it.')
                     return
-                text = f"You're **{name}** now, and locked to it. That's you off Renegade."
+                text = (f"You're **{name}** on Discord now, and locked to it here. That's you "
+                        "off Renegade — play whatever side you like in game.")
             except discord.Forbidden:
                 text = 'I need Manage Roles, and my role must sit above the faction roles. Ask an admin.'
             await say(interaction, text)
@@ -226,9 +227,11 @@ def panel_embed():
         'match it, it goes to an admin to sort out.\n\n'
         '**This is what opens up the rest of the server**, and it starts your kills, deaths and '
         'playtime counting towards your rank and the leaderboards.\n\n'
-        '**2. Pick your side** — US, USSR or FIA. Colours your name, gets you into that side\'s '
-        'channels, and takes you off **OYB Renegade**. You are locked to it after, so pick the '
-        'one your mates are on. Not fussed? Press **No faction** and stay Renegade.\n\n'
+        '**2. Pick your side** — US, USSR or FIA. A Discord role only: it colours your name, '
+        'gets you into that side\'s channels and takes you off **OYB Renegade**. It does not '
+        'pick your faction in game, so play whatever you like on the servers. You are locked '
+        'to it here once you pick, so go with the one your mates are on. Not fussed? Press '
+        '**No faction** and stay Renegade.\n\n'
         'Stuck? Press **My progress** to see what you still need.')
     ).set_footer(text=MARKER)
 
