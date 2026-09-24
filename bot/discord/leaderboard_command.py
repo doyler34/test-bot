@@ -8,6 +8,14 @@ from bot.storage.combat_store import week_start, window_standings
 
 PAGE_SIZE = 25
 
+# The board is read on phones more than anything else, and a Discord code
+# block wraps there at about 37 characters. These widths are fixed rather
+# than measured per page so a three-digit position cannot quietly push a
+# later page over the edge while the first pages look fine.
+NAME = 14
+PLACE = 4
+SCORE = 4
+
 
 def standings(db, guild, start=None, end=None):
     """One snapshot for the current week; never write XP or stats."""
@@ -19,17 +27,14 @@ def clean_name(value):
     value = ''.join(' ' if ch.isspace() else ch for ch in str(value)
                     if not unicodedata.category(ch).startswith('C'))
     value = ' '.join(value.replace('`', "'").split()) or 'Unknown player'
-    return value[:17] + '…' if len(value) > 18 else value
+    return value[:NAME - 1] + '…' if len(value) > NAME else value
 
 
 def table(selected, offset=0):
     """Fixed-width standings block shared by the weekly and per-match boards."""
-    number_width = max(2, len(str(offset + len(selected))))
-    kills_width = max(5, max(len(str(row[1])) for row in selected))
-    deaths_width = max(6, max(len(str(row[2])) for row in selected))
-    lines = [f"{'#':>{number_width}}  {'Name':18}  {'Kills':>{kills_width}}  {'Deaths':>{deaths_width}}"]
+    lines = [f"{'#':>{PLACE}}  {'Name':{NAME}} {'K':>{SCORE}} {'D':>{SCORE}}"]
     for position, (name, kills, deaths) in enumerate(selected, offset + 1):
-        lines.append(f'{position:>{number_width}}  {clean_name(name):18}  {kills:>{kills_width}}  {deaths:>{deaths_width}}')
+        lines.append(f'{position:>{PLACE}}  {clean_name(name):{NAME}} {kills:>{SCORE}} {deaths:>{SCORE}}')
     return '```text\n' + '\n'.join(lines) + '\n```'
 
 

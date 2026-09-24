@@ -4,7 +4,7 @@ import unittest
 import uuid
 from bot.storage.account_links import AccountLinks
 from bot.storage.combat_store import migrate, stamp, week_start
-from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
+from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings, table
 
 
 def players(count):
@@ -64,6 +64,15 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
                     self.assertLess(len(embed.description),4096)
                 else:
                     self.assertIn('No combat recorded this week',embed.description)
+
+    def test_every_page_is_the_same_width(self):
+        # A three-digit position used to widen the row by a character, so the
+        # later pages wrapped on a phone while the first ones read fine.
+        widths = {len(line) for offset in (0, 75, 999)
+                  for line in table([('Vo1d-SaNdStOrMz5', 16, 50), ('x', 9999, 1234)],
+                                    offset).splitlines()[1:-1]}
+        self.assertEqual(len(widths), 1)
+        self.assertLessEqual(widths.pop(), 32)
 
     async def test_names_cannot_escape_table(self):
         embed=leaderboard_embed([('```\n@everyone\r\n‮'+'X'*200,4,3),('Éowyn 玩家',2,1)],0)
