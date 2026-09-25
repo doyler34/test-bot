@@ -62,7 +62,7 @@ def verdict(before: int, after: int, fresh: int) -> tuple[str, str]:
         if extra > max(LEAK_FLOOR, fresh // 5):
             return "leak", (f"Still holding {gb(extra)} more than a fresh start ({gb(after)} now, "
                             f"{gb(fresh)} fresh). Use Restart server to clear it.")
-        return "ok", f"Back to {gb(after)}, close to a fresh start ({gb(fresh)})."
+        return "ok", f"Fine: {gb(after)} now, within {gb(max(LEAK_FLOOR, fresh // 5))} of a fresh start ({gb(fresh)})."
     if before - after < before // 10:
         return "leak", (f"Only went from {gb(before)} to {gb(after)}, so the old mission's memory looks stuck. "
                         "Use Restart server to clear it.")
