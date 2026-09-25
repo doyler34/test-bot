@@ -20,8 +20,12 @@ SAMPLE_PLAYERS = [
 
 
 class FakeRcon(asyncio.DatagramProtocol):
-    def __init__(self, password, players=None, chunk=0):
+    def __init__(self, password, players=None, chunk=0, direct=False):
+        """By default it answers like Reforger: an empty reply, then the output
+        as server messages. direct=True puts the output in the reply itself."""
         self.password = password
+        self.direct = direct
+        self.message_seq = 0
         self.players = list(players if players is not None else SAMPLE_PLAYERS)
         self.chunk = chunk
         self.commands = []
@@ -33,8 +37,8 @@ class FakeRcon(asyncio.DatagramProtocol):
         self.transport = transport
 
     def players_text(self):
-        lines = ["Players on server:"]
-        lines += [f"{pid} ; {name} ; {identity}" for pid, name, identity in self.players]
+        lines = ["Players on server: [Player#] ; [Player UID] ; [Player Name]"]
+        lines += [f"{pid} ; {identity} ; {name}" for pid, name, identity in self.players]
         return "\n".join(lines)
 
     def reply(self, text):
@@ -51,6 +55,8 @@ class FakeRcon(asyncio.DatagramProtocol):
         if words[:2] == ["#ban", "remove"] and len(words) >= 3:
             self.bans.pop(words[2], None)
             return f"Ban removed for {words[2]}"
+        if text.startswith("#unknown"):
+            return f"unknown command '{text[1:]}'"
         return f"ok: {text}"
 
     def datagram_received(self, data, addr):
@@ -63,19 +69,28 @@ class FakeRcon(asyncio.DatagramProtocol):
             if ok:
                 self.clients.add(addr)
             self.transport.sendto(packet(0, b"\x01" if ok else b"\x00"), addr)
+            if ok and not self.direct:
+                self.say("Logged In! Client ID: #1")
         elif kind == 1 and addr in self.clients:
             seq, text = body[0], body[1:].decode()
             if text:
                 self.commands.append(text)
             answer = self.reply(text).encode() if text else b""
-            if self.chunk and len(answer) > self.chunk:
+            if text and not self.direct:
+                self.transport.sendto(packet(1, bytes([seq])), addr)
+                self.say(f"Processing Command: {text}")
+                self.say(answer.decode())
+            elif self.chunk and len(answer) > self.chunk:
                 parts = [answer[i:i + self.chunk] for i in range(0, len(answer), self.chunk)]
                 for index, part in reversed(list(enumerate(parts))):
                     self.transport.sendto(packet(1, bytes([seq, 0, len(parts), index]) + part), addr)
             else:
                 self.transport.sendto(packet(1, bytes([seq]) + answer), addr)
 
-    def say(self, text, seq=0):
+    def say(self, text, seq=None):
+        if seq is None:
+            seq = self.message_seq
+            self.message_seq = (self.message_seq + 1) % 256
         for addr in self.clients:
             self.transport.sendto(packet(2, bytes([seq]) + text.encode()), addr)
 

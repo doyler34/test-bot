@@ -71,6 +71,12 @@ class ParsePlayersTests(unittest.TestCase):
         players = parse_players("Players on server:\n0 ; Sgt Havoc ; 5F1C2A90-8B1E-4A57-9A3E-2D4B6C8E0F11\n")
         self.assertEqual(players, [{"id": "0", "name": "Sgt Havoc", "identity": HAVOC}])
 
+    def test_real_reforger_reply(self):
+        output = ("Players on server: [Player#] ; [Player UID] ; [Player Name]\n"
+                  "1 ; d0d8bcaf-e30b-49e2-b32a-9618871f3b89 ; GazLagom")
+        self.assertEqual(parse_players(output),
+                         [{"id": "1", "name": "GazLagom", "identity": "d0d8bcaf-e30b-49e2-b32a-9618871f3b89"}])
+
     def test_without_identity(self):
         self.assertEqual(parse_players("3  Rook"), [{"id": "3", "name": "Rook", "identity": ""}])
 
@@ -226,7 +232,7 @@ class MissionCheckTests(unittest.IsolatedAsyncioTestCase):
 
 class RconClientTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.transport, self.fake = await serve(0, "secret", chunk=20)
+        self.transport, self.fake = await serve(0, "secret", chunk=20, direct=True)
         self.port = self.transport.get_extra_info("sockname")[1]
         self.addCleanup(self.transport.close)
 
@@ -235,6 +241,30 @@ class RconClientTests(unittest.IsolatedAsyncioTestCase):
         await client.connect()
         self.addCleanup(client.close)
         self.assertEqual(await client.command("#players"), self.fake.players_text())
+
+    async def test_reforger_sends_output_as_messages(self):
+        self.fake.direct = False
+        client = RconClient("127.0.0.1", self.port, "secret", timeout=2)
+        await client.connect()
+        self.addCleanup(client.close)
+        self.assertEqual(await client.command("#players"), self.fake.players_text())
+        self.assertEqual(await client.command("#kick 1"), "Player 1 kicked")
+
+    async def test_unknown_command_is_an_error(self):
+        self.fake.direct = False
+        client = RconClient("127.0.0.1", self.port, "secret", timeout=2)
+        await client.connect()
+        self.addCleanup(client.close)
+        with self.assertRaisesRegex(RconError, "unknown command 'unknown'"):
+            await client.command("#unknown")
+
+    async def test_no_output_does_not_hang(self):
+        self.fake.direct = False
+        self.fake.reply = lambda text: ""
+        client = RconClient("127.0.0.1", self.port, "secret", timeout=2, output_wait=0.2)
+        await client.connect()
+        self.addCleanup(client.close)
+        self.assertEqual(await client.command("#restart"), "")
 
     async def test_wrong_password(self):
         client = RconClient("127.0.0.1", self.port, "nope", timeout=2)

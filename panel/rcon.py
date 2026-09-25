@@ -1,8 +1,13 @@
 """BattlEye RCon over UDP, which is what Reforger speaks on its rcon port."""
 
 import asyncio
+import collections
 import struct
 import zlib
+
+# Reforger acks a command with an empty reply, then sends the actual output as
+# server messages: "Processing Command: <cmd>" followed by the result.
+PROCESSING = "Processing Command: "
 
 
 class RconError(Exception):
@@ -37,11 +42,12 @@ class _Protocol(asyncio.DatagramProtocol):
 
 
 class RconClient:
-    def __init__(self, host: str, port: int, password: str, timeout: float = 5.0):
+    def __init__(self, host: str, port: int, password: str, timeout: float = 5.0, output_wait: float = 3.0):
         self.host = host
         self.port = port
         self.password = password
         self.timeout = timeout
+        self.output_wait = output_wait
         self.on_message = None
         self._transport = None
         self._login = None
@@ -49,6 +55,8 @@ class RconClient:
         self._parts: dict[int, dict[int, bytes]] = {}
         self._seq = 0
         self._lock = asyncio.Lock()
+        self._output = None
+        self._recent = collections.deque(maxlen=32)
 
     @property
     def connected(self) -> bool:
@@ -90,14 +98,26 @@ class RconClient:
             future = asyncio.get_running_loop().create_future()
             self._pending[seq] = future
             self._parts.pop(seq, None)
+            output = self._output = {"command": text, "seen": False, "lines": [], "got": asyncio.Event()}
             self._transport.sendto(packet(1, bytes([seq]) + text.encode()))
-        try:
-            return await asyncio.wait_for(future, self.timeout)
-        except asyncio.TimeoutError:
-            raise RconError("command timed out") from None
-        finally:
-            self._pending.pop(seq, None)
-            self._parts.pop(seq, None)
+            try:
+                reply = await asyncio.wait_for(future, self.timeout)
+                if not reply:
+                    try:
+                        await asyncio.wait_for(output["got"].wait(), self.output_wait)
+                        await asyncio.sleep(0.2)
+                    except asyncio.TimeoutError:
+                        pass
+                    reply = "\n".join(output["lines"])
+            except asyncio.TimeoutError:
+                raise RconError("command timed out") from None
+            finally:
+                self._output = None
+                self._pending.pop(seq, None)
+                self._parts.pop(seq, None)
+        if reply.lower().startswith("unknown command"):
+            raise RconError(reply)
+        return reply
 
     def _received(self, data: bytes):
         parsed = parse(data)
@@ -110,8 +130,23 @@ class RconClient:
             self._answer(body[0], body[1:])
         elif kind == 2 and body:
             self._transport.sendto(packet(2, body[:1]))
+            text = body[1:].decode(errors="replace")
+            if (body[0], text) in self._recent:
+                return
+            self._recent.append((body[0], text))
+            self._collect(text)
             if self.on_message:
-                self.on_message(body[1:].decode(errors="replace"))
+                self.on_message(text)
+
+    def _collect(self, text: str):
+        output = self._output
+        if output is None:
+            return
+        if text == PROCESSING + output["command"]:
+            output["seen"] = True
+        elif output["seen"]:
+            output["lines"].append(text)
+            output["got"].set()
 
     def _answer(self, seq: int, body: bytes):
         future = self._pending.get(seq)
