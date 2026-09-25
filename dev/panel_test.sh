@@ -8,6 +8,7 @@ set -euo pipefail
 GAME=/root/reforger-test
 PANEL=/root/oyb-panel
 SOURCE=/root/test-bot
+TEST_BOT=/root/oyb-bot
 BRANCH="${1:-main}"
 
 if [ "${1:-}" = stop ]; then
@@ -73,9 +74,12 @@ else
     git -C "$SOURCE" worktree prune
     git -C "$SOURCE" worktree add -q -B panel-test "$PANEL" FETCH_HEAD
 fi
+OYB_DATA="$PANEL/data"
+[ -d "$TEST_BOT/data" ] && OYB_DATA="$TEST_BOT/data"
 cat > "$PANEL/panel.local.json" <<EOF
 {
   "listen": "0.0.0.0",
+  "oyb_data": "$OYB_DATA",
   "port": 8080,
   "cookie_secure": false,
   "servers": [
@@ -108,7 +112,12 @@ echo "== Installing the panel"
 bash "$PANEL/deploy/panel_setup.sh"
 
 systemctl daemon-reload
-systemctl restart oyb-test-playtime
+if [ "$OYB_DATA" = "$PANEL/data" ]; then
+    systemctl restart oyb-test-playtime
+else
+    systemctl stop oyb-test-playtime 2>/dev/null || true
+    echo "Using the test bot's data in $OYB_DATA (its own tracker counts playtime)."
+fi
 
 echo "== Waiting for the game server to load (up to 5 minutes)"
 READY=false
