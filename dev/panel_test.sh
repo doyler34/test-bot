@@ -58,7 +58,7 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=$GAME
-ExecStart=$GAME/ArmaReforgerServer -config $GAME/test.json -profile $GAME/profile -maxFPS 30
+ExecStart=$GAME/ArmaReforgerServer -config $GAME/test.json -profile $GAME/profile -maxFPS 30 -logStats 30000
 Restart=always
 RestartSec=10
 EOF
