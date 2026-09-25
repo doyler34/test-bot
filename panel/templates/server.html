@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ s.name }} · OYB Control{% endblock %}
+{% block body %}
+<div class="row">
+  <h1>{{ s.name }}</h1>
+  {% if not s.configured %}<span class="badge off">Not set up</span>
+  {% elif s.online %}<span class="badge on">Online</span>
+  {% else %}<span class="badge down">Offline</span>{% endif %}
+</div>
+{% if not s.online %}<p class="muted">{{ s.error or "Connecting…" }}</p>{% endif %}
+
+<section class="card">
+  <h2>Players</h2>
+  <div data-refresh="/server/{{ s.id }}/players.part">
+  {% include "_players.html" %}
+  </div>
+</section>
+
+{% if can("power") %}
+<section class="card">
+  <h2>Server controls</h2>
+  <div class="buttons">
+  {% for action in actions %}
+    <form method="post" action="/server/{{ s.id }}/power" data-confirm="{{ labels[action] }} on {{ s.name }}? Everyone on it will be affected.">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="action" value="{{ action }}">
+      <button class="{{ 'danger' if action in ('stop', 'shutdown') else '' }}">{{ labels[action] }}</button>
+    </form>
+  {% endfor %}
+  </div>
+  {% if not s.service %}<p class="muted">Shut down only brings the server back if it restarts by itself (systemd <code>Restart=always</code>). Set <code>service</code> in panel.local.json for Start / Stop / Restart.</p>{% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Recent actions here</h2>
+  {% include "_audit_rows.html" %}
+</section>
+{% endblock %}

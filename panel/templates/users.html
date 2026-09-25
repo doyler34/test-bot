@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Admins · OYB Control{% endblock %}
+{% block body %}
+<h1>Admin accounts</h1>
+{% if created %}
+<div class="card highlight">
+  <h2>Send this to {{ created.username }}</h2>
+  <p>Username: <b>{{ created.username }}</b><br>Temporary password: <b class="mono">{{ created.password }}</b></p>
+  <p class="muted">It's only shown once. They'll be asked to pick their own password when they first log in.</p>
+</div>
+{% endif %}
+
+<form class="card" method="post" action="/users">
+  <h2>New admin</h2>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="grid">
+    <label>Username <input name="username" maxlength="32" required></label>
+    <label>Role
+      <select name="role">{% for r in roles %}<option {% if r == "moderator" %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+    </label>
+  </div>
+  <button>Create account</button>
+  <p class="muted"><b>Moderator</b>: see everything, kick, add notes. <b>Admin</b>: also ban, unban, restart and see the audit log. <b>Owner</b>: also the raw console and admin accounts.</p>
+</form>
+
+<div class="scroll"><table>
+  <thead><tr><th>Username</th><th>Role</th><th>Last login</th><th></th></tr></thead>
+  <tbody>
+  {% for u in rows %}
+  <tr class="{{ 'bad' if u.disabled else '' }}">
+    <td>{{ u.username }}{% if u.disabled %} <span class="muted">(disabled)</span>{% endif %}</td>
+    <td>
+      <form method="post" action="/users/{{ u.id }}" class="inline">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="action" value="role">
+        <select name="role" data-autosubmit>{% for r in roles %}<option {% if r == u.role %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+        <noscript><button class="small">Save</button></noscript>
+      </form>
+    </td>
+    <td>{{ u.last_login|ago }}</td>
+    <td class="actions">
+      <form method="post" action="/users/{{ u.id }}" data-confirm="Give {{ u.username }} a new temporary password? They'll be logged out.">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="action" value="reset">
+        <button class="small">Reset password</button>
+      </form>
+      {% if u.id != user.id %}
+      <form method="post" action="/users/{{ u.id }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="action" value="{{ 'enable' if u.disabled else 'disable' }}">
+        <button class="small {{ '' if u.disabled else 'danger' }}">{{ "Enable" if u.disabled else "Disable" }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

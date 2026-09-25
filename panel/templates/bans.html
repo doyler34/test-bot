@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Bans · OYB Control{% endblock %}
+{% block body %}
+<h1>Bans</h1>
+<p class="muted">One ban list for every server. A ban goes to all servers straight away, and to any that are offline as soon as they're back.</p>
+
+{% if can("ban") %}
+<form class="card" method="post" action="/bans">
+  <h2>New ban</h2>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="grid">
+    <label>Identity ID <input name="identity" class="mono" value="{{ prefill.identity }}" placeholder="1a2b3c4d-0000-0000-0000-000000000000" required></label>
+    <label>Name <input name="name" value="{{ prefill.name }}" placeholder="optional"></label>
+    <label>Length
+      <select name="duration">{% for value, label in durations %}<option value="{{ value }}" {% if value == "86400" %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    </label>
+    <label>Reason <input name="reason" maxlength="200" required></label>
+  </div>
+  <button class="danger">Ban on all servers</button>
+</form>
+{% endif %}
+
+<section class="card">
+  <div class="row">
+    <h2>{{ "All bans" if show_old else "Active bans" }}</h2>
+    <a href="/bans{{ '' if show_old else '?all=1' }}">{{ "Active only" if show_old else "Show expired and removed" }}</a>
+  </div>
+  {% if bans %}
+  <div class="scroll"><table>
+    <thead><tr><th>Player</th><th>Reason</th><th>Length</th><th>By</th><th class="wide">Servers</th><th></th></tr></thead>
+    <tbody>
+    {% for b in bans %}
+    <tr>
+      <td><a href="/player/{{ b.identity }}">{{ b.name or b.identity }}</a></td>
+      <td class="wrap">{{ b.reason }}</td>
+      <td>{% if b.removed_at %}Removed by {{ b.removed_by }}{% else %}{{ b.expires_at|until }}{% endif %}</td>
+      <td title="{{ b.created_at|ts }}">{{ b.created_by }}</td>
+      <td class="wide">
+        {% for srv in servers if srv.configured %}
+          {% set done = b.synced.get(srv.id, []) %}
+          {% if b.removed_at %}
+            <span class="pill {{ 'on' if 'unban' in done or 'ban' not in done else 'down' }}">{{ srv.id }}</span>
+          {% else %}
+            <span class="pill {{ 'on' if 'ban' in done else 'down' }}" title="{{ 'applied' if 'ban' in done else 'waiting for the server' }}">{{ srv.id }}</span>
+          {% endif %}
+        {% endfor %}
+      </td>
+      <td class="actions">
+        {% if can("ban") and not b.removed_at %}
+        <form method="post" action="/bans/{{ b.id }}/remove" data-confirm="Unban {{ b.name or b.identity }} on every server?">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="small">Unban</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">No bans.</p>
+  {% endif %}
+</section>
+{% endblock %}

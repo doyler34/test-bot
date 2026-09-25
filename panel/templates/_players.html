@@ -1,0 +1,32 @@
+{% if s.players %}
+<div class="scroll"><table>
+  <thead><tr><th>#</th><th>Name</th><th class="wide">Identity</th><th></th></tr></thead>
+  <tbody>
+  {% for p in s.players %}
+  <tr>
+    <td>{{ p.id }}</td>
+    <td>{% if p.identity %}<a href="/player/{{ p.identity }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}</td>
+    <td class="wide mono">{{ p.identity or "—" }}</td>
+    <td class="actions">
+      {% if can("kick") %}
+      <form method="post" action="/server/{{ s.id }}/kick" data-confirm="Kick {{ p.name }}?">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="player" value="{{ p.id }}">
+        <input type="hidden" name="name" value="{{ p.name }}">
+        <button class="small">Kick</button>
+      </form>
+      {% endif %}
+      {% if can("ban") and p.identity %}<a class="button small danger" href="/bans?identity={{ p.identity }}&name={{ p.name|urlencode }}">Ban</a>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% elif s.online and s.raw_players.strip() %}
+<p class="muted">Couldn't read the player list, so here's what the server sent:</p>
+<pre>{{ s.raw_players }}</pre>
+{% elif s.online %}
+<p class="muted">Nobody on.</p>
+{% else %}
+<p class="muted">Server offline.</p>
+{% endif %}

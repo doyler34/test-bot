@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ player.name if player else identity }} · OYB Control{% endblock %}
+{% block body %}
+<div class="row">
+  <h1>{{ player.name if player else "Unknown player" }}</h1>
+  {% if active %}<span class="badge down">Banned · {{ active.expires_at|until }}</span>{% endif %}
+</div>
+<p class="mono muted">{{ identity }}</p>
+
+<div class="split">
+<section class="card">
+  <h2>History</h2>
+  {% if player %}
+  <p>First seen {{ player.first_seen|ts }}<br>Last seen {{ player.last_seen|ts }} on {{ player.last_server }}</p>
+  {% else %}
+  <p class="muted">The panel hasn't seen this player on a server.</p>
+  {% endif %}
+  {% if names|length > 1 %}
+  <h3>Names used</h3>
+  <ul>{% for n in names %}<li>{{ n.name }} <span class="muted">· {{ n.last_seen|ago }}</span></li>{% endfor %}</ul>
+  {% endif %}
+  {% if can("ban") and not active %}
+  <p><a class="button danger" href="/bans?identity={{ identity }}&name={{ (player.name if player else '')|urlencode }}">Ban</a></p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Admin notes</h2>
+  {% if can("notes") %}
+  <form method="post" action="/player/{{ identity }}/notes">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <textarea name="body" rows="3" maxlength="2000" placeholder="Visible to every admin, on every server" required></textarea>
+    <button>Add note</button>
+  </form>
+  {% endif %}
+  {% for n in notes %}
+  <div class="note"><p>{{ n.body }}</p><span class="muted">{{ n.author }} · {{ n.created_at|ts }}</span></div>
+  {% else %}
+  <p class="muted">No notes.</p>
+  {% endfor %}
+</section>
+</div>
+
+{% if bans %}
+<section class="card">
+  <h2>Ban history</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>When</th><th>By</th><th>Reason</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for b in bans %}
+    <tr>
+      <td>{{ b.created_at|ts }}</td>
+      <td>{{ b.created_by }}</td>
+      <td class="wrap">{{ b.reason }}</td>
+      <td>{% if b.removed_at %}Removed by {{ b.removed_by }}{% else %}{{ b.expires_at|until }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

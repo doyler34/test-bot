@@ -1,0 +1,16 @@
+{% for c in cards %}
+<a class="card server" href="/server/{{ c.id }}">
+  <div class="row">
+    <h2>{{ c.name }}</h2>
+    {% if not c.configured %}<span class="badge off">Not set up</span>
+    {% elif c.online %}<span class="badge on">Online</span>
+    {% else %}<span class="badge down">Offline</span>{% endif %}
+  </div>
+  {% if c.online %}
+  <p class="big">{{ c.players|length }} <small>players</small></p>
+  <p class="muted">Connected {{ c.online_since|ago }} · checked {{ c.updated|ago }}</p>
+  {% else %}
+  <p class="muted">{{ c.error or "Connecting…" }}</p>
+  {% endif %}
+</a>
+{% endfor %}

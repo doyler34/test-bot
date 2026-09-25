@@ -1,0 +1,32 @@
+{
+  "listen": "127.0.0.1",
+  "port": 8080,
+  "database": "data/panel.sqlite3",
+  "cookie_secure": true,
+  "servers": [
+    {
+      "id": "server-1",
+      "name": "Server 1",
+      "rcon_host": "127.0.0.1",
+      "rcon_port": 19999,
+      "rcon_password": "",
+      "service": ""
+    },
+    {
+      "id": "server-2",
+      "name": "Server 2",
+      "rcon_host": "127.0.0.1",
+      "rcon_port": 19998,
+      "rcon_password": "",
+      "service": ""
+    },
+    {
+      "id": "server-3",
+      "name": "Server 3",
+      "rcon_host": "127.0.0.1",
+      "rcon_port": 19997,
+      "rcon_password": "",
+      "service": ""
+    }
+  ]
+}

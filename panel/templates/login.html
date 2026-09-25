@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Log in · OYB Control{% endblock %}
+{% block body %}
+<form class="card narrow" method="post" action="/login">
+  <h1>OYB Control</h1>
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  <label>Username <input name="username" autocomplete="username" autofocus required></label>
+  <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+  <button>Log in</button>
+</form>
+{% endblock %}

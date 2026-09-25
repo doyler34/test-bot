@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Players · OYB Control{% endblock %}
+{% block body %}
+<h1>Players</h1>
+<form class="search" method="get" action="/players">
+  <input name="q" value="{{ q }}" placeholder="Name, old name or identity ID" autofocus>
+  <button>Search</button>
+</form>
+{% if rows %}
+<div class="scroll"><table>
+  <thead><tr><th>Name</th><th class="wide">Identity</th><th>Last seen</th><th>Where</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td><a href="/player/{{ r.identity }}">{{ r.name }}</a></td>
+    <td class="wide mono">{{ r.identity }}</td>
+    <td title="{{ r.last_seen|ts }}">{{ r.last_seen|ago }}</td>
+    <td>{{ r.last_server }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="muted">{{ "No one matches." if q else "No players seen yet. They show up here once they've been on a server while the panel is running." }}</p>
+{% endif %}
+{% endblock %}

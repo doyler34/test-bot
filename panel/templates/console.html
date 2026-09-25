@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Console · OYB Control{% endblock %}
+{% block body %}
+<h1>RCON console</h1>
+<p class="muted">Sends a raw command straight to the server. Every command is written to the audit log.</p>
+<form class="card" method="post" action="/console">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="grid">
+    <label>Server
+      <select name="server">{% for srv in servers %}<option value="{{ srv.id }}" {% if srv.id == chosen %}selected{% endif %}>{{ srv.name }}</option>{% endfor %}</select>
+    </label>
+    <label class="span">Command <input name="command" class="mono" value="{{ command }}" placeholder="#players" autocomplete="off" required></label>
+  </div>
+  <button>Send</button>
+</form>
+{% if output is not none %}
+<section class="card">
+  <h2>Reply</h2>
+  <pre>{{ output or "(empty reply)" }}</pre>
+</section>
+{% endif %}
+{% endblock %}

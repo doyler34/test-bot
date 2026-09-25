@@ -14,6 +14,7 @@ logs/
 
 # Local server configuration and durable notification state
 servers.local.json
+panel.local.json
 data/
 .oyb-backups/
 .oyb-service-backup-*

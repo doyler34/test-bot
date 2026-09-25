@@ -13,6 +13,7 @@ One bot handles up to three Reforger servers on the same box.
 - `bot/discord/` contains commands, buttons and channel displays.
 - `bot/ranks/` handles XP, roles and rank cards.
 - `bot/storage/` handles databases and retention.
+- `panel/` is OYB Control, the admin web panel.
 - [docs/](docs/) contains the feature guides.
 - [deploy/](deploy/) contains the VPS installer.
 - `assets/` contains artwork and fonts; `dev/` contains artwork tools.
@@ -32,6 +33,13 @@ One bot handles up to three Reforger servers on the same box.
   in-game name; admins approve from a private staff channel.
 
 Game restarts and map wipes don't reset anyone's XP or stats.
+
+## OYB Control
+
+A separate web panel for admins: live players, kick / ban / unban with one ban
+list shared across all three servers, restarts, a raw RCON console, admin
+accounts with roles, and a full audit log. It uses RCON; the bot still doesn't.
+Setup and HTTPS: [PANEL.md](docs/PANEL.md).
 
 ## Setup
 
@@ -69,6 +77,7 @@ account links, and setup never overwrites them. Set `MATCH_ALERT_CHANNEL_ID`,
 
 More detail: [RANKS.md](docs/RANKS.md) · [STATS.md](docs/STATS.md) · [LEADERBOARD.md](docs/LEADERBOARD.md)
 · [NOTIFICATIONS.md](docs/NOTIFICATIONS.md) · [PLAYTIME.md](docs/PLAYTIME.md) · [JOIN_OYB.md](docs/JOIN_OYB.md)
+· [PANEL.md](docs/PANEL.md)
 
 ## Tests
 

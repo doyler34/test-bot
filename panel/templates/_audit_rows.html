@@ -1,0 +1,19 @@
+{% if recent %}
+<div class="scroll"><table>
+  <thead><tr><th>When</th><th>Who</th><th>What</th><th>Server</th><th>Target</th><th>Detail</th></tr></thead>
+  <tbody>
+  {% for r in recent %}
+  <tr class="{{ '' if r.ok else 'bad' }}">
+    <td title="{{ r.at|ts }}">{{ r.at|ago }}</td>
+    <td>{{ r.username }}</td>
+    <td>{{ r.action }}</td>
+    <td>{{ r.server or "—" }}</td>
+    <td>{{ r.target or "—" }}</td>
+    <td class="wrap detail">{{ r.detail }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="muted">Nothing yet.</p>
+{% endif %}

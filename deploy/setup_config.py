@@ -155,7 +155,7 @@ def env_text(values):
                    for k, v in values.items() if v is not None)
 
 
-def render_unit(repo, user):
+def render_unit(repo, user, template="reforger-timer.service.tpl"):
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", user):
         raise ValueError("Unsupported systemd user name")
     repo = str(repo)
@@ -170,7 +170,7 @@ def render_unit(repo, user):
         return '"' + value + '"'
     # WorkingDirectory is a literal path setting, not a shell argument. Only
     # ExecStart uses argument quoting; both settings expand percent specifiers.
-    return (ROOT / "deploy/reforger-timer.service.tpl").read_text().replace("@USER@", user).replace("@REPO_DIR@", repo.replace("%", "%%")).replace("@PYTHON@", quote(PurePosixPath(repo) / ".venv/bin/python", True))
+    return (ROOT / "deploy" / template).read_text().replace("@USER@", user).replace("@REPO_DIR@", repo.replace("%", "%%")).replace("@PYTHON@", quote(PurePosixPath(repo) / ".venv/bin/python", True))
 
 
 def render_cli(repo):
@@ -338,6 +338,8 @@ if __name__ == "__main__":
     try:
         if len(sys.argv) > 1 and sys.argv[1] == "--render-unit":
             print(render_unit(sys.argv[2], sys.argv[3]), end="")
+        elif len(sys.argv) > 1 and sys.argv[1] == "--render-panel-unit":
+            print(render_unit(sys.argv[2], sys.argv[3], "oyb-panel.service.tpl"), end="")
         elif len(sys.argv) > 1 and sys.argv[1] == "--render-cli":
             print(render_cli(sys.argv[2]), end="")
         elif sys.argv[1:] == ["--summary"]:

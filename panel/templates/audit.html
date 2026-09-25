@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Audit log · OYB Control{% endblock %}
+{% block body %}
+<h1>Audit log</h1>
+<form class="search" method="get" action="/audit">
+  <input name="q" value="{{ q }}" placeholder="Admin, action, player…">
+  <select name="server"><option value="">All servers</option>{% for srv in servers %}<option value="{{ srv.id }}" {% if srv.id == chosen %}selected{% endif %}>{{ srv.name }}</option>{% endfor %}</select>
+  <button>Filter</button>
+</form>
+{% set recent = rows %}
+{% include "_audit_rows.html" %}
+{% endblock %}
