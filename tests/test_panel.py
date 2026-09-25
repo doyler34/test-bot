@@ -9,13 +9,23 @@ from pathlib import Path
 from aiohttp.test_utils import TestClient, TestServer
 
 from dev.fake_rcon import SAMPLE_PLAYERS, serve
+import sqlite3
+
+from aiohttp import web as aioweb
+
+from bot.storage.account_links import AccountLinks
+from bot.storage.combat_store import migrate as migrate_combat, record as record_kill
+from bot.tracking.combat_parser import KillEvent
 from panel import auth, memory
+from panel.alerts import Alerts
+from panel.oyb_stats import OybStats
+from panel.web import memory_chart
 from deploy.setup_config import render_unit
 from panel.config import PanelConfig, PanelConfigError, ServerConfig, load_config
 from panel.db import PanelDB, now
 from panel.rcon import RconClient, RconError, packet, parse
 from panel.servers import ServerManager, parse_players
-from panel.web import create_app
+from panel.web import STATS as STATS_KEY, create_app
 
 HAVOC = SAMPLE_PLAYERS[0][2]
 
@@ -50,6 +60,12 @@ class ConfigTests(unittest.TestCase):
         config = self.load({"servers": [{"id": "s1", "commands": {"players": "players"}}]})
         self.assertEqual(config.servers[0].commands["players"], "players")
         self.assertEqual(config.servers[0].commands["kick"], "#kick {player}")
+
+    def test_webhook_must_be_discord(self):
+        with self.assertRaises(PanelConfigError):
+            self.load({"discord_webhook": "https://example.com/hook"})
+        url = "https://discord.com/api/webhooks/1/abc"
+        self.assertEqual(self.load({"discord_webhook": url}).discord_webhook, url)
 
     def test_bad_values_are_refused(self):
         for server in ({"id": "bad id"}, {"id": "s1", "service": "x; rm -rf /"}):
@@ -230,6 +246,152 @@ class MissionCheckTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.manager.state("server-2").check)
 
 
+ENEMY = "11111111-2222-4333-8444-555555555555"
+
+
+def bot_data(root):
+    """Databases shaped by the bot's own code, holding one linked player with some kills."""
+    with sqlite3.connect(Path(root, "playtime.sqlite3")) as db:
+        db.execute("CREATE TABLE totals (server TEXT, identity TEXT, name TEXT, seconds REAL NOT NULL, PRIMARY KEY(server, identity))")
+        db.execute("CREATE TABLE global_time(identity TEXT PRIMARY KEY, milliseconds INTEGER NOT NULL)")
+        db.executemany("INSERT INTO totals VALUES (?, ?, ?, ?)",
+                       [("server-1", HAVOC, "Sgt Havoc", 7200), ("server-2", HAVOC, "Sgt Havoc", 3600)])
+        db.execute("INSERT INTO global_time VALUES (?, ?)", (HAVOC, 10_000_000))
+    links = AccountLinks(str(Path(root, "account_links.sqlite3")))
+    migrate_combat(links.db)
+    with links.db:
+        for n in range(3):
+            record_kill(links.db, "server-1", f"2026-09-20T10:00:0{n}+00:00", KillEvent("10:00:00", "ENEMY", ENEMY, HAVOC))
+        record_kill(links.db, "server-1", "2026-09-20T11:00:00+00:00", KillEvent("11:00:00", "ENEMY", HAVOC, ENEMY))
+        links.db.execute("INSERT INTO account_links VALUES (1, 42, ?, 0, 'test')", (HAVOC,))
+    links.db.close()
+
+
+class OybStatsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        bot_data(self.tmp.name)
+        self.stats = OybStats(self.tmp.name)
+
+    def test_matches_the_bot(self):
+        stats = self.stats.player(HAVOC)
+        self.assertEqual((stats["kills"], stats["deaths"], stats["teamkills"]), (3, 1, 0))
+        self.assertEqual(stats["playtime"], 10_000)
+        self.assertEqual([r["server"] for r in stats["servers"]], ["server-1", "server-2"])
+        self.assertEqual((stats["discord"], stats["name"]), (42, "Sgt Havoc"))
+        self.assertNotIn("xp", stats)
+
+    def test_unknown_and_missing(self):
+        self.assertIsNone(self.stats.player("00000000-0000-4000-8000-000000000000"))
+        self.assertIsNone(OybStats("/nonexistent").player(HAVOC))
+        self.assertFalse(OybStats("/nonexistent").available)
+
+    def test_read_only(self):
+        before = Path(self.tmp.name, "account_links.sqlite3").read_bytes()
+        self.stats.player(HAVOC)
+        self.assertEqual(Path(self.tmp.name, "account_links.sqlite3").read_bytes(), before)
+
+    def test_search(self):
+        self.assertEqual(self.stats.search("havoc"), [{"identity": HAVOC, "name": "Sgt Havoc"}])
+
+
+class HealthTests(unittest.TestCase):
+    def setUp(self):
+        self.db = PanelDB(":memory:")
+        self.addCleanup(self.db.close)
+
+    def test_uptime(self):
+        t = now()
+        self.assertIsNone(self.db.uptime("s", t - 100))
+        self.db.add_event("s", "online", at=t - 1000)
+        self.db.add_event("s", "offline", at=t - 60)
+        self.db.add_event("s", "online", at=t - 30)
+        self.assertAlmostEqual(self.db.uptime("s", t - 100), 0.7, delta=0.03)
+
+    def test_memory_chart(self):
+        rows = [{"at": 0, "rss": 1 * GB}, {"at": 50, "rss": 2 * GB}, {"at": 100, "rss": 1 * GB}]
+        chart = memory_chart(rows, 0, 100, fresh=1 * GB)
+        self.assertEqual(chart["peak"], 2 * GB)
+        self.assertTrue(chart["line"].startswith("0.0,"))
+        self.assertIsNone(memory_chart(rows[:1], 0, 100))
+
+
+class FakeAlerts(Alerts):
+    def __init__(self):
+        super().__init__("")
+        self.sent = []
+
+    def send(self, title, description="", colour=0, fields=()):
+        self.sent.append((title, description, dict(fields)))
+
+
+class AlertTests(unittest.IsolatedAsyncioTestCase):
+    async def test_posts_an_embed(self):
+        received = []
+
+        async def hook(request):
+            received.append(await request.json())
+            return aioweb.Response(status=204)
+
+        app = aioweb.Application()
+        app.router.add_post("/api/webhooks/1/x", hook)
+        server = TestServer(app)
+        await server.start_server()
+        self.addAsyncCleanup(server.close)
+        alerts = Alerts(str(server.make_url("/api/webhooks/1/x")))
+        alerts.send("Banned Havoc", "teamkilling", fields=[("By", "gaz")])
+        await alerts.close()
+        embed = received[0]["embeds"][0]
+        self.assertEqual((embed["title"], embed["fields"][0]["value"]), ("Banned Havoc", "gaz"))
+        self.assertEqual(received[0]["allowed_mentions"], {"parse": []})
+
+    async def test_off_without_a_webhook(self):
+        alerts = Alerts("")
+        alerts.send("nothing")
+        self.assertFalse(alerts._tasks)
+
+
+class CrashTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = PanelDB(":memory:")
+        self.addCleanup(self.db.close)
+        self.proc = FakeProcess()
+        self.alerts = FakeAlerts()
+        self.manager = ServerManager(panel_config(1, service="reforger-test"), self.db,
+                                     sampler=self.proc, alerts=self.alerts)
+        self.state = self.manager.state("server-1")
+
+    async def test_unexpected_restart_is_a_crash(self):
+        await self.manager.refresh_memory(self.state)
+        self.proc.sample.update(pid=200, age=5)
+        await self.manager.refresh_memory(self.state)
+        kinds = [e["kind"] for e in self.db.events("server-1")]
+        self.assertEqual(kinds[:2], ["started", "crashed"])
+        self.assertIn("crashed", self.alerts.sent[0][0])
+
+    async def test_admin_restart_is_not_a_crash(self):
+        await self.manager.refresh_memory(self.state)
+        self.manager.expect_restart("server-1")
+        self.proc.sample.update(pid=200, age=5)
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual([e["kind"] for e in self.db.events("server-1")][:2], ["started", "stopped"])
+        self.assertEqual(self.alerts.sent, [])
+
+    async def test_memory_is_sampled_each_minute(self):
+        await self.manager.refresh_memory(self.state)
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(len(self.db.memory("server-1", 0)), 1)
+
+    async def test_offline_alert(self):
+        self.manager._offline(self.state, RconError("gone"))
+        self.assertEqual(self.alerts.sent, [])
+        self.manager._changed(self.state, True)
+        self.manager._offline(self.state, RconError("gone"))
+        self.assertEqual(self.alerts.sent[-1][0], "Server 1 went offline")
+        self.assertEqual([e["kind"] for e in self.db.events("server-1")], ["offline", "online", "offline"])
+
+
 class RconClientTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.transport, self.fake = await serve(0, "secret", chunk=20, direct=True)
@@ -335,6 +497,17 @@ class ManagerTests(unittest.IsolatedAsyncioTestCase):
             await self.manager.kick("server-1", "0; #shutdown")
         await self.manager.kick("server-1", "1")
         self.assertIn("#kick 1", self.fake.commands)
+
+    async def test_stop_survives_a_swallowed_cancel(self):
+        async def stubborn():
+            while not self.manager._stopping:
+                try:
+                    await asyncio.sleep(0.01)
+                except asyncio.CancelledError:
+                    pass
+        self.manager._tasks.append(asyncio.create_task(stubborn()))
+        await asyncio.wait_for(self.manager.stop(), 5)
+        self.assertEqual(self.manager._tasks, [])
 
     async def test_service_actions_need_a_service(self):
         with self.assertRaisesRegex(RconError, "no systemd service"):
@@ -479,6 +652,39 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Mission restart check", html)
         self.assertIn("#restart", self.fake.commands)
         self.assertEqual(state.check["by"], "boss")
+
+    async def test_brand_assets_need_no_login(self):
+        self.assertEqual((await self.client.get("/brand/fonts/Display.ttf")).status, 200)
+        self.assertEqual((await self.client.get("/static/oyb-mark.svg")).status, 200)
+
+    async def test_player_page_shows_oyb_record(self):
+        with tempfile.TemporaryDirectory() as root:
+            bot_data(root)
+            self.client.app[STATS_KEY].data = Path(root)
+            await self.login("boss", "boss-password")
+            html = await (await self.client.get(f"/player/{HAVOC}")).text()
+            self.assertIn("In-game record", html)
+            self.assertIn("https://discord.com/users/42", html)
+            self.assertNotIn("XP", html)
+            html = await (await self.client.get("/server/server-1")).text()
+            self.assertIn("2h 46m", html)
+            html = await (await self.client.get("/players?q=havoc")).text()
+            self.assertIn("Sgt Havoc", html)
+
+    async def test_server_page_has_health(self):
+        await self.login("boss", "boss-password")
+        html = await (await self.client.get("/server/server-1")).text()
+        self.assertIn("Up, last 24h", html)
+        self.assertIn("online", html)
+
+    async def test_actions_raise_alerts(self):
+        self.manager.alerts = FakeAlerts()
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/bans")
+        await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "name": "Sgt Havoc",
+                                              "reason": "team killing", "duration": "3600"})
+        title, _, fields = self.manager.alerts.sent[0]
+        self.assertEqual((title, fields["By"], fields["Reason"]), ("Banned Sgt Havoc", "boss", "team killing"))
 
     async def test_console_is_audited(self):
         await self.login("boss", "boss-password")

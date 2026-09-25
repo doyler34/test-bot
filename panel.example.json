@@ -3,6 +3,8 @@
   "port": 8080,
   "database": "data/panel.sqlite3",
   "cookie_secure": true,
+  "discord_webhook": "",
+  "oyb_data": "data",
   "servers": [
     {
       "id": "server-1",

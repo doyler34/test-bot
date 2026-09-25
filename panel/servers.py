@@ -6,7 +6,8 @@ import shutil
 from dataclasses import dataclass, field
 
 from .config import PanelConfig, ServerConfig
-from . import memory
+from . import alerts as alert_colours, memory
+from .alerts import Alerts
 from .db import PanelDB, now
 from .rcon import RconClient, RconError
 
@@ -57,18 +58,24 @@ class ServerState:
     process_age: int = 0
     fresh: int = 0
     check: dict | None = None
+    expected_until: int = 0
+    last_sample: int = 0
+    was_online: bool | None = None
 
 
 class ServerManager:
-    def __init__(self, config: PanelConfig, db: PanelDB, client_factory=RconClient, sampler=memory.sample_service):
+    def __init__(self, config: PanelConfig, db: PanelDB, client_factory=RconClient, sampler=memory.sample_service,
+                 alerts: Alerts | None = None):
         self.config = config
         self.db = db
+        self.alerts = alerts or Alerts(config.discord_webhook)
         self.client_factory = client_factory
         self.sampler = sampler
         self.settle = memory.SETTLE_SECONDS
         self.box_total = memory.box_total()
         self.states = {s.id: ServerState(s) for s in config.servers}
         self._tasks: list[asyncio.Task] = []
+        self._stopping = False
 
     def start(self):
         for state in self.states.values():
@@ -80,16 +87,22 @@ class ServerManager:
             self._tasks.append(asyncio.create_task(self._watch_memory()))
 
     async def stop(self):
-        for task in self._tasks:
-            task.cancel()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
+        # On 3.11 a cancel that lands as a wait_for finishes can be swallowed,
+        # so the loops also check _stopping and we keep cancelling until they end.
+        self._stopping = True
+        while self._tasks:
+            for task in self._tasks:
+                task.cancel()
+            _, pending = await asyncio.wait(self._tasks, timeout=1)
+            self._tasks = list(pending)
         for state in self.states.values():
             if state.client:
                 state.client.close()
+        await self.alerts.close()
 
     async def _run(self, state: ServerState):
         delay = 5
-        while True:
+        while not self._stopping:
             try:
                 if not (state.client and state.client.connected):
                     await self._connect(state)
@@ -107,7 +120,7 @@ class ServerManager:
                 delay = min(delay * 2, 60)
 
     async def _watch_memory(self):
-        while True:
+        while not self._stopping:
             for state in self.states.values():
                 if state.config.service:
                     try:
@@ -119,14 +132,34 @@ class ServerManager:
     async def refresh_memory(self, state: ServerState):
         sample = await self.sampler(state.config.service)
         if sample is None:
+            if state.pid:
+                self._process_gone(state)
             state.pid = state.memory = state.process_age = 0
         else:
             if sample["pid"] != state.pid:
                 state.fresh = 0
+                started = now() - sample["age"]
+                if state.pid:
+                    self._process_gone(state, at=started)
+                if sample["age"] < 300:
+                    self.db.add_event(state.config.id, "started", "", at=started)
             state.pid, state.memory, state.process_age = sample["pid"], sample["rss"], sample["age"]
+            if now() - state.last_sample >= 60:
+                state.last_sample = now()
+                self.db.add_memory(state.config.id, state.memory)
             if not state.fresh and self.settle <= state.process_age <= self.settle + memory.BASELINE_WINDOW:
                 state.fresh = state.memory
         self._finish_check(state)
+
+    def _process_gone(self, state: ServerState, at=None):
+        if now() < state.expected_until:
+            self.db.add_event(state.config.id, "stopped", "by an admin", at=at)
+            return
+        detail = f"used {memory.gb(state.memory)} when it went" if state.memory else ""
+        self.db.add_event(state.config.id, "crashed", detail, at=at)
+        self.alerts.send(f"{state.config.name} crashed or restarted on its own",
+                         f"The server program ended without anyone pressing a button. {detail}".strip(),
+                         alert_colours.RED)
 
     async def start_mission_check(self, server_id: str, username: str):
         state = self.states[server_id]
@@ -149,6 +182,8 @@ class ServerManager:
             status, message = memory.verdict(check["before"], state.memory, check["fresh"])
         check.update(status=status, after=state.memory, message=message, finished=now())
         self.db.log(check["by"], "mission restart check", state.config.id, detail=message, ok=status != "leak")
+        if status == "leak":
+            self.alerts.send(f"{state.config.name}: memory didn't clear", message, alert_colours.GOLD)
 
     async def _connect(self, state: ServerState):
         cfg = state.config
@@ -159,6 +194,7 @@ class ServerManager:
         state.error = ""
         state.online_since = now()
         log.info("%s connected", cfg.id)
+        self._changed(state, True)
 
     def _offline(self, state: ServerState, exc):
         if state.client:
@@ -168,6 +204,26 @@ class ServerManager:
         state.online_since = 0
         state.players = []
         state.error = str(exc) or exc.__class__.__name__
+        self._changed(state, False)
+
+    def expect_restart(self, server_id: str, seconds: int = 300):
+        """An admin action is about to take this server down; don't call it a crash."""
+        self.states[server_id].expected_until = now() + seconds
+
+    def _changed(self, state: ServerState, online: bool):
+        if state.was_online == online:
+            return
+        first = state.was_online is None
+        state.was_online = online
+        name = state.config.name
+        self.db.add_event(state.config.id, "online" if online else "offline", "" if online else state.error)
+        if first:
+            return
+        expected = now() < state.expected_until
+        if online:
+            self.alerts.send(f"{name} is back online", colour=alert_colours.GREEN)
+        elif not expected:
+            self.alerts.send(f"{name} went offline", f"RCON stopped answering: {state.error}", alert_colours.RED)
 
     def state(self, server_id: str) -> ServerState | None:
         return self.states.get(server_id)
@@ -244,6 +300,8 @@ class ServerManager:
 
     async def power(self, server_id: str, action: str) -> str:
         state = self.states[server_id]
+        if action != "restart_mission":
+            self.expect_restart(server_id)
         if action in POWER_RCON:
             return await self.command(server_id, state.config.commands[action])
         if action in POWER_SERVICE:

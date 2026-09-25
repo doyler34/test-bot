@@ -1,0 +1,30 @@
+<section class="card">
+  <h2>In-game record</h2>
+  {% if stats %}
+  <div class="stats">
+    <div class="stat"><b>{{ stats.playtime|span }}</b><span>Played</span></div>
+    <div class="stat"><b>{{ stats.kills }}</b><span>Kills</span></div>
+    <div class="stat"><b>{{ stats.deaths }}</b><span>Deaths</span></div>
+    <div class="stat"><b>{{ "%.2f"|format(stats.kills / stats.deaths if stats.deaths else stats.kills) }}</b><span>K/D</span></div>
+    <div class="stat"><b class="{{ 'warn' if stats.teamkills else '' }}">{{ stats.teamkills }}</b><span>Teamkills</span></div>
+  </div>
+  <p class="muted">Linked Discord: {% if stats.discord %}<a class="mono" href="https://discord.com/users/{{ stats.discord }}" rel="noopener noreferrer" target="_blank">{{ stats.discord }}</a>{% else %}not linked{% endif %}</p>
+  {% if stats.servers|length > 1 %}
+  <h3>Time per server</h3>
+  {% for row in stats.servers %}<div class="event"><b>{{ row.server }}</b><span>{{ row.seconds|span }}</span></div>{% endfor %}
+  {% endif %}
+  {% if stats.matches %}
+  <h3>Last games</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>When</th><th class="num">Kills</th><th class="num">Deaths</th><th>Server</th></tr></thead>
+    <tbody>
+    {% for m in stats.matches %}
+    <tr><td>{{ m.started.strftime("%d %b %H:%M") if m.started.strftime is defined else m.started }}</td><td class="num">{{ m.kills }}</td><td class="num">{{ m.deaths }}</td><td>{{ m.name or "—" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  {% else %}
+  <p class="muted">The OYB bot has no record of this player yet.</p>
+  {% endif %}
+</section>

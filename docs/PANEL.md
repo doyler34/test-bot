@@ -17,10 +17,18 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   uses. After **Restart mission** it checks again once the new mission has
   loaded and warns if the old mission's memory wasn't let go, meaning it's time
   for a full **Restart server**. Needs `service` set for that server.
+- **Health**: uptime over the last day and week, crashes (the server program
+  ending without anyone pressing a button), recent starts and stops, and a
+  24-hour memory graph. Needs `service` set for that server.
+- **Discord alerts**: bans, unbans, kicks, restarts, crashes, a server going
+  offline or coming back, and memory that didn't clear, posted to a staff channel.
 - **Shared bans**: one list for every server. Bans go to every server at once;
   a server that's offline picks them up when it's back. Unbans work the same way.
-- **Players**: everyone the panel has seen, searchable by name, old name or
-  identity ID, with first/last seen, names used, ban history and admin notes.
+- **Players**: everyone the panel or the bot has seen, searchable by name, old
+  name or identity ID. Each player shows time played, kills, deaths, K/D,
+  teamkills and recent games from the bot's logs, their linked Discord account,
+  first/last seen, names used, ban history and admin notes. The panel only reads
+  the bot's data and never changes it.
 - **Console**: raw RCON commands for anything the buttons don't cover.
 - **Audit log**: logins, kicks, bans, restarts, console commands, account changes.
 - **Admins**: create accounts, change roles, reset passwords, disable accounts.
@@ -82,6 +90,17 @@ printf 'panel.yourdomain.com {\n\treverse_proxy 127.0.0.1:8080\n}\n' | sudo tee 
 That replaces the whole Caddyfile, so skip it if Caddy is already serving
 something else on the box and add the block by hand instead. Caddy fetches the
 HTTPS certificate itself. Open `https://panel.yourdomain.com` and log in.
+
+## Discord alerts
+
+In Discord: the staff channel → Edit Channel → Integrations → Webhooks → New
+Webhook → Copy Webhook URL. Put it in `panel.local.json`:
+
+```
+"discord_webhook": "https://discord.com/api/webhooks/..."
+```
+
+then restart the panel. Leave it empty to turn alerts off.
 
 ## Adding admins
 

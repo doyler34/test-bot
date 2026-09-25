@@ -1,11 +1,13 @@
 {% if s.players %}
 <div class="scroll"><table>
-  <thead><tr><th>#</th><th>Name</th><th class="wide">Identity</th><th></th></tr></thead>
+  <thead><tr><th>#</th><th>Name</th><th class="num">Played</th><th class="wide">Identity</th><th></th></tr></thead>
   <tbody>
   {% for p in s.players %}
+  {% set st = oyb(p.identity) if p.identity else none %}
   <tr>
     <td>{{ p.id }}</td>
     <td>{% if p.identity %}<a href="/player/{{ p.identity }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}</td>
+    <td class="num">{{ st.playtime|span if st else "—" }}</td>
     <td class="wide mono">{{ p.identity or "—" }}</td>
     <td class="actions">
       {% if can("kick") %}
@@ -13,7 +15,7 @@
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="player" value="{{ p.id }}">
         <input type="hidden" name="name" value="{{ p.name }}">
-        <button class="small">Kick</button>
+        <button class="small ghost">Kick</button>
       </form>
       {% endif %}
       {% if can("ban") and p.identity %}<a class="button small danger" href="/bans?identity={{ p.identity }}&name={{ p.name|urlencode }}">Ban</a>{% endif %}
@@ -22,7 +24,7 @@
   {% endfor %}
   </tbody>
 </table></div>
-{% elif s.online and s.raw_players.strip() %}
+{% elif s.online and s.raw_players.strip() and not s.raw_players.startswith("Players on server") %}
 <p class="muted">Couldn't read the player list, so here's what the server sent:</p>
 <pre>{{ s.raw_players }}</pre>
 {% elif s.online %}

@@ -41,6 +41,8 @@ class PanelConfig:
     database: str = "data/panel.sqlite3"
     cookie_secure: bool = True
     poll_seconds: float = 10.0
+    discord_webhook: str = ""
+    oyb_data: str = "data"
     servers: list[ServerConfig] = field(default_factory=list)
 
     def server(self, server_id: str) -> ServerConfig | None:
@@ -55,6 +57,9 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
         raise PanelConfigError(f"{path} not found; copy panel.example.json to {path} and fill it in") from None
     except json.JSONDecodeError as exc:
         raise PanelConfigError(f"{path} is not valid JSON: {exc}") from None
+    webhook = str(raw.get("discord_webhook") or "")
+    if webhook and not webhook.startswith(("https://discord.com/api/webhooks/", "https://discordapp.com/api/webhooks/")):
+        raise PanelConfigError("discord_webhook must be a Discord webhook URL (https://discord.com/api/webhooks/...)")
     servers = []
     for entry in raw.get("servers", []):
         server_id = str(entry.get("id", "")).strip()
@@ -80,5 +85,7 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
         database=str(raw.get("database", "data/panel.sqlite3")),
         cookie_secure=bool(raw.get("cookie_secure", True)),
         poll_seconds=float(raw.get("poll_seconds", 10)),
+        discord_webhook=str(raw.get("discord_webhook") or ""),
+        oyb_data=str(raw.get("oyb_data") or "data"),
         servers=servers,
     )

@@ -1,0 +1,27 @@
+<section class="card">
+  <h2>Health</h2>
+  <div class="stats">
+    <div class="stat"><b>{{ "%.1f"|format(health.day * 100) ~ "%" if health.day is not none else "—" }}</b><span>Up, last 24h</span></div>
+    <div class="stat"><b>{{ "%.1f"|format(health.week * 100) ~ "%" if health.week is not none else "—" }}</b><span>Up, last 7 days</span></div>
+    <div class="stat"><b>{{ health.crashes }}</b><span>Crashes, 7 days</span></div>
+    <div class="stat"><b>{{ s.process_age|span if s.pid else "—" }}</b><span>Program running</span></div>
+  </div>
+  {% if health.chart %}
+  {% set c = health.chart %}
+  <h3>Memory, last 24 hours</h3>
+  <svg class="chart" viewBox="0 0 {{ c.width }} {{ c.height }}" preserveAspectRatio="none" role="img" aria-label="Memory over the last 24 hours">
+    <polygon class="area" points="{{ c.area }}"/>
+    <polyline class="line" points="{{ c.line }}"/>
+    {% if c.fresh is not none %}<line class="fresh" x1="0" x2="{{ c.width }}" y1="{{ c.fresh }}" y2="{{ c.fresh }}"/>{% endif %}
+  </svg>
+  <div class="legend"><span>24h ago</span><span>Peak {{ c.peak|gb }}{% if s.fresh %} · dashed line = fresh start {{ s.fresh|gb }}{% endif %}</span><span>now</span></div>
+  {% elif s.service %}
+  <p class="muted">The memory graph fills in as the panel records a reading each minute.</p>
+  {% endif %}
+  {% if health.events %}
+  <h3>Recent events</h3>
+  {% for e in health.events %}
+  <div class="event"><b class="{{ e.kind }}">{{ e.kind }}</b><span class="muted" title="{{ e.at|ts }}">{{ e.at|ago }}</span><span>{{ e.detail }}</span></div>
+  {% endfor %}
+  {% endif %}
+</section>

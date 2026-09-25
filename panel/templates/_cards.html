@@ -7,7 +7,7 @@
     {% else %}<span class="badge down">Offline</span>{% endif %}
   </div>
   {% if c.online %}
-  <p class="big">{{ c.players|length }} <small>players</small></p>
+  <p class="big">{{ c.players|length }} <small>on now</small></p>
   <p class="muted">Connected {{ c.online_since|ago }} · checked {{ c.updated|ago }}</p>
   {% else %}
   <p class="muted">{{ c.error or "Connecting…" }}</p>

@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ player.name if player else identity }} · OYB Control{% endblock %}
 {% block body %}
+<p class="kicker">Player</p>
 <div class="row">
-  <h1>{{ player.name if player else "Unknown player" }}</h1>
+  <h1>{{ player.name if player else (stats.name if stats and stats.name else "Unknown player") }}</h1>
   {% if active %}<span class="badge down">Banned · {{ active.expires_at|until }}</span>{% endif %}
 </div>
 <p class="mono muted">{{ identity }}</p>
+
+{% include "_oyb.html" %}
 
 <div class="split">
 <section class="card">

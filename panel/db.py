@@ -62,6 +62,20 @@ CREATE TABLE IF NOT EXISTS player_names (
     last_seen INTEGER NOT NULL,
     PRIMARY KEY (identity, name)
 );
+CREATE TABLE IF NOT EXISTS server_events (
+    id INTEGER PRIMARY KEY,
+    server TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS server_events_at ON server_events(server, at);
+CREATE TABLE IF NOT EXISTS memory_samples (
+    server TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    rss INTEGER NOT NULL,
+    PRIMARY KEY (server, at)
+);
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY,
     identity TEXT NOT NULL,
@@ -212,6 +226,48 @@ class PanelDB:
             "SELECT * FROM players WHERE identity LIKE ? OR identity IN"
             " (SELECT identity FROM player_names WHERE name LIKE ?) ORDER BY last_seen DESC LIMIT ?",
             like, like, limit)
+
+    # health
+
+    def add_event(self, server, kind, detail="", at=None):
+        self.write("INSERT INTO server_events (server, at, kind, detail) VALUES (?, ?, ?, ?)",
+                   server, at or now(), kind, detail)
+
+    def events(self, server, limit=20, kinds=None):
+        sql = "SELECT * FROM server_events WHERE server = ?"
+        args = [server]
+        if kinds:
+            sql += f" AND kind IN ({','.join('?' * len(kinds))})"
+            args += list(kinds)
+        return self.all(sql + " ORDER BY at DESC, id DESC LIMIT ?", *args, limit)
+
+    def uptime(self, server, since) -> float | None:
+        """Share of time since `since` the server answered RCON, from its online/offline history."""
+        rows = self.all("SELECT at, kind FROM server_events WHERE server = ? AND kind IN ('online', 'offline')"
+                        " AND at >= ? ORDER BY at, id", server, since)
+        before = self.one("SELECT kind FROM server_events WHERE server = ? AND kind IN ('online', 'offline')"
+                          " AND at < ? ORDER BY at DESC, id DESC LIMIT 1", server, since)
+        if not rows and not before:
+            return None
+        state = before["kind"] if before else None
+        start = since if before else rows[0]["at"]
+        cursor, up = start, 0
+        for row in rows:
+            if state == "online":
+                up += row["at"] - cursor
+            state, cursor = row["kind"], row["at"]
+        if state == "online":
+            up += now() - cursor
+        span = now() - start
+        return up / span if span > 0 else (1.0 if state == "online" else 0.0)
+
+    def add_memory(self, server, rss, at=None):
+        t = at or now()
+        self.write("INSERT OR REPLACE INTO memory_samples (server, at, rss) VALUES (?, ?, ?)", server, t, rss)
+        self.write("DELETE FROM memory_samples WHERE at < ?", t - 7 * 86400)
+
+    def memory(self, server, since):
+        return self.all("SELECT at, rss FROM memory_samples WHERE server = ? AND at >= ? ORDER BY at", server, since)
 
     # notes
 

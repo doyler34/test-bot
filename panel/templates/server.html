@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ s.name }} · OYB Control{% endblock %}
 {% block body %}
+<p class="kicker">Server</p>
 <div class="row">
   <h1>{{ s.name }}</h1>
   {% if not s.configured %}<span class="badge off">Not set up</span>
@@ -24,6 +25,8 @@
   </div>
 </section>
 {% endif %}
+
+{% include "_health.html" %}
 
 {% if can("power") %}
 <section class="card">

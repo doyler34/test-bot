@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Players · OYB Control{% endblock %}
 {% block body %}
+<p class="kicker">Everyone the panel has seen</p>
 <h1>Players</h1>
 <form class="search" method="get" action="/players">
   <input name="q" value="{{ q }}" placeholder="Name, old name or identity ID" autofocus>
@@ -8,11 +9,13 @@
 </form>
 {% if rows %}
 <div class="scroll"><table>
-  <thead><tr><th>Name</th><th class="wide">Identity</th><th>Last seen</th><th>Where</th></tr></thead>
+  <thead><tr><th>Name</th><th class="num">Played</th><th class="wide">Identity</th><th>Last seen</th><th>Where</th></tr></thead>
   <tbody>
   {% for r in rows %}
   <tr>
+    {% set st = oyb(r.identity) %}
     <td><a href="/player/{{ r.identity }}">{{ r.name }}</a></td>
+    <td class="num">{{ st.playtime|span if st else "—" }}</td>
     <td class="wide mono">{{ r.identity }}</td>
     <td title="{{ r.last_seen|ts }}">{{ r.last_seen|ago }}</td>
     <td>{{ r.last_server }}</td>

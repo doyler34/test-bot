@@ -6,16 +6,19 @@ import jinja2
 from aiohttp import web
 
 from . import auth, memory
+from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
 from .db import PanelDB, now
+from .oyb_stats import OybStats
 from .rcon import RconError
 from .servers import POWER_RCON, POWER_SERVICE, ServerManager, clean, valid_identity
 
 log = logging.getLogger("panel.web")
 
 HERE = Path(__file__).parent
+BRAND = HERE.parent / "assets" / "rank-card"
 COOKIE = "oyb_panel"
-PUBLIC = ("/login", "/static/")
+PUBLIC = ("/login", "/static/", "/brand/")
 DURATIONS = [("3600", "1 hour"), ("86400", "1 day"), ("604800", "7 days"),
              ("2592000", "30 days"), ("0", "Permanent")]
 POWER_LABELS = {
@@ -32,6 +35,7 @@ MANAGER = web.AppKey("manager", ServerManager)
 THROTTLE = web.AppKey("throttle", auth.LoginThrottle)
 FLASH = web.AppKey("flash", dict)
 JINJA = web.AppKey("jinja", jinja2.Environment)
+STATS = web.AppKey("stats", OybStats)
 USER = web.RequestKey("user", object) if hasattr(web, "RequestKey") else "user"
 CSRF = web.RequestKey("csrf", str) if hasattr(web, "RequestKey") else "csrf"
 
@@ -75,6 +79,7 @@ def render(request, template, **context):
     user = request.get(USER)
     context.update(
         box_total=request.app[MANAGER].box_total,
+        oyb=request.app[STATS].player,
         settle_minutes=request.app[MANAGER].settle // 60,
         user=user,
         csrf=request.get(CSRF, ""),
@@ -102,6 +107,26 @@ def audit(request, action, server="", target="", detail="", ok=True):
 
 def client_ip(request):
     return request.headers.get("X-Forwarded-For", request.remote or "").split(",")[-1].strip()
+
+
+def alert(request, title, description="", colour=GOLD, fields=()):
+    by = request[USER]["username"]
+    request.app[MANAGER].alerts.send(title, description, colour, [*fields, ("By", by)])
+
+
+def memory_chart(samples, since, until, fresh=0, width=600, height=120):
+    if len(samples) < 2:
+        return None
+    top = max(max(r["rss"] for r in samples), fresh) * 1.1 or 1
+    span = max(until - since, 1)
+    xy = [((r["at"] - since) / span * width, height - r["rss"] / top * height) for r in samples]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
+    return {
+        "line": line,
+        "area": f"{xy[0][0]:.1f},{height} {line} {xy[-1][0]:.1f},{height}",
+        "fresh": height - fresh / top * height if fresh else None,
+        "top": top, "peak": max(r["rss"] for r in samples), "width": width, "height": height,
+    }
 
 
 def server_or_404(request, server_id):
@@ -245,9 +270,18 @@ async def dashboard_part(request):
 async def server_page(request):
     state = server_or_404(request, request.match_info["id"])
     actions = list(POWER_RCON) + (list(POWER_SERVICE) if state.config.service else [])
-    recent = request.app[DB].audit(server=state.config.id, limit=15)
+    db = request.app[DB]
+    recent = db.audit(server=state.config.id, limit=15)
+    t = now()
+    health = {
+        "day": db.uptime(state.config.id, t - 86400),
+        "week": db.uptime(state.config.id, t - 7 * 86400),
+        "events": db.events(state.config.id, 12, ("started", "crashed", "stopped", "online", "offline")),
+        "crashes": len([e for e in db.events(state.config.id, 200, ("crashed",)) if e["at"] > t - 7 * 86400]),
+        "chart": memory_chart(db.memory(state.config.id, t - 86400), t - 86400, t, state.fresh),
+    }
     return render(request, "server.html", s=server_view(state), actions=actions,
-                  labels=POWER_LABELS, recent=recent)
+                  labels=POWER_LABELS, recent=recent, health=health)
 
 
 async def players_part(request):
@@ -279,6 +313,7 @@ async def kick(request):
         flash(request, f"Kick failed: {exc}", "error")
     else:
         audit(request, "kick", state.config.id, name or player)
+        alert(request, f"Kick on {state.config.name}", f"**{name or player}** was kicked.")
         flash(request, f"Kicked {name or player}.")
     raise web.HTTPFound(f"/server/{state.config.id}")
 
@@ -301,6 +336,8 @@ async def power(request):
         flash(request, f"{POWER_LABELS[action]} failed: {exc}", "error")
     else:
         audit(request, POWER_LABELS[action].lower(), state.config.id, detail=clean(result, 300))
+        alert(request, f"{POWER_LABELS[action]}: {state.config.name}",
+              colour=RED if action in ("stop", "shutdown") else GOLD)
         note = ""
         if action == "restart_mission" and state.check:
             note = f" Memory check in {manager.settle // 60} minutes."
@@ -343,6 +380,8 @@ async def add_ban(request):
     summary = ", ".join(f"{k}: {v}" for k, v in results.items()) or "no servers set up"
     audit(request, "ban", target=name or identity,
           detail=f"{dict(DURATIONS)[duration]} — {reason} ({summary})")
+    alert(request, f"Banned {name or identity}", colour=RED, fields=(
+        ("Length", dict(DURATIONS)[duration]), ("Reason", reason), ("Identity", identity)))
     flash(request, f"Banned {name or identity}. {summary}")
     raise web.HTTPFound("/bans")
 
@@ -357,6 +396,8 @@ async def remove_ban(request):
     results = await request.app[MANAGER].push_unban(db.ban(ban["id"]))
     summary = ", ".join(f"{k}: {v}" for k, v in results.items()) or "nothing to undo on the servers"
     audit(request, "unban", target=ban["name"] or ban["identity"], detail=summary)
+    alert(request, f"Unbanned {ban['name'] or ban['identity']}", colour=GREEN,
+          fields=(("Was banned for", ban["reason"]),))
     flash(request, f"Unbanned {ban['name'] or ban['identity']}. {summary}")
     raise web.HTTPFound("/bans")
 
@@ -365,7 +406,10 @@ async def remove_ban(request):
 
 async def players_page(request):
     q = clean(request.query.get("q", ""), 64)
-    rows = request.app[DB].search_players(q) if q else request.app[DB].search_players("", limit=50)
+    rows = [dict(r) for r in request.app[DB].search_players(q, limit=50)]
+    if q:
+        seen = {r["identity"] for r in rows}
+        rows += [dict(r, last_seen=0, last_server="") for r in request.app[STATS].search(q) if r["identity"] not in seen]
     return render(request, "players.html", q=q, rows=rows)
 
 
@@ -376,6 +420,7 @@ async def player_page(request):
     db = request.app[DB]
     bans = [b for b in db.all("SELECT * FROM bans WHERE identity = ? ORDER BY id DESC", identity)]
     return render(request, "player.html", identity=identity, player=db.player(identity),
+                  stats=request.app[STATS].player(identity),
                   names=db.player_names(identity), notes=db.notes(identity), bans=bans,
                   active=db.active_ban(identity), durations=DURATIONS)
 
@@ -504,6 +549,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[MANAGER] = manager or ServerManager(config, app[DB])
     app[THROTTLE] = auth.LoginThrottle()
     app[FLASH] = {}
+    app[STATS] = OybStats(config.oyb_data)
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
     env.filters.update(ts=_ts, ago=_ago, until=_until, span=_span, gb=memory.gb)
@@ -543,4 +589,5 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/users", add_user)
     app.router.add_post("/users/{user_id:\\d+}", change_user)
     app.router.add_static("/static/", HERE / "static")
+    app.router.add_static("/brand/", BRAND)
     return app
