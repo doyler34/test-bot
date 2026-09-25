@@ -420,7 +420,7 @@ async def player_page(request):
     db = request.app[DB]
     bans = [b for b in db.all("SELECT * FROM bans WHERE identity = ? ORDER BY id DESC", identity)]
     return render(request, "player.html", identity=identity, player=db.player(identity),
-                  stats=request.app[STATS].player(identity),
+                  stats=request.app[STATS].player(identity), stats_here=request.app[STATS].available,
                   names=db.player_names(identity), notes=db.notes(identity), bans=bans,
                   active=db.active_ban(identity), durations=DURATIONS)
 

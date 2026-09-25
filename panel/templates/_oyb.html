@@ -25,6 +25,6 @@
   </table></div>
   {% endif %}
   {% else %}
-  <p class="muted">The OYB bot has no record of this player yet.</p>
+  <p class="muted">{% if stats_here %}The OYB bot has no record of this player yet.{% else %}The OYB bot's data isn't on this machine, so time played, kills and Discord links can't show here.{% endif %}</p>
   {% endif %}
 </section>

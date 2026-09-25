@@ -11,7 +11,7 @@ SOURCE=/root/test-bot
 BRANCH="${1:-main}"
 
 if [ "${1:-}" = stop ]; then
-    systemctl stop oyb-panel reforger-test 2>/dev/null || true
+    systemctl stop oyb-panel reforger-test oyb-test-playtime 2>/dev/null || true
     systemctl disable -q oyb-panel 2>/dev/null || true
     echo "Stopped the test server and the panel."
     exit 0
@@ -91,8 +91,24 @@ if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
     ufw allow 17777/udp >/dev/null
 fi
 
+echo "== Tracking playtime from the test server's logs"
+cat > /etc/systemd/system/oyb-test-playtime.service <<EOF
+[Unit]
+Description=OYB playtime tracker for the panel test server
+After=reforger-test.service
+
+[Service]
+WorkingDirectory=$PANEL
+ExecStart=$PANEL/.venv/bin/python -m bot.tracking.playtime_tracker watch --log-dir $GAME/profile/logs --database $PANEL/data/playtime.sqlite3 --server server-1
+Restart=always
+RestartSec=10
+EOF
+
 echo "== Installing the panel"
 bash "$PANEL/deploy/panel_setup.sh"
+
+systemctl daemon-reload
+systemctl restart oyb-test-playtime
 
 echo "== Waiting for the game server to load (up to 5 minutes)"
 READY=false
