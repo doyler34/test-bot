@@ -109,6 +109,19 @@ Webhook → Copy Webhook URL. Put it in `panel.local.json`:
 
 then restart the panel. Leave it empty to turn alerts off.
 
+## Banned roles in Discord
+
+While a player is banned in the panel, the bot gives their linked Discord
+account a role naming the length (`Banned · 1 hour`, `Banned · 1 day`,
+`Banned · 7 days`, `Banned · 30 days` or `Banned · Permanent`) and removes it
+when the ban ends or is lifted. It checks once a minute. The bot makes the
+roles itself the first time it needs them; they carry no permissions.
+
+It reads the panel's `data/panel.sqlite3`, which is where it already is when
+the panel runs from the bot's folder. Otherwise set `PANEL_DB` in the bot's
+`.env` to the panel's database. Players who haven't linked their Discord get
+no role.
+
 ## Adding admins
 
 Admins → New admin. The panel shows a temporary password once; send it to them.

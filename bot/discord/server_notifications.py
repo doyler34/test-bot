@@ -19,6 +19,7 @@ from bot.discord.category_timer import CategoryTimers
 from bot.storage.account_links import AccountLinks
 from bot.discord.join_oyb import prepare_join_channel
 from bot.ranks.rank_sync import RankSync
+from bot.discord.ban_roles import BanRoles
 from bot.discord.rank_command import RankCommand
 from bot.storage.combat_store import migrate as migrate_combat
 from bot.tracking.combat_ingestor import CombatIngestor
@@ -127,6 +128,7 @@ class NotificationBot(TimerBot):
         self.combat_ingestor = CombatIngestor(self)
         self.server_stats = ServerStats(self)
         self.maintenance = Maintenance(self)
+        self.ban_roles = BanRoles(self)
         self._boot_lock = asyncio.Lock()
         self._booted = False
 
@@ -307,6 +309,7 @@ class NotificationBot(TimerBot):
             self._jobs.append(asyncio.create_task(self.live_board.run()))
             self._jobs.append(asyncio.create_task(self.server_stats.run()))
             self._jobs.append(asyncio.create_task(self.maintenance.run()))
+            self._jobs.append(asyncio.create_task(self.ban_roles.run()))
             logger.info("Ready: one combined servers card + announcements channel; %s active game monitors",
                         len(self.monitors))
 
