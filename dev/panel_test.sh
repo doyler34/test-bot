@@ -71,7 +71,7 @@ if [ -d "$PANEL" ]; then
     git -C "$PANEL" pull -q --ff-only origin "$BRANCH"
 else
     git -C "$SOURCE" worktree prune
-    git -C "$SOURCE" worktree add -q --track -B panel-test "$PANEL" "origin/$BRANCH"
+    git -C "$SOURCE" worktree add -q -B panel-test "$PANEL" FETCH_HEAD
 fi
 cat > "$PANEL/panel.local.json" <<EOF
 {
