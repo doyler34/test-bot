@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import re
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ from pathlib import Path
 from aiohttp.test_utils import TestClient, TestServer
 
 from dev.fake_rcon import SAMPLE_PLAYERS, serve
-from panel import auth
+from panel import auth, memory
 from deploy.setup_config import render_unit
 from panel.config import PanelConfig, PanelConfigError, ServerConfig, load_config
 from panel.db import PanelDB, now
@@ -126,6 +127,101 @@ class BanQueueTests(unittest.TestCase):
         self.db.add_ban(HAVOC, "Havoc", "spam", "owner", expires_at=now() - 5)
         self.assertEqual(self.db.pending_bans("server-1"), [])
         self.assertIsNone(self.db.active_ban(HAVOC))
+
+
+GB = 1024 ** 3
+
+
+class MemoryTests(unittest.TestCase):
+    def test_verdict_against_fresh_start(self):
+        self.assertEqual(memory.verdict(6 * GB, int(3.2 * GB), 3 * GB)[0], "ok")
+        status, message = memory.verdict(6 * GB, int(5.5 * GB), 3 * GB)
+        self.assertEqual(status, "leak")
+        self.assertIn("Still holding 2.5 GB more than a fresh start", message)
+
+    def test_verdict_without_fresh_start(self):
+        self.assertEqual(memory.verdict(6 * GB, int(5.8 * GB), 0)[0], "leak")
+        self.assertEqual(memory.verdict(6 * GB, 3 * GB, 0)[0], "unknown")
+
+    def test_reads_proc(self):
+        with tempfile.TemporaryDirectory() as root:
+            Path(root, "42").mkdir()
+            Path(root, "42", "status").write_text("Name:\tArmaReforgerSer\nVmRSS:\t 2097152 kB\n")
+            ticks = os.sysconf("SC_CLK_TCK")
+            fields = ["S"] + ["0"] * 18 + [str(100 * ticks)]
+            Path(root, "42", "stat").write_text("42 (Arma Reforger) " + " ".join(fields) + " 0 0")
+            Path(root, "uptime").write_text("400.5 1000.0\n")
+            Path(root, "meminfo").write_text("MemTotal:       8000000 kB\n")
+            self.assertEqual(memory.process_memory(42, root), {"pid": 42, "rss": 2 * GB, "age": 300})
+            self.assertIsNone(memory.process_memory(43, root))
+            self.assertEqual(memory.box_total(root), 8000000 * 1024)
+
+
+class FakeProcess:
+    def __init__(self):
+        self.sample = {"pid": 100, "rss": 3 * GB, "age": 200}
+
+    async def __call__(self, unit):
+        return dict(self.sample) if self.sample else None
+
+
+class MissionCheckTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = PanelDB(":memory:")
+        self.addCleanup(self.db.close)
+        config = panel_config(1, service="reforger-test")
+        self.proc = FakeProcess()
+        self.manager = ServerManager(config, self.db, sampler=self.proc)
+        self.manager.settle = 0
+        self.state = self.manager.state("server-1")
+
+    async def test_fresh_start_reading(self):
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(self.state.fresh, 3 * GB)
+        self.proc.sample.update(rss=5 * GB, age=5000)
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(self.state.fresh, 3 * GB)
+        self.proc.sample.update(pid=101, rss=6 * GB, age=5000)
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(self.state.fresh, 0)
+
+    async def test_memory_left_behind_is_flagged(self):
+        await self.manager.refresh_memory(self.state)
+        self.proc.sample["rss"] = 6 * GB
+        await self.manager.start_mission_check("server-1", "gaz")
+        self.assertEqual(self.state.check["before"], 6 * GB)
+        self.proc.sample["rss"] = int(5.5 * GB)
+        self.state.check["started"] -= 1
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(self.state.check["status"], "leak")
+        entry = self.db.audit()[0]
+        self.assertEqual((entry["username"], entry["action"], entry["ok"]), ("gaz", "mission restart check", 0))
+
+    async def test_memory_cleared(self):
+        await self.manager.refresh_memory(self.state)
+        await self.manager.start_mission_check("server-1", "gaz")
+        self.proc.sample["rss"] = int(3.1 * GB)
+        self.state.check["started"] -= 1
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(self.state.check["status"], "ok")
+
+    async def test_waits_for_the_mission_to_load(self):
+        self.manager.settle = 180
+        await self.manager.start_mission_check("server-1", "gaz")
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(self.state.check["status"], "waiting")
+
+    async def test_process_restart_counts_as_cleared(self):
+        await self.manager.start_mission_check("server-1", "gaz")
+        self.proc.sample.update(pid=555)
+        self.state.check["started"] -= 1
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(self.state.check["status"], "ok")
+        self.assertIn("restarted", self.state.check["message"])
+
+    async def test_no_service_no_check(self):
+        await self.manager.start_mission_check("server-2", "gaz")
+        self.assertIsNone(self.manager.state("server-2").check)
 
 
 class RconClientTests(unittest.IsolatedAsyncioTestCase):
@@ -341,6 +437,18 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.client.session.cookie_jar.update_cookies(mod_cookies)
         response = await self.client.get("/", allow_redirects=False)
         self.assertEqual(response.headers["Location"], "/login")
+
+    async def test_restart_mission_starts_a_memory_check(self):
+        state = self.manager.state("server-1")
+        state.config.service = "reforger-test"
+        self.manager.sampler = FakeProcess()
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/server/server-1")
+        html = await (await self.client.post("/server/server-1/power", data={"csrf": token, "action": "restart_mission"})).text()
+        self.assertIn("Memory check in 3 minutes", html)
+        self.assertIn("Mission restart check", html)
+        self.assertIn("#restart", self.fake.commands)
+        self.assertEqual(state.check["by"], "boss")
 
     async def test_console_is_audited(self):
         await self.login("boss", "boss-password")

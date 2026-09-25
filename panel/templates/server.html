@@ -16,6 +16,15 @@
   </div>
 </section>
 
+{% if s.service %}
+<section class="card">
+  <h2>Memory</h2>
+  <div data-refresh="/server/{{ s.id }}/memory.part">
+  {% include "_memory.html" %}
+  </div>
+</section>
+{% endif %}
+
 {% if can("power") %}
 <section class="card">
   <h2>Server controls</h2>
@@ -28,7 +37,7 @@
     </form>
   {% endfor %}
   </div>
-  {% if not s.service %}<p class="muted">Shut down only brings the server back if it restarts by itself (systemd <code>Restart=always</code>). Set <code>service</code> in panel.local.json for Start / Stop / Restart.</p>{% endif %}
+  {% if not s.service %}<p class="muted">Shut down only brings the server back if it restarts by itself (systemd <code>Restart=always</code>). Set <code>service</code> in panel.local.json for Start / Stop / Restart and memory tracking.</p>{% endif %}
 </section>
 {% endif %}
 

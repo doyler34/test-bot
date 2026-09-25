@@ -89,3 +89,4 @@ ul { padding-left: 18px; }
   .top nav { order: 3; flex-basis: 100%; }
 }
 td.detail { min-width: 220px; }
+.warn { color: var(--bad); font-weight: 600; margin: 4px 0 0; }

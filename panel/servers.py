@@ -6,6 +6,7 @@ import shutil
 from dataclasses import dataclass, field
 
 from .config import PanelConfig, ServerConfig
+from . import memory
 from .db import PanelDB, now
 from .rcon import RconClient, RconError
 
@@ -51,13 +52,21 @@ class ServerState:
     raw_players: str = ""
     updated: int = 0
     online_since: int = 0
+    pid: int = 0
+    memory: int = 0
+    process_age: int = 0
+    fresh: int = 0
+    check: dict | None = None
 
 
 class ServerManager:
-    def __init__(self, config: PanelConfig, db: PanelDB, client_factory=RconClient):
+    def __init__(self, config: PanelConfig, db: PanelDB, client_factory=RconClient, sampler=memory.sample_service):
         self.config = config
         self.db = db
         self.client_factory = client_factory
+        self.sampler = sampler
+        self.settle = memory.SETTLE_SECONDS
+        self.box_total = memory.box_total()
         self.states = {s.id: ServerState(s) for s in config.servers}
         self._tasks: list[asyncio.Task] = []
 
@@ -67,6 +76,8 @@ class ServerManager:
                 self._tasks.append(asyncio.create_task(self._run(state)))
             else:
                 state.error = "RCON is not set up in panel.local.json"
+        if any(s.config.service for s in self.states.values()):
+            self._tasks.append(asyncio.create_task(self._watch_memory()))
 
     async def stop(self):
         for task in self._tasks:
@@ -94,6 +105,50 @@ class ServerManager:
                 self._offline(state, exc)
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 60)
+
+    async def _watch_memory(self):
+        while True:
+            for state in self.states.values():
+                if state.config.service:
+                    try:
+                        await self.refresh_memory(state)
+                    except Exception:
+                        log.exception("memory check failed for %s", state.config.id)
+            await asyncio.sleep(self.config.poll_seconds)
+
+    async def refresh_memory(self, state: ServerState):
+        sample = await self.sampler(state.config.service)
+        if sample is None:
+            state.pid = state.memory = state.process_age = 0
+        else:
+            if sample["pid"] != state.pid:
+                state.fresh = 0
+            state.pid, state.memory, state.process_age = sample["pid"], sample["rss"], sample["age"]
+            if not state.fresh and self.settle <= state.process_age <= self.settle + memory.BASELINE_WINDOW:
+                state.fresh = state.memory
+        self._finish_check(state)
+
+    async def start_mission_check(self, server_id: str, username: str):
+        state = self.states[server_id]
+        if not state.config.service:
+            return
+        await self.refresh_memory(state)
+        if state.pid:
+            state.check = {"status": "waiting", "by": username, "started": now(), "pid": state.pid,
+                           "before": state.memory, "fresh": state.fresh}
+
+    def _finish_check(self, state: ServerState):
+        check = state.check
+        if not check or check["status"] != "waiting" or now() - check["started"] < self.settle:
+            return
+        if state.pid != check["pid"]:
+            status, message = "ok", "The server program restarted since, so its memory was fully cleared."
+        elif not state.pid:
+            return
+        else:
+            status, message = memory.verdict(check["before"], state.memory, check["fresh"])
+        check.update(status=status, after=state.memory, message=message, finished=now())
+        self.db.log(check["by"], "mission restart check", state.config.id, detail=message, ok=status != "leak")
 
     async def _connect(self, state: ServerState):
         cfg = state.config

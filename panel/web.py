@@ -5,7 +5,7 @@ from pathlib import Path
 import jinja2
 from aiohttp import web
 
-from . import auth
+from . import auth, memory
 from .config import PanelConfig
 from .db import PanelDB, now
 from .rcon import RconError
@@ -50,6 +50,15 @@ def _ago(value):
     return "just now"
 
 
+def _span(seconds):
+    seconds = int(seconds or 0)
+    if seconds >= 86400:
+        return f"{seconds // 86400}d {seconds % 86400 // 3600}h"
+    if seconds >= 3600:
+        return f"{seconds // 3600}h {seconds % 3600 // 60}m"
+    return f"{seconds // 60}m"
+
+
 def _until(value):
     if not value:
         return "Permanent"
@@ -65,6 +74,8 @@ def _until(value):
 def render(request, template, **context):
     user = request.get(USER)
     context.update(
+        box_total=request.app[MANAGER].box_total,
+        settle_minutes=request.app[MANAGER].settle // 60,
         user=user,
         csrf=request.get(CSRF, ""),
         can=(lambda perm: bool(user) and auth.can(user["role"], perm)),
@@ -213,6 +224,11 @@ def server_view(state):
         "updated": state.updated,
         "online_since": state.online_since,
         "service": state.config.service,
+        "pid": state.pid,
+        "memory": state.memory,
+        "process_age": state.process_age,
+        "fresh": state.fresh,
+        "check": state.check,
     }
 
 
@@ -237,6 +253,11 @@ async def server_page(request):
 async def players_part(request):
     state = server_or_404(request, request.match_info["id"])
     return render(request, "_players.html", s=server_view(state))
+
+
+async def memory_part(request):
+    state = server_or_404(request, request.match_info["id"])
+    return render(request, "_memory.html", s=server_view(state))
 
 
 async def status_api(request):
@@ -269,14 +290,21 @@ async def power(request):
     action = form.get("action", "")
     if action not in POWER_LABELS:
         raise web.HTTPBadRequest(text="Unknown action.")
+    manager = request.app[MANAGER]
+    if action == "restart_mission":
+        await manager.start_mission_check(state.config.id, request[USER]["username"])
     try:
-        result = await request.app[MANAGER].power(state.config.id, action)
+        result = await manager.power(state.config.id, action)
     except RconError as exc:
+        state.check = None
         audit(request, POWER_LABELS[action].lower(), state.config.id, detail=str(exc), ok=False)
         flash(request, f"{POWER_LABELS[action]} failed: {exc}", "error")
     else:
         audit(request, POWER_LABELS[action].lower(), state.config.id, detail=clean(result, 300))
-        flash(request, f"{POWER_LABELS[action]}: sent.")
+        note = ""
+        if action == "restart_mission" and state.check:
+            note = f" Memory check in {manager.settle // 60} minutes."
+        flash(request, f"{POWER_LABELS[action]}: sent.{note}")
     raise web.HTTPFound(f"/server/{state.config.id}")
 
 
@@ -478,7 +506,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[FLASH] = {}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
-    env.filters.update(ts=_ts, ago=_ago, until=_until)
+    env.filters.update(ts=_ts, ago=_ago, until=_until, span=_span, gb=memory.gb)
     app[JINJA] = env
 
     if start_manager:
@@ -499,6 +527,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/api/status", status_api)
     app.router.add_get("/server/{id}", server_page)
     app.router.add_get("/server/{id}/players.part", players_part)
+    app.router.add_get("/server/{id}/memory.part", memory_part)
     app.router.add_post("/server/{id}/kick", kick)
     app.router.add_post("/server/{id}/power", power)
     app.router.add_get("/bans", bans_page)

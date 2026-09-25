@@ -12,5 +12,7 @@
   {% else %}
   <p class="muted">{{ c.error or "Connecting…" }}</p>
   {% endif %}
+  {% if c.pid %}<p class="muted">Memory {{ c.memory|gb }}{% if c.fresh %} · fresh start {{ c.fresh|gb }}{% endif %}</p>{% endif %}
+  {% if c.check and c.check.status == "leak" %}<p class="warn">Memory didn't clear after the last mission restart</p>{% endif %}
 </a>
 {% endfor %}

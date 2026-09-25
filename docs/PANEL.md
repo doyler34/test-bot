@@ -12,6 +12,11 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
 - **Live players**: refreshes every 10 seconds, with kick and ban on each row.
 - **Server controls**: restart mission, RCON shutdown, and start / stop /
   restart of the systemd service when `service` is set.
+- **Memory check**: each server's memory on the dashboard and server page. A
+  few minutes after a full server restart the panel notes what a clean server
+  uses. After **Restart mission** it checks again once the new mission has
+  loaded and warns if the old mission's memory wasn't let go, meaning it's time
+  for a full **Restart server**. Needs `service` set for that server.
 - **Shared bans**: one list for every server. Bans go to every server at once;
   a server that's offline picks them up when it's back. Unbans work the same way.
 - **Players**: everyone the panel has seen, searchable by name, old name or

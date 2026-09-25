@@ -1,0 +1,24 @@
+{% if s.pid %}
+<p class="big">{{ s.memory|gb }}{% if box_total %} <small>of {{ box_total|gb }} on this box</small>{% endif %}</p>
+<p class="muted">
+  Server program running for {{ s.process_age|span }}.
+  {% if s.fresh %}
+  A fresh start used {{ s.fresh|gb }}{% if s.memory > s.fresh %}, so it's holding {{ (s.memory - s.fresh)|gb }} more now{% endif %}.
+  {% else %}
+  The fresh-start reading is taken {{ settle_minutes }} minutes after a full server restart.
+  {% endif %}
+</p>
+{% else %}
+<p class="muted">The server program isn't running.</p>
+{% endif %}
+{% set c = s.check %}
+{% if c %}
+<div class="flash {{ 'error' if c.status == 'leak' else '' }}">
+  <b>Mission restart check</b> ({{ c.by }}, {{ c.started|ts }})<br>
+  {% if c.status == "waiting" %}
+  Was {{ c.before|gb }} before the restart. Checking again {{ settle_minutes }} minutes after, once the new mission has loaded.
+  {% else %}
+  {{ c.message }}
+  {% endif %}
+</div>
+{% endif %}
