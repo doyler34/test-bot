@@ -57,6 +57,7 @@ class BanRoles:
         self.bot = bot
         self.path = os.getenv("PANEL_DB", "data/panel.sqlite3")
         self.announced = False
+        self.noted = set()
 
     async def run(self):
         while not self.bot.is_closed():
@@ -68,7 +69,10 @@ class BanRoles:
 
     async def tick(self):
         guild = self.bot.get_guild(self.bot.config.guild_id)
-        if guild is None or not guild.me.guild_permissions.manage_roles:
+        if guild is None:
+            return
+        if not guild.me.guild_permissions.manage_roles:
+            self._note("perm", "Ban roles need the bot to have Manage Roles")
             return
         bans = await asyncio.to_thread(active_bans, self.path)
         if bans is None:
@@ -79,12 +83,15 @@ class BanRoles:
         wanted = {}
         for identity, label in bans.items():
             member_id = self.bot.account_links.owner(guild.id, identity)
-            if member_id and rank(label) > rank(wanted.get(member_id, "")):
+            if not member_id:
+                self._note(identity, f"Banned player {identity} has no linked Discord account, so no ban role")
+            elif rank(label) > rank(wanted.get(member_id, "")):
                 wanted[member_id] = label
         roles = {role.name[len(PREFIX):]: role for role in guild.roles if role.name.startswith(PREFIX)}
         for member_id, label in wanted.items():
             member = guild.get_member(member_id)
             if member is None:
+                self._note(member_id, f"Linked member {member_id} isn't in the Discord server, so no ban role")
                 continue
             role = roles.get(label)
             if role is None:
@@ -98,6 +105,11 @@ class BanRoles:
             for member in list(role.members):
                 if wanted.get(member.id) != label:
                     await self._change(member.remove_roles, role, member)
+
+    def _note(self, key, message):
+        if key not in self.noted:
+            self.noted.add(key)
+            LOG.info(message)
 
     async def _change(self, action, role, member):
         try:
