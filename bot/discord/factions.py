@@ -129,13 +129,14 @@ class FactionView(discord.ui.View):
 async def prepare_faction_picker(bot, guild, channel):
     """Ensure the faction roles exist and post/refresh the picker in the channel."""
     await ensure_faction_roles(bot, guild)
-    embed = discord.Embed(title="Pick your side on Discord", colour=0x5865F2, description=(
-        "Pick a faction below. It colours your name here, brands your **/rank** card and "
+    embed = discord.Embed(title="Faction roles — optional, Discord only", colour=0x5865F2, description=(
+        "⚠️ **THIS DOES NOT LOCK YOUR FACTION IN GAME.** Play US, USSR or FIA on the "
+        "servers whenever you like. This is a Discord role and nothing more.\n\n"
+        "⚠️ **It is completely optional.** Skip it and nothing is closed off to you.\n\n"
+        "If you do want one, it colours your name here, brands your **/rank** card and "
         "gets you into that faction's channels.\n\n"
-        "**This is a Discord role only.** It does not pick your side in game and it does "
-        "not stop you playing whatever faction you like on the servers.\n\n"
-        "**You are locked to it here once you pick** — ask an admin if you need to "
-        "switch.\n\n"
+        "You are locked to it **on Discord** once you pick — ask an admin if you want to "
+        "switch later.\n\n"
         "Welcome to the fight. 🫡"))
     embed.set_footer(text=PICKER_MARKER)
     existing = None

@@ -119,12 +119,13 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
     def test_the_panel_leads_with_the_link_because_that_is_the_gate(self):
         embed = panel_embed()
         self.assertEqual(embed.footer.text, MARKER)
-        for step in ('**1 — Link your Reforger account**', '**2 — Pick your side**',
+        for step in ('**1 — Link your Reforger account**', '**2 — Pick your side (optional)**',
                      '**No faction**'):
             self.assertIn(step, embed.description)
         self.assertIn('opens up the rest of the server', embed.description)
-        # Picking a side here has never changed which faction you play in game.
-        self.assertIn('does not touch what you play in game', embed.description)
+        # Picking a side here has never changed which faction you play in game,
+        # and people kept reading it as if it did.
+        self.assertIn('DOES NOT LOCK YOUR FACTION IN GAME', embed.description)
         self.assertLessEqual(len(embed.description), 4096)
 
     async def test_the_member_role_is_created_when_it_is_missing(self):
