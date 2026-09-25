@@ -29,6 +29,13 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   teamkills and recent games from the bot's logs, their linked Discord account,
   first/last seen, names used, ban history and admin notes. The panel only reads
   the bot's data and never changes it.
+- **Connections** (admins and owners only): every IP a player has connected
+  from, their BattlEye GUID, and every other account that used the same IP, so
+  alts and ban evaders stand out. The live player list flags players with alts,
+  in red when one of them is banned. Search the Players page by IP. Read from
+  each server's console logs: `log_dir` in panel.local.json, or the bot's own
+  `servers.local.json` when the panel runs from the bot's folder. Records not
+  seen for 180 days are deleted.
 - **Console**: raw RCON commands for anything the buttons don't cover.
 - **Audit log**: logins, kicks, bans, restarts, console commands, account changes.
 - **Admins**: create accounts, change roles, reset passwords, disable accounts.

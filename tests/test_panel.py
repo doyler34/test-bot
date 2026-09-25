@@ -3,7 +3,9 @@ import json
 import os
 import re
 import tempfile
+import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from aiohttp.test_utils import TestClient, TestServer
@@ -18,6 +20,7 @@ from bot.storage.combat_store import migrate as migrate_combat, record as record
 from bot.tracking.combat_parser import KillEvent
 from panel import auth, memory
 from panel.alerts import Alerts
+from panel.connections import LogReader
 from panel.oyb_stats import OybStats
 from panel.web import memory_chart
 from deploy.setup_config import render_unit
@@ -60,6 +63,14 @@ class ConfigTests(unittest.TestCase):
         config = self.load({"servers": [{"id": "s1", "commands": {"players": "players"}}]})
         self.assertEqual(config.servers[0].commands["players"], "players")
         self.assertEqual(config.servers[0].commands["kick"], "#kick {player}")
+
+    def test_log_dir_falls_back_to_the_bots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = Path(tmp, "servers.json")
+            bot.write_text(json.dumps([{"id": "s1", "enabled": True, "log_dir": "${TEST_LOGS}/one"}]))
+            with unittest.mock.patch.dict(os.environ, {"SERVERS_CONFIG": str(bot), "TEST_LOGS": "/srv/logs"}):
+                config = self.load({"servers": [{"id": "s1"}, {"id": "s2", "log_dir": "/own"}]})
+        self.assertEqual([s.log_dir for s in config.servers], ["/srv/logs/one", "/own"])
 
     def test_webhook_must_be_discord(self):
         with self.assertRaises(PanelConfigError):
@@ -392,6 +403,77 @@ class CrashTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([e["kind"] for e in self.db.events("server-1")], ["offline", "online", "offline"])
 
 
+GAZ = "d0d8bcaf-e30b-49e2-b32a-9618871f3b89"
+BURD = "d35f38a2-aff1-4155-870c-29407fdf49ea"
+REAL_LOG = """10:16:40.000  ENGINE       : Arma Reforger server
+10:17:12.153  DEFAULT      : BattlEye Server: Adding player identity=0x00000000, name='GazLagom'
+10:17:12.153  DEFAULT      : BattlEye Server: 'Player #0 GazLagom (203.0.113.7:57449) connected'
+10:17:12.153  DEFAULT      : BattlEye Server: 'Player #0 GazLagom - BE GUID: 2ec9f958b59989197d397674c956d316'
+10:17:20.000   NETWORK      : ### Updating player: PlayerId=1, Name=GazLagom, rplIdentity=0x00000000, IdentityId=D0D8BCAF-E30B-49E2-B32A-9618871F3B89
+10:18:29.653  DEFAULT      : BattlEye Server: 'Player #1 Sgt_Burd (198.51.100.4:58289) connected'
+10:18:29.653  DEFAULT      : BattlEye Server: 'Player #1 Sgt_Burd - BE GUID: 1cbf92c878ccc9d6441e2b52aa7e9654'
+10:18:42.155   NETWORK      : ### Updating player: PlayerId=2, Name=Sgt_Burd, rplIdentity=0x00000001, IdentityId=d35f38a2-aff1-4155-870c-29407fdf49ea
+10:46:51.302   NETWORK      : ### Updating player: PlayerId=1, Name=GazLagom, rplIdentity=0x00000000, IdentityId=d0d8bcaf-e30b-49e2-b32a-9618871f3b89
+"""
+
+
+def write_log(root, folder, text):
+    path = Path(root, folder)
+    path.mkdir(parents=True, exist_ok=True)
+    with open(path / "console.log", "a") as fh:
+        fh.write(text)
+
+
+class ConnectionLogTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.reader = LogReader(self.tmp.name)
+        self.db = PanelDB(":memory:")
+        self.addCleanup(self.db.close)
+
+    def scan(self):
+        events, moved = self.reader.scan(self.db.log_positions("server-1"))
+        self.db.add_connections("server-1", events, moved)
+        return events
+
+    def test_real_reforger_lines(self):
+        write_log(self.tmp.name, "logs_2026-09-25_10-16-32", REAL_LOG)
+        events = self.scan()
+        self.assertEqual([(e["name"], e["ip"], e["guid"][:6]) for e in events],
+                         [("GazLagom", "203.0.113.7", "2ec9f9"), ("Sgt_Burd", "198.51.100.4", "1cbf92"), ("GazLagom", "", "")])
+        self.assertEqual(events[0]["identity"], GAZ)
+        start = time.mktime((2026, 9, 25, 10, 17, 20, 0, 0, -1))
+        self.assertEqual(events[0]["at"], int(start))
+        self.assertEqual(self.db.ips(GAZ)[0]["ip"], "203.0.113.7")
+        self.assertEqual(self.db.player(BURD)["name"], "Sgt_Burd")
+
+    def test_reads_only_new_lines_and_whole_lines(self):
+        write_log(self.tmp.name, "logs_2026-09-25_10-16-32", REAL_LOG[:REAL_LOG.index("10:18:29")])
+        self.assertEqual(len(self.scan()), 1)
+        self.assertEqual(self.scan(), [])
+        write_log(self.tmp.name, "logs_2026-09-25_10-16-32", REAL_LOG[REAL_LOG.index("10:18:29"):] + "10:50:00.000  half a li")
+        self.assertEqual([e["name"] for e in self.scan()], ["Sgt_Burd", "GazLagom"])
+
+    def test_same_ip_finds_alts_and_banned_ones(self):
+        log = REAL_LOG.replace("198.51.100.4", "203.0.113.7")
+        write_log(self.tmp.name, "logs_2026-09-25_10-16-32", log)
+        self.scan()
+        self.assertEqual([a["name"] for a in self.db.alts(GAZ)], ["Sgt_Burd"])
+        self.assertEqual(self.db.alt_summary([GAZ]), {GAZ: {"count": 1, "banned": []}})
+        self.db.add_ban(BURD, "Sgt_Burd", "cheating", "boss")
+        self.assertEqual(self.db.alt_summary([GAZ])[GAZ]["banned"], ["Sgt_Burd"])
+        self.assertEqual([r["identity"] for r in self.db.search_ip("203.0.113")], [GAZ, BURD])
+
+    def test_after_midnight(self):
+        write_log(self.tmp.name, "logs_2026-09-25_23-59-00", "23:59:30.000 x\n" + REAL_LOG.replace("10:1", "00:1"))
+        events = self.scan()
+        self.assertEqual(events[0]["at"], int(time.mktime((2026, 9, 26, 0, 17, 20, 0, 0, -1))))
+
+    def test_missing_folder(self):
+        self.assertEqual(LogReader("/nonexistent").scan({}), ([], {}))
+
+
 class RconClientTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.transport, self.fake = await serve(0, "secret", chunk=20, direct=True)
@@ -685,6 +767,37 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
                                               "reason": "team killing", "duration": "3600"})
         title, _, fields = self.manager.alerts.sent[0]
         self.assertEqual((title, fields["By"], fields["Reason"]), ("Banned Sgt Havoc", "boss", "team killing"))
+
+    async def test_connections_are_for_admins(self):
+        with tempfile.TemporaryDirectory() as root:
+            write_log(root, "logs_2026-09-25_10-16-32", REAL_LOG.replace("198.51.100.4", "203.0.113.7"))
+            events, moved = LogReader(root).scan({})
+            self.db.add_connections("server-1", events, moved)
+        await self.login("boss", "boss-password")
+        html = await (await self.client.get(f"/player/{GAZ}")).text()
+        self.assertIn("203.0.113.7", html)
+        self.assertIn("Sgt_Burd", html)
+        html = await (await self.client.get("/players?q=203.0.113")).text()
+        self.assertIn("GazLagom", html)
+        await self.client.post("/logout", data={"csrf": await self.csrf()})
+        await self.login("mod", "mod-password")
+        html = await (await self.client.get(f"/player/{GAZ}")).text()
+        self.assertNotIn("203.0.113.7", html)
+        self.assertNotIn("Connections", html)
+
+    async def test_live_list_flags_alts(self):
+        self.fake.players.append(("5", "Sgt_Burd", BURD))
+        self.fake.players.append(("6", "GazLagom", GAZ))
+        with tempfile.TemporaryDirectory() as root:
+            write_log(root, "logs_2026-09-25_10-16-32", REAL_LOG.replace("198.51.100.4", "203.0.113.7"))
+            events, moved = LogReader(root).scan({})
+            self.db.add_connections("server-1", events, moved)
+        self.db.add_ban(BURD, "Sgt_Burd", "cheating", "boss")
+        await self.manager.refresh_players(self.manager.state("server-1"))
+        await self.login("boss", "boss-password")
+        html = await (await self.client.get("/server/server-1/players.part")).text()
+        self.assertIn("Banned alt", html)
+        self.assertIn("1 alt", html)
 
     async def test_console_is_audited(self):
         await self.login("boss", "boss-password")

@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from pathlib import Path
 
@@ -281,12 +282,18 @@ async def server_page(request):
         "chart": memory_chart(db.memory(state.config.id, t - 86400), t - 86400, t, state.fresh),
     }
     return render(request, "server.html", s=server_view(state), actions=actions,
-                  labels=POWER_LABELS, recent=recent, health=health)
+                  labels=POWER_LABELS, recent=recent, health=health, alts=alt_flags(request, state))
+
+
+def alt_flags(request, state):
+    if not auth.can(request[USER]["role"], "ips"):
+        return {}
+    return request.app[DB].alt_summary([p["identity"] for p in state.players if p["identity"]])
 
 
 async def players_part(request):
     state = server_or_404(request, request.match_info["id"])
-    return render(request, "_players.html", s=server_view(state))
+    return render(request, "_players.html", s=server_view(state), alts=alt_flags(request, state))
 
 
 async def memory_part(request):
@@ -407,6 +414,9 @@ async def remove_ban(request):
 async def players_page(request):
     q = clean(request.query.get("q", ""), 64)
     rows = [dict(r) for r in request.app[DB].search_players(q, limit=50)]
+    if q and re.fullmatch(r"[0-9a-fA-F.:]{3,}", q) and auth.can(request[USER]["role"], "ips"):
+        seen = {r["identity"] for r in rows}
+        rows += [dict(r) for r in request.app[DB].search_ip(q) if r["identity"] not in seen]
     if q:
         seen = {r["identity"] for r in rows}
         rows += [dict(r, last_seen=0, last_server="") for r in request.app[STATS].search(q) if r["identity"] not in seen]
@@ -421,6 +431,8 @@ async def player_page(request):
     bans = [b for b in db.all("SELECT * FROM bans WHERE identity = ? ORDER BY id DESC", identity)]
     return render(request, "player.html", identity=identity, player=db.player(identity),
                   stats=request.app[STATS].player(identity), stats_here=request.app[STATS].available,
+                  ips=db.ips(identity) if auth.can(request[USER]["role"], "ips") else [],
+                  alts=db.alts(identity) if auth.can(request[USER]["role"], "ips") else [],
                   names=db.player_names(identity), notes=db.notes(identity), bans=bans,
                   active=db.active_ban(identity), durations=DURATIONS)
 

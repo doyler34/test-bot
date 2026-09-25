@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from .config import PanelConfig, ServerConfig
 from . import alerts as alert_colours, memory
 from .alerts import Alerts
+from .connections import LogReader
 from .db import PanelDB, now
 from .rcon import RconClient, RconError
 
@@ -85,6 +86,9 @@ class ServerManager:
                 state.error = "RCON is not set up in panel.local.json"
         if any(s.config.service for s in self.states.values()):
             self._tasks.append(asyncio.create_task(self._watch_memory()))
+        for state in self.states.values():
+            if state.config.log_dir:
+                self._tasks.append(asyncio.create_task(self._watch_logs(state)))
 
     async def stop(self):
         # On 3.11 a cancel that lands as a wait_for finishes can be swallowed,
@@ -128,6 +132,25 @@ class ServerManager:
                     except Exception:
                         log.exception("memory check failed for %s", state.config.id)
             await asyncio.sleep(self.config.poll_seconds)
+
+    async def _watch_logs(self, state: ServerState):
+        reader = LogReader(state.config.log_dir)
+        pruned = 0
+        while not self._stopping:
+            try:
+                await self.read_logs(state, reader)
+                if now() - pruned > 3600:
+                    pruned = now()
+                    self.db.prune_connections()
+            except Exception:
+                log.exception("reading logs failed for %s", state.config.id)
+            await asyncio.sleep(self.config.poll_seconds)
+
+    async def read_logs(self, state: ServerState, reader: LogReader):
+        positions = self.db.log_positions(state.config.id)
+        events, moved = await asyncio.to_thread(reader.scan, positions)
+        if moved:
+            self.db.add_connections(state.config.id, events, moved)
 
     async def refresh_memory(self, state: ServerState):
         sample = await self.sampler(state.config.service)

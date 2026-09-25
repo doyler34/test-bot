@@ -12,6 +12,7 @@ PERMISSIONS = {
     "kick": "moderator",
     "notes": "moderator",
     "ban": "admin",
+    "ips": "admin",
     "power": "admin",
     "audit": "admin",
     "console": "owner",

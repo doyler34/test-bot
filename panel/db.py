@@ -76,6 +76,24 @@ CREATE TABLE IF NOT EXISTS memory_samples (
     rss INTEGER NOT NULL,
     PRIMARY KEY (server, at)
 );
+CREATE TABLE IF NOT EXISTS connections (
+    identity TEXT NOT NULL,
+    ip TEXT NOT NULL,
+    guid TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL,
+    server TEXT NOT NULL,
+    first_seen INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL,
+    times INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (identity, ip)
+);
+CREATE INDEX IF NOT EXISTS connections_ip ON connections(ip);
+CREATE TABLE IF NOT EXISTS log_positions (
+    server TEXT NOT NULL,
+    path TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    PRIMARY KEY (server, path)
+);
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY,
     identity TEXT NOT NULL,
@@ -201,18 +219,21 @@ class PanelDB:
 
     # players
 
-    def saw_player(self, identity, name, server_id):
-        t = now()
+    def saw_player(self, identity, name, server_id, at=None, commit=True):
+        t = at or now()
         self.db.execute(
             "INSERT INTO players (identity, name, first_seen, last_seen, last_server) VALUES (?, ?, ?, ?, ?)"
-            " ON CONFLICT(identity) DO UPDATE SET name = excluded.name, last_seen = excluded.last_seen,"
-            " last_server = excluded.last_server",
+            " ON CONFLICT(identity) DO UPDATE SET"
+            " name = CASE WHEN excluded.last_seen >= last_seen THEN excluded.name ELSE name END,"
+            " last_server = CASE WHEN excluded.last_seen >= last_seen THEN excluded.last_server ELSE last_server END,"
+            " first_seen = MIN(first_seen, excluded.first_seen), last_seen = MAX(last_seen, excluded.last_seen)",
             (identity, name, t, t, server_id))
         self.db.execute(
             "INSERT INTO player_names (identity, name, last_seen) VALUES (?, ?, ?)"
-            " ON CONFLICT(identity, name) DO UPDATE SET last_seen = excluded.last_seen",
+            " ON CONFLICT(identity, name) DO UPDATE SET last_seen = MAX(last_seen, excluded.last_seen)",
             (identity, name, t))
-        self.db.commit()
+        if commit:
+            self.db.commit()
 
     def player(self, identity: str):
         return self.one("SELECT * FROM players WHERE identity = ?", identity)
@@ -268,6 +289,59 @@ class PanelDB:
 
     def memory(self, server, since):
         return self.all("SELECT at, rss FROM memory_samples WHERE server = ? AND at >= ? ORDER BY at", server, since)
+
+    # connections
+
+    def add_connections(self, server, events, positions):
+        for e in events:
+            self.saw_player(e["identity"], e["name"], server, at=e["at"], commit=False)
+            if e["ip"]:
+                self.db.execute(
+                    "INSERT INTO connections (identity, ip, guid, name, server, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    " ON CONFLICT(identity, ip) DO UPDATE SET times = times + 1,"
+                    " guid = CASE WHEN excluded.guid != '' THEN excluded.guid ELSE guid END,"
+                    " name = CASE WHEN excluded.last_seen >= last_seen THEN excluded.name ELSE name END,"
+                    " server = CASE WHEN excluded.last_seen >= last_seen THEN excluded.server ELSE server END,"
+                    " first_seen = MIN(first_seen, excluded.first_seen), last_seen = MAX(last_seen, excluded.last_seen)",
+                    (e["identity"], e["ip"], e["guid"], e["name"], server, e["at"], e["at"]))
+        for path, position in positions.items():
+            self.db.execute("INSERT OR REPLACE INTO log_positions (server, path, position) VALUES (?, ?, ?)",
+                            (server, path, position))
+        self.db.commit()
+
+    def log_positions(self, server) -> dict[str, int]:
+        return {r["path"]: r["position"] for r in self.all("SELECT path, position FROM log_positions WHERE server = ?", server)}
+
+    def ips(self, identity):
+        return self.all("SELECT * FROM connections WHERE identity = ? ORDER BY last_seen DESC", identity)
+
+    def alts(self, identity):
+        """Other accounts that connected from any address this one used."""
+        return self.all(
+            "SELECT other.identity, COALESCE(p.name, other.name) AS name, MAX(other.last_seen) AS last_seen,"
+            " GROUP_CONCAT(DISTINCT other.ip) AS shared,"
+            " EXISTS (SELECT 1 FROM bans b WHERE b.identity = other.identity AND b.removed_at IS NULL"
+            "   AND (b.expires_at IS NULL OR b.expires_at > ?)) AS banned"
+            " FROM connections mine JOIN connections other ON other.ip = mine.ip AND other.identity != mine.identity"
+            " LEFT JOIN players p ON p.identity = other.identity"
+            " WHERE mine.identity = ? GROUP BY other.identity ORDER BY last_seen DESC", now(), identity)
+
+    def alt_summary(self, identities) -> dict[str, dict]:
+        """For the live list: how many other accounts share an address, and whether one is banned."""
+        result = {}
+        for identity in identities:
+            rows = self.alts(identity)
+            if rows:
+                result[identity] = {"count": len(rows), "banned": [r["name"] for r in rows if r["banned"]]}
+        return result
+
+    def search_ip(self, text, limit=100):
+        return self.all(
+            "SELECT p.* FROM players p WHERE p.identity IN (SELECT identity FROM connections WHERE ip LIKE ?)"
+            " ORDER BY p.last_seen DESC LIMIT ?", f"{text}%", limit)
+
+    def prune_connections(self, days=180):
+        self.write("DELETE FROM connections WHERE last_seen < ?", now() - days * 86400)
 
     # notes
 

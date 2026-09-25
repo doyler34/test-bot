@@ -4,7 +4,7 @@
 <p class="kicker">Everyone the panel has seen</p>
 <h1>Players</h1>
 <form class="search" method="get" action="/players">
-  <input name="q" value="{{ q }}" placeholder="Name, old name or identity ID" autofocus>
+  <input name="q" value="{{ q }}" placeholder="Name, old name, identity ID{{ ' or IP' if can('ips') }}" autofocus>
   <button>Search</button>
 </form>
 {% if rows %}

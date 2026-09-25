@@ -79,7 +79,7 @@ cat > "$PANEL/panel.local.json" <<EOF
   "port": 8080,
   "cookie_secure": false,
   "servers": [
-    {"id": "server-1", "name": "OYB Panel Test", "rcon_port": 19999, "rcon_password": "$RCON_PASS", "service": "reforger-test"}
+    {"id": "server-1", "name": "OYB Panel Test", "rcon_port": 19999, "rcon_password": "$RCON_PASS", "service": "reforger-test", "log_dir": "$GAME/profile/logs"}
   ]
 }
 EOF

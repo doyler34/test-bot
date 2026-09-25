@@ -6,7 +6,11 @@
   {% set st = oyb(p.identity) if p.identity else none %}
   <tr>
     <td>{{ p.id }}</td>
-    <td>{% if p.identity %}<a href="/player/{{ p.identity }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}</td>
+    <td>{% if p.identity %}<a href="/player/{{ p.identity }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}
+      {% set a = alts.get(p.identity) if alts and p.identity else none %}
+      {% if a and a.banned %}<span class="pill down" title="Shares an IP with {{ a.banned|join(', ') }}">Banned alt</span>
+      {% elif a %}<span class="pill alt" title="{{ a.count }} other account{{ 's' if a.count > 1 }} from the same IP">{{ a.count }} alt{{ 's' if a.count > 1 }}</span>{% endif %}
+    </td>
     <td class="num">{{ st.playtime|span if st else "—" }}</td>
     <td class="wide mono">{{ p.identity or "—" }}</td>
     <td class="actions">
