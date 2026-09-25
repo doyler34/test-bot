@@ -227,13 +227,13 @@ def panel_embed():
         'Name yours and unclaimed? You are in straight away. Otherwise an admin checks it.\n\n'
         'Linking opens up the rest of the server and starts your kills, deaths and playtime '
         'counting towards your rank.\n\n'
-        '**2 — Pick your side**\n'
-        '**US**, **USSR** or **FIA**. A Discord role and nothing else: colours your name, '
-        'opens that side\'s channels, drops **OYB Renegade**.\n\n'
-        'It does not touch what you play in game. Run whatever faction you like on the '
-        'servers.\n\n'
-        'You cannot swap it yourself after, so go with your mates. Not fussed? **No '
-        'faction**.\n\n'
+        '**2 — Pick your side (optional)**\n'
+        '⚠️ **THIS DOES NOT LOCK YOUR FACTION IN GAME.** Play US, USSR or FIA on the '
+        'servers whenever you like. It is a Discord role and nothing else, and you can '
+        'skip it entirely.\n\n'
+        'If you want one: it colours your name, opens that side\'s channels and drops '
+        '**OYB Renegade**. You cannot swap it yourself on Discord after, so go with your '
+        'mates. Not fussed? Press **No faction**.\n\n'
         'Stuck? **My progress** shows what you are missing.')
     ).set_footer(text=MARKER)
 
