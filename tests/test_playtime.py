@@ -55,6 +55,20 @@ class PlaytimeTests(unittest.TestCase):
         self.tracker.tick()
         self.assertEqual(self.seconds(), 60)
 
+    def test_players_from_older_logs_can_link(self):
+        from bot.discord.join_oyb import find_identity
+        self.append(join("13:00:00", "Current") + heartbeat("13:01:00"))
+        old = self.root / "logs_2026-09-01_10-00-00" / "console.log"
+        old.parent.mkdir()
+        other = "99999999-8888-4777-8666-555555555555"
+        old.write_text(join("10:05:00", "Oldtimer").replace(UID, other.upper()), encoding="utf-8")
+        before = self.seconds()
+        self.tracker.close()
+        self.tracker = Tracker(self.root, self.database)
+        self.assertEqual(find_identity(self.database, "oldtimer"), other)
+        self.assertEqual(self.seconds(), before)
+        self.assertEqual(find_identity(self.database, "Current"), UID)
+
     def test_duplicate_mapping(self):
         self.append(join("13:00:00") + join("13:00:10") + heartbeat("13:00:30"))
         self.assertEqual(self.seconds(), 30)

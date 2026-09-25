@@ -10,7 +10,8 @@ saved totals. Reporting only reads the database; it does not start a second
 tracker. No Discord accounts, roles, ranks, or XP are changed in this test.
 
 On first activation, the current console.log is imported. Older server runs
-are excluded. After activation, later log folders are processed, including
+add no time, but every start reads the names and identity IDs from all logs
+still on disk, so anyone who has ever joined can link their account. After activation, later log folders are processed, including
 ones created during bot downtime, as long as those files are still present.
 The parser requires the HH:MM:SS.mmm timestamps used by the existing timer.
 It uses the observed Updating player identity mapping, RPL disconnect, and

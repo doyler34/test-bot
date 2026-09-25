@@ -42,6 +42,31 @@ class Tracker:
                 PRIMARY KEY(server, path));
         ''')
         migrate_time(self.db)
+        self.remember_names()
+
+    def remember_names(self):
+        """Anyone who has ever joined may link, not just those since tracking
+        began, so older logs still on disk contribute names with no time."""
+        seen = {}
+        paths = sorted(self.root.glob("logs_*/console.log"))
+        if (self.root / "console.log").is_file():
+            paths.append(self.root / "console.log")
+        for path in paths:
+            try:
+                with open(path, "rb") as fh:
+                    for raw in fh:
+                        if b"### Updating player" in raw:
+                            join = JOIN.search(raw.decode("utf-8", errors="replace"))
+                            if join:
+                                seen[join.group(3).lower()] = join.group(1)
+            except OSError:
+                continue
+        if seen:
+            with self.db:
+                self.db.executemany(
+                    "INSERT INTO totals(server,identity,name,seconds) VALUES (?,?,?,0) "
+                    "ON CONFLICT(server,identity) DO NOTHING",
+                    [(self.server, identity, name) for identity, name in seen.items()])
 
     def close(self):
         self.db.close()
