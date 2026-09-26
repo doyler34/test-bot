@@ -476,10 +476,18 @@ async def player_page(request):
     identity = request.match_info["identity"].lower()
     if not valid_identity(identity):
         raise web.HTTPNotFound(text="No such player.")
-    db = request.app[DB]
+    db, oyb = request.app[DB], request.app[STATS]
     bans = [b for b in db.all("SELECT * FROM bans WHERE identity = ? ORDER BY id DESC", identity)]
+    stats = oyb.player(identity)
+    linked_via = None
+    if stats and not stats["discord"]:
+        for alt in db.alts(identity):
+            other = oyb.player(alt["identity"])
+            if other and other["discord"]:
+                linked_via = {"identity": alt["identity"], "name": alt["name"], "discord": other["discord"]}
+                break
     return render(request, "player.html", identity=identity, player=db.player(identity),
-                  stats=request.app[STATS].player(identity), stats_here=request.app[STATS].available,
+                  stats=stats, stats_here=oyb.available, linked_via=linked_via,
                   ips=db.ips(identity) if auth.can(request[USER]["role"], "ips") else [],
                   banned_ips=db.banned_ips() if auth.can(request[USER]["role"], "ips") else set(),
                   alts=db.alts(identity) if auth.can(request[USER]["role"], "ips") else [],

@@ -8,7 +8,7 @@
     <div class="stat"><b>{{ "%.2f"|format(stats.kills / stats.deaths if stats.deaths else stats.kills) }}</b><span>K/D</span></div>
     <div class="stat"><b class="{{ 'warn' if stats.teamkills else '' }}">{{ stats.teamkills }}</b><span>Teamkills</span></div>
   </div>
-  <p class="muted">Linked Discord: {% if stats.discord %}<a class="mono" href="https://discord.com/users/{{ stats.discord }}" rel="noopener noreferrer" target="_blank">{{ stats.discord }}</a>{% else %}not linked{% endif %}</p>
+  <p class="muted">Linked Discord: {% if stats.discord %}<a class="mono" href="https://discord.com/users/{{ stats.discord }}" rel="noopener noreferrer" target="_blank">{{ stats.discord }}</a>{% elif linked_via %}not on this account, but their other account <a href="/player/{{ linked_via.identity }}">{{ linked_via.name }}</a> (same IP) is linked to <a class="mono" href="https://discord.com/users/{{ linked_via.discord }}" rel="noopener noreferrer" target="_blank">{{ linked_via.discord }}</a>{% else %}not linked{% endif %}</p>
   {% if stats.servers|length > 1 %}
   <h3>Time per server</h3>
   {% for row in stats.servers %}<div class="event"><b>{{ row.server }}</b><span>{{ row.seconds|span }}</span></div>{% endfor %}

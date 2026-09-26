@@ -796,6 +796,19 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             html = await (await self.client.get("/players?q=havoc")).text()
             self.assertIn("Sgt Havoc", html)
 
+    async def test_other_account_shows_its_discord_link(self):
+        with tempfile.TemporaryDirectory() as root:
+            bot_data(root)
+            with sqlite3.connect(Path(root, "playtime.sqlite3")) as db:
+                db.execute("INSERT INTO totals VALUES ('server-1', ?, 'Sgt Havoc', 60)", (ENEMY,))
+            self.client.app[STATS_KEY].data = Path(root)
+            self.connect(HAVOC, "Sgt Havoc", "203.0.113.7")
+            self.connect(ENEMY, "Sgt Havoc", "203.0.113.7")
+            await self.login("boss", "boss-password")
+            html = await (await self.client.get(f"/player/{ENEMY}")).text()
+            self.assertIn("their other account", html)
+            self.assertIn("https://discord.com/users/42", html)
+
     async def test_server_page_has_health(self):
         await self.login("boss", "boss-password")
         html = await (await self.client.get("/server/server-1")).text()
