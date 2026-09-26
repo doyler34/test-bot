@@ -1,10 +1,13 @@
 """A role naming the ban length on linked members while an OYB Control ban is
-active, taken away when the ban ends. The panel owns the bans; this only reads
-its database, and leaves every role alone when that database can't be read."""
+active, taken away when the ban ends, and a DM telling them why when the ban
+is made. The panel owns the bans; this only reads its database, and leaves
+every role alone when that database can't be read."""
 import asyncio
 from contextlib import closing
+import json
 import logging
 import os
+import re
 from pathlib import Path
 import sqlite3
 import time
@@ -17,6 +20,10 @@ LENGTHS = ((3600, "1 hour"), (86400, "1 day"), (604800, "7 days"), (2592000, "30
 INTERVAL = 60
 RECHECK_SECONDS = 3600
 ENDED_WINDOW = 7 * 86400
+# Only bans made this recently get a DM, so turning the bot on doesn't message
+# everyone banned in the past.
+DM_WINDOW = 3600
+SAME_IP = re.compile(r"\s*\(same IP as [^)]*\)$")
 
 
 def length_label(created, expires):
@@ -49,6 +56,37 @@ def read_bans(path, ended_since):
     return active, {identity for (identity,) in ended} - set(active)
 
 
+def new_bans(path, since):
+    """Active bans made since `since`: (id, identity, name, reason, created, expires)."""
+    if not Path(path).is_file():
+        return None
+    try:
+        with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
+            return db.execute("SELECT id, identity, name, reason, created_at, expires_at FROM bans"
+                              " WHERE created_at >= ? AND removed_at IS NULL"
+                              " AND (expires_at IS NULL OR expires_at > ?) ORDER BY id",
+                              (since, int(time.time()))).fetchall()
+    except sqlite3.Error:
+        return None
+
+
+def ban_message(guild_name, name, reason, created, expires, appeal=""):
+    """The DM a linked player gets when they're banned."""
+    label = length_label(created, expires)
+    length = "permanently" if label == "Permanent" else f"for **{label}**"
+    who = f"Your account **{discord.utils.escape_markdown(name)}**" if name else "Your account"
+    embed = discord.Embed(title=f"You've been banned from {guild_name}", colour=0x6E2F29,
+                          description=f"{who} is banned from all our servers {length}.")
+    # An IP ban's reason names the other account on the IP; that may be
+    # someone else in their house, so it stays out of the DM.
+    embed.add_field(name="Reason", value=SAME_IP.sub("", reason or "")[:1000] or "Not given", inline=False)
+    embed.add_field(name="Ends", value=f"<t:{int(expires)}:F> (<t:{int(expires)}:R>)" if expires else "Never",
+                    inline=False)
+    if appeal:
+        embed.add_field(name="Appeal", value=appeal[:1000], inline=False)
+    return embed
+
+
 def active_bans(path):
     read = read_bans(path, int(time.time()))
     return read[0] if read else None
@@ -75,6 +113,9 @@ class BanRoles:
         self.applied: dict[int, str] = {}
         self.cleared: set[int] = set()
         self.checked = 0
+        self.appeal = os.getenv("BAN_APPEAL", "").strip()
+        self.dm_state = Path(os.getenv("BAN_DM_STATE", "data/ban_dms.json"))
+        self.messaged = self._load_messaged()
 
     async def run(self):
         while not self.bot.is_closed():
@@ -88,6 +129,7 @@ class BanRoles:
         guild = self.bot.get_guild(self.bot.config.guild_id)
         if guild is None:
             return
+        await self.send_dms(guild)
         if not guild.me.guild_permissions.manage_roles:
             self._note("perm", "Ban roles need the bot to have Manage Roles")
             return
@@ -142,6 +184,54 @@ class BanRoles:
                 done = await self._change(member.remove_roles, role, member) and done
             if done:
                 self.cleared.add(member_id)
+
+    async def send_dms(self, guild):
+        """Tells each linked player once, when a ban is made, why and for how long."""
+        rows = await asyncio.to_thread(new_bans, self.path, int(time.time()) - DM_WINDOW)
+        rows = [r for r in rows or [] if r[0] not in self.messaged]
+        if not rows:
+            return
+        # One DM per person, about their longest ban, however many accounts it covered.
+        people = {}
+        for row in rows:
+            member_id = self.bot.account_links.owner(guild.id, row[1])
+            if not member_id:
+                self.messaged.add(row[0])
+                continue
+            best = people.get(member_id)
+            if best is None or rank(length_label(row[4], row[5])) > rank(length_label(best[0][4], best[0][5])):
+                people[member_id] = [row] + (best or [])
+            else:
+                best.append(row)
+        for member_id, bans in people.items():
+            _, _, name, reason, created, expires = bans[0]
+            member = await self._member(guild, member_id)
+            if member is None:
+                self.messaged.update(b[0] for b in bans)
+                continue
+            try:
+                await member.send(embed=ban_message(guild.name, name, reason, created, expires, self.appeal))
+                LOG.info("Sent ban DM to %s", member_id)
+            except discord.Forbidden:
+                LOG.info("Couldn't DM %s about their ban; their DMs are closed", member_id)
+            except discord.HTTPException:
+                LOG.warning("Ban DM to %s failed; will try again", member_id)
+                continue
+            self.messaged.update(b[0] for b in bans)
+        self._save_messaged()
+
+    def _load_messaged(self):
+        try:
+            return set(json.loads(self.dm_state.read_text()))
+        except (OSError, ValueError, TypeError):
+            return set()
+
+    def _save_messaged(self):
+        try:
+            self.dm_state.parent.mkdir(parents=True, exist_ok=True)
+            self.dm_state.write_text(json.dumps(sorted(self.messaged)[-1000:]))
+        except OSError:
+            LOG.warning("Couldn't save %s", self.dm_state)
 
     async def _member(self, guild, member_id):
         member = guild.get_member(member_id)

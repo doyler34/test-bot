@@ -183,7 +183,15 @@ then restart the panel. Leave it empty to turn alerts off.
 While a player is banned in the panel, the bot gives their linked Discord
 account a role naming the length (`Banned · 1 hour`, `Banned · 1 day`,
 `Banned · 7 days`, `Banned · 30 days` or `Banned · Permanent`) and removes it
-when the ban ends or is lifted. It checks once a minute. The bot makes the
+when the ban ends or is lifted. It checks once a minute.
+
+When the ban is made, the bot also DMs them: banned from all servers, for how
+long, the reason, when it ends, and `BAN_APPEAL` from the bot's `.env` if set
+(e.g. `BAN_APPEAL=Appeal in #ban-appeals`). An IP ban's "same IP as ..." note
+is left out, since the other account may be someone else in their house. One
+DM per person however many of their accounts were banned, sent once; bans
+from before the bot was running aren't messaged. Players with DMs closed just
+don't get one. The bot makes the
 roles itself the first time it needs them; they carry no permissions.
 
 It reads the panel's `data/panel.sqlite3`, which is where it already is when
