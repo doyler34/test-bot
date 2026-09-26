@@ -1,0 +1,45 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+{% if not can("ban") %}
+<p class="tip">Banning needs an admin. If someone needs banning, kick them, leave a note on their player page saying what happened, and ask an admin. This page shows what they'll do.</p>
+{% endif %}
+<p>A ban works on every server at once. If the player is on, they're kicked straight away. A server that's offline picks the ban up as soon as it's back.</p>
+
+<h2>Banning a player</h2>
+<ol class="steps">
+  <li>Click <b>Bans</b> in the top menu.</li>
+  <li>In <b>Player</b>, start typing their in-game name. A list drops down as you type: players who are on right now come first, and it shows their other names and when they were last seen.</li>
+  <li>Click the right player. Their ID fills in under the box, so you know you've got the right one. You can paste an identity ID instead of typing a name.</li>
+  <li>Pick a <b>Length</b>: 1 hour, 1 day, 7 days, 30 days or permanent.</li>
+  <li>Write a <b>Reason</b>. Keep it short and clear: other admins will read it later.</li>
+  <li>Press <b>Ban on all servers</b>.</li>
+</ol>
+{{ shot("ban-typing", "Typing \"ro\" lists both of Rook's accounts and which server each is on.") }}
+{{ shot("ban-form", "Ready to ban, with the IP ban option outlined.") }}
+<p class="tip">You can also press <b>Ban</b> on a player's row in the server's player list, or on their player page. That fills the form in for you.</p>
+
+<h2>IP bans</h2>
+<p>Tick <b>IP ban</b> for cheaters and ban evaders. It also:</p>
+<ul>
+  <li>bans every other account seen on the same IPs: their PC, PlayStation and Xbox accounts, and any alts, with the same length;</li>
+  <li>bans and kicks any <b>new</b> account that joins from one of those IPs later.</li>
+</ul>
+<p>In the demo, the banned cheater came back on a new account called Dreadful, from the same IP. The panel banned and kicked him on its own:</p>
+{{ shot("server-overview", "The live feed's top row: Dreadful IP banned automatically when he joined.") }}
+<p class="tip danger">People in the same house share an IP, so an IP ban hits them too. Leave it unticked unless you mean it.</p>
+
+<h2>The ban list</h2>
+<p>Under the form is every active ban: who, why, how long is left, who did it, and whether each server has it yet (green) or is still waiting (red). <b>IP</b> marks IP bans. Click <b>Show expired and removed</b> for old ones.</p>
+{{ shot("bans-list", "Active bans.") }}
+
+<h2>Discord role</h2>
+<p>If the banned player has linked their Discord, the bot gives them a <b>Banned · length</b> role (e.g. "Banned · 7 days"), so everyone in the Discord can see it. It's taken off when the ban ends or is lifted.</p>
+
+<h2>Unbanning</h2>
+<ol class="steps">
+  <li>On the <b>Bans</b> page, press <b>Unban</b> next to the ban, and confirm.</li>
+  <li>It's lifted on every server.</li>
+</ol>
+<p>An IP ban is undone one account at a time: unban each of their accounts.</p>
+{% endblock %}

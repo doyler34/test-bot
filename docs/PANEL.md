@@ -100,6 +100,11 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   each server's console logs: `log_dir` in panel.local.json, or the bot's own
   `servers.local.json` when the panel runs from the bot's folder. Records not
   seen for 180 days are deleted.
+- **Guide**: a how-to for staff with screenshots, one page per topic, linked
+  from the welcome box on the home page. Each person only sees the pages for
+  what their role can do. The screenshots come from a demo panel full of
+  made-up players: run `.venv/bin/python dev/guide_demo.py`, then
+  `node dev/guide_shots.js` to retake them after the look changes.
 - **Console**: raw RCON commands for anything the buttons don't cover.
 - **Audit log**: logins, kicks, bans, restarts, console commands, account changes.
 - **Admins**: create accounts, change roles, reset passwords, disable accounts.

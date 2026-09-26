@@ -1,0 +1,21 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>Owners manage who can log in, from <b>Admins</b> in the top menu.</p>
+{{ shot("users", "The Admins page.") }}
+
+<h2>Adding someone</h2>
+<ol class="steps">
+  <li>Under <b>New admin</b>, type their username and pick a role: moderator, admin or owner.</li>
+  <li>Press <b>Create account</b>. The panel shows a temporary password <b>once</b>.</li>
+  <li>Send them the panel's address, their username and that password. They'll pick their own password the first time they log in.</li>
+</ol>
+
+<h2>Changing someone</h2>
+<ul>
+  <li><b>Role</b>: pick a new one from the list next to their name. It changes straight away.</li>
+  <li><b>Reset password</b>: gives them a new temporary password, shown once. Use it when someone's locked out.</li>
+  <li><b>Disable</b>: stops them logging in, without losing their history in the audit log.</li>
+</ul>
+<p class="tip">Give people the lowest role that does the job. Start new staff as moderators.</p>
+{% endblock %}

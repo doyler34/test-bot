@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }} · Guide · OYB Control{% endblock %}
+{% block body %}
+<div class="guide-layout">
+  <aside class="guide-side">
+    <a class="kicker" href="/guide">Guide</a>
+    <ol>
+      {% for p in pages %}
+      <li><a href="/guide/{{ p.slug }}" {% if p.slug == page.slug %}class="on"{% endif %}>{{ p.title }}</a></li>
+      {% endfor %}
+    </ol>
+  </aside>
+  <article class="guide">
+    <p class="kicker">Guide · {{ "%02d"|format(number) }}</p>
+    <h1>{{ page.title }}</h1>
+    {% block guide %}{% endblock %}
+    <nav class="guide-next">
+      {% if prev %}<a class="card" href="/guide/{{ prev.slug }}"><span class="muted">← Previous</span><b>{{ prev.title }}</b></a>{% else %}<span></span>{% endif %}
+      {% if next %}<a class="card next" href="/guide/{{ next.slug }}"><span class="muted">Next →</span><b>{{ next.title }}</b></a>{% endif %}
+    </nav>
+  </article>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>A kick removes a player from the server right now. They can rejoin straight away, so use it for a warning or to sort out someone who's stuck. For anything more, ban.</p>
+<ol class="steps">
+  <li>Open the server, on the <b>Overview</b> tab.</li>
+  <li>Find the player in the <b>Players</b> box.</li>
+  <li>Press <b>Kick</b> on their row, and confirm.</li>
+  <li>Leave a note on their player page saying why.</li>
+</ol>
+{{ shot("players-pane", "The Kick button (outlined) on a player's row.") }}
+<p>The kick shows in the live feed and the audit log with your name, and is posted to the staff Discord channel.</p>
+{% endblock %}

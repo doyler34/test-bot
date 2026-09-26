@@ -1,0 +1,19 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<h2>Audit log</h2>
+<p>Every action in the panel is recorded here: logins (and failed ones), kicks, bans, restarts, console commands, log downloads and account changes, with who, when, and the details. Search it to find out who did something.</p>
+{{ shot("audit", "The audit log.") }}
+
+{% if can("console") %}
+<h2>Console (owners)</h2>
+<p>Sends raw RCON commands to a server, for anything the buttons don't cover.</p>
+<ol class="steps">
+  <li>Click <b>Console</b> in the top menu.</li>
+  <li>Pick the server, type the command, and send it.</li>
+  <li>The server's reply shows underneath.</li>
+</ol>
+{{ shot("console", "The console.") }}
+<p class="tip danger">Everything sent is in the audit log. Use the buttons where there's one for the job: they check and record things the console doesn't.</p>
+{% endif %}
+{% endblock %}

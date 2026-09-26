@@ -297,8 +297,40 @@ async def dashboard(request):
     return render(request, "dashboard.html", cards=states, welcome=welcome)
 
 
+GUIDE = [
+    ("getting-started", "Getting started", "Logging in, the home page, roles and your password.", None),
+    ("servers", "Running a server", "The server page, its controls, the summary strip and tabs.", None),
+    ("live-feed", "The live feed", "Everything happening in game as it happens, and how to filter it.", None),
+    ("cheaters", "Spotting cheaters", "What the Sus flags mean and what to do about one.", None),
+    ("players", "Looking players up", "Searching, player pages, alt accounts and notes.", None),
+    ("kicking", "Kicking", "Getting someone off a server for now.", None),
+    ("banning", "Banning", "Bans on every server, IP bans and unbanning.", None),
+    ("history", "Past games", "Pulling up any day's games, and downloading or uploading logs.", None),
+    ("health", "Health and memory", "Uptime, crashes, and when a server needs a full restart.", None),
+    ("discord", "Discord", "What gets posted to the staff channel, and linked accounts.", None),
+    ("console-audit", "Console and audit log", "Raw RCON commands, and the record of who did what.", "audit"),
+    ("admins", "Admin accounts", "Making accounts, roles and password resets.", "users"),
+]
+
+
+def guide_pages(request):
+    return [{"slug": slug, "title": title, "summary": summary} for slug, title, summary, need in GUIDE
+            if need is None or auth.can(request[USER]["role"], need)]
+
+
 async def guide(request):
-    return render(request, "guide.html")
+    return render(request, "guide.html", pages=guide_pages(request))
+
+
+async def guide_page(request):
+    pages = guide_pages(request)
+    slugs = [p["slug"] for p in pages]
+    slug = request.match_info["page"]
+    if slug not in slugs:
+        raise web.HTTPNotFound(text="No such guide page.")
+    at = slugs.index(slug)
+    return render(request, f"guide/{slug}.html", pages=pages, page=pages[at], number=at + 1,
+                  prev=pages[at - 1] if at else None, next=pages[at + 1] if at + 1 < len(pages) else None)
 
 
 async def dashboard_part(request):
@@ -812,6 +844,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/", dashboard)
     app.router.add_get("/cards.part", dashboard_part)
     app.router.add_get("/guide", guide)
+    app.router.add_get("/guide/{page}", guide_page)
     app.router.add_get("/api/status", status_api)
     app.router.add_get("/server/{id}", server_page)
     app.router.add_get("/server/{id}/players.part", players_part)

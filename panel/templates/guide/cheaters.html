@@ -1,0 +1,36 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>OYB Control reads the server logs as they're written and watches for the patterns we found when we caught a cheater spawning explosions on our servers. When something trips a check it shows up as a red <b>Sus</b> row in the live feed, and gets posted to the staff Discord channel.</p>
+{{ shot("feed-sus", "Two Sus flags: a teamkill spree, and explosions credited to AI with the player who'd just joined.") }}
+
+<h2>What each flag means</h2>
+<div class="scroll"><table>
+  <thead><tr><th>Flag</th><th>What it spotted</th><th>Why it matters</th></tr></thead>
+  <tbody>
+    <tr><td>Explosions credited to AI</td><td>Players dying to explosions with no named killer. 3 in the same second, or 5 within 5 minutes.</td><td>These kills never show in the in-game kill feed. That's exactly what the cheater we caught was doing.</td></tr>
+    <tr><td>Script errors</td><td>The server failing over and over, usually at player spawns.</td><td>It started right after the cheater we caught joined. On its own it can also just be a game bug.</td></tr>
+    <tr><td>Rapid kills</td><td>6 rifle kills in 30 seconds.</td><td>Very hard to do legitimately.</td></tr>
+    <tr><td>Headshots</td><td>10 or more kills in 15 minutes with three quarters or more to the head.</td><td>A classic aimbot sign.</td></tr>
+    <tr><td>Teamkills</td><td>3 teamkills in 10 minutes.</td><td>Griefing, or someone who needs a word.</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Reading an explosion flag</h2>
+<p>Explosion and script-error flags wait 2 minutes, then tell you who to look at:</p>
+<ul>
+  <li><b>Joined just before</b>: players who connected in the 10 minutes before it started. Players who only reconnected, the victims, and anyone who'd already left are left out.</li>
+  <li><b>Killing nearby</b>: players whose own kills landed close to where the explosions hit, around the same time.</li>
+  <li><b>At earlier incidents too</b>: the panel saves everyone who was online at each incident. If someone keeps turning up, on any of our servers, it says so, e.g. "Dreadful (2x)".</li>
+</ul>
+<p>Every incident a player was online for is also listed on their <a href="/guide/players">player page</a>.</p>
+
+<h2>What to do with a flag</h2>
+<ol class="steps">
+  <li>Open the names it mentions (search them on the Players page). Check their notes, ban history{% if can("ips") %} and other accounts on the same IP{% endif %}.</li>
+  <li>Get in game and spectate them if you can.</li>
+  <li>Leave a note on their player page saying what you saw, so the next admin knows.</li>
+  <li>If you're sure, {% if can("ban") %}<a href="/guide/banning">ban them</a>{% else %}kick them and ask an admin to ban{% endif %}. If you're not, keep an eye out: the same name at the next incident makes it much clearer.</li>
+</ol>
+<p class="tip danger"><b>A flag is a reason to look, not proof.</b> The logs never say which weapon was used, and gunships and grenade launchers can look odd too. One flag with someone's name in it means little. The same name at several is worth acting on.</p>
+{% endblock %}

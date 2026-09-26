@@ -1,0 +1,39 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>Everyone who has ever joined one of our servers is on the <b>Players</b> page, whether they're on now or not.</p>
+
+<h2>Finding a player</h2>
+<ol class="steps">
+  <li>Click <b>Players</b> in the top menu.</li>
+  <li>Type part of their name. Old names work too, and so does their identity ID{% if can("ips") %} or an IP address{% endif %}.</li>
+  <li>Click their name to open their page.</li>
+</ol>
+{{ shot("players-search", "Searching for \"rook\" finds both of his accounts.") }}
+<p>You can also click any name in a server's player list or in History.</p>
+
+<h2>A player's page</h2>
+{{ shot("player", "A player's page.") }}
+<ul>
+  <li><b>In-game record</b>: time played, kills, deaths, K/D and teamkills, and the Discord account they linked.</li>
+  <li><b>History</b>: first and last seen, and a <b>Ban</b> button{% if not can("ban") %} (admins){% endif %}.</li>
+  <li><b>Admin notes</b>, the names they've used, their ban history, and any suspicious incidents they were online for.</li>
+</ul>
+
+<h2>Notes</h2>
+<p>Whenever you deal with someone, leave a note: what happened, and what you did. Every admin on every server sees it, so the next person doesn't start from scratch.</p>
+<ol class="steps">
+  <li>On their page, type in the <b>Admin notes</b> box.</li>
+  <li>Press <b>Add note</b>. It's saved with your name and the time.</li>
+</ol>
+{{ shot("player-notes", "A note left after a warning.") }}
+
+{% if can("ips") %}
+<h2>Alt accounts and ban evaders</h2>
+<p>Players on PC, PlayStation and Xbox get a different ID on each, and anyone can make a second account. What ties them together is the IP address they connect from.</p>
+<p>The <b>Connections</b> box on a player's page lists every IP they've played from, their BattlEye GUID, and every other account seen on the same IP, with a <b>Banned</b> tag on any that are banned.</p>
+{{ shot("player-connections", "Pte Rook and his PlayStation account, Rook_PS5, on the same IP.") }}
+<p>In a server's player list, a pill next to a name shows how many other accounts they have. It's red if one of them is banned: that's very likely someone dodging a ban.</p>
+<p class="tip">People in the same house share an IP too. Two accounts on one IP isn't proof they're the same person. Check the names, times and notes first.</p>
+{% endif %}
+{% endblock %}

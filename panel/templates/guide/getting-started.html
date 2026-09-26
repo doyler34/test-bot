@@ -1,0 +1,39 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>OYB Control runs in your web browser, on a phone or a computer. There's nothing to install.</p>
+
+<h2>Logging in</h2>
+<ol class="steps">
+  <li>Open the panel's address. An owner will send it to you along with your username and a temporary password.</li>
+  <li>Type your username and password and press <b>Log in</b>.</li>
+  <li>The first time, it asks you to pick your own password. Make it at least 10 characters and don't reuse one from anywhere else.</li>
+</ol>
+{{ shot("login", "The login page.") }}
+<p class="tip">Five wrong passwords in a row locks that account for 15 minutes. If you've forgotten yours, ask an owner to reset it rather than guessing.</p>
+
+<h2>The home page</h2>
+<p>After logging in you land on the home page. The top shows who you're logged in as and a few numbers at a glance: how many servers are up, how many players are on, active bans, and any Sus flags from the last day. Red there means something is worth a look.</p>
+<p>Below that is a card for every server: online or not, players on, and memory. Click a card to open that server.</p>
+{{ shot("home", "The home page, with the welcome box and a card for each server.") }}
+
+<h2>Your role</h2>
+<p>Everyone has their own login, and every action is written to the audit log with your name on it. What you can do depends on your role:</p>
+<div class="scroll"><table>
+  <thead><tr><th>Role</th><th>Can</th></tr></thead>
+  <tbody>
+    <tr><td>Moderator</td><td>See the servers and players, kick, and leave notes on players.</td></tr>
+    <tr><td>Admin</td><td>Everything a moderator can, plus ban and unban, see IPs and alt accounts, start, stop and restart servers, download and upload game logs, and read the audit log.</td></tr>
+    <tr><td>Owner</td><td>Everything, plus the raw RCON console and making admin accounts.</td></tr>
+  </tbody>
+</table></div>
+<p>You're {{ "an" if user.role in ("admin", "owner") else "a" }} <b>{{ user.role }}</b>. Some pages in this guide cover things only admins or owners can do, and say so.</p>
+
+<h2>Your password</h2>
+<ol class="steps">
+  <li>Click your name in the top right.</li>
+  <li>Type your current password, then the new one twice, and save.</li>
+</ol>
+{{ shot("account", "Changing your password.") }}
+<p>Always log out on a shared computer: <b>Log out</b> is in the top right.</p>
+{% endblock %}

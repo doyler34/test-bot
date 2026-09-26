@@ -1,0 +1,36 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>Every game is saved when the server next restarts: its whole log folder, kept for good. You can pull up any day's games, see exactly who played and what happened, and re-check them for cheating.</p>
+
+<h2>Finding a game</h2>
+<ol class="steps">
+  <li>Open the server and click the <b>History</b> tab.</li>
+  <li>It lists the last 7 days of games: when each started, how long it ran, players, kills, and any Sus flags.</li>
+  <li>To look at another day, pick a date. Press <b>Last 7 days</b> to go back.</li>
+  <li>Press <b>Open</b> on a game.</li>
+</ol>
+{{ shot("history", "The History tab. The game in progress is listed too.") }}
+
+<h2>A game's page</h2>
+{{ shot("game", "A past game: who played and when, and the whole feed.") }}
+<ul>
+  <li>How long it ran, players, kills, teamkills and Sus flags.</li>
+  <li>The <b>Suspicious</b> box, newest first. Past games are checked with today's checks, so an old game gets any check we add later.</li>
+  <li><b>Players</b>: everyone who played, when they were on, and their kills, deaths and teamkills{% if can("ips") %}, with their IP{% endif %}.</li>
+  <li><b>Feed</b>: the whole game from start to finish, with the same filters as the live feed, plus admin actions during it.</li>
+</ul>
+
+{% if can("ips") %}
+<h2>Downloading a log</h2>
+<p>At the bottom of a game's page, <b>Download the whole log folder</b> gives you a .tar.gz with the console, script and error logs, for sending on or digging through. Downloads are recorded in the audit log.</p>
+
+<h2>Adding an old game</h2>
+<p>For a game from before the panel was running, or a log someone sent you:</p>
+<ol class="steps">
+  <li>On the <b>History</b> tab, scroll to <b>Add an old game</b> at the bottom.</li>
+  <li>Choose the console.log file (it can be renamed, e.g. a .txt).</li>
+  <li>Press <b>Upload</b>. It goes into History like any other game and opens its page.</li>
+</ol>
+{% endif %}
+{% endblock %}

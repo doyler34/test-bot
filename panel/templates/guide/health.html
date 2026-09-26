@@ -1,0 +1,28 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>The <b>Health</b> tab on a server page shows whether the server has been staying up, and whether it needs a restart.</p>
+{{ shot("health", "The Health tab.") }}
+
+<h2>Uptime and crashes</h2>
+<ul>
+  <li><b>Up, last 24h</b> and <b>Up, last 7 days</b>: how much of the time it was online.</li>
+  <li><b>Crashes</b>: the server stopping without anyone pressing a button. A crash is posted to the staff Discord channel.</li>
+  <li><b>Recent events</b>: starts, stops (and who stopped it), crashes, and the server going offline or coming back.</li>
+</ul>
+
+<h2>Memory</h2>
+<p>Reforger servers slowly take more memory the longer they run, and some games leave memory behind when a new mission starts. Too much and the server gets laggy or crashes.</p>
+<ul>
+  <li>A few minutes after a full <b>Restart server</b>, the panel notes what a clean server uses. That's the dashed line on the graph.</li>
+  <li>The graph shows the last 24 hours. Memory stepping up a bit when a mission loads is normal.</li>
+  <li>After you press <b>Restart mission</b>, the panel checks again once the new mission has loaded. If memory is still well above a clean start (over 512 MB more), it warns: the old mission's memory wasn't let go.</li>
+</ul>
+
+<h2>When to do a full restart</h2>
+<ol class="steps">
+  <li>If you see "Memory didn't clear" on the server page, press <b>Restart server</b> when it's quiet (it disconnects everyone for a minute or two).</li>
+  <li>If memory climbs higher after every mission restart, that's a leak: restart the server.</li>
+  <li>Either way, a full restart every 6–12 hours keeps things smooth.</li>
+</ol>
+{% endblock %}

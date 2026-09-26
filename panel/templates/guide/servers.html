@@ -1,0 +1,44 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>Click a server on the home page to open it. Everything about that one server is on this page.</p>
+{{ shot("server-overview", "A server page: controls, the summary strip, then the Overview tab.") }}
+
+<h2>The controls</h2>
+<p>The buttons along the top act on the whole server, so they affect everyone playing. Each one asks you to confirm first.</p>
+{{ shot("server-top", "The controls (outlined) and the summary strip under them.") }}
+<div class="scroll"><table>
+  <thead><tr><th>Button</th><th>What it does</th><th>When to use it</th></tr></thead>
+  <tbody>
+    <tr><td>Restart mission</td><td>Ends the current game and loads a fresh one, without restarting the server program. Quick, and nobody has to reconnect to the server.</td><td>End of a round, or the game has got into a bad state.</td></tr>
+    <tr><td>Shut down (RCON)</td><td>Tells the game to shut itself down.</td><td>Rarely. Stop server is usually better.</td></tr>
+    <tr><td>Start server</td><td>Starts the server program when it's off.</td><td>After a Stop, or if it crashed and didn't come back.</td></tr>
+    <tr><td>Stop server</td><td>Stops the server program. It stays off until someone starts it.</td><td>Maintenance.</td></tr>
+    <tr><td>Restart server</td><td>Stops and starts the whole server program. Everyone is disconnected for a minute or two.</td><td>Memory didn't clear after a mission restart, or every 6–12 hours to keep things fresh.</td></tr>
+  </tbody>
+</table></div>
+<p class="tip">The controls are for admins and owners. Moderators don't see them.</p>
+
+<h2>The summary strip</h2>
+<p>Updated every 10 seconds:</p>
+<ul>
+  <li><b>Players on</b>, right now.</li>
+  <li><b>Ping (RCON)</b>: how fast the server answers the panel. A big number means the server is struggling.</li>
+  <li><b>Server FPS</b>: how smoothly the server is running. Below 20 turns red and players will feel lag.</li>
+  <li><b>Memory</b> the server program is using.</li>
+  <li><b>Up, last 24h</b>: how much of the last day it was online.</li>
+  <li><b>Running for</b>: time since the server program last started.</li>
+</ul>
+
+<h2>Tabs</h2>
+{{ shot("server-tabs", "The three tabs.") }}
+<ul>
+  <li><b>Overview</b>: the players on now, the <a href="/guide/live-feed">live feed</a>, and recent admin actions on this server.</li>
+  <li><b>Health</b>: uptime, crashes and memory. See <a href="/guide/health">Health and memory</a>.</li>
+  <li><b>History</b>: every past game. See <a href="/guide/history">Past games</a>.</li>
+</ul>
+
+<h2>Full screen</h2>
+<p>Every box has a <b>⤢</b> button in its top right corner. Press it to blow the box up to fill the screen, which is handy for reading a busy live feed. Press <b>Esc</b> or the button again to put it back.</p>
+{{ shot("fullscreen", "The live feed in full screen.") }}
+{% endblock %}

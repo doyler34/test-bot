@@ -1015,11 +1015,31 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("mod", "mod-password")
         html = await (await self.client.get("/")).text()
         self.assertIn("Welcome, mod", html)
+        self.assertIn("You're signed in as a <b>moderator</b>", html)
         self.assertIn('href="/guide"', html)
         guide = await (await self.client.get("/guide")).text()
-        self.assertIn("Spotting cheaters", guide)
-        self.assertIn("Bans need an admin", guide)
-        self.assertNotIn("id=\"console\"", guide)
+        self.assertIn("Welcome to OYB Control", guide)
+        self.assertIn('href="/guide/cheaters"', guide)
+        self.assertNotIn('href="/guide/admins"', guide)
+        for slug in ("getting-started", "servers", "live-feed", "cheaters", "players", "kicking", "banning",
+                     "history", "health", "discord"):
+            response = await self.client.get(f"/guide/{slug}")
+            self.assertEqual(response.status, 200, slug)
+            page = await response.text()
+            for image in re.findall(r'src="/static/guide/([\w-]+)\.jpg', page):
+                self.assertTrue(Path("panel/static/guide", image + ".jpg").is_file(), image)
+        self.assertIn("Banning needs an admin", await (await self.client.get("/guide/banning")).text())
+        self.assertEqual((await self.client.get("/guide/admins")).status, 404)
+        self.assertEqual((await self.client.get("/guide/nope")).status, 404)
+
+    async def test_owner_guide_pages(self):
+        await self.login("boss", "boss-password")
+        self.assertIn("You're signed in as an <b>owner</b>", await (await self.client.get("/")).text())
+        for slug in ("console-audit", "admins"):
+            self.assertEqual((await self.client.get(f"/guide/{slug}")).status, 200)
+        banning = await (await self.client.get("/guide/banning")).text()
+        self.assertNotIn("Banning needs an admin", banning)
+        self.assertIn("Next →", banning)
 
     async def test_ban_needs_a_known_player(self):
         await self.login("boss", "boss-password")
