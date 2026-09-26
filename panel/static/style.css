@@ -165,3 +165,46 @@ ul { padding-left: 18px; }
 }
 label.check { display: flex; gap: 8px; align-items: flex-start; text-transform: none; font-family: var(--body); letter-spacing: 0; margin-bottom: 12px; }
 label.check input { width: auto; margin: 3px 0 0; }
+
+/* server page */
+.controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 18px; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--gold); }
+.controls form { margin: 0; }
+.controls .muted { font-size: .85rem; margin-left: 6px; }
+.panes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.panes .card { margin: 0; min-width: 0; }
+.pane { display: flex; flex-direction: column; height: 460px; padding-top: 14px; }
+.pane > h2, .pane > .row { flex: none; padding-right: 36px; }
+.pane > .body { flex: 1; overflow: auto; min-height: 0; }
+.pane.full { position: fixed; inset: 12px; height: auto; z-index: 50; }
+body.has-full { overflow: hidden; }
+body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(0, 0, 0, .6); z-index: 40; }
+.expand { position: absolute; top: 10px; right: 14px; padding: 0 8px; background: var(--line); color: var(--ink);
+  font-size: 1rem; clip-path: none; z-index: 2; }
+.count { font-size: .85rem; color: var(--muted); margin-left: 6px; }
+
+/* live feed */
+.filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { padding: 1px 9px; font-size: .8rem; background: var(--bg); color: var(--muted); border: 1px solid var(--line); clip-path: none; }
+[data-filter="all"] .chip[data-show="all"], [data-filter="joins"] .chip[data-show="joins"],
+[data-filter="kills"] .chip[data-show="kills"], [data-filter="admin"] .chip[data-show="admin"],
+[data-filter="rcon"] .chip[data-show="rcon"] { color: #17130a; background: var(--gold); border-color: var(--gold); }
+.feed { list-style: none; margin: 0; padding: 0; font-size: .9rem; }
+.feed li { display: grid; grid-template-columns: 64px 52px 1fr; gap: 8px; padding: 4px 2px; border-bottom: 1px solid var(--line-soft); }
+.feed time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.feed b { font-family: var(--display); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.feed .k-join b, .feed .k-side b { color: var(--khaki); }
+.feed .k-leave b { color: var(--muted); }
+.feed .k-kill b { color: var(--gold); }
+.feed .k-teamkill b, .feed .k-server b { color: var(--red); }
+.feed .k-admin b { color: #8fb4e6; }
+.feed .k-rcon b { color: #c49be0; }
+[data-filter="joins"] .feed li:not(.k-join):not(.k-leave):not(.k-side),
+[data-filter="kills"] .feed li:not(.k-kill):not(.k-teamkill),
+[data-filter="admin"] .feed li:not(.k-admin),
+[data-filter="rcon"] .feed li:not(.k-rcon):not(.k-server) { display: none; }
+
+@media (max-width: 900px) {
+  .panes { grid-template-columns: minmax(0, 1fr); }
+  .pane { height: 380px; }
+}

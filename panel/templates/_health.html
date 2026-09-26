@@ -1,5 +1,3 @@
-<section class="card">
-  <h2>Health</h2>
   <div class="stats">
     <div class="stat"><b>{{ "%.1f"|format(health.day * 100) ~ "%" if health.day is not none else "—" }}</b><span>Up, last 24h</span></div>
     <div class="stat"><b>{{ "%.1f"|format(health.week * 100) ~ "%" if health.week is not none else "—" }}</b><span>Up, last 7 days</span></div>
@@ -24,4 +22,3 @@
   <div class="event"><b class="{{ e.kind }}">{{ e.kind }}</b><span class="muted" title="{{ e.at|ts }}">{{ e.at|ago }}</span><span>{{ e.detail }}</span></div>
   {% endfor %}
   {% endif %}
-</section>

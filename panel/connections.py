@@ -1,17 +1,21 @@
-"""Who connected from where, read from the Reforger console logs.
+"""Who connected from where, and the live feed, read from the console logs.
 
 BattlEye logs the IP when a player connects; the game logs their identity a
 moment later under the same name. Pairing the two gives identity, name and IP
 for every connection, which is what finds alt accounts sharing an address.
+Joins, leaves, kills and side picks along the way make up the live feed.
 """
 
 import re
 import time
 from pathlib import Path
 
+from bot.tracking.combat_parser import HEADER as KILL, JOINED as SIDE, PERSON, distance
+
 STAMP = re.compile(r"^(\d{2}):(\d{2}):(\d{2})")
 FOLDER = re.compile(r"logs_(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})$")
 CONNECT = re.compile(r"BattlEye Server: 'Player #\d+ (.+) \((.+):\d+\) connected'")
+LEAVE = re.compile(r"BattlEye Server: 'Player #\d+ (.+) disconnected'")
 GUID = re.compile(r"BattlEye Server: 'Player #\d+ (.+) - BE GUID: ([0-9a-fA-F]{32})'")
 IDENTITY = re.compile(r"### Updating player: PlayerId=\d+, Name=(.*?), rplIdentity=0x[0-9a-fA-F]+, "
                       r"IdentityId=([0-9a-fA-F-]{36})")
@@ -83,7 +87,15 @@ class LogReader:
         at = int(state["base"] - state["start_clock"] + clock + state["day"] * 86400)
         pending = state["pending"]
         if match := CONNECT.search(line):
-            pending[match[1]] = {"ip": match[2].strip("[]"), "guid": "", "at": at}
+            ip = match[2].strip("[]")
+            pending[match[1]] = {"ip": ip, "guid": "", "at": at}
+            return {"kind": "join", "at": at, "text": f"{match[1]} connected", "ip": ip}
+        elif match := LEAVE.search(line):
+            return {"kind": "leave", "at": at, "text": f"{match[1]} disconnected", "ip": ""}
+        elif " KILL " in line and (match := KILL.fullmatch(line.rstrip())):
+            return kill_event(match[2], match[3], at)
+        elif match := SIDE.match(line.rstrip()):
+            return {"kind": "side", "at": at, "text": f"{match[2]} joined {match[4]}", "ip": ""}
         elif match := GUID.search(line):
             if match[1] in pending:
                 pending[match[1]]["guid"] = match[2].lower()
@@ -92,6 +104,24 @@ class LogReader:
             seen = pending.pop(name, None)
             if seen and at - seen["at"] > PENDING_SECONDS:
                 seen = None
-            return {"identity": identity, "name": name, "at": at,
+            return {"kind": "identity", "identity": identity, "name": name, "at": at,
                     "ip": seen["ip"] if seen else "", "guid": seen["guid"] if seen else ""}
         return None
+
+
+def kill_event(relation, body, at):
+    victim = PERSON.match(body)
+    if not victim:
+        return None
+    parts = body.split(" was killed by ", 1)
+    if len(parts) == 1:
+        text, kind = f"{victim[1]} killed themselves", "kill"
+    else:
+        killer = PERSON.match(parts[1])
+        name = killer[1] if killer else ("AI" if parts[1].startswith("AI") else parts[1].split(" from ")[0])
+        kind = "teamkill" if relation == "TK" else "kill"
+        text = f"{name} {'teamkilled' if relation == 'TK' else 'killed'} {victim[1]}"
+        metres = distance(body)
+        if metres:
+            text += f" ({metres:.0f} m)"
+    return {"kind": kind, "at": at, "text": text, "ip": ""}

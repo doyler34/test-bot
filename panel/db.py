@@ -88,6 +88,15 @@ CREATE TABLE IF NOT EXISTS connections (
     PRIMARY KEY (identity, ip)
 );
 CREATE INDEX IF NOT EXISTS connections_ip ON connections(ip);
+CREATE TABLE IF NOT EXISTS feed (
+    id INTEGER PRIMARY KEY,
+    server TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL,
+    ip TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS feed_at ON feed(server, at);
 CREATE TABLE IF NOT EXISTS ip_bans (
     ban_id INTEGER NOT NULL REFERENCES bans(id),
     ip TEXT NOT NULL,
@@ -333,6 +342,11 @@ class PanelDB:
 
     def add_connections(self, server, events, positions):
         for e in events:
+            if e.get("kind", "identity") != "identity":
+                if e.get("text"):
+                    self.db.execute("INSERT INTO feed (server, at, kind, text, ip) VALUES (?, ?, ?, ?, ?)",
+                                    (server, e["at"], e["kind"], e["text"][:300], e.get("ip", "")))
+                continue
             self.saw_player(e["identity"], e["name"], server, at=e["at"], commit=False)
             if e["ip"]:
                 self.db.execute(
@@ -347,6 +361,23 @@ class PanelDB:
             self.db.execute("INSERT OR REPLACE INTO log_positions (server, path, position) VALUES (?, ?, ?)",
                             (server, path, position))
         self.db.commit()
+
+    def add_feed(self, server, kind, text, at=None):
+        self.write("INSERT INTO feed (server, at, kind, text) VALUES (?, ?, ?, ?)", server, at or now(), kind, text[:300])
+
+    def feed(self, server, limit=200):
+        """Log events, RCON messages and admin actions for one server, newest first."""
+        return self.all(
+            "SELECT at, kind, text, ip FROM ("
+            " SELECT id, at, kind, text, ip, 0 AS src FROM feed WHERE server = ?"
+            " UNION ALL SELECT id, at, 'admin' AS kind,"
+            "  username || ': ' || action || CASE WHEN target != '' THEN ' ' || target ELSE '' END"
+            "  || CASE WHEN detail != '' THEN ' (' || detail || ')' ELSE '' END, '' AS ip, 1 AS src"
+            "  FROM audit WHERE server = ?"
+            ") ORDER BY at DESC, src, id DESC LIMIT ?", server, server, limit)
+
+    def prune_feed(self, days=7):
+        self.write("DELETE FROM feed WHERE at < ?", now() - days * 86400)
 
     def log_positions(self, server) -> dict[str, int]:
         return {r["path"]: r["position"] for r in self.all("SELECT path, position FROM log_positions WHERE server = ?", server)}

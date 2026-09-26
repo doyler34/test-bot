@@ -134,19 +134,22 @@ class RconClient:
             if (body[0], text) in self._recent:
                 return
             self._recent.append((body[0], text))
-            self._collect(text)
-            if self.on_message:
+            if not self._collect(text) and self.on_message:
                 self.on_message(text)
 
-    def _collect(self, text: str):
+    def _collect(self, text: str) -> bool:
+        """Take the output of our own command; True if the message was ours."""
         output = self._output
         if output is None:
-            return
+            return text.startswith(PROCESSING)
         if text == PROCESSING + output["command"]:
             output["seen"] = True
         elif output["seen"]:
             output["lines"].append(text)
             output["got"].set()
+        else:
+            return text.startswith(PROCESSING)
+        return True
 
     def _answer(self, seq: int, body: bytes):
         future = self._pending.get(seq)

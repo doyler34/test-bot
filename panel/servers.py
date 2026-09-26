@@ -145,6 +145,7 @@ class ServerManager:
                 if now() - pruned > 3600:
                     pruned = now()
                     self.db.prune_connections()
+                    self.db.prune_feed()
             except Exception:
                 log.exception("reading logs failed for %s", state.config.id)
             await asyncio.sleep(self.config.poll_seconds)
@@ -214,6 +215,7 @@ class ServerManager:
     async def _connect(self, state: ServerState):
         cfg = state.config
         client = self.client_factory(cfg.rcon_host, cfg.rcon_port, cfg.rcon_password)
+        client.on_message = lambda text: self._rcon_message(state, text)
         await client.connect()
         state.client = client
         state.online = True
@@ -221,6 +223,10 @@ class ServerManager:
         state.online_since = now()
         log.info("%s connected", cfg.id)
         self._changed(state, True)
+
+    def _rcon_message(self, state: ServerState, text: str):
+        if text.strip() and not text.startswith("Logged In!"):
+            self.db.add_feed(state.config.id, "rcon", " ".join(text.split()))
 
     def _offline(self, state: ServerState, exc):
         if state.client:
@@ -242,7 +248,12 @@ class ServerManager:
         first = state.was_online is None
         state.was_online = online
         name = state.config.name
-        self.db.add_event(state.config.id, "online" if online else "offline", "" if online else state.error)
+        kind = "online" if online else "offline"
+        last = self.db.events(state.config.id, 1, ("online", "offline"))
+        if first and last and last[0]["kind"] == kind:
+            return
+        self.db.add_event(state.config.id, kind, "" if online else state.error)
+        self.db.add_feed(state.config.id, "server", f"{name} is {'online' if online else 'offline'}")
         if first:
             return
         expected = now() < state.expected_until

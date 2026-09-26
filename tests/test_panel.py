@@ -394,6 +394,12 @@ class CrashTests(unittest.IsolatedAsyncioTestCase):
         await self.manager.refresh_memory(self.state)
         self.assertEqual(len(self.db.memory("server-1", 0)), 1)
 
+    async def test_panel_restart_adds_no_duplicate_online(self):
+        self.manager._changed(self.state, True)
+        other = ServerManager(panel_config(1, service="reforger-test"), self.db, sampler=self.proc, alerts=self.alerts)
+        other._changed(other.state("server-1"), True)
+        self.assertEqual([e["kind"] for e in self.db.events("server-1")], ["online"])
+
     async def test_offline_alert(self):
         self.manager._offline(self.state, RconError("gone"))
         self.assertEqual(self.alerts.sent, [])
@@ -435,7 +441,23 @@ class ConnectionLogTests(unittest.TestCase):
     def scan(self):
         events, moved = self.reader.scan(self.db.log_positions("server-1"))
         self.db.add_connections("server-1", events, moved)
-        return events
+        return [e for e in events if e["kind"] == "identity"]
+
+    def test_feed_from_the_log(self):
+        kill = ("10:30:00.000   SCRIPT       : INFO: KILL ENEMY: Sgt_Burd (playerID = 2 | UUID = " + BURD + ") "
+                "from US faction at <1, 2, 3> was killed by GazLagom (playerID = 1 | UUID = " + GAZ + ") "
+                "from USSR faction [120.4m away from the corpse] With last inflicted damage type KINETIC\n")
+        side = ("10:20:00.000   SCRIPT       : INFO: Faction: player GazLagom (playerID = 1 | UUID = " + GAZ + ") "
+                "has joined faction #AR-Faction_USSR (USSR)\n")
+        leave = "10:49:23.433  DEFAULT      : BattlEye Server: 'Player #1 Sgt_Burd disconnected'\n"
+        write_log(self.tmp.name, "logs_2026-09-25_10-16-32", REAL_LOG + side + kill + leave)
+        self.scan()
+        feed = [(r["kind"], r["text"]) for r in self.db.feed("server-1")]
+        self.assertEqual(feed[:3], [("leave", "Sgt_Burd disconnected"), ("kill", "GazLagom killed Sgt_Burd (120 m)"),
+                                    ("side", "GazLagom joined USSR")])
+        self.assertIn(("join", "GazLagom connected"), feed)
+        self.db.log("boss", "kick", "server-1", "Sgt_Burd")
+        self.assertEqual(self.db.feed("server-1")[0]["text"], "boss: kick Sgt_Burd")
 
     def test_real_reforger_lines(self):
         write_log(self.tmp.name, "logs_2026-09-25_10-16-32", REAL_LOG)
@@ -514,6 +536,18 @@ class RconClientTests(unittest.IsolatedAsyncioTestCase):
         client = RconClient("127.0.0.1", self.port, "nope", timeout=2)
         with self.assertRaisesRegex(RconError, "wrong rcon password"):
             await client.connect()
+
+    async def test_command_replies_are_not_server_messages(self):
+        self.fake.direct = False
+        client = RconClient("127.0.0.1", self.port, "secret", timeout=2)
+        seen = []
+        client.on_message = seen.append
+        await client.connect()
+        self.addCleanup(client.close)
+        await client.command("#players")
+        self.fake.say("Admin message from the game")
+        await asyncio.sleep(0.1)
+        self.assertEqual(seen, ["Logged In! Client ID: #1", "Admin message from the game"])
 
     async def test_server_messages_are_acknowledged(self):
         client = RconClient("127.0.0.1", self.port, "secret", timeout=2)
@@ -865,6 +899,18 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         token = await self.csrf("/bans")
         await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "reason": "x", "duration": "0"})
         self.assertEqual(self.db.banned_ips(), set())
+
+    async def test_live_feed(self):
+        self.db.add_feed("server-1", "kill", "GazLagom killed Sgt_Burd (120 m)")
+        self.fake.say("Something from the server")
+        await asyncio.sleep(0.1)
+        await self.login("boss", "boss-password")
+        html = await (await self.client.get("/server/server-1")).text()
+        self.assertIn("Live feed", html)
+        self.assertIn("GazLagom killed Sgt_Burd (120 m)", html)
+        part = await (await self.client.get("/server/server-1/feed.part")).text()
+        self.assertIn("Something from the server", part)
+        self.assertNotIn("Logged In!", part)
 
     async def test_console_is_audited(self):
         await self.login("boss", "boss-password")

@@ -1,0 +1,13 @@
+{% if feed %}
+<ul class="feed">
+  {% for f in feed %}
+  <li class="k-{{ f.kind }}">
+    <time title="{{ f.at|ts }}">{{ f.at|clock }}</time>
+    <b>{{ {"join": "Join", "leave": "Leave", "side": "Side", "kill": "Kill", "teamkill": "TK", "admin": "Admin", "rcon": "RCON", "server": "Server"}.get(f.kind, f.kind) }}</b>
+    <span>{{ f.text }}{% if f.ip and can("ips") %} <span class="muted mono">{{ f.ip }}</span>{% endif %}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Nothing yet. Joins, leaves, kills and admin actions show up here as they happen{{ "" if s.log_dir else " (joins and kills need log_dir set for this server)" }}.</p>
+{% endif %}

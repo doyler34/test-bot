@@ -64,6 +64,14 @@ def _span(seconds):
     return f"{seconds // 60}m"
 
 
+def _clock(value):
+    if not value:
+        return ""
+    if time.strftime("%Y%m%d", time.localtime(value)) == time.strftime("%Y%m%d"):
+        return time.strftime("%H:%M:%S", time.localtime(value))
+    return time.strftime("%d %b %H:%M", time.localtime(value))
+
+
 def _until(value):
     if not value:
         return "Permanent"
@@ -250,6 +258,7 @@ def server_view(state):
         "updated": state.updated,
         "online_since": state.online_since,
         "service": state.config.service,
+        "log_dir": state.config.log_dir,
         "pid": state.pid,
         "memory": state.memory,
         "process_age": state.process_age,
@@ -281,8 +290,13 @@ async def server_page(request):
         "crashes": len([e for e in db.events(state.config.id, 200, ("crashed",)) if e["at"] > t - 7 * 86400]),
         "chart": memory_chart(db.memory(state.config.id, t - 86400), t - 86400, t, state.fresh),
     }
-    return render(request, "server.html", s=server_view(state), actions=actions,
-                  labels=POWER_LABELS, recent=recent, health=health, alts=alt_flags(request, state))
+    return render(request, "server.html", s=server_view(state), actions=actions, labels=POWER_LABELS,
+                  recent=recent, health=health, alts=alt_flags(request, state), feed=db.feed(state.config.id))
+
+
+async def feed_part(request):
+    state = server_or_404(request, request.match_info["id"])
+    return render(request, "_feed.html", s=server_view(state), feed=request.app[DB].feed(state.config.id))
 
 
 def alt_flags(request, state):
@@ -587,7 +601,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[STATS] = OybStats(config.oyb_data)
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
-    env.filters.update(ts=_ts, ago=_ago, until=_until, span=_span, gb=memory.gb)
+    env.filters.update(ts=_ts, ago=_ago, clock=_clock, until=_until, span=_span, gb=memory.gb)
     app[JINJA] = env
 
     if start_manager:
@@ -609,6 +623,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/server/{id}", server_page)
     app.router.add_get("/server/{id}/players.part", players_part)
     app.router.add_get("/server/{id}/memory.part", memory_part)
+    app.router.add_get("/server/{id}/feed.part", feed_part)
     app.router.add_post("/server/{id}/kick", kick)
     app.router.add_post("/server/{id}/power", power)
     app.router.add_get("/bans", bans_page)

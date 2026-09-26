@@ -10,6 +10,11 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
 
 - **Servers**: all three at a glance, online/offline and player counts.
 - **Live players**: refreshes every 10 seconds, with kick and ban on each row.
+- **Live feed**: joins, leaves, side picks, kills and teamkills from the logs,
+  messages the server sends over RCON, and admin actions, newest first,
+  refreshing every 5 seconds. Filter by joins, kills, admin or RCON. Every box on
+  the server page has a fixed height with its own scroll and a full-screen button
+  (Esc closes it).
 - **Server controls**: restart mission, RCON shutdown, and start / stop /
   restart of the systemd service when `service` is set.
 - **Memory check**: each server's memory on the dashboard and server page. A
