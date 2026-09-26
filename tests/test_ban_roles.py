@@ -6,6 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import discord
+
 from bot.discord.ban_roles import PREFIX, BanRoles, active_bans, length_label
 from panel.db import PanelDB
 
@@ -26,23 +28,30 @@ class Member:
 
     async def add_roles(self, role, reason=None):
         self.roles.append(role)
-        role.members.append(self)
 
     async def remove_roles(self, role, reason=None):
         self.roles.remove(role)
-        role.members.remove(self)
 
 
 class Guild:
+    """Like a bot without the members intent: nothing cached, role.members
+    stays empty, and every member has to be fetched."""
     id = 1
 
     def __init__(self, members):
         self.members = {m.id: m for m in members}
         self.roles = []
+        self.fetched = 0
         self.me = SimpleNamespace(guild_permissions=SimpleNamespace(manage_roles=True))
 
     def get_member(self, member_id):
-        return self.members.get(member_id)
+        return None
+
+    async def fetch_member(self, member_id):
+        self.fetched += 1
+        if member_id not in self.members:
+            raise discord.NotFound(SimpleNamespace(status=404, reason="Not Found"), "Unknown Member")
+        return self.members[member_id]
 
     async def create_role(self, name, **kwargs):
         role = Role(name)
@@ -111,6 +120,28 @@ class BanRoleTests(unittest.IsolatedAsyncioTestCase):
         await self.roles.tick()
         self.assertEqual(self.names(self.havoc), [PREFIX + "Permanent"])
         self.assertIsNone(active_bans(self.roles.path))
+
+    async def test_not_in_the_server(self):
+        self.guild.members.pop(10)
+        self.panel.add_ban(HAVOC, "Havoc", "a", "boss")
+        await self.roles.tick()
+        self.assertEqual(self.guild.roles, [])
+
+    async def test_does_not_ask_discord_every_minute(self):
+        self.panel.add_ban(HAVOC, "Havoc", "a", "boss")
+        await self.roles.tick()
+        fetched = self.guild.fetched
+        await self.roles.tick()
+        await self.roles.tick()
+        self.assertEqual(self.guild.fetched, fetched)
+
+    async def test_removed_after_a_restart(self):
+        ban = self.panel.add_ban(HAVOC, "Havoc", "a", "boss", expires_at=int(time.time()) + 86400)
+        await self.roles.tick()
+        self.roles.applied.clear()
+        self.panel.remove_ban(ban, "boss")
+        await self.roles.tick()
+        self.assertEqual(self.names(self.havoc), [])
 
     async def test_role_is_made_once(self):
         self.panel.add_ban(HAVOC, "Havoc", "a", "boss")
