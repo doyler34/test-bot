@@ -1,7 +1,10 @@
 import asyncio
+import io
 import json
 import os
 import re
+import shutil
+import tarfile
 import tempfile
 import time
 import unittest
@@ -649,6 +652,83 @@ class IncidentTests(unittest.TestCase):
         self.assertEqual(self.manager.alerts.sent, [])
         self.assertEqual(self.db.incidents_for(BUFORD), [])
         self.assertEqual(self.db.feed("one")[0]["text"], "old")
+
+
+class HistoryTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.logs = Path(self.tmp.name, "logs")
+        server = ServerConfig(id="server-1", name="Server 1", log_dir=str(self.logs))
+        self.config = PanelConfig(database=str(Path(self.tmp.name, "data", "panel.sqlite3")), cookie_secure=False,
+                                  servers=[server])
+        self.db = PanelDB(self.config.database)
+        self.addCleanup(self.db.close)
+        self.db.add_user("boss", auth.hash_password("boss-password"), "owner")
+        self.db.add_user("mod", auth.hash_password("mod-password"), "moderator")
+        self.manager = ServerManager(self.config, self.db, alerts=FakeAlerts())
+        self.client = TestClient(TestServer(create_app(self.config, self.db, self.manager, start_manager=False)))
+        await self.client.start_server()
+        self.addAsyncCleanup(self.client.close)
+        kill = shot("10:30:00.000", "GazLagom", GAZ, 1, 0, 0)
+        write_log(self.logs, "logs_2026-09-25_10-16-32", REAL_LOG + kill + blast("10:40:00.000", 2, 0, 0) * 3)
+        Path(self.logs, "logs_2026-09-25_10-16-32", "script.log").write_text("SCRIPT (E): Virtual Machine Exception\n")
+        write_log(self.logs, "logs_2026-09-25_11-00-00", arrive("11:05:00.000", "Buford", BUFORD, "146.70.168.126"))
+
+    async def archive(self):
+        state = self.manager.states["server-1"]
+        await self.manager.archive_logs(state, LogReader(str(self.logs)))
+
+    async def test_finished_games_are_kept(self):
+        await self.archive()
+        game = self.db.archived_game("server-1", "logs_2026-09-25_10-16-32")
+        self.assertEqual((game["players"], game["kills"], game["flags"]), (2, 4, 1))
+        self.assertTrue(Path(game["path"]).is_file())
+        self.assertEqual(Path(game["path"]).parent, Path(self.tmp.name, "data", "log-archive", "server-1"))
+        self.assertIsNone(self.db.archived_game("server-1", "logs_2026-09-25_11-00-00"))
+        # The game's own folder can go; the archive stays.
+        shutil.rmtree(Path(self.logs, "logs_2026-09-25_10-16-32"))
+        await self.archive()
+        self.assertEqual(len(self.db.archived("server-1")), 1)
+
+    async def test_history_and_a_past_game(self):
+        await self.archive()
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+        shutil.rmtree(Path(self.logs, "logs_2026-09-25_10-16-32"))
+        html = await (await self.client.get("/server/server-1?day=2026-09-25")).text()
+        self.assertIn("Games on 2026-09-25", html)
+        self.assertIn("/server/server-1/game/logs_2026-09-25_10-16-32", html)
+        self.assertIn("In progress", html)
+        self.assertIn("1 sus", html)
+        html = await (await self.client.get("/server/server-1/game/logs_2026-09-25_10-16-32")).text()
+        self.assertIn("GazLagom", html)
+        self.assertIn("203.0.113.7", html)
+        self.assertIn("3 players killed by explosions credited to AI in the same second", html)
+        live = await (await self.client.get("/server/server-1/game/logs_2026-09-25_11-00-00")).text()
+        self.assertIn("Buford", live)
+        response = await self.client.get("/server/server-1/game/logs_2026-09-25_10-16-32/log")
+        self.assertEqual(response.headers["Content-Type"], "application/gzip")
+        with tarfile.open(fileobj=io.BytesIO(await response.read())) as tar:
+            self.assertIn(b"GazLagom", tar.extractfile("logs_2026-09-25_10-16-32/console.log").read())
+            self.assertIn("logs_2026-09-25_10-16-32/script.log", tar.getnames())
+        live = await self.client.get("/server/server-1/game/logs_2026-09-25_11-00-00/log")
+        with tarfile.open(fileobj=io.BytesIO(await live.read())) as tar:
+            self.assertIn(b"Buford", tar.extractfile("logs_2026-09-25_11-00-00/console.log").read())
+        self.assertEqual(self.db.audit()[0]["action"], "download log")
+
+    async def test_moderators_see_games_but_not_ips_or_logs(self):
+        await self.archive()
+        await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
+        html = await (await self.client.get("/server/server-1/game/logs_2026-09-25_10-16-32")).text()
+        self.assertIn("GazLagom", html)
+        self.assertNotIn("203.0.113.7", html)
+        self.assertEqual((await self.client.get("/server/server-1/game/logs_2026-09-25_10-16-32/log")).status, 403)
+
+    async def test_only_real_game_folders(self):
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+        for folder in ("..", "logs_2026-09-25_10-16-3", "nope"):
+            self.assertEqual((await self.client.get(f"/server/server-1/game/{folder}")).status, 404)
+        self.assertEqual((await self.client.get("/server/server-1/game/logs_2020-01-01_00-00-00")).status, 404)
 
 
 class RconClientTests(unittest.IsolatedAsyncioTestCase):

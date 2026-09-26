@@ -12,6 +12,16 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
 - **Server page**: a live summary along the top (players on, RCON ping, server
   FPS from the `-logStats` lines, memory, uptime and running time), then an
   Overview tab (players, live feed, recent actions) and a Health tab.
+- **History**: every finished game's whole log folder (console, script, error
+  and crash logs) is packed into `data/log-archive/<server>/<folder>.tar.gz`
+  when the server next restarts, and kept for good, even if AMP or the game
+  clears its own logs. A 6 MB game log comes out around 1 MB. The History tab
+  on a server page lists the last week's games, or any day you pick. Opening
+  a game shows who played (times on, kills, deaths, teamkills, and IPs for
+  admins), the whole feed with the same filters as the live one, admin actions
+  during it, and the suspicious-activity checks run with today's settings.
+  Admins and owners can download the log folder; each download is in the
+  audit log. The game in progress can be opened too.
 - **Live players**: refreshes every 10 seconds, with kick and ban on each row.
 - **Live feed**: joins, leaves, side picks, kills and teamkills from the logs,
   messages the server sends over RCON, and admin actions, newest first,

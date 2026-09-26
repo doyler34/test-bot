@@ -37,6 +37,16 @@ def folder_start(folder: Path) -> float | None:
     return time.mktime(tuple(int(x) for x in match.groups()) + (0, 0, -1))
 
 
+def new_state(base: float) -> dict:
+    return {"base": base, "clock": None, "day": 0, "pending": {}}
+
+
+def read_lines(lines, started: float) -> list[dict]:
+    """Every event in one whole log, for going back over a past game."""
+    reader, state = LogReader(""), new_state(started)
+    return [e for e in map(lambda line: reader._line(line.rstrip("\n"), state), lines) if e]
+
+
 class LogReader:
     """Follows every logs_*/console.log under one server's log directory."""
 
@@ -65,7 +75,7 @@ class LogReader:
                 start = 0
             if size == start:
                 continue
-            state = self.files.setdefault(key, {"base": folder_start(folder), "clock": None, "day": 0, "pending": {}})
+            state = self.files.setdefault(key, new_state(folder_start(folder)))
             with open(path, "rb") as fh:
                 fh.seek(start)
                 data = fh.read(size - start)

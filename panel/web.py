@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 import time
@@ -6,9 +7,10 @@ from pathlib import Path
 import jinja2
 from aiohttp import web
 
-from . import auth, memory
+from . import archive, auth, memory
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
+from .connections import LogReader, folder_start
 from .db import PanelDB, now
 from .oyb_stats import OybStats
 from .rcon import RconError
@@ -71,6 +73,10 @@ def _clock(value):
     if time.strftime("%Y%m%d", time.localtime(value)) == time.strftime("%Y%m%d"):
         return time.strftime("%H:%M:%S", time.localtime(value))
     return time.strftime("%d %b %H:%M", time.localtime(value))
+
+
+def _hms(value):
+    return time.strftime("%H:%M:%S", time.localtime(value)) if value else ""
 
 
 def _until(value):
@@ -288,7 +294,67 @@ async def server_page(request):
     recent = db.audit(server=state.config.id, limit=15)
     return render(request, "server.html", s=server_view(state), actions=actions, labels=POWER_LABELS,
                   recent=recent, health=health_data(db, state), alts=alt_flags(request, state),
-                  feed=db.feed(state.config.id))
+                  feed=db.feed(state.config.id), **history(request, state))
+
+
+def history(request, state):
+    """Games that started on the chosen day, or in the last week when none is chosen."""
+    day = request.query.get("day", "")
+    try:
+        start = time.mktime(time.strptime(day, "%Y-%m-%d"))
+        since, until = int(start), int(start) + 86400
+    except ValueError:
+        day, since, until = "", now() - 7 * 86400, now() + 86400
+    games = [dict(g) for g in request.app[DB].games(state.config.id, since, until)]
+    live = None
+    if state.config.log_dir:
+        folders = LogReader(state.config.log_dir).folders()
+        if folders and folders[-1].name not in {g["folder"] for g in games}:
+            started = folder_start(folders[-1])
+            if since <= started < until:
+                live = {"folder": folders[-1].name, "started": started}
+    return {"games": games, "live": live, "day": day, "today": time.strftime("%Y-%m-%d")}
+
+
+def game_file(request, state, folder):
+    if not archive.valid_folder(folder):
+        raise web.HTTPNotFound(text="No such game.")
+    row = request.app[DB].archived_game(state.config.id, folder)
+    if row and Path(row["path"]).is_file():
+        return Path(row["path"]), True
+    if state.config.log_dir:
+        path = Path(state.config.log_dir, folder)
+        if (path / "console.log").is_file():
+            return path, False
+    raise web.HTTPNotFound(text="That game's log isn't there any more.")
+
+
+async def game_page(request):
+    state = server_or_404(request, request.match_info["id"])
+    folder = request.match_info["folder"]
+    path, archived = game_file(request, state, folder)
+    info = path.stat() if archived else (path / "console.log").stat()
+    settings = tuple(sorted(request.app[MANAGER].config.suspicion.items()))
+    game = await asyncio.to_thread(archive.read_game, str(path), folder, info.st_size, info.st_mtime, settings)
+    admin = [{"at": r["at"], "kind": "admin", "ip": "",
+              "text": f"{r['username']}: {r['action']}" + (f" {r['target']}" if r["target"] else "")
+                      + (f" ({r['detail']})" if r["detail"] else "")}
+             for r in request.app[DB].audit_between(state.config.id, game["started"], game["ended"])]
+    feed = sorted(game["feed"] + admin, key=lambda e: e["at"])
+    return render(request, "game.html", s=server_view(state), folder=folder, game=game, feed=feed,
+                  archived=archived, size=info.st_size)
+
+
+async def game_log(request):
+    require(request, "ips")
+    state = server_or_404(request, request.match_info["id"])
+    folder = request.match_info["folder"]
+    path, archived = game_file(request, state, folder)
+    body = await asyncio.to_thread(path.read_bytes if archived else lambda: archive.pack_bytes(path))
+    name = f"{state.config.id}-{folder}.tar.gz"
+    audit(request, "download log", server=state.config.id, target=folder)
+    return web.Response(body=body, content_type="application/gzip",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 def health_data(db, state):
@@ -623,7 +689,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[STATS] = OybStats(config.oyb_data)
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
-    env.filters.update(ts=_ts, ago=_ago, clock=_clock, until=_until, span=_span, gb=memory.gb)
+    env.filters.update(ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb)
     app[JINJA] = env
 
     if start_manager:
@@ -647,6 +713,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/server/{id}/memory.part", memory_part)
     app.router.add_get("/server/{id}/feed.part", feed_part)
     app.router.add_get("/server/{id}/summary.part", summary_part)
+    app.router.add_get("/server/{id}/game/{folder}", game_page)
+    app.router.add_get("/server/{id}/game/{folder}/log", game_log)
     app.router.add_post("/server/{id}/kick", kick)
     app.router.add_post("/server/{id}/power", power)
     app.router.add_get("/bans", bans_page)

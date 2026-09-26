@@ -30,6 +30,7 @@
 <nav class="tabs">
   <a href="#overview" data-tab="overview">Overview</a>
   <a href="#health" data-tab="health">Health</a>
+  <a href="#history" data-tab="history">History</a>
 </nav>
 
 <div data-tab-panel="overview">
@@ -62,6 +63,36 @@
       </div>
     </section>
   </div>
+</div>
+
+<div data-tab-panel="history" hidden>
+  <section class="card">
+    <div class="row">
+      <h2>{{ "Games on " ~ day if day else "Games in the last 7 days" }}</h2>
+      <form method="get" action="/server/{{ s.id }}#history" class="inline">
+        <input type="date" name="day" value="{{ day }}" max="{{ today }}" data-autosubmit>
+        {% if day %}<a class="button small" href="/server/{{ s.id }}#history">Last 7 days</a>{% endif %}
+      </form>
+    </div>
+    {% if games or live %}
+    <div class="scroll"><table>
+      <thead><tr><th>Started</th><th>Length</th><th class="num">Players</th><th class="num">Kills</th><th>Flags</th><th></th></tr></thead>
+      <tbody>
+      {% if live %}
+      <tr><td>{{ live.started|ts }}</td><td><span class="pill on">In progress</span></td><td class="num">—</td><td class="num">—</td><td></td>
+          <td><a href="/server/{{ s.id }}/game/{{ live.folder }}">Open</a></td></tr>
+      {% endif %}
+      {% for g in games %}
+      <tr><td>{{ g.started|ts }}</td><td>{{ (g.ended - g.started)|span }}</td><td class="num">{{ g.players }}</td>
+          <td class="num">{{ g.kills }}</td><td>{% if g.flags %}<span class="pill down">{{ g.flags }} sus</span>{% endif %}</td>
+          <td><a href="/server/{{ s.id }}/game/{{ g.folder }}">Open</a></td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+    <p class="muted">{% if not s.log_dir %}Set <code>log_dir</code> for this server to keep its games.{% else %}No games {{ "that day" if day else "yet" }}. Each game is saved when the server next restarts.{% endif %}</p>
+    {% endif %}
+  </section>
 </div>
 
 <div data-tab-panel="health" hidden>

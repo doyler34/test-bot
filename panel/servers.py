@@ -3,10 +3,12 @@ import logging
 import os
 import re
 import shutil
+import tarfile
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
-from . import alerts as alert_colours, memory
+from . import alerts as alert_colours, archive, memory
 from .alerts import Alerts
 from .connections import LogReader
 from .db import PanelDB, now
@@ -150,6 +152,7 @@ class ServerManager:
                 await self.read_logs(state, reader)
                 if now() - pruned > 3600:
                     pruned = now()
+                    await self.archive_logs(state, reader)
                     self.db.prune_connections()
                     self.db.prune_feed()
                     self.db.prune_incidents()
@@ -168,6 +171,24 @@ class ServerManager:
         flags = [f for event in events for f in state.detector.feed(event)]
         for flag in flags + state.detector.flush(now()):
             self.suspicious(state, flag)
+
+    @property
+    def archive_root(self) -> Path:
+        return Path(self.config.database).resolve().parent / "log-archive"
+
+    async def archive_logs(self, state: ServerState, reader: LogReader):
+        """Packs every finished game's log folder into the panel's archive."""
+        done = self.db.archived(state.config.id)
+        for folder in reader.folders()[:-1]:
+            if folder.name in done or not (folder / "console.log").is_file():
+                continue
+            dest = self.archive_root / state.config.id / f"{folder.name}.tar.gz"
+            try:
+                game = await asyncio.to_thread(archive.archive_game, folder, dest)
+            except (OSError, tarfile.TarError) as exc:
+                log.warning("Couldn't archive %s: %s", folder, exc)
+                continue
+            self.db.add_archive(state.config.id, folder.name, str(dest), dest.stat().st_size, game)
 
     def suspicious(self, state: ServerState, flag: dict):
         """Puts a flag in the live feed; a fresh one also goes to Discord, and a

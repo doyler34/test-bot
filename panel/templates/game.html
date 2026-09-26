@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ s.name }} · {{ game.started|ts }} · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/server/{{ s.id }}#history">{{ s.name }}</a> · Game</p>
+<div class="row">
+  <h1>{{ game.started|ts }}</h1>
+  {% if not archived %}<span class="badge on">In progress</span>{% endif %}
+</div>
+
+<div class="summary">
+  <div class="stat"><b>{{ (game.ended - game.started)|span }}</b><span>Length</span></div>
+  <div class="stat"><b>{{ game.players|length }}</b><span>Players</span></div>
+  <div class="stat"><b>{{ game.kills }}</b><span>Kills</span></div>
+  <div class="stat"><b>{{ game.teamkills }}</b><span>Teamkills</span></div>
+  <div class="stat"><b>{{ game.flags|length }}</b><span>Sus flags</span></div>
+  <div class="stat"><b>{{ game.ended|hms }}</b><span>{{ "Last line" if not archived else "Ended" }}</span></div>
+</div>
+
+{% if game.flags %}
+<section class="card">
+  <h2>Suspicious</h2>
+  <p class="muted">Checked with the current settings, so a past game gets any check added since.</p>
+  <ul class="feed">
+    {% for f in game.flags %}
+    <li class="k-sus"><time>{{ f.at|hms }}</time><b>Sus</b><span>{{ f.text }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<div class="panes">
+  <section class="card pane" data-expand>
+    <h2>Players</h2>
+    <div class="body">
+    {% if game.players %}
+    <table>
+      <thead><tr><th>Name</th>{% if can("ips") %}<th>IP</th>{% endif %}<th>On</th><th class="num">K</th><th class="num">D</th><th class="num">TK</th></tr></thead>
+      <tbody>
+      {% for p in game.players %}
+      <tr><td><a href="/player/{{ p.identity }}">{{ p.name }}</a></td>
+          {% if can("ips") %}<td class="mono">{{ p.ip }}</td>{% endif %}
+          <td>{{ p.first|hms }}–{{ p.last|hms }}</td>
+          <td class="num">{{ p.kills }}</td><td class="num">{{ p.deaths }}</td><td class="num">{{ p.teamkills }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Nobody joined.</p>
+    {% endif %}
+    </div>
+  </section>
+
+  <section class="card pane" data-expand data-filter="all">
+    <div class="row">
+      <h2>Feed</h2>
+      <div class="filters">
+        {% for key, label in [("all", "All"), ("joins", "Joins"), ("kills", "Kills"), ("sus", "Sus"), ("admin", "Admin")] %}
+        <button type="button" class="chip" data-show="{{ key }}">{{ label }}</button>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="body">
+    <ul class="feed">
+      {% for f in feed %}
+      <li class="k-{{ f.kind }}">
+        <time>{{ f.at|hms }}</time>
+        <b>{{ {"join": "Join", "leave": "Leave", "side": "Side", "kill": "Kill", "teamkill": "TK", "admin": "Admin", "sus": "Sus"}.get(f.kind, f.kind) }}</b>
+        <span>{{ f.text }}{% if f.ip and can("ips") %} <span class="muted mono">{{ f.ip }}</span>{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    </div>
+  </section>
+</div>
+
+{% if can("ips") %}
+<p><a class="button small" href="/server/{{ s.id }}/game/{{ folder }}/log">Download the whole log folder</a>
+  <span class="muted">{{ folder }}.tar.gz: console, script and error logs{% if archived %} · {{ "%.1f"|format(size / 1048576) }} MB{% endif %}</span></p>
+{% endif %}
+{% endblock %}

@@ -109,6 +109,18 @@ CREATE TABLE IF NOT EXISTS log_positions (
     position INTEGER NOT NULL,
     PRIMARY KEY (server, path)
 );
+CREATE TABLE IF NOT EXISTS log_archive (
+    server TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    path TEXT NOT NULL,
+    started INTEGER NOT NULL,
+    ended INTEGER NOT NULL,
+    size INTEGER NOT NULL,
+    players INTEGER NOT NULL,
+    kills INTEGER NOT NULL,
+    flags INTEGER NOT NULL,
+    PRIMARY KEY (server, folder)
+);
 CREATE TABLE IF NOT EXISTS incidents (
     id INTEGER PRIMARY KEY,
     server TEXT NOT NULL,
@@ -389,8 +401,9 @@ class PanelDB:
             "  FROM audit WHERE server = ?"
             ") ORDER BY at DESC, src, id DESC LIMIT ?", server, server, limit)
 
-    def prune_feed(self, days=7):
-        self.write("DELETE FROM feed WHERE at < ?", now() - days * 86400)
+    def prune_feed(self, days=7, sus_days=180):
+        self.write("DELETE FROM feed WHERE at < ? AND (kind != 'sus' OR at < ?)",
+                   now() - days * 86400, now() - sus_days * 86400)
 
     def log_positions(self, server) -> dict[str, int]:
         return {r["path"]: r["position"] for r in self.all("SELECT path, position FROM log_positions WHERE server = ?", server)}
@@ -425,6 +438,26 @@ class PanelDB:
 
     def prune_connections(self, days=180):
         self.write("DELETE FROM connections WHERE last_seen < ?", now() - days * 86400)
+
+    # archived games
+
+    def archived(self, server) -> set[str]:
+        return {r["folder"] for r in self.all("SELECT folder FROM log_archive WHERE server = ?", server)}
+
+    def add_archive(self, server, folder, path, size, game):
+        self.write("INSERT OR REPLACE INTO log_archive (server, folder, path, started, ended, size, players, kills, flags)"
+                   " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", server, folder, path, int(game["started"]),
+                   int(game["ended"]), size, game["players"], game["kills"], game["flags"])
+
+    def games(self, server, since, until):
+        return self.all("SELECT * FROM log_archive WHERE server = ? AND started >= ? AND started < ?"
+                        " ORDER BY started DESC", server, since, until)
+
+    def archived_game(self, server, folder):
+        return self.one("SELECT * FROM log_archive WHERE server = ? AND folder = ?", server, folder)
+
+    def audit_between(self, server, since, until):
+        return self.all("SELECT * FROM audit WHERE server = ? AND at >= ? AND at <= ? ORDER BY at", server, since, until)
 
     # incidents
 

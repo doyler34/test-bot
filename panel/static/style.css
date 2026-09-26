@@ -222,3 +222,4 @@ body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(
 .tabs a:hover { color: var(--ink); text-decoration: none; }
 .tabs a.on { color: var(--ink); border-bottom-color: var(--gold); }
 @media (max-width: 900px) { .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+form.inline input[type=date] { display: inline-block; width: auto; margin: 0; padding: 4px 8px; }
