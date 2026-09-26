@@ -17,6 +17,7 @@ from .servers import POWER_RCON, POWER_SERVICE, ServerManager, clean, valid_iden
 log = logging.getLogger("panel.web")
 
 HERE = Path(__file__).parent
+ASSET_VERSION = str(int(max((HERE / "static" / n).stat().st_mtime for n in ("style.css", "app.js"))))
 BRAND = HERE.parent / "assets" / "rank-card"
 COOKIE = "oyb_panel"
 PUBLIC = ("/login", "/static/", "/brand/")
@@ -88,6 +89,7 @@ def render(request, template, **context):
     user = request.get(USER)
     context.update(
         box_total=request.app[MANAGER].box_total,
+        asset_version=ASSET_VERSION,
         oyb=request.app[STATS].player,
         settle_minutes=request.app[MANAGER].settle // 60,
         user=user,
