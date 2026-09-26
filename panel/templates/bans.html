@@ -9,8 +9,13 @@
   <h2>New ban</h2>
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <div class="grid">
-    <label>Identity ID <input name="identity" class="mono" value="{{ prefill.identity }}" placeholder="1a2b3c4d-0000-0000-0000-000000000000" required></label>
-    <label>Name <input name="name" value="{{ prefill.name }}" placeholder="optional"></label>
+    <div class="span picker">
+      <label>Player <input name="player" value="{{ prefill.name or prefill.identity }}" placeholder="Start typing their in-game name, or paste an identity ID"
+        autocomplete="off" required data-player-search></label>
+      <input type="hidden" name="identity" value="{{ prefill.identity }}">
+      <p class="muted mono chosen">{{ prefill.identity }}</p>
+      <ul class="suggest" hidden></ul>
+    </div>
     <label>Length
       <select name="duration">{% for value, label in durations %}<option value="{{ value }}" {% if value == "86400" %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
     </label>

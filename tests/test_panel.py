@@ -11,6 +11,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
+import aiohttp
 from aiohttp.test_utils import TestClient, TestServer
 
 from dev.fake_rcon import SAMPLE_PLAYERS, serve
@@ -724,6 +725,34 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("203.0.113.7", html)
         self.assertEqual((await self.client.get("/server/server-1/game/logs_2026-09-25_10-16-32/log")).status, 403)
 
+    async def test_upload_an_old_game(self):
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+        html = await (await self.client.get("/server/server-1#history")).text()
+        action = re.search(r'action="(/server/server-1/history/upload\?csrf=[^"]+)"', html)[1]
+        text = "Log /x/logs/logs_2026-09-20_08-00-00/console.log started at 2026-09-20 08:00:00\n" + \
+            arrive("08:05:00.000", "Buford", BUFORD, "146.70.168.126") + blast("08:10:00.000", 2, 0, 0) * 3
+        form = aiohttp.FormData()
+        form.add_field("log", text.encode(), filename="logs1-926.txt", content_type="text/plain")
+        response = await self.client.post(action, data=form)
+        self.assertEqual(response.url.path, "/server/server-1/game/logs_2026-09-20_08-00-00")
+        page = await response.text()
+        self.assertIn("Buford", page)
+        self.assertIn("same second", page)
+        self.assertEqual(self.db.archived_game("server-1", "logs_2026-09-20_08-00-00")["players"], 1)
+        self.assertEqual(self.db.audit()[0]["action"], "upload log")
+        self.assertEqual(list(Path(self.manager.archive_root, "server-1", ".upload").iterdir()), [])
+        again = aiohttp.FormData()
+        again.add_field("log", text.encode(), filename="x.txt")
+        self.assertIn("already in History", await (await self.client.post(action, data=again)).text())
+        stale = aiohttp.FormData()
+        stale.add_field("log", text.encode(), filename="x.txt")
+        self.assertEqual((await self.client.post("/server/server-1/history/upload?csrf=nope", data=stale)).status, 403)
+
+    async def test_moderators_cannot_upload(self):
+        await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
+        html = await (await self.client.get("/server/server-1")).text()
+        self.assertNotIn("history/upload", html)
+
     async def test_only_real_game_folders(self):
         await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
         for folder in ("..", "logs_2026-09-25_10-16-3", "nope"):
@@ -952,13 +981,47 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(HAVOC, self.fake.bans)
         self.assertEqual([r["action"] for r in self.db.audit(limit=2)], ["unban", "ban"])
 
-    async def test_ban_needs_a_real_identity(self):
+    async def test_ban_needs_a_known_player(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/bans")
         html = await (await self.client.post("/bans", data={
-            "csrf": token, "identity": "Havoc", "reason": "x", "duration": "0"})).text()
-        self.assertIn("not a Reforger identity ID", html)
+            "csrf": token, "player": "Nobody", "reason": "x", "duration": "0"})).text()
+        self.assertIn("Pick the player from the list", html)
         self.assertEqual(self.db.bans(), [])
+
+    async def test_ban_by_typed_name_or_pasted_id(self):
+        await self.login("boss", "boss-password")
+        self.db.saw_player(GAZ, "GazLagom", "server-1")
+        self.db.saw_player(BURD, "Sgt_Burd", "server-1")
+        token = await self.csrf("/bans")
+        await self.client.post("/bans", data={"csrf": token, "player": "gazlagom", "reason": "x", "duration": "0"})
+        self.assertEqual([(b["identity"], b["name"]) for b in self.db.bans()], [(GAZ, "GazLagom")])
+        await self.client.post("/bans", data={"csrf": token, "player": BURD.upper(), "reason": "x", "duration": "0"})
+        self.assertEqual(self.db.active_ban(BURD)["name"], "Sgt_Burd")
+
+    async def test_two_players_with_one_name_must_be_picked(self):
+        await self.login("boss", "boss-password")
+        self.db.saw_player(GAZ, "Twin", "server-1")
+        self.db.saw_player(BURD, "Twin", "server-1")
+        token = await self.csrf("/bans")
+        html = await (await self.client.post("/bans", data={
+            "csrf": token, "player": "Twin", "reason": "x", "duration": "0"})).text()
+        self.assertIn("2 players have gone by Twin", html)
+        await self.client.post("/bans", data={"csrf": token, "player": "Twin", "identity": BURD,
+                                              "reason": "x", "duration": "0"})
+        self.assertEqual([b["identity"] for b in self.db.bans()], [BURD])
+
+    async def test_player_suggestions(self):
+        await self.login("mod", "mod-password")
+        self.db.saw_player(GAZ, "GazLagom", "server-1")
+        self.db.saw_player(GAZ, "Gaz", "server-1")
+        self.db.saw_player(BURD, "Sgt_Burd", "server-1")
+        matches = await (await self.client.get("/players/search.json?q=gaz")).json()
+        self.assertEqual([(m["identity"], m["name"]) for m in matches], [(GAZ, "Gaz")])
+        self.assertEqual(matches[0]["aka"], ["GazLagom"])
+        self.assertEqual(await (await self.client.get("/players/search.json?q=g")).json(), [])
+        await self.client.post("/logout", data={"csrf": await self.csrf("/")})
+        self.assertEqual((await self.client.get("/players/search.json?q=gaz")).status, 401)
 
     async def test_new_admin_must_change_password(self):
         await self.login("boss", "boss-password")

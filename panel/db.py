@@ -314,6 +314,13 @@ class PanelDB:
     def player_names(self, identity: str):
         return self.all("SELECT * FROM player_names WHERE identity = ? ORDER BY last_seen DESC", identity)
 
+    def by_name(self, name: str):
+        """Everyone who has gone by exactly this name, ignoring case."""
+        return self.all(
+            "SELECT * FROM players WHERE name = ? COLLATE NOCASE OR identity IN"
+            " (SELECT identity FROM player_names WHERE name = ? COLLATE NOCASE) ORDER BY last_seen DESC",
+            name, name)
+
     def search_players(self, text: str, limit=100):
         like = f"%{text}%"
         return self.all(

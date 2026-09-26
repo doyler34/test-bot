@@ -92,6 +92,13 @@
     {% else %}
     <p class="muted">{% if not s.log_dir %}Set <code>log_dir</code> for this server to keep its games.{% else %}No games {{ "that day" if day else "yet" }}. Each game is saved when the server next restarts.{% endif %}</p>
     {% endif %}
+    {% if can("ips") %}
+    <form method="post" action="/server/{{ s.id }}/history/upload?csrf={{ csrf }}" enctype="multipart/form-data" class="upload">
+      <label>Add an old game <input type="file" name="log" accept=".log,.txt,text/plain" required></label>
+      <button class="small">Upload</button>
+      <span class="muted">A console.log from a logs_&lt;date&gt; folder. It goes into History like any other game.</span>
+    </form>
+    {% endif %}
   </section>
 </div>
 

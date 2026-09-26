@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import re
+import secrets
+import shutil
 import time
 from pathlib import Path
 
@@ -180,10 +182,14 @@ async def session(request, handler):
     if request.path.startswith(PUBLIC):
         return await handler(request)
     if user is None:
-        if request.path.startswith("/api/") or request.path.endswith(".part"):
+        if request.path.startswith("/api/") or request.path.endswith((".part", ".json")):
             raise web.HTTPUnauthorized(text="Log in again.")
         raise web.HTTPFound("/login")
-    if request.method == "POST":
+    if request.method == "POST" and request.path.endswith("/history/upload"):
+        # Streamed straight to disk, so the token rides in the URL instead of the form.
+        if not csrf or request.query.get("csrf") != csrf:
+            raise web.HTTPForbidden(text="This form expired. Go back, reload the page and try again.")
+    elif request.method == "POST":
         form = await request.post()
         sent = request.headers.get("X-CSRF") or form.get("csrf", "")
         if not csrf or sent != csrf:
@@ -345,6 +351,61 @@ async def game_page(request):
                   archived=archived, size=info.st_size)
 
 
+UPLOAD_LIMIT = 200 * 1024 * 1024
+FOLDER_NAME = re.compile(r"logs_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
+
+
+async def upload_log(request):
+    """Adds a console.log from anywhere to a server's History, e.g. one saved before the panel ran."""
+    require(request, "ips")
+    state = server_or_404(request, request.match_info["id"])
+    back = f"/server/{state.config.id}#history"
+    reader = await request.multipart()
+    part = await reader.next()
+    while part is not None and part.name != "log":
+        part = await reader.next()
+    if part is None or not part.filename:
+        flash(request, "Choose a console.log to upload.", "error")
+        raise web.HTTPFound(back)
+    manager = request.app[MANAGER]
+    staging = manager.archive_root / state.config.id / ".upload"
+    staging.mkdir(parents=True, exist_ok=True)
+    temp = staging / f"{secrets.token_hex(8)}.log"
+    size = 0
+    try:
+        with open(temp, "wb") as out:
+            while chunk := await part.read_chunk(1 << 20):
+                size += len(chunk)
+                if size > UPLOAD_LIMIT:
+                    flash(request, "That file is over 200 MB.", "error")
+                    raise web.HTTPFound(back)
+                out.write(chunk)
+        with open(temp, "rb") as fh:
+            head = fh.read(4096).decode("utf-8", "replace")
+        match = FOLDER_NAME.search(head) or FOLDER_NAME.search(part.filename)
+        if not match:
+            flash(request, "Couldn't tell when that game started. Upload the console.log from a logs_<date> folder.",
+                  "error")
+            raise web.HTTPFound(back)
+        folder = match[0]
+        if request.app[DB].archived_game(state.config.id, folder):
+            flash(request, f"{folder} is already in History.", "error")
+            raise web.HTTPFound(back)
+        game_dir = staging / folder
+        game_dir.mkdir(exist_ok=True)
+        temp.replace(game_dir / "console.log")
+        dest = manager.archive_root / state.config.id / f"{folder}.tar.gz"
+        try:
+            game = await asyncio.to_thread(archive.archive_game, game_dir, dest)
+        finally:
+            shutil.rmtree(game_dir, ignore_errors=True)
+        request.app[DB].add_archive(state.config.id, folder, str(dest), dest.stat().st_size, game)
+    finally:
+        temp.unlink(missing_ok=True)
+    audit(request, "upload log", server=state.config.id, target=folder, detail=f"{size // 1024} KB")
+    raise web.HTTPFound(f"/server/{state.config.id}/game/{folder}")
+
+
 async def game_log(request):
     require(request, "ips")
     state = server_or_404(request, request.match_info["id"])
@@ -460,13 +521,22 @@ async def add_ban(request):
     require(request, "ban")
     form = await request.post()
     db, manager = request.app[DB], request.app[MANAGER]
+    typed = clean(form.get("player", ""), 64)
     identity = form.get("identity", "").strip().lower()
-    name = clean(form.get("name", ""), 64)
+    name = ""
     reason = clean(form.get("reason", ""))
     duration = form.get("duration", "")
-    if not valid_identity(identity):
-        flash(request, "That is not a Reforger identity ID (it looks like 1a2b3c4d-....).", "error")
-        raise web.HTTPFound("/bans")
+    if valid_identity(typed.lower()):
+        identity = typed.lower()
+    elif valid_identity(identity):
+        name = typed
+    else:
+        found = db.by_name(typed) if typed else []
+        if len(found) != 1:
+            flash(request, "Pick the player from the list as you type, or paste their identity ID." if not found else
+                  f"{len(found)} players have gone by {typed}. Pick the right one from the list.", "error")
+            raise web.HTTPFound("/bans")
+        identity, name = found[0]["identity"], found[0]["name"]
     if duration not in dict(DURATIONS) or not reason:
         flash(request, "Pick a length and give a reason.", "error")
         raise web.HTTPFound("/bans")
@@ -525,6 +595,27 @@ async def remove_ban(request):
 
 
 # players
+
+async def player_search(request):
+    """Suggestions for the ban form, as you type a name or ID."""
+    q = clean(request.query.get("q", ""), 64)
+    if len(q) < 2:
+        return web.json_response([])
+    online = {p["identity"]: s.config.id for s in request.app[MANAGER].states.values() for p in s.players}
+    found = {}
+    for r in request.app[DB].search_players(q, limit=10):
+        names = [n["name"] for n in request.app[DB].player_names(r["identity"]) if n["name"] != r["name"]]
+        found[r["identity"]] = {"identity": r["identity"], "name": r["name"], "seen": _ago(r["last_seen"]),
+                                "aka": names[:3], "online": online.get(r["identity"], ""),
+                                "banned": bool(request.app[DB].active_ban(r["identity"]))}
+    for r in request.app[STATS].search(q)[:10]:
+        if r["identity"] not in found and len(found) < 10:
+            found[r["identity"]] = {"identity": r["identity"], "name": r["name"], "seen": "", "aka": [],
+                                    "online": online.get(r["identity"], ""),
+                                    "banned": bool(request.app[DB].active_ban(r["identity"]))}
+    matches = sorted(found.values(), key=lambda m: (not m["online"], not m["name"].lower().startswith(q.lower())))
+    return web.json_response(matches)
+
 
 async def players_page(request):
     q = clean(request.query.get("q", ""), 64)
@@ -715,12 +806,14 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/server/{id}/summary.part", summary_part)
     app.router.add_get("/server/{id}/game/{folder}", game_page)
     app.router.add_get("/server/{id}/game/{folder}/log", game_log)
+    app.router.add_post("/server/{id}/history/upload", upload_log)
     app.router.add_post("/server/{id}/kick", kick)
     app.router.add_post("/server/{id}/power", power)
     app.router.add_get("/bans", bans_page)
     app.router.add_post("/bans", add_ban)
     app.router.add_post("/bans/{ban_id:\\d+}/remove", remove_ban)
     app.router.add_get("/players", players_page)
+    app.router.add_get("/players/search.json", player_search)
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/notes", add_note)
     app.router.add_get("/console", console_page)

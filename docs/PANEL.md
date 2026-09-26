@@ -21,7 +21,9 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   admins), the whole feed with the same filters as the live one, admin actions
   during it, and the suspicious-activity checks run with today's settings.
   Admins and owners can download the log folder; each download is in the
-  audit log. The game in progress can be opened too.
+  audit log. The game in progress can be opened too. Admins can also upload
+  an old console.log (from before the panel ran, or from another box) at the
+  bottom of the History tab, and it goes in like any other game.
 - **Live players**: refreshes every 10 seconds, with kick and ban on each row.
 - **Live feed**: joins, leaves, side picks, kills and teamkills from the logs,
   messages the server sends over RCON, and admin actions, newest first,
@@ -73,7 +75,9 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   24-hour memory graph. Needs `service` set for that server.
 - **Discord alerts**: bans, unbans, kicks, restarts, crashes, a server going
   offline or coming back, and memory that didn't clear, posted to a staff channel.
-- **Shared bans**: one list for every server. Bans go to every server at once;
+- **Shared bans**: start typing a player's in-game name (or an old name, or
+  paste their identity ID) and pick them from the list; players on right now
+  come first. One list for every server. Bans go to every server at once;
   a server that's offline picks them up when it's back. Unbans work the same way.
 - **IP bans**: tick "IP ban" when banning. It also bans every other account
   the panel has seen on that player's IPs (their PC, PlayStation and Xbox

@@ -223,3 +223,13 @@ body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(
 .tabs a.on { color: var(--ink); border-bottom-color: var(--gold); }
 @media (max-width: 900px) { .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 form.inline input[type=date] { display: inline-block; width: auto; margin: 0; padding: 4px 8px; }
+.picker { position: relative; }
+.picker .chosen { margin: 4px 0 0; font-size: .8rem; min-height: 1em; }
+.suggest { position: absolute; left: 0; right: 0; top: 64px; z-index: 20; list-style: none; margin: 0; padding: 0;
+  background: var(--panel-2); border: 1px solid var(--gold); max-height: 320px; overflow: auto; }
+.suggest li { padding: 8px 11px; cursor: pointer; border-bottom: 1px solid var(--line-soft); }
+.suggest li.active, .suggest li:hover { background: var(--panel); }
+.suggest li.online b { color: var(--khaki); }
+.suggest li.empty { cursor: default; }
+.upload { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.upload label { flex: 1 1 260px; }
