@@ -24,12 +24,15 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   offline or coming back, and memory that didn't clear, posted to a staff channel.
 - **Shared bans**: one list for every server. Bans go to every server at once;
   a server that's offline picks them up when it's back. Unbans work the same way.
-- **IP bans**: tick "Also ban their IPs" when banning to ban every IP the
-  panel has seen that player use. Anyone who joins from one of those IPs on
-  another account (seen in the last 12 hours) is kicked within a poll or two,
-  logged as "IP ban kick" and posted to Discord. It kicks rather than bans, since
-  people in one house share an IP; ban the other account yourself if it's them.
-  Lifting or expiry of the ban lifts the IP ban with it.
+- **IP bans**: tick "IP ban" when banning. It also bans every other account
+  the panel has seen on that player's IPs (their PC, PlayStation and Xbox
+  accounts, and alts), and any new account that joins from one of those IPs
+  later (seen in the last 12 hours) is banned and kicked too, logged as
+  "IP ban" and posted to Discord. Each gets the same length, with the reason
+  marked "same IP as ...". People in one house share an IP, so leave it unticked
+  when that matters. Unban each account separately.
+- **Kick on ban**: a banned account that is connected is kicked straight away,
+  and any banned account still on a server is kicked on the next check.
 - **Players**: everyone the panel or the bot has seen, searchable by name, old
   name or identity ID. Each player shows time played, kills, deaths, K/D,
   teamkills and recent games from the bot's logs, their linked Discord account,

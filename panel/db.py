@@ -207,6 +207,18 @@ class PanelDB:
     def ban_ips(self, ban_id: int) -> list[str]:
         return [r["ip"] for r in self.all("SELECT ip FROM ip_bans WHERE ban_id = ? ORDER BY ip", ban_id)]
 
+    def accounts_on_ips(self, ips, exclude=""):
+        """Every other account seen on any of these addresses, newest first."""
+        ips = list(ips)
+        if not ips:
+            return []
+        marks = ",".join("?" * len(ips))
+        return self.all(
+            f"SELECT c.identity, COALESCE(p.name, MAX(c.name)) AS name FROM connections c"
+            f" LEFT JOIN players p ON p.identity = c.identity"
+            f" WHERE c.ip IN ({marks}) AND c.identity != ? GROUP BY c.identity ORDER BY MAX(c.last_seen) DESC",
+            *ips, exclude)
+
     def banned_ips(self) -> set[str]:
         return {r["ip"] for r in self.all(
             "SELECT i.ip FROM ip_bans i JOIN bans b ON b.id = i.ban_id WHERE b.removed_at IS NULL"

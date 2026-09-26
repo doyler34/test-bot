@@ -675,7 +675,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         token = await self.csrf("/bans")
         html = await (await self.client.post("/bans", data={
             "csrf": token, "identity": HAVOC.upper(), "name": "Sgt Havoc", "reason": "team killing", "duration": "86400"})).text()
-        self.assertIn("Banned Sgt Havoc. server-1: done", html)
+        self.assertIn("Banned 1 account: Sgt Havoc (server-1: done", html)
         self.assertEqual(self.fake.bans[HAVOC], "team killing")
         self.assertEqual(sum(c.startswith("#ban create") for c in self.fake.commands), 1)
         ban = self.db.active_ban(HAVOC)
@@ -811,18 +811,21 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "name": "Sgt Havoc",
                                                              "reason": "cheating", "duration": "0", "ip": "1"})).text()
         self.assertIn("IP banned 1 address", html)
+        self.assertIn("Banned 1 account", html)
         rook = SAMPLE_PLAYERS[1]
         self.connect(rook[2], rook[1], "203.0.113.7")
         state = self.manager.state("server-1")
         await self.manager.refresh_players(state)
         await self.manager.enforce_ip_bans(state)
         for _ in range(100):
-            if f"#kick {rook[0]}" in self.fake.commands and self.db.audit()[0]["action"] == "IP ban kick":
+            if f"#kick {rook[0]}" in self.fake.commands and self.db.audit()[0]["action"] == "IP ban":
                 break
             await asyncio.sleep(0.02)
         self.assertIn(f"#kick {rook[0]}", self.fake.commands)
+        self.assertIn(rook[2], self.fake.bans)
+        self.assertIn("same IP as Sgt Havoc", self.db.active_ban(rook[2])["reason"])
         entry = self.db.audit()[0]
-        self.assertEqual((entry["username"], entry["action"], entry["target"]), ("panel", "IP ban kick", "Pte Rook"))
+        self.assertEqual((entry["username"], entry["action"], entry["target"]), ("panel", "IP ban", "Pte Rook"))
         kicks = self.fake.commands.count(f"#kick {rook[0]}")
         await self.manager.enforce_ip_bans(state)
         self.assertEqual(self.fake.commands.count(f"#kick {rook[0]}"), kicks)
@@ -840,6 +843,21 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.db.remove_ban(ban, "boss")
         await self.manager.enforce_ip_bans(state)
         self.assertNotIn(f"#kick {rook[0]}", self.fake.commands)
+
+    async def test_ip_ban_takes_every_account_on_the_ip(self):
+        rook, fennel = SAMPLE_PLAYERS[1], SAMPLE_PLAYERS[2]
+        self.connect(HAVOC, "Sgt Havoc", "203.0.113.7")
+        self.connect(rook[2], rook[1], "203.0.113.7")
+        self.connect(fennel[2], fennel[1], "198.51.100.9")
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/bans")
+        html = await (await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "name": "Sgt Havoc",
+                                                             "reason": "cheating", "duration": "86400", "ip": "1"})).text()
+        self.assertIn("Banned 2 accounts", html)
+        self.assertTrue(self.db.active_ban(rook[2]))
+        self.assertIsNone(self.db.active_ban(fennel[2]))
+        self.assertEqual(self.db.active_ban(rook[2])["expires_at"], self.db.active_ban(HAVOC)["expires_at"])
+        self.assertIn(f"#kick {rook[0]}", self.fake.commands)
 
     async def test_ip_ban_box_is_off_by_default(self):
         self.connect(HAVOC, "Sgt Havoc", "203.0.113.7")

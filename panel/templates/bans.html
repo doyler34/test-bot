@@ -17,7 +17,7 @@
     <label>Reason <input name="reason" maxlength="200" required></label>
   </div>
   {% if can("ips") %}
-  <label class="check"><input type="checkbox" name="ip" value="1"> Also ban their IPs: anyone joining from them on another account is kicked. People in the same house share an IP.</label>
+  <label class="check"><input type="checkbox" name="ip" value="1"> IP ban: also ban every other account seen on their IPs (PC, PlayStation, Xbox, alts), and any new account that joins from them. People in the same house share an IP.</label>
   {% endif %}
   <button class="danger">Ban on all servers</button>
 </form>

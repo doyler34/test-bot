@@ -366,7 +366,7 @@ async def bans_page(request):
 async def add_ban(request):
     require(request, "ban")
     form = await request.post()
-    db = request.app[DB]
+    db, manager = request.app[DB], request.app[MANAGER]
     identity = form.get("identity", "").strip().lower()
     name = clean(form.get("name", ""), 64)
     reason = clean(form.get("reason", ""))
@@ -378,24 +378,40 @@ async def add_ban(request):
         flash(request, "Pick a length and give a reason.", "error")
         raise web.HTTPFound("/bans")
     if db.active_ban(identity):
-        flash(request, "That player is already banned.", "error")
+        flash(request, "That player is already banned. Unban them first to change the ban.", "error")
         raise web.HTTPFound("/bans")
     seconds = int(duration)
-    ban_id = db.add_ban(identity, name or (db.player(identity) or {"name": ""})["name"], reason,
-                        request[USER]["username"], now() + seconds if seconds else None)
-    ips = []
-    if form.get("ip") == "1":
+    expires = now() + seconds if seconds else None
+    name = name or (db.player(identity) or {"name": ""})["name"]
+    by = request[USER]["username"]
+    ip_ban = form.get("ip") == "1" and auth.can(request[USER]["role"], "ips")
+    targets = [(identity, name, reason)]
+    if ip_ban:
         ips = [c["ip"] for c in db.ips(identity)]
-        db.add_ip_bans(ban_id, ips)
-    results = await request.app[MANAGER].push_ban(db.ban(ban_id))
-    summary = ", ".join(f"{k}: {v}" for k, v in results.items()) or "no servers set up"
-    if form.get("ip") == "1":
-        summary += f"; IP banned {len(ips)} address{'es' if len(ips) != 1 else ''}" if ips else "; no IPs known for them yet"
-    audit(request, "ban", target=name or identity,
-          detail=f"{dict(DURATIONS)[duration]} — {reason} ({summary})")
-    alert(request, f"Banned {name or identity}", colour=RED, fields=(
-        ("Length", dict(DURATIONS)[duration]), ("Reason", reason), ("Identity", identity)))
-    flash(request, f"Banned {name or identity}. {summary}")
+        targets += [(a["identity"], a["name"], f"{reason} (same IP as {name or identity[:8]})")
+                    for a in db.accounts_on_ips(ips, identity) if not db.active_ban(a["identity"])]
+    lines = []
+    for target, target_name, target_reason in targets:
+        if ip_ban:
+            ban = manager.ip_ban_account(target, target_name, target_reason, by, expires)
+        else:
+            ban = db.ban(db.add_ban(target, target_name, target_reason, by, expires))
+        results = await manager.push_ban(ban)
+        kicked = await manager.kick_everywhere(target)
+        summary = ", ".join(f"{k}: {v}" for k, v in results.items()) or "no servers set up"
+        if kicked:
+            summary += f"; kicked from {', '.join(kicked)}"
+        audit(request, "ban", target=target_name or target,
+              detail=f"{dict(DURATIONS)[duration]} — {target_reason} ({summary})")
+        alert(request, f"Banned {target_name or target}", colour=RED, fields=(
+            ("Length", dict(DURATIONS)[duration]), ("Reason", target_reason), ("Identity", target)))
+        lines.append(f"{target_name or target} ({summary})")
+    extra = ""
+    if ip_ban:
+        known = len(db.ips(identity))
+        extra = (f" IP banned {known} address{'es' if known != 1 else ''}." if known
+                 else " No IPs known for them yet, so only this account.")
+    flash(request, f"Banned {len(targets)} account{'s' if len(targets) != 1 else ''}: {'; '.join(lines)}.{extra}")
     raise web.HTTPFound("/bans")
 
 

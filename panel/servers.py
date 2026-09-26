@@ -276,25 +276,55 @@ class ServerManager:
                 self.db.saw_player(player["identity"], player["name"], state.config.id)
 
     async def enforce_ip_bans(self, state: ServerState):
-        """Kick anyone on another account who joined from an IP-banned address."""
+        """Kick banned accounts that are still connected, and ban any other
+        account that joins from an IP-banned address."""
         for player in state.players:
             identity = player["identity"]
             if not identity or now() - self._ip_kicked.get(identity, 0) < 30:
                 continue
-            ban = self.db.ip_ban_hit(identity)
-            if ban is None or self.db.active_ban(identity):
+            own = self.db.active_ban(identity)
+            if own:
+                self._ip_kicked[identity] = now()
+                try:
+                    await self.kick(state.config.id, player["id"])
+                except RconError as exc:
+                    log.warning("Kick of banned %s failed: %s", player["name"], exc)
+                    continue
+                self.db.log("panel", "banned player kick", state.config.id, player["name"],
+                            f"still connected while banned ({own['reason']})")
                 continue
-            self._ip_kicked[identity] = now()
-            try:
-                await self.kick(state.config.id, player["id"])
-            except RconError as exc:
-                log.warning("IP ban kick of %s failed: %s", player["name"], exc)
+            hit = self.db.ip_ban_hit(identity)
+            if hit is None:
                 continue
-            banned = ban["name"] or ban["identity"]
-            detail = f"joined from {ban['hit_ip']}, which is IP banned with {banned} ({ban['reason']})"
-            self.db.log("panel", "IP ban kick", state.config.id, player["name"], detail)
-            self.alerts.send(f"Kicked {player['name']} on {state.config.name}", detail.capitalize(),
-                             alert_colours.RED, [("Identity", identity), ("Banned account", banned)])
+            source = hit["name"] or hit["identity"]
+            reason = f"{hit['reason']} (same IP as {source})"
+            ban = self.ip_ban_account(identity, player["name"], reason, "panel", hit["expires_at"])
+            await self.push_ban(ban)
+            await self.kick_everywhere(identity)
+            detail = f"joined from {hit['hit_ip']}, which is IP banned with {source} ({hit['reason']})"
+            self.db.log("panel", "IP ban", state.config.id, player["name"], detail)
+            self.alerts.send(f"Banned {player['name']} on {state.config.name}", detail.capitalize(),
+                             alert_colours.RED, [("Identity", identity), ("Same IP as", source)])
+
+    def ip_ban_account(self, identity, name, reason, by, expires_at):
+        """Ban one account and every IP it has used."""
+        ban_id = self.db.add_ban(identity, name, reason, by, expires_at)
+        self.db.add_ip_bans(ban_id, [c["ip"] for c in self.db.ips(identity)])
+        return self.db.ban(ban_id)
+
+    async def kick_everywhere(self, identity: str) -> list[str]:
+        """Kick this account from every server it is on right now."""
+        kicked = []
+        for state in self.states.values():
+            for player in list(state.players):
+                if player["identity"] == identity:
+                    self._ip_kicked[identity] = now()
+                    try:
+                        await self.kick(state.config.id, player["id"])
+                        kicked.append(state.config.id)
+                    except RconError as exc:
+                        log.warning("Kick after ban failed on %s: %s", state.config.id, exc)
+        return kicked
 
     async def kick(self, server_id: str, player_id: str) -> str:
         if not player_id.isdigit():
