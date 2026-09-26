@@ -677,6 +677,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             "csrf": token, "identity": HAVOC.upper(), "name": "Sgt Havoc", "reason": "team killing", "duration": "86400"})).text()
         self.assertIn("Banned Sgt Havoc. server-1: done", html)
         self.assertEqual(self.fake.bans[HAVOC], "team killing")
+        self.assertEqual(sum(c.startswith("#ban create") for c in self.fake.commands), 1)
         ban = self.db.active_ban(HAVOC)
         await self.client.post(f"/bans/{ban['id']}/remove", data={"csrf": token})
         self.assertNotIn(HAVOC, self.fake.bans)
@@ -798,6 +799,54 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get("/server/server-1/players.part")).text()
         self.assertIn("Banned alt", html)
         self.assertIn("1 alt", html)
+
+    def connect(self, identity, name, ip, at=None):
+        self.db.add_connections("server-1", [{"identity": identity, "name": name, "ip": ip, "guid": "",
+                                              "at": at or now()}], {})
+
+    async def test_ip_ban_kicks_alts(self):
+        self.connect(HAVOC, "Sgt Havoc", "203.0.113.7")
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/bans")
+        html = await (await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "name": "Sgt Havoc",
+                                                             "reason": "cheating", "duration": "0", "ip": "1"})).text()
+        self.assertIn("IP banned 1 address", html)
+        rook = SAMPLE_PLAYERS[1]
+        self.connect(rook[2], rook[1], "203.0.113.7")
+        state = self.manager.state("server-1")
+        await self.manager.refresh_players(state)
+        await self.manager.enforce_ip_bans(state)
+        for _ in range(100):
+            if f"#kick {rook[0]}" in self.fake.commands and self.db.audit()[0]["action"] == "IP ban kick":
+                break
+            await asyncio.sleep(0.02)
+        self.assertIn(f"#kick {rook[0]}", self.fake.commands)
+        entry = self.db.audit()[0]
+        self.assertEqual((entry["username"], entry["action"], entry["target"]), ("panel", "IP ban kick", "Pte Rook"))
+        kicks = self.fake.commands.count(f"#kick {rook[0]}")
+        await self.manager.enforce_ip_bans(state)
+        self.assertEqual(self.fake.commands.count(f"#kick {rook[0]}"), kicks)
+
+    async def test_no_ip_kick_after_unban_or_for_old_addresses(self):
+        rook = SAMPLE_PLAYERS[1]
+        ban = self.db.add_ban(HAVOC, "Sgt Havoc", "cheating", "boss")
+        self.db.add_ip_bans(ban, ["203.0.113.7"])
+        self.connect(rook[2], rook[1], "203.0.113.7", at=now() - 2 * 86400)
+        state = self.manager.state("server-1")
+        await self.manager.refresh_players(state)
+        await self.manager.enforce_ip_bans(state)
+        self.assertNotIn(f"#kick {rook[0]}", self.fake.commands)
+        self.connect(rook[2], rook[1], "203.0.113.7")
+        self.db.remove_ban(ban, "boss")
+        await self.manager.enforce_ip_bans(state)
+        self.assertNotIn(f"#kick {rook[0]}", self.fake.commands)
+
+    async def test_ip_ban_box_is_off_by_default(self):
+        self.connect(HAVOC, "Sgt Havoc", "203.0.113.7")
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/bans")
+        await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "reason": "x", "duration": "0"})
+        self.assertEqual(self.db.banned_ips(), set())
 
     async def test_console_is_audited(self):
         await self.login("boss", "boss-password")

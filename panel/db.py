@@ -88,6 +88,12 @@ CREATE TABLE IF NOT EXISTS connections (
     PRIMARY KEY (identity, ip)
 );
 CREATE INDEX IF NOT EXISTS connections_ip ON connections(ip);
+CREATE TABLE IF NOT EXISTS ip_bans (
+    ban_id INTEGER NOT NULL REFERENCES bans(id),
+    ip TEXT NOT NULL,
+    PRIMARY KEY (ban_id, ip)
+);
+CREATE INDEX IF NOT EXISTS ip_bans_ip ON ip_bans(ip);
 CREATE TABLE IF NOT EXISTS log_positions (
     server TEXT NOT NULL,
     path TEXT NOT NULL,
@@ -193,6 +199,27 @@ class PanelDB:
     def remove_ban(self, ban_id: int, removed_by: str):
         self.write("UPDATE bans SET removed_by = ?, removed_at = ? WHERE id = ? AND removed_at IS NULL",
                    removed_by, now(), ban_id)
+
+    def add_ip_bans(self, ban_id: int, ips):
+        self.db.executemany("INSERT OR IGNORE INTO ip_bans (ban_id, ip) VALUES (?, ?)", [(ban_id, ip) for ip in ips])
+        self.db.commit()
+
+    def ban_ips(self, ban_id: int) -> list[str]:
+        return [r["ip"] for r in self.all("SELECT ip FROM ip_bans WHERE ban_id = ? ORDER BY ip", ban_id)]
+
+    def banned_ips(self) -> set[str]:
+        return {r["ip"] for r in self.all(
+            "SELECT i.ip FROM ip_bans i JOIN bans b ON b.id = i.ban_id WHERE b.removed_at IS NULL"
+            " AND (b.expires_at IS NULL OR b.expires_at > ?)", now())}
+
+    def ip_ban_hit(self, identity: str, within=12 * 3600):
+        """Another player's active IP ban on an address this identity connected from recently."""
+        t = now()
+        return self.one(
+            "SELECT b.*, c.ip AS hit_ip FROM connections c JOIN ip_bans i ON i.ip = c.ip JOIN bans b ON b.id = i.ban_id"
+            " WHERE c.identity = ? AND c.last_seen >= ? AND b.identity != ? AND b.removed_at IS NULL"
+            " AND (b.expires_at IS NULL OR b.expires_at > ?) ORDER BY b.id DESC LIMIT 1",
+            identity, t - within, identity, t)
 
     def mark_synced(self, ban_id: int, server_id: str, action: str):
         self.write("INSERT OR IGNORE INTO ban_sync (ban_id, server_id, action, done_at) VALUES (?, ?, ?, ?)",

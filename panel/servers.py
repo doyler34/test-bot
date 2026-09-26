@@ -77,6 +77,8 @@ class ServerManager:
         self.states = {s.id: ServerState(s) for s in config.servers}
         self._tasks: list[asyncio.Task] = []
         self._stopping = False
+        self._ip_kicked: dict[str, int] = {}
+        self._ban_lock = asyncio.Lock()
 
     def start(self):
         for state in self.states.values():
@@ -113,6 +115,7 @@ class ServerManager:
                     delay = 5
                 await self.refresh_players(state)
                 await self.sync_bans(state)
+                await self.enforce_ip_bans(state)
                 await asyncio.sleep(self.config.poll_seconds)
             except asyncio.CancelledError:
                 raise
@@ -272,6 +275,27 @@ class ServerManager:
             if player["identity"]:
                 self.db.saw_player(player["identity"], player["name"], state.config.id)
 
+    async def enforce_ip_bans(self, state: ServerState):
+        """Kick anyone on another account who joined from an IP-banned address."""
+        for player in state.players:
+            identity = player["identity"]
+            if not identity or now() - self._ip_kicked.get(identity, 0) < 30:
+                continue
+            ban = self.db.ip_ban_hit(identity)
+            if ban is None or self.db.active_ban(identity):
+                continue
+            self._ip_kicked[identity] = now()
+            try:
+                await self.kick(state.config.id, player["id"])
+            except RconError as exc:
+                log.warning("IP ban kick of %s failed: %s", player["name"], exc)
+                continue
+            banned = ban["name"] or ban["identity"]
+            detail = f"joined from {ban['hit_ip']}, which is IP banned with {banned} ({ban['reason']})"
+            self.db.log("panel", "IP ban kick", state.config.id, player["name"], detail)
+            self.alerts.send(f"Kicked {player['name']} on {state.config.name}", detail.capitalize(),
+                             alert_colours.RED, [("Identity", identity), ("Banned account", banned)])
+
     async def kick(self, server_id: str, player_id: str) -> str:
         if not player_id.isdigit():
             raise RconError("player id must be a number")
@@ -292,6 +316,10 @@ class ServerManager:
         return await self._push(ban, "unban")
 
     async def _push(self, ban, action: str) -> dict[str, str]:
+        async with self._ban_lock:
+            return await self._push_locked(ban, action)
+
+    async def _push_locked(self, ban, action: str) -> dict[str, str]:
         results = {}
         for state in self.states.values():
             if not state.config.configured:
@@ -316,10 +344,11 @@ class ServerManager:
         return "done"
 
     async def sync_bans(self, state: ServerState):
-        for ban in self.db.pending_bans(state.config.id):
-            await self._send_ban(state, ban, "ban")
-        for ban in self.db.pending_unbans(state.config.id):
-            await self._send_ban(state, ban, "unban")
+        async with self._ban_lock:
+            for ban in self.db.pending_bans(state.config.id):
+                await self._send_ban(state, ban, "ban")
+            for ban in self.db.pending_unbans(state.config.id):
+                await self._send_ban(state, ban, "unban")
 
     async def power(self, server_id: str, action: str) -> str:
         state = self.states[server_id]

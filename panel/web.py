@@ -357,7 +357,7 @@ async def power(request):
 async def bans_page(request):
     db = request.app[DB]
     show_old = request.query.get("all") == "1"
-    rows = [dict(b, synced=db.synced(b["id"])) for b in db.bans(include_old=show_old)]
+    rows = [dict(b, synced=db.synced(b["id"]), ips=db.ban_ips(b["id"])) for b in db.bans(include_old=show_old)]
     prefill = {k: clean(request.query.get(k, ""), 64) for k in ("identity", "name")}
     return render(request, "bans.html", bans=rows, show_old=show_old, durations=DURATIONS,
                   prefill=prefill, error="")
@@ -383,8 +383,14 @@ async def add_ban(request):
     seconds = int(duration)
     ban_id = db.add_ban(identity, name or (db.player(identity) or {"name": ""})["name"], reason,
                         request[USER]["username"], now() + seconds if seconds else None)
+    ips = []
+    if form.get("ip") == "1":
+        ips = [c["ip"] for c in db.ips(identity)]
+        db.add_ip_bans(ban_id, ips)
     results = await request.app[MANAGER].push_ban(db.ban(ban_id))
     summary = ", ".join(f"{k}: {v}" for k, v in results.items()) or "no servers set up"
+    if form.get("ip") == "1":
+        summary += f"; IP banned {len(ips)} address{'es' if len(ips) != 1 else ''}" if ips else "; no IPs known for them yet"
     audit(request, "ban", target=name or identity,
           detail=f"{dict(DURATIONS)[duration]} — {reason} ({summary})")
     alert(request, f"Banned {name or identity}", colour=RED, fields=(
@@ -432,6 +438,7 @@ async def player_page(request):
     return render(request, "player.html", identity=identity, player=db.player(identity),
                   stats=request.app[STATS].player(identity), stats_here=request.app[STATS].available,
                   ips=db.ips(identity) if auth.can(request[USER]["role"], "ips") else [],
+                  banned_ips=db.banned_ips() if auth.can(request[USER]["role"], "ips") else set(),
                   alts=db.alts(identity) if auth.can(request[USER]["role"], "ips") else [],
                   names=db.player_names(identity), notes=db.notes(identity), bans=bans,
                   active=db.active_ban(identity), durations=DURATIONS)

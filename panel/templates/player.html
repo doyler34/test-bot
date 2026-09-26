@@ -52,7 +52,7 @@
     <thead><tr><th>IP</th><th>Name</th><th>Server</th><th class="num">Times</th><th>First</th><th>Last</th></tr></thead>
     <tbody>
     {% for c in ips %}
-    <tr><td class="mono"><a href="/players?q={{ c.ip|urlencode }}">{{ c.ip }}</a></td><td>{{ c.name }}</td><td>{{ c.server }}</td>
+    <tr><td class="mono"><a href="/players?q={{ c.ip|urlencode }}">{{ c.ip }}</a>{% if c.ip in banned_ips %} <span class="pill down">Banned IP</span>{% endif %}</td><td>{{ c.name }}</td><td>{{ c.server }}</td>
         <td class="num">{{ c.times }}</td><td>{{ c.first_seen|ts }}</td><td title="{{ c.last_seen|ts }}">{{ c.last_seen|ago }}</td></tr>
     {% endfor %}
     </tbody>

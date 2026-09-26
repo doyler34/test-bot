@@ -16,6 +16,9 @@
     </label>
     <label>Reason <input name="reason" maxlength="200" required></label>
   </div>
+  {% if can("ips") %}
+  <label class="check"><input type="checkbox" name="ip" value="1"> Also ban their IPs: anyone joining from them on another account is kicked. People in the same house share an IP.</label>
+  {% endif %}
   <button class="danger">Ban on all servers</button>
 </form>
 {% endif %}
@@ -31,7 +34,7 @@
     <tbody>
     {% for b in bans %}
     <tr>
-      <td><a href="/player/{{ b.identity }}">{{ b.name or b.identity }}</a></td>
+      <td><a href="/player/{{ b.identity }}">{{ b.name or b.identity }}</a>{% if b.ips %} <span class="pill down" title="{{ b.ips|join(', ') if can('ips') else '' }}">IP</span>{% endif %}</td>
       <td class="wrap">{{ b.reason }}</td>
       <td>{% if b.removed_at %}Removed by {{ b.removed_by }}{% else %}{{ b.expires_at|until }}{% endif %}</td>
       <td title="{{ b.created_at|ts }}">{{ b.created_by }}</td>

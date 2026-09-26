@@ -163,3 +163,5 @@ ul { padding-left: 18px; }
   .top nav { order: 3; flex-basis: 100%; }
   h1 { font-size: 1.6rem; }
 }
+label.check { display: flex; gap: 8px; align-items: flex-start; text-transform: none; font-family: var(--body); letter-spacing: 0; margin-bottom: 12px; }
+label.check input { width: auto; margin: 3px 0 0; }
