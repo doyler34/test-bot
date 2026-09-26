@@ -233,3 +233,5 @@ form.inline input[type=date] { display: inline-block; width: auto; margin: 0; pa
 .suggest li.empty { cursor: default; }
 .upload { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 .upload label { flex: 1 1 260px; }
+.sus-pane { height: 360px; margin-bottom: 18px; }
+.sus-pane > p { flex: none; }

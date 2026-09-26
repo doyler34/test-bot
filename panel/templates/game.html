@@ -17,14 +17,16 @@
 </div>
 
 {% if game.flags %}
-<section class="card">
-  <h2>Suspicious</h2>
-  <p class="muted">Checked with the current settings, so a past game gets any check added since.</p>
+<section class="card pane sus-pane" data-expand>
+  <h2>Suspicious ({{ game.flags|length }})</h2>
+  <p class="muted">Newest first. Checked with the current settings, so a past game gets any check added since.</p>
+  <div class="body">
   <ul class="feed">
-    {% for f in game.flags %}
+    {% for f in game.flags|sort(attribute="at", reverse=True) %}
     <li class="k-sus"><time>{{ f.at|hms }}</time><b>Sus</b><span>{{ f.text }}</span></li>
     {% endfor %}
   </ul>
+  </div>
 </section>
 {% endif %}
 
