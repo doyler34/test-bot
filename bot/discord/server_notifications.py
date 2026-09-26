@@ -20,6 +20,7 @@ from bot.storage.account_links import AccountLinks
 from bot.discord.join_oyb import prepare_join_channel
 from bot.ranks.rank_sync import RankSync
 from bot.discord.ban_roles import BanRoles
+from bot.discord.ban_tickets import BanTickets
 from bot.discord.rank_command import RankCommand
 from bot.storage.combat_store import migrate as migrate_combat
 from bot.tracking.combat_ingestor import CombatIngestor
@@ -129,6 +130,7 @@ class NotificationBot(TimerBot):
         self.server_stats = ServerStats(self)
         self.maintenance = Maintenance(self)
         self.ban_roles = BanRoles(self)
+        self.ban_tickets = BanTickets(self)
         self._boot_lock = asyncio.Lock()
         self._booted = False
 
@@ -158,6 +160,18 @@ class NotificationBot(TimerBot):
 
     async def on_message(self, message):
         await award_message(self, message)
+
+    async def on_guild_channel_create(self, channel):
+        try:
+            await self.ban_tickets.channel_created(channel)
+        except Exception:
+            logger.exception("Checking new channel %s for a banned player failed", channel.id)
+
+    async def on_thread_create(self, thread):
+        try:
+            await self.ban_tickets.thread_created(thread)
+        except Exception:
+            logger.exception("Checking new thread %s for a banned player failed", thread.id)
 
     async def on_ready(self):
         if self.voice_channel_id:

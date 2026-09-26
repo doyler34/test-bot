@@ -191,7 +191,16 @@ long, the reason, when it ends, and `BAN_APPEAL` from the bot's `.env` if set
 is left out, since the other account may be someone else in their house. One
 DM per person however many of their accounts were banned, sent once; bans
 from before the bot was running aren't messaged. Players with DMs closed just
-don't get one. The bot makes the
+don't get one.
+
+When a banned player opens a ticket, the bot posts their ban into it (account,
+length, reason, when it ends, and a panel link if `PANEL_URL` is set), so staff
+don't have to ask. It works with Ticket King or any ticket bot that makes a
+channel or thread per ticket. Set `BAN_TICKET_CHANNEL` in the bot's `.env` to
+the channel with the ticket panel; tickets made as channels are watched in
+that channel's category (or `BAN_TICKET_CATEGORY`), tickets made as threads
+under that channel. The bot needs to see and post in the ticket channels.
+Tickets from players who aren't banned are left alone. The bot makes the
 roles itself the first time it needs them; they carry no permissions.
 
 It reads the panel's `data/panel.sqlite3`, which is where it already is when
