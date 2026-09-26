@@ -172,6 +172,8 @@ label.check input { width: auto; margin: 3px 0 0; }
 .controls form { margin: 0; }
 .controls .muted { font-size: .85rem; margin-left: 6px; }
 .panes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.main-pane { margin-bottom: 18px; }
+.main-pane .stats { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 .panes .card { margin: 0; min-width: 0; }
 .pane { display: flex; flex-direction: column; height: 460px; padding-top: 14px; }
 .pane > h2, .pane > .row { flex: none; padding-right: 36px; }

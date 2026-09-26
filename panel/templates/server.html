@@ -23,6 +23,16 @@
 </div>
 {% endif %}
 
+<section class="card main-pane">
+  <h2>Health</h2>
+  {% if s.service %}
+  <div data-refresh="/server/{{ s.id }}/memory.part">
+  {% include "_memory.html" %}
+  </div>
+  {% endif %}
+  {% include "_health.html" %}
+</section>
+
 <div class="panes">
   <section class="card pane" data-expand>
     <h2>Players</h2>
@@ -42,18 +52,6 @@
     </div>
     <div class="body" data-refresh="/server/{{ s.id }}/feed.part" data-every="5000">
     {% include "_feed.html" %}
-    </div>
-  </section>
-
-  <section class="card pane" data-expand>
-    <h2>Health</h2>
-    <div class="body">
-      {% if s.service %}
-      <div data-refresh="/server/{{ s.id }}/memory.part">
-      {% include "_memory.html" %}
-      </div>
-      {% endif %}
-      {% include "_health.html" %}
     </div>
   </section>
 
