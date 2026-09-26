@@ -1,5 +1,21 @@
 {% extends "base.html" %}
 {% block body %}
+<section class="card welcome">
+  <p class="kicker">{{ welcome.greeting }}</p>
+  <h1>Welcome, {{ user.username }}</h1>
+  <p>You're signed in as {{ "an" if user.role in ("admin", "owner") else "a" }} <b>{{ user.role }}</b>.
+    {% if user.role == "owner" %}You can do everything here, including the raw console and managing admin accounts.
+    {% elif user.role == "admin" %}You can kick, ban, see IPs and alts, run the server controls and read the audit log.
+    {% else %}You can watch the servers, look players up, kick and leave notes. Bans go to an admin.{% endif %}</p>
+  <div class="stats">
+    <div class="stat"><b>{{ welcome.online }}/{{ cards|length }}</b><span>Servers online</span></div>
+    <div class="stat"><b>{{ welcome.players }}</b><span>Players on now</span></div>
+    <div class="stat"><b>{{ welcome.bans }}</b><span>Active bans</span></div>
+    <div class="stat"><b class="{{ 'warn' if welcome.sus }}">{{ welcome.sus }}</b><span>Sus flags, last 24h</span></div>
+  </div>
+  <p><a class="button small" href="/guide">Read the guide</a> <span class="muted">How everything in OYB Control works, from kicking a player to spotting a cheater.</span></p>
+</section>
+
 <p class="kicker">Command overview</p>
 <h1>Servers</h1>
 <div class="cards" data-refresh="/cards.part">

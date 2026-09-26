@@ -1011,6 +1011,16 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(HAVOC, self.fake.bans)
         self.assertEqual([r["action"] for r in self.db.audit(limit=2)], ["unban", "ban"])
 
+    async def test_welcome_and_guide(self):
+        await self.login("mod", "mod-password")
+        html = await (await self.client.get("/")).text()
+        self.assertIn("Welcome, mod", html)
+        self.assertIn('href="/guide"', html)
+        guide = await (await self.client.get("/guide")).text()
+        self.assertIn("Spotting cheaters", guide)
+        self.assertIn("Bans need an admin", guide)
+        self.assertNotIn("id=\"console\"", guide)
+
     async def test_ban_needs_a_known_player(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/bans")

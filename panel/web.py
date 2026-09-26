@@ -285,7 +285,20 @@ def server_view(state):
 
 async def dashboard(request):
     states = [server_view(s) for s in request.app[MANAGER].states.values()]
-    return render(request, "dashboard.html", cards=states)
+    db = request.app[DB]
+    hour = time.localtime().tm_hour
+    welcome = {
+        "greeting": "Good morning" if 5 <= hour < 12 else "Good afternoon" if hour < 18 else "Good evening",
+        "online": sum(1 for s in states if s["online"]),
+        "players": sum(len(s["players"]) for s in states if s["online"]),
+        "bans": len(db.bans()),
+        "sus": db.one("SELECT COUNT(*) FROM feed WHERE kind = 'sus' AND at > ?", now() - 86400)[0],
+    }
+    return render(request, "dashboard.html", cards=states, welcome=welcome)
+
+
+async def guide(request):
+    return render(request, "guide.html")
 
 
 async def dashboard_part(request):
@@ -798,6 +811,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/account", account)
     app.router.add_get("/", dashboard)
     app.router.add_get("/cards.part", dashboard_part)
+    app.router.add_get("/guide", guide)
     app.router.add_get("/api/status", status_api)
     app.router.add_get("/server/{id}", server_page)
     app.router.add_get("/server/{id}/players.part", players_part)

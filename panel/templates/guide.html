@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Guide · OYB Control{% endblock %}
+{% block body %}
+<div class="guide">
+<p class="kicker">How it all works</p>
+<h1>Guide</h1>
+<nav class="toc">
+  <a href="#roles">Roles</a><a href="#servers">Servers</a><a href="#feed">Live feed</a><a href="#sus">Spotting cheaters</a>
+  <a href="#players">Players</a><a href="#kick">Kicking</a><a href="#bans">Bans</a><a href="#history">History</a>
+  <a href="#health">Health</a><a href="#discord">Discord</a><a href="#console">Console</a><a href="#account">Your account</a>
+</nav>
+
+<section class="card" id="roles">
+  <h2>Roles</h2>
+  <p>Everyone has their own login, and everything you do is written to the audit log with your name on it.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Role</th><th>Can</th></tr></thead>
+    <tbody>
+      <tr><td>Moderator</td><td>See the servers and players, kick, leave notes on players</td></tr>
+      <tr><td>Admin</td><td>Everything a moderator can, plus ban and unban, see IPs and alt accounts, start / stop / restart servers, download and upload game logs, read the audit log</td></tr>
+      <tr><td>Owner</td><td>Everything, plus the raw RCON console and making admin accounts</td></tr>
+    </tbody>
+  </table></div>
+  <p>You're a <b>{{ user.role }}</b>.</p>
+</section>
+
+<section class="card" id="servers">
+  <h2>Servers</h2>
+  <p>The home page shows every server with its status, player count and memory. Click one to open it.</p>
+  <ul>
+    <li><b>Controls</b> along the top: <b>Restart mission</b> starts a new game without restarting the server program. <b>Shut down (RCON)</b> stops the game from inside. <b>Start / Stop / Restart server</b> control the whole server program. Every button asks you to confirm first, because everyone on is affected.</li>
+    <li><b>Summary strip</b>: players on, RCON ping, server FPS, memory, uptime over the last day and how long it's been running. It refreshes every 10 seconds.</li>
+    <li><b>Tabs</b>: Overview (players, live feed, recent actions), Health and History.</li>
+    <li>Every box has a <b>⤢</b> button in the corner to go full screen. Press <b>Esc</b> to close it.</li>
+  </ul>
+</section>
+
+<section class="card" id="feed">
+  <h2>Live feed</h2>
+  <p>Everything happening in game, newest first, refreshing every 5 seconds: joins and leaves, side picks, kills and teamkills (with distance, and the damage type when it isn't a bullet), messages from the server, and admin actions.</p>
+  <p>Use the chips to filter: <b>Joins</b>, <b>Kills</b>, <b>Sus</b>, <b>Admin</b> and <b>RCON</b>.</p>
+</section>
+
+<section class="card" id="sus">
+  <h2>Spotting cheaters</h2>
+  <p>The panel watches the logs for the patterns we found when we caught a cheater spawning explosions. Anything that trips a check shows up as a red <b>Sus</b> row in the live feed and is posted to the staff Discord channel.</p>
+  <ul>
+    <li><b>Explosions credited to AI</b>: players dying to explosions with no named killer, so nothing in the kill feed. It flags 3 in the same second, or 5 within 5 minutes.</li>
+    <li><b>Script error spike</b>: the server failing to spawn players properly, over and over.</li>
+    <li><b>Rapid kills</b>: 6 rifle kills in 30 seconds.</li>
+    <li><b>Headshots</b>: 10+ kills in 15 minutes with three quarters or more to the head.</li>
+    <li><b>Teamkill spree</b>: 3 teamkills in 10 minutes.</li>
+  </ul>
+  <p>An explosion or error flag waits 2 minutes, then tells you <b>who joined just before</b> and <b>who was killing nearby</b>. It also saves everyone who was online. If the same player is on for incidents again, on any server, the flag says so ("At earlier incidents too: Name (2x)"), and their player page lists every incident they were present for.</p>
+  <p><b>A flag is a reason to spectate, not proof.</b> The logs never say which weapon was used, and gunships and grenade launchers can look odd too. One flag with someone's name in it means little; the same name at several is worth a close look.</p>
+</section>
+
+<section class="card" id="players">
+  <h2>Players</h2>
+  <p>Search anyone who has ever joined by name, an old name or their identity ID{% if can("ips") %}, or by IP{% endif %}. A player's page shows:</p>
+  <ul>
+    <li>Time played, kills, deaths, K/D, teamkills and recent games, and their linked Discord account.</li>
+    <li>Names they've used, first and last seen, ban history and admin notes. Leave a note whenever you deal with someone so the next admin knows.</li>
+    {% if can("ips") %}<li><b>Connections</b>: every IP they've played from, their BattlEye GUID, and every other account seen on the same IP. That's how alts and ban evaders show up. In the live player list, a pill marks players with other accounts, red if one of them is banned.</li>{% endif %}
+    <li>Any suspicious incidents they were online for.</li>
+  </ul>
+  <p>Players on PC, PlayStation and Xbox get a different identity ID on each, so one person can have several accounts. Shared IPs are how you link them.</p>
+</section>
+
+<section class="card" id="kick">
+  <h2>Kicking</h2>
+  <p>Use the <b>Kick</b> button on a player's row in the server's player list. They can rejoin straight away, so use it for a warning or to sort out a bug, and ban for anything more.</p>
+</section>
+
+<section class="card" id="bans">
+  <h2>Bans</h2>
+  {% if can("ban") %}
+  <ul>
+    <li>Go to <b>Bans</b>, start typing the player's in-game name and pick them from the list. Players online come first. You can paste an identity ID instead.</li>
+    <li>Pick a length and give a reason. The ban goes to every server at once and kicks them if they're on. A server that's offline picks it up when it's back.</li>
+    <li><b>IP ban</b> also bans every other account seen on their IPs (PC, PlayStation, Xbox, alts), and bans and kicks any new account that joins from one of those IPs later. People in one house share an IP, so leave it unticked when that matters.</li>
+    <li>If the player has linked their Discord, the bot gives them a <b>Banned · length</b> role so everyone can see it, and takes it off when the ban ends.</li>
+    <li>To unban, press <b>Unban</b> next to the ban. IP bans are undone one account at a time.</li>
+  </ul>
+  {% else %}
+  <p>Bans need an admin. Kick the player and ask an admin, and leave a note on their player page saying what happened.</p>
+  {% endif %}
+</section>
+
+<section class="card" id="history">
+  <h2>History</h2>
+  <p>Every game is saved when the server next restarts, whole log folder and all, and kept for good. Open a server's <b>History</b> tab to see the last week's games, or pick any day.</p>
+  <p>Opening a game shows who played (when they were on, and their kills, deaths and teamkills), the whole feed with the same filters as the live one, admin actions during it, and the suspicious-activity checks run with today's settings.</p>
+  {% if can("ips") %}<p>You can <b>download</b> a game's log folder from its page, and <b>upload</b> an old console.log at the bottom of the History tab to add a game from before the panel was running.</p>{% endif %}
+</section>
+
+<section class="card" id="health">
+  <h2>Health</h2>
+  <ul>
+    <li><b>Uptime</b> over the last day and week, crashes (the server stopping without anyone pressing a button), and recent starts and stops.</li>
+    <li><b>Memory</b>: a graph of the last 24 hours. A few minutes after a full server restart the panel notes what a clean server uses.</li>
+    <li>After <b>Restart mission</b>, the panel checks memory again once the new mission has loaded. If it's still well above a clean start, the old mission's memory wasn't let go, and it's time for a full <b>Restart server</b>. A bit higher than a clean start is normal.</li>
+    <li>The real sign of a leak is memory that climbs higher after every mission restart. A full server restart every 6–12 hours keeps it in check.</li>
+  </ul>
+</section>
+
+<section class="card" id="discord">
+  <h2>Discord</h2>
+  <ul>
+    <li>Bans, unbans, kicks, restarts, crashes, a server going down or coming back, memory that didn't clear, and sus flags are posted to the staff channel.</li>
+    <li>Players link their game account to Discord through the bot. Anyone who has played on one of the servers can link.</li>
+  </ul>
+</section>
+
+{% if can("console") %}
+<section class="card" id="console">
+  <h2>Console</h2>
+  <p>Sends raw RCON commands to a server, for anything the buttons don't cover. Everything sent is in the audit log. Use the buttons where there's one for the job.</p>
+</section>
+{% endif %}
+
+<section class="card" id="account">
+  <h2>Your account</h2>
+  <ul>
+    <li>Change your password from your name in the top right. New accounts have to pick a password the first time they log in.</li>
+    <li>Forgot it? Ask an owner to reset it{% if can("users") %} (Admins → your admin → reset password){% endif %}.</li>
+    <li>Too many wrong passwords locks the login for a little while.</li>
+  </ul>
+</section>
+</div>
+{% endblock %}
