@@ -52,3 +52,14 @@ document.addEventListener("click", (event) => {
   const pane = chip.closest("[data-filter]");
   pane.dataset.filter = chip.dataset.show;
 });
+
+function showTab(name) {
+  const panels = document.querySelectorAll("[data-tab-panel]");
+  if (!panels.length) return;
+  if (![...panels].some((panel) => panel.dataset.tabPanel === name)) name = panels[0].dataset.tabPanel;
+  for (const panel of panels) panel.hidden = panel.dataset.tabPanel !== name;
+  for (const tab of document.querySelectorAll("[data-tab]")) tab.classList.toggle("on", tab.dataset.tab === name);
+}
+
+showTab(location.hash.slice(1));
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));

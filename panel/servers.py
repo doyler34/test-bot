@@ -59,6 +59,9 @@ class ServerState:
     process_age: int = 0
     fresh: int = 0
     check: dict | None = None
+    ping_ms: int = 0
+    fps: float = 0.0
+    fps_at: int = 0
     expected_until: int = 0
     last_sample: int = 0
     was_online: bool | None = None
@@ -153,6 +156,9 @@ class ServerManager:
     async def read_logs(self, state: ServerState, reader: LogReader):
         positions = self.db.log_positions(state.config.id)
         events, moved = await asyncio.to_thread(reader.scan, positions)
+        for event in events:
+            if event["kind"] == "fps" and event["at"] >= state.fps_at:
+                state.fps, state.fps_at = event["fps"], event["at"]
         if moved:
             self.db.add_connections(state.config.id, events, moved)
 
@@ -279,6 +285,7 @@ class ServerManager:
 
     async def refresh_players(self, state: ServerState):
         output = await self.command(state.config.id, state.config.commands["players"])
+        state.ping_ms = state.client.ping_ms if state.client else 0
         state.raw_players = output
         state.players = parse_players(output)
         state.updated = now()

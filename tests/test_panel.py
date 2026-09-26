@@ -492,6 +492,14 @@ class ConnectionLogTests(unittest.TestCase):
         events = self.scan()
         self.assertEqual(events[0]["at"], int(time.mktime((2026, 9, 26, 0, 17, 20, 0, 0, -1))))
 
+    def test_server_fps(self):
+        write_log(self.tmp.name, "logs_2026-09-25_10-16-32",
+                  "10:17:00.000  DEFAULT      : FPS: 58.3, frame time (avg: 17.2 ms), Mem: 1234 kB, Player: 1, AI: 20\n")
+        events, _ = self.reader.scan({})
+        self.assertEqual([e["fps"] for e in events if e["kind"] == "fps"], [58.3])
+        self.db.add_connections("server-1", events, {})
+        self.assertEqual(self.db.feed("server-1"), [])
+
     def test_missing_folder(self):
         self.assertEqual(LogReader("/nonexistent").scan({}), ([], {}))
 
@@ -899,6 +907,17 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         token = await self.csrf("/bans")
         await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "reason": "x", "duration": "0"})
         self.assertEqual(self.db.banned_ips(), set())
+
+    async def test_summary_strip(self):
+        state = self.manager.state("server-1")
+        state.fps, state.fps_at = 57.6, now()
+        await self.login("boss", "boss-password")
+        html = await (await self.client.get("/server/server-1/summary.part")).text()
+        self.assertIn("Ping (RCON)", html)
+        self.assertIn(">58<", html)
+        self.assertIn(" ms<", html)
+        page = await (await self.client.get("/server/server-1")).text()
+        self.assertIn('data-tab-panel="health"', page)
 
     async def test_live_feed(self):
         self.db.add_feed("server-1", "kill", "GazLagom killed Sgt_Burd (120 m)")

@@ -343,7 +343,7 @@ class PanelDB:
     def add_connections(self, server, events, positions):
         for e in events:
             if e.get("kind", "identity") != "identity":
-                if e.get("text"):
+                if e.get("text") and e["kind"] != "fps":
                     self.db.execute("INSERT INTO feed (server, at, kind, text, ip) VALUES (?, ?, ?, ?, ?)",
                                     (server, e["at"], e["kind"], e["text"][:300], e.get("ip", "")))
                 continue

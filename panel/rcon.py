@@ -3,6 +3,7 @@
 import asyncio
 import collections
 import struct
+import time
 import zlib
 
 # Reforger acks a command with an empty reply, then sends the actual output as
@@ -57,6 +58,7 @@ class RconClient:
         self._lock = asyncio.Lock()
         self._output = None
         self._recent = collections.deque(maxlen=32)
+        self.ping_ms = 0
 
     @property
     def connected(self) -> bool:
@@ -100,8 +102,10 @@ class RconClient:
             self._parts.pop(seq, None)
             output = self._output = {"command": text, "seen": False, "lines": [], "got": asyncio.Event()}
             self._transport.sendto(packet(1, bytes([seq]) + text.encode()))
+            sent = time.monotonic()
             try:
                 reply = await asyncio.wait_for(future, self.timeout)
+                self.ping_ms = round((time.monotonic() - sent) * 1000)
                 if not reply:
                     try:
                         await asyncio.wait_for(output["got"].wait(), self.output_wait)

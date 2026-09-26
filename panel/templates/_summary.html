@@ -1,0 +1,9 @@
+<div class="summary">
+  <div class="stat"><b>{{ s.players|length if s.online else "—" }}</b><span>Players on</span></div>
+  <div class="stat"><b class="{{ 'warn' if s.ping_ms > 250 }}">{{ s.ping_ms ~ " ms" if s.online else "—" }}</b><span>Ping (RCON)</span></div>
+  <div class="stat"><b class="{{ 'warn' if s.fps is not none and s.fps < 20 }}">{{ "%.0f"|format(s.fps) if s.fps is not none else "—" }}</b><span>Server FPS</span></div>
+  <div class="stat"><b>{{ s.memory|gb if s.pid else "—" }}</b><span>Memory</span></div>
+  <div class="stat"><b>{{ "%.1f"|format(health.day * 100) ~ "%" if health.day is not none else "—" }}</b><span>Up, last 24h</span></div>
+  <div class="stat"><b>{{ s.process_age|span if s.pid else "—" }}</b><span>Running for</span></div>
+</div>
+{% if s.check and s.check.status == "leak" %}<p class="warn">Memory didn't clear after the last mission restart. See the Health tab.</p>{% endif %}

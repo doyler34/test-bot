@@ -19,6 +19,7 @@ LEAVE = re.compile(r"BattlEye Server: 'Player #\d+ (.+) disconnected'")
 GUID = re.compile(r"BattlEye Server: 'Player #\d+ (.+) - BE GUID: ([0-9a-fA-F]{32})'")
 IDENTITY = re.compile(r"### Updating player: PlayerId=\d+, Name=(.*?), rplIdentity=0x[0-9a-fA-F]+, "
                       r"IdentityId=([0-9a-fA-F-]{36})")
+FPS = re.compile(r"\bFPS:\s*([0-9]+(?:\.[0-9]+)?)")
 PENDING_SECONDS = 600
 
 
@@ -96,6 +97,8 @@ class LogReader:
             return kill_event(match[2], match[3], at)
         elif match := SIDE.match(line.rstrip()):
             return {"kind": "side", "at": at, "text": f"{match[2]} joined {match[4]}", "ip": ""}
+        elif match := FPS.search(line):
+            return {"kind": "fps", "at": at, "fps": float(match[1])}
         elif match := GUID.search(line):
             if match[1] in pending:
                 pending[match[1]]["guid"] = match[2].lower()

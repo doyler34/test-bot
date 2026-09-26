@@ -266,6 +266,8 @@ def server_view(state):
         "process_age": state.process_age,
         "fresh": state.fresh,
         "check": state.check,
+        "ping_ms": state.ping_ms,
+        "fps": state.fps if now() - state.fps_at < 180 else None,
     }
 
 
@@ -284,16 +286,25 @@ async def server_page(request):
     actions = list(POWER_RCON) + (list(POWER_SERVICE) if state.config.service else [])
     db = request.app[DB]
     recent = db.audit(server=state.config.id, limit=15)
+    return render(request, "server.html", s=server_view(state), actions=actions, labels=POWER_LABELS,
+                  recent=recent, health=health_data(db, state), alts=alt_flags(request, state),
+                  feed=db.feed(state.config.id))
+
+
+def health_data(db, state):
     t = now()
-    health = {
+    return {
         "day": db.uptime(state.config.id, t - 86400),
         "week": db.uptime(state.config.id, t - 7 * 86400),
         "events": db.events(state.config.id, 12, ("started", "crashed", "stopped", "online", "offline")),
         "crashes": len([e for e in db.events(state.config.id, 200, ("crashed",)) if e["at"] > t - 7 * 86400]),
         "chart": memory_chart(db.memory(state.config.id, t - 86400), t - 86400, t, state.fresh),
     }
-    return render(request, "server.html", s=server_view(state), actions=actions, labels=POWER_LABELS,
-                  recent=recent, health=health, alts=alt_flags(request, state), feed=db.feed(state.config.id))
+
+
+async def summary_part(request):
+    state = server_or_404(request, request.match_info["id"])
+    return render(request, "_summary.html", s=server_view(state), health=health_data(request.app[DB], state))
 
 
 async def feed_part(request):
@@ -626,6 +637,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/server/{id}/players.part", players_part)
     app.router.add_get("/server/{id}/memory.part", memory_part)
     app.router.add_get("/server/{id}/feed.part", feed_part)
+    app.router.add_get("/server/{id}/summary.part", summary_part)
     app.router.add_post("/server/{id}/kick", kick)
     app.router.add_post("/server/{id}/power", power)
     app.router.add_get("/bans", bans_page)

@@ -9,6 +9,9 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
 ## What's in it
 
 - **Servers**: all three at a glance, online/offline and player counts.
+- **Server page**: a live summary along the top (players on, RCON ping, server
+  FPS from the `-logStats` lines, memory, uptime and running time), then an
+  Overview tab (players, live feed, recent actions) and a Health tab.
 - **Live players**: refreshes every 10 seconds, with kick and ban on each row.
 - **Live feed**: joins, leaves, side picks, kills and teamkills from the logs,
   messages the server sends over RCON, and admin actions, newest first,

@@ -23,43 +23,56 @@
 </div>
 {% endif %}
 
-<section class="card main-pane">
-  <h2>Health</h2>
-  {% if s.service %}
-  <div data-refresh="/server/{{ s.id }}/memory.part">
-  {% include "_memory.html" %}
-  </div>
-  {% endif %}
-  {% include "_health.html" %}
-</section>
+<div data-refresh="/server/{{ s.id }}/summary.part">
+{% include "_summary.html" %}
+</div>
 
-<div class="panes">
-  <section class="card pane" data-expand>
-    <h2>Players</h2>
-    <div class="body" data-refresh="/server/{{ s.id }}/players.part">
-    {% include "_players.html" %}
-    </div>
-  </section>
+<nav class="tabs">
+  <a href="#overview" data-tab="overview">Overview</a>
+  <a href="#health" data-tab="health">Health</a>
+</nav>
 
-  <section class="card pane" data-expand data-filter="all">
-    <div class="row">
-      <h2>Live feed</h2>
-      <div class="filters">
-        {% for key, label in [("all", "All"), ("joins", "Joins"), ("kills", "Kills"), ("admin", "Admin"), ("rcon", "RCON")] %}
-        <button type="button" class="chip" data-show="{{ key }}">{{ label }}</button>
-        {% endfor %}
+<div data-tab-panel="overview">
+  <div class="panes">
+    <section class="card pane" data-expand>
+      <h2>Players</h2>
+      <div class="body" data-refresh="/server/{{ s.id }}/players.part">
+      {% include "_players.html" %}
       </div>
-    </div>
-    <div class="body" data-refresh="/server/{{ s.id }}/feed.part" data-every="5000">
-    {% include "_feed.html" %}
-    </div>
-  </section>
+    </section>
 
-  <section class="card pane" data-expand>
-    <h2>Recent actions here</h2>
-    <div class="body">
-    {% include "_audit_rows.html" %}
+    <section class="card pane" data-expand data-filter="all">
+      <div class="row">
+        <h2>Live feed</h2>
+        <div class="filters">
+          {% for key, label in [("all", "All"), ("joins", "Joins"), ("kills", "Kills"), ("admin", "Admin"), ("rcon", "RCON")] %}
+          <button type="button" class="chip" data-show="{{ key }}">{{ label }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="body" data-refresh="/server/{{ s.id }}/feed.part" data-every="5000">
+      {% include "_feed.html" %}
+      </div>
+    </section>
+
+    <section class="card pane" data-expand>
+      <h2>Recent actions here</h2>
+      <div class="body">
+      {% include "_audit_rows.html" %}
+      </div>
+    </section>
+  </div>
+</div>
+
+<div data-tab-panel="health" hidden>
+  <section class="card">
+    <h2>Health</h2>
+    {% if s.service %}
+    <div data-refresh="/server/{{ s.id }}/memory.part">
+    {% include "_memory.html" %}
     </div>
+    {% endif %}
+    {% include "_health.html" %}
   </section>
 </div>
 {% endblock %}
