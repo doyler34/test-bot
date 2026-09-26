@@ -28,7 +28,7 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   refreshing every 5 seconds. Filter by joins, kills, sus, admin or RCON. Every box on
   the server page has a fixed height with its own scroll and a full-screen button
   (Esc closes it).
-- **Suspicious activity** (the red "Sus" rows in the live feed, also posted to
+- **Suspicious activity** (the red "Sus" rows in the live feed, kept 180 days, and posted to
   the Discord alerts channel): the patterns from past cheater investigations.
   - Explosions killing players with the kill credited to AI or "neutral or
     factionless", which never shows in the kill feed: 3 players in the same
