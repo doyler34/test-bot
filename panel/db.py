@@ -109,6 +109,12 @@ CREATE TABLE IF NOT EXISTS log_positions (
     position INTEGER NOT NULL,
     PRIMARY KEY (server, path)
 );
+CREATE TABLE IF NOT EXISTS baselines (
+    server TEXT PRIMARY KEY,
+    pid INTEGER NOT NULL,
+    started INTEGER NOT NULL,
+    rss INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS log_archive (
     server TEXT NOT NULL,
     folder TEXT NOT NULL,
@@ -333,6 +339,13 @@ class PanelDB:
     def add_event(self, server, kind, detail="", at=None):
         self.write("INSERT INTO server_events (server, at, kind, detail) VALUES (?, ?, ?, ?)",
                    server, at or now(), kind, detail)
+
+    def save_baseline(self, server, pid, started, rss):
+        self.write("INSERT OR REPLACE INTO baselines (server, pid, started, rss) VALUES (?, ?, ?, ?)",
+                   server, pid, int(started), rss)
+
+    def baseline(self, server):
+        return self.one("SELECT * FROM baselines WHERE server = ?", server)
 
     def events(self, server, limit=20, kinds=None):
         sql = "SELECT * FROM server_events WHERE server = ?"

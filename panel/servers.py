@@ -217,10 +217,13 @@ class ServerManager:
             state.pid = state.memory = state.process_age = 0
         else:
             if sample["pid"] != state.pid:
-                state.fresh = 0
                 started = now() - sample["age"]
+                state.fresh = self._saved_baseline(state, sample["pid"], started)
                 if state.pid:
                     self._process_gone(state, at=started)
+                    # A new server process starts with clean memory, so an old warning no longer applies.
+                    if state.check and state.check["status"] != "waiting":
+                        state.check = None
                 if sample["age"] < 300:
                     self.db.add_event(state.config.id, "started", "", at=started)
             state.pid, state.memory, state.process_age = sample["pid"], sample["rss"], sample["age"]
@@ -229,7 +232,16 @@ class ServerManager:
                 self.db.add_memory(state.config.id, state.memory)
             if not state.fresh and self.settle <= state.process_age <= self.settle + memory.BASELINE_WINDOW:
                 state.fresh = state.memory
+                self.db.save_baseline(state.config.id, state.pid, now() - state.process_age, state.memory)
         self._finish_check(state)
+
+    def _saved_baseline(self, state: ServerState, pid: int, started: float) -> int:
+        """The fresh-start reading for this server process, if one was taken
+        before the panel itself last restarted."""
+        saved = self.db.baseline(state.config.id)
+        if saved and saved["pid"] == pid and abs(saved["started"] - started) <= 5:
+            return saved["rss"]
+        return 0
 
     def _process_gone(self, state: ServerState, at=None):
         if now() < state.expected_until:

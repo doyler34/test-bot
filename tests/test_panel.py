@@ -178,7 +178,7 @@ class MemoryTests(unittest.TestCase):
         self.assertIn("Still holding 2.5 GB more than a fresh start", message)
 
     def test_verdict_without_fresh_start(self):
-        self.assertEqual(memory.verdict(6 * GB, int(5.8 * GB), 0)[0], "leak")
+        self.assertEqual(memory.verdict(int(1.2 * GB), int(1.5 * GB), 0)[0], "unknown")
         self.assertEqual(memory.verdict(6 * GB, 3 * GB, 0)[0], "unknown")
 
     def test_reads_proc(self):
@@ -256,6 +256,36 @@ class MissionCheckTests(unittest.IsolatedAsyncioTestCase):
         await self.manager.refresh_memory(self.state)
         self.assertEqual(self.state.check["status"], "ok")
         self.assertIn("restarted", self.state.check["message"])
+
+    async def test_fresh_reading_survives_a_panel_restart(self):
+        await self.manager.refresh_memory(self.state)
+        self.proc.sample.update(rss=int(3.5 * GB))
+        again = ServerManager(panel_config(1, service="reforger-test"), self.db, sampler=self.proc)
+        state = again.state("server-1")
+        await again.refresh_memory(state)
+        self.assertEqual(state.fresh, 3 * GB)
+        self.proc.sample.update(pid=101, age=4000)
+        await again.refresh_memory(state)
+        self.assertEqual(state.fresh, 0)
+
+    async def test_no_fresh_reading_is_not_a_leak(self):
+        self.proc.sample.update(rss=int(1.2 * GB), age=5000)
+        await self.manager.start_mission_check("server-1", "gaz")
+        self.proc.sample["rss"] = int(1.5 * GB)
+        self.state.check["started"] -= 1
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(self.state.check["status"], "unknown")
+
+    async def test_a_server_restart_clears_the_warning(self):
+        await self.manager.refresh_memory(self.state)
+        self.proc.sample["rss"] = 6 * GB
+        await self.manager.start_mission_check("server-1", "gaz")
+        self.state.check["started"] -= 1
+        await self.manager.refresh_memory(self.state)
+        self.assertEqual(self.state.check["status"], "leak")
+        self.proc.sample.update(pid=101, rss=3 * GB, age=10)
+        await self.manager.refresh_memory(self.state)
+        self.assertIsNone(self.state.check)
 
     async def test_no_service_no_check(self):
         await self.manager.start_mission_check("server-2", "gaz")
