@@ -10,7 +10,7 @@ import re
 import time
 from pathlib import Path
 
-from bot.tracking.combat_parser import HEADER as KILL, JOINED as SIDE, PERSON, distance
+from bot.tracking.combat_parser import HEADER as KILL, JOINED as SIDE, PERSON, damage_type, distance
 
 STAMP = re.compile(r"^(\d{2}):(\d{2}):(\d{2})")
 FOLDER = re.compile(r"logs_(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})$")
@@ -20,6 +20,10 @@ GUID = re.compile(r"BattlEye Server: 'Player #\d+ (.+) - BE GUID: ([0-9a-fA-F]{3
 IDENTITY = re.compile(r"### Updating player: PlayerId=\d+, Name=(.*?), rplIdentity=0x[0-9a-fA-F]+, "
                       r"IdentityId=([0-9a-fA-F-]{36})")
 FPS = re.compile(r"\bFPS:\s*([0-9]+(?:\.[0-9]+)?)")
+ZONE = re.compile(r"to the '(\w+)' hit zone")
+VICTIM_AT = re.compile(r" at <(-?[\d.]+), -?[\d.]+, (-?[\d.]+)> was killed by ")
+KILLER_AT = re.compile(r"who was at that time at <(-?[\d.]+), -?[\d.]+, (-?[\d.]+)>")
+SCRIPT_ERROR = re.compile(r"SCRIPT\s*\(E\).*(NULL pointer|INSTIGATOR_OTHER)")
 PENDING_SECONDS = 600
 
 
@@ -92,9 +96,11 @@ class LogReader:
             pending[match[1]] = {"ip": ip, "guid": "", "at": at}
             return {"kind": "join", "at": at, "text": f"{match[1]} connected", "ip": ip}
         elif match := LEAVE.search(line):
-            return {"kind": "leave", "at": at, "text": f"{match[1]} disconnected", "ip": ""}
+            return {"kind": "leave", "at": at, "text": f"{match[1]} disconnected", "ip": "", "name": match[1]}
         elif " KILL " in line and (match := KILL.fullmatch(line.rstrip())):
             return kill_event(match[2], match[3], at)
+        elif SCRIPT_ERROR.search(line):
+            return {"kind": "error", "at": at}
         elif match := SIDE.match(line.rstrip()):
             return {"kind": "side", "at": at, "text": f"{match[2]} joined {match[4]}", "ip": ""}
         elif match := FPS.search(line):
@@ -117,14 +123,25 @@ def kill_event(relation, body, at):
     if not victim:
         return None
     parts = body.split(" was killed by ", 1)
+    metres, zone, where = distance(body), ZONE.search(body), VICTIM_AT.search(body)
+    event = {"at": at, "ip": "", "relation": relation, "victim": victim[2].lower(), "distance": metres,
+             "damage": damage_type(body), "zone": zone[1] if zone else None,
+             "victim_at": (float(where[1]), float(where[2])) if where else None,
+             "killer": None, "killer_name": None, "killer_at": None}
     if len(parts) == 1:
-        text, kind = f"{victim[1]} killed themselves", "kill"
-    else:
-        killer = PERSON.match(parts[1])
-        name = killer[1] if killer else ("AI" if parts[1].startswith("AI") else parts[1].split(" from ")[0])
-        kind = "teamkill" if relation == "TK" else "kill"
-        text = f"{name} {'teamkilled' if relation == 'TK' else 'killed'} {victim[1]}"
-        metres = distance(body)
-        if metres:
-            text += f" ({metres:.0f} m)"
-    return {"kind": kind, "at": at, "text": text, "ip": ""}
+        event.update(kind="kill", text=f"{victim[1]} killed themselves", killer=event["victim"], killer_name=victim[1])
+        return event
+    killer = PERSON.match(parts[1])
+    name = killer[1] if killer else ("AI" if parts[1].startswith("AI") else parts[1].split(" from ")[0])
+    kind = "teamkill" if relation == "TK" else "kill"
+    text = f"{name} {'teamkilled' if relation == 'TK' else 'killed'} {victim[1]}"
+    if metres:
+        text += f" ({metres:.0f} m)"
+    if event["damage"] and event["damage"] != "KINETIC":
+        text += f" · {event['damage'].lower()}"
+    if killer:
+        spot = KILLER_AT.search(parts[1])
+        event.update(killer=killer[2].lower(), killer_name=name,
+                     killer_at=(float(spot[1]), float(spot[2])) if spot else None)
+    event.update(kind=kind, text=text)
+    return event

@@ -78,6 +78,21 @@
 </section>
 {% endif %}
 
+{% if incidents %}
+<section class="card">
+  <h2>On at suspicious incidents ({{ incidents|length }})</h2>
+  <p class="muted">Bursts of explosions credited to AI, or a spike of script errors, while this player was connected. One is chance; the same name at several is worth spectating.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>When</th><th>Server</th><th>What happened</th></tr></thead>
+    <tbody>
+    {% for i in incidents %}
+    <tr><td>{{ i.at|ts }}</td><td>{{ i.server }}</td><td class="wrap">{{ i.text }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}
+
 {% if bans %}
 <section class="card">
   <h2>Ban history</h2>

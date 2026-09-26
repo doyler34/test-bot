@@ -492,6 +492,7 @@ async def player_page(request):
                   banned_ips=db.banned_ips() if auth.can(request[USER]["role"], "ips") else set(),
                   alts=db.alts(identity) if auth.can(request[USER]["role"], "ips") else [],
                   names=db.player_names(identity), notes=db.notes(identity), bans=bans,
+                  incidents=db.incidents_for(identity),
                   active=db.active_ban(identity), durations=DURATIONS)
 
 

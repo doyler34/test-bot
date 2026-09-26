@@ -45,7 +45,7 @@
       <div class="row">
         <h2>Live feed</h2>
         <div class="filters">
-          {% for key, label in [("all", "All"), ("joins", "Joins"), ("kills", "Kills"), ("admin", "Admin"), ("rcon", "RCON")] %}
+          {% for key, label in [("all", "All"), ("joins", "Joins"), ("kills", "Kills"), ("sus", "Sus"), ("admin", "Admin"), ("rcon", "RCON")] %}
           <button type="button" class="chip" data-show="{{ key }}">{{ label }}</button>
           {% endfor %}
         </div>
@@ -55,7 +55,7 @@
       </div>
     </section>
 
-    <section class="card pane" data-expand>
+    <section class="card pane wide" data-expand>
       <h2>Recent actions here</h2>
       <div class="body">
       {% include "_audit_rows.html" %}

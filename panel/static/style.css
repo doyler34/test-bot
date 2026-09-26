@@ -174,6 +174,7 @@ label.check input { width: auto; margin: 3px 0 0; }
 .panes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 
 .panes .card { margin: 0; min-width: 0; }
+.panes .wide { grid-column: 1 / -1; }
 .pane { display: flex; flex-direction: column; height: 460px; padding-top: 14px; }
 .pane > h2, .pane > .row { flex: none; padding-right: 36px; }
 .pane > .body { flex: 1; overflow: auto; min-height: 0; }
@@ -189,7 +190,7 @@ body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(
 .chip { padding: 1px 9px; font-size: .8rem; background: var(--bg); color: var(--muted); border: 1px solid var(--line); clip-path: none; }
 [data-filter="all"] .chip[data-show="all"], [data-filter="joins"] .chip[data-show="joins"],
 [data-filter="kills"] .chip[data-show="kills"], [data-filter="admin"] .chip[data-show="admin"],
-[data-filter="rcon"] .chip[data-show="rcon"] { color: #17130a; background: var(--gold); border-color: var(--gold); }
+[data-filter="rcon"] .chip[data-show="rcon"], [data-filter="sus"] .chip[data-show="sus"] { color: #17130a; background: var(--gold); border-color: var(--gold); }
 .feed { list-style: none; margin: 0; padding: 0; font-size: .9rem; }
 .feed li { display: grid; grid-template-columns: 64px 52px 1fr; gap: 8px; padding: 4px 2px; border-bottom: 1px solid var(--line-soft); }
 .feed time { color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -200,10 +201,13 @@ body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(
 .feed .k-teamkill b, .feed .k-server b { color: var(--red); }
 .feed .k-admin b { color: #8fb4e6; }
 .feed .k-rcon b { color: #c49be0; }
+.feed .k-sus { background: rgba(231, 76, 60, .12); }
+.feed .k-sus b { color: var(--red); }
 [data-filter="joins"] .feed li:not(.k-join):not(.k-leave):not(.k-side),
 [data-filter="kills"] .feed li:not(.k-kill):not(.k-teamkill),
 [data-filter="admin"] .feed li:not(.k-admin),
-[data-filter="rcon"] .feed li:not(.k-rcon):not(.k-server) { display: none; }
+[data-filter="rcon"] .feed li:not(.k-rcon):not(.k-server),
+[data-filter="sus"] .feed li:not(.k-sus) { display: none; }
 
 @media (max-width: 900px) {
   .panes { grid-template-columns: minmax(0, 1fr); }

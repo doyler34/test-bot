@@ -27,7 +27,8 @@ from deploy.setup_config import render_unit
 from panel.config import PanelConfig, PanelConfigError, ServerConfig, load_config
 from panel.db import PanelDB, now
 from panel.rcon import RconClient, RconError, packet, parse
-from panel.servers import ServerManager, parse_players
+from panel.servers import ServerManager, ServerState, parse_players
+from panel.suspicion import Detector
 from panel.web import STATS as STATS_KEY, create_app
 
 HAVOC = SAMPLE_PLAYERS[0][2]
@@ -502,6 +503,144 @@ class ConnectionLogTests(unittest.TestCase):
 
     def test_missing_folder(self):
         self.assertEqual(LogReader("/nonexistent").scan({}), ([], {}))
+
+
+BUFORD = "4bd39e3d-a6e3-4090-a338-00e1dc08ca69"
+
+
+def person(n):
+    return f"00000000-0000-4000-8000-{n:012d}"
+
+
+def blast(clock, victim, x, y, zone="Head", damage="FRAGMENTATION"):
+    return (f"{clock}   SCRIPT       : INFO: KILL KILLED_BY_NEUTRAL_OR_FACTIONLESS: Victim{victim} "
+            f"(playerID = {victim + 10} | UUID = {person(victim)}) from US faction at <{x}, 30, {y}> "
+            f"was killed by AI [0m away from the corpse]. With last inflicted damage type {damage} "
+            f"to the '{zone}' hit zone\n")
+
+
+def shot(clock, killer, killer_id, victim, x, y, zone="Head", metres=40):
+    return (f"{clock}   SCRIPT       : INFO: KILL ENEMY: Victim{victim} (playerID = {victim + 10} | UUID = {person(victim)}) "
+            f"from US faction at <{x}, 30, {y}> was killed by {killer} (playerID = 3 | UUID = {killer_id}) "
+            f"from FIA faction who was at that time at <{x + 60}, 30, {y + 20}> [{metres}m away from the corpse]. "
+            f"With last inflicted damage type KINETIC to the '{zone}' hit zone\n")
+
+
+def arrive(clock, name, identity, ip):
+    return (f"{clock}  DEFAULT      : BattlEye Server: 'Player #3 {name} ({ip}:2304) connected'\n"
+            f"{clock}   NETWORK      : ### Updating player: PlayerId=3, Name={name}, rplIdentity=0x3, IdentityId={identity}\n")
+
+
+class SuspicionTests(unittest.TestCase):
+    """Replays the pattern from the Buford investigation."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def flags(self, text, **settings):
+        write_log(self.tmp.name, "logs_2026-09-26_04-14-00", text)
+        events, _ = LogReader(self.tmp.name).scan({})
+        detector = Detector(settings)
+        return [f for e in events for f in detector.feed(e)] + detector.flush(10 ** 10)
+
+    def test_explosions_credited_to_ai_name_the_new_arrival(self):
+        log = (arrive("06:10:00.000", "Regular", person(90), "10.0.0.9")
+               + "06:16:09.000  DEFAULT      : BattlEye Server: 'Player #3 Regular disconnected'\n"
+               + arrive("06:16:46.000", "Regular", person(90), "10.0.0.9")
+               + arrive("06:16:52.000", "Buford", BUFORD, "146.70.168.126")
+               + arrive("06:17:02.000", "pook4lyfe", person(1), "10.0.0.1")
+               + arrive("06:17:30.000", "Gone", person(91), "10.0.0.2")
+               + "06:19:00.000  DEFAULT      : BattlEye Server: 'Player #4 Gone disconnected'\n"
+               + blast("06:19:09.000", 1, 3810, 5448) + blast("06:19:09.000", 2, 3812, 5450, zone="Chest")
+               + blast("06:19:09.000", 3, 3815, 5446)
+               + shot("06:19:40.000", "Buford", BUFORD, 4, 3700, 5400))
+        flags = self.flags(log)
+        self.assertEqual(len(flags), 1)
+        text = flags[0]["text"]
+        self.assertTrue(flags[0]["incident"])
+        self.assertIn("3 players killed by explosions credited to AI in the same second", text)
+        self.assertIn("2 of 3 to the head", text)
+        self.assertIn("joined just before: Buford (146.70.168.126)", text)
+        self.assertIn("killing nearby: Buford", text)
+        for innocent in ("pook4lyfe", "Gone", "Regular"):
+            self.assertNotIn(innocent, text)
+
+    def test_a_steady_trickle_of_ai_explosions_adds_up(self):
+        log = "".join(blast(f"06:2{i}:00.000", i, 1000 * i, 500, zone="Chest") for i in range(1, 6))
+        flags = self.flags(log)
+        self.assertEqual(len(flags), 1)
+        self.assertIn("5 explosive deaths credited to AI in 5 min", flags[0]["text"])
+
+    def test_gunships_and_attribution_quirks_are_left_alone(self):
+        log = "".join(shot(f"06:0{i}:00.000", "SEPHRAP", person(80), i, 100 * i, 100, zone="Chest", metres=700)
+                      .replace("KINETIC", "EXPLOSIVE") for i in range(1, 9))
+        log += blast("06:30:00.000", 1, 0, 0, damage="COLLISION") * 3
+        log += shot("06:31:00.000", "DauntlessNZr", person(81), 5, 0, 0, metres=2700) * 6
+        self.assertEqual(self.flags(log), [])
+
+    def test_player_patterns(self):
+        rapid = "".join(shot(f"07:00:{i * 4:02d}.000", "Spray", person(70), i, 0, 0, zone="Chest") for i in range(6))
+        heads = "".join(shot(f"08:{i:02d}:00.000", "Aimer", person(71), i, 0, 0) for i in range(10))
+        tks = "".join(shot(f"09:0{i}:00.000", "Rogue", person(72), i, 0, 0).replace("KILL ENEMY", "KILL TK")
+                      for i in range(3))
+        texts = [f["text"] for f in self.flags(rapid + heads + tks)]
+        self.assertEqual(texts, ["Spray: 6 kills in 30 s", "Aimer: 10 of 10 kills were headshots in 15 min",
+                                 "Rogue: 3 teamkills in 10 min"])
+
+    def test_script_error_spike(self):
+        line = "06:18:15.000   SCRIPT    (E): NULL pointer to instance. Variable 'faction'\n"
+        flags = self.flags(arrive("06:16:52.000", "Buford", BUFORD, "146.70.168.126") + line * 60)
+        self.assertEqual(len(flags), 1)
+        self.assertIn("50 NULL / INSTIGATOR_OTHER script errors in 5 min", flags[0]["text"])
+        self.assertIn("joined just before: Buford", flags[0]["text"])
+
+    def test_a_burst_waits_for_the_killers_around_it(self):
+        write_log(self.tmp.name, "logs_2026-09-26_04-14-00", blast("06:19:09.000", 1, 0, 0) * 3)
+        events, _ = LogReader(self.tmp.name).scan({})
+        detector = Detector()
+        self.assertEqual([f for e in events for f in detector.feed(e)], [])
+        at = events[-1]["at"]
+        self.assertEqual(detector.flush(at + 60), [])
+        self.assertEqual(len(detector.flush(at + 120)), 1)
+
+    def test_thresholds_come_from_the_config(self):
+        log = blast("06:19:09.000", 1, 0, 0) + blast("06:19:09.000", 2, 0, 0)
+        self.assertEqual(self.flags(log), [])
+        self.assertEqual(len(self.flags("", same_second=2)), 1)
+
+
+class IncidentTests(unittest.TestCase):
+    def setUp(self):
+        self.db = PanelDB(":memory:")
+        self.addCleanup(self.db.close)
+        self.manager = ServerManager(PanelConfig(servers=[ServerConfig("one", "One"), ServerConfig("two", "Two")]),
+                                     self.db, alerts=FakeAlerts())
+
+    def incident(self, server, *players):
+        state = self.manager.states[server]
+        state.recent = {i: (n, now()) for n, i in players}
+        self.manager.suspicious(state, {"at": now(), "text": "3 players killed", "identity": "", "incident": True})
+
+    def test_the_same_face_at_incidents_on_both_servers(self):
+        self.incident("one", ("Buford", BUFORD), ("M1SF1T", person(5)))
+        self.assertNotIn("earlier incidents", self.db.feed("one")[0]["text"])
+        self.incident("two", ("Buford", BUFORD), ("Someone", person(6)))
+        self.assertEqual(self.db.feed("two")[0]["kind"], "sus")
+        self.assertIn("At earlier incidents too: Buford (2x)", self.db.feed("two")[0]["text"])
+        title, _, fields = self.manager.alerts.sent[-1]
+        self.assertEqual(title, "Suspicious on Two")
+        self.assertIn(BUFORD, fields["Buford"])
+        self.assertEqual(len(self.db.incidents_for(BUFORD)), 2)
+        self.assertEqual(len(self.db.incidents_for(person(5))), 1)
+
+    def test_old_flags_from_a_backlog_only_go_in_the_feed(self):
+        state = self.manager.states["one"]
+        state.recent = {BUFORD: ("Buford", now())}
+        self.manager.suspicious(state, {"at": now() - 86400, "text": "old", "identity": "", "incident": True})
+        self.assertEqual(self.manager.alerts.sent, [])
+        self.assertEqual(self.db.incidents_for(BUFORD), [])
+        self.assertEqual(self.db.feed("one")[0]["text"], "old")
 
 
 class RconClientTests(unittest.IsolatedAsyncioTestCase):

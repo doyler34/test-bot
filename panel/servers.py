@@ -11,6 +11,7 @@ from .alerts import Alerts
 from .connections import LogReader
 from .db import PanelDB, now
 from .rcon import RconClient, RconError
+from .suspicion import Detector
 
 log = logging.getLogger("panel.servers")
 
@@ -65,6 +66,8 @@ class ServerState:
     expected_until: int = 0
     last_sample: int = 0
     was_online: bool | None = None
+    detector: Detector = field(default_factory=Detector)
+    recent: dict = field(default_factory=dict)
 
 
 class ServerManager:
@@ -77,7 +80,7 @@ class ServerManager:
         self.sampler = sampler
         self.settle = memory.SETTLE_SECONDS
         self.box_total = memory.box_total()
-        self.states = {s.id: ServerState(s) for s in config.servers}
+        self.states = {s.id: ServerState(s, detector=Detector(config.suspicion)) for s in config.servers}
         self._tasks: list[asyncio.Task] = []
         self._stopping = False
         self._ip_kicked: dict[str, int] = {}
@@ -149,6 +152,7 @@ class ServerManager:
                     pruned = now()
                     self.db.prune_connections()
                     self.db.prune_feed()
+                    self.db.prune_incidents()
             except Exception:
                 log.exception("reading logs failed for %s", state.config.id)
             await asyncio.sleep(self.config.poll_seconds)
@@ -161,6 +165,28 @@ class ServerManager:
                 state.fps, state.fps_at = event["fps"], event["at"]
         if moved:
             self.db.add_connections(state.config.id, events, moved)
+        flags = [f for event in events for f in state.detector.feed(event)]
+        for flag in flags + state.detector.flush(now()):
+            self.suspicious(state, flag)
+
+    def suspicious(self, state: ServerState, flag: dict):
+        """Puts a flag in the live feed; a fresh one also goes to Discord, and a
+        burst saves who was on in the last few minutes so repeat faces across
+        incidents stand out."""
+        text, fields = flag["text"], []
+        fresh = now() - flag["at"] < 900
+        present = [{"identity": i, "name": n} for i, (n, seen) in state.recent.items() if now() - seen <= 300]
+        if flag["incident"] and fresh and present:
+            incident = self.db.add_incident(state.config.id, flag["at"], text, present)
+            repeat = self.db.repeat_suspects(incident)
+            if repeat:
+                text += ". At earlier incidents too: " + ", ".join(f"{r['name']} ({r['times']}x)" for r in repeat[:5])
+                fields = [(r["name"], f"{r['identity']}\n{r['times']} incidents") for r in repeat[:5]]
+        elif flag["identity"]:
+            fields = [("Identity", flag["identity"])]
+        self.db.add_feed(state.config.id, "sus", text, at=flag["at"])
+        if fresh:
+            self.alerts.send(f"Suspicious on {state.config.name}", text, alert_colours.GOLD, fields)
 
     async def refresh_memory(self, state: ServerState):
         sample = await self.sampler(state.config.service)
@@ -292,6 +318,8 @@ class ServerManager:
         for player in state.players:
             if player["identity"]:
                 self.db.saw_player(player["identity"], player["name"], state.config.id)
+                state.recent[player["identity"]] = (player["name"], now())
+        state.recent = {i: seen for i, seen in state.recent.items() if now() - seen[1] <= 600}
 
     async def enforce_ip_bans(self, state: ServerState):
         """Kick banned accounts that are still connected, and ban any other

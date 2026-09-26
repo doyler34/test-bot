@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .suspicion import DEFAULTS
+
 
 class PanelConfigError(Exception):
     pass
@@ -44,6 +46,7 @@ class PanelConfig:
     poll_seconds: float = 10.0
     discord_webhook: str = ""
     oyb_data: str = "data"
+    suspicion: dict = field(default_factory=dict)
     servers: list[ServerConfig] = field(default_factory=list)
 
     def server(self, server_id: str) -> ServerConfig | None:
@@ -83,6 +86,9 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
     webhook = str(raw.get("discord_webhook") or "")
     if webhook and not webhook.startswith(("https://discord.com/api/webhooks/", "https://discordapp.com/api/webhooks/")):
         raise PanelConfigError("discord_webhook must be a Discord webhook URL (https://discord.com/api/webhooks/...)")
+    suspicion = raw.get("suspicion") or {}
+    if not isinstance(suspicion, dict) or any(k not in DEFAULTS for k in suspicion):
+        raise PanelConfigError("suspicion may only set: " + ", ".join(DEFAULTS))
     servers = []
     from_bot = bot_log_dirs()
     for entry in raw.get("servers", []):
@@ -112,5 +118,6 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
         poll_seconds=float(raw.get("poll_seconds", 10)),
         discord_webhook=str(raw.get("discord_webhook") or ""),
         oyb_data=str(raw.get("oyb_data") or "data"),
+        suspicion=suspicion,
         servers=servers,
     )

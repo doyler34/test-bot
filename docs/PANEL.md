@@ -15,9 +15,35 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
 - **Live players**: refreshes every 10 seconds, with kick and ban on each row.
 - **Live feed**: joins, leaves, side picks, kills and teamkills from the logs,
   messages the server sends over RCON, and admin actions, newest first,
-  refreshing every 5 seconds. Filter by joins, kills, admin or RCON. Every box on
+  refreshing every 5 seconds. Filter by joins, kills, sus, admin or RCON. Every box on
   the server page has a fixed height with its own scroll and a full-screen button
   (Esc closes it).
+- **Suspicious activity** (the red "Sus" rows in the live feed, also posted to
+  the Discord alerts channel): the patterns from past cheater investigations.
+  - Explosions killing players with the kill credited to AI or "neutral or
+    factionless", which never shows in the kill feed: 3 players in the same
+    second, or 5 within 5 minutes.
+  - A spike of NULL pointer / INSTIGATOR_OTHER script errors (50 in 5 minutes).
+  - One player getting 6 rifle kills in 30 seconds, 10+ kills in 15 minutes
+    with 75% or more to the head, or 3 teamkills in 10 minutes.
+
+  An explosion or error flag waits 2 minutes, then names who joined in the 10
+  minutes before (leaving out reconnects, the victims and anyone who had
+  already left) and any player whose own kills landed within 150 m of the
+  explosions. It also saves everyone who was on the server, and a player who
+  was on for incidents on any server says so ("At earlier incidents too:
+  Buford (2x)"). Their player page lists every incident they were present for.
+  Being present once means nothing; the same name at several is worth
+  spectating. The logs never say which weapon was used, so a flag is a reason
+  to look, not proof. Kills credited from over 2 km away and collision deaths
+  are ignored (a crash gets credited to whoever last damaged the vehicle), and
+  so are long-range explosive kills by a named player (usually a gunship).
+  Every limit can be changed in panel.local.json, for example
+  `"suspicion": {"same_second": 4, "headshot_share": 0.8}`. The names are
+  `ai_explosions`, `ai_explosions_window`, `same_second`, `rapid_kills`,
+  `rapid_window`, `headshot_kills`, `headshot_share`, `teamkills`,
+  `script_errors`, `max_distance`, `nearby`, `joined_before`, `cooldown` and
+  `settle`.
 - **Server controls**: restart mission, RCON shutdown, and start / stop /
   restart of the systemd service when `service` is set.
 - **Memory check**: each server's memory on the dashboard and server page. A

@@ -3,7 +3,7 @@
   {% for f in feed %}
   <li class="k-{{ f.kind }}">
     <time title="{{ f.at|ts }}">{{ f.at|clock }}</time>
-    <b>{{ {"join": "Join", "leave": "Leave", "side": "Side", "kill": "Kill", "teamkill": "TK", "admin": "Admin", "rcon": "RCON", "server": "Server"}.get(f.kind, f.kind) }}</b>
+    <b>{{ {"join": "Join", "leave": "Leave", "side": "Side", "kill": "Kill", "teamkill": "TK", "admin": "Admin", "rcon": "RCON", "server": "Server", "sus": "Sus"}.get(f.kind, f.kind) }}</b>
     <span>{{ f.text }}{% if f.ip and can("ips") %} <span class="muted mono">{{ f.ip }}</span>{% endif %}</span>
   </li>
   {% endfor %}

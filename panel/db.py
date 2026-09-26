@@ -109,6 +109,19 @@ CREATE TABLE IF NOT EXISTS log_positions (
     position INTEGER NOT NULL,
     PRIMARY KEY (server, path)
 );
+CREATE TABLE IF NOT EXISTS incidents (
+    id INTEGER PRIMARY KEY,
+    server TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    text TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS incident_players (
+    incident INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+    identity TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (incident, identity)
+);
+CREATE INDEX IF NOT EXISTS incident_players_identity ON incident_players(identity);
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY,
     identity TEXT NOT NULL,
@@ -412,6 +425,34 @@ class PanelDB:
 
     def prune_connections(self, days=180):
         self.write("DELETE FROM connections WHERE last_seen < ?", now() - days * 86400)
+
+    # incidents
+
+    def add_incident(self, server, at, text, players) -> int:
+        """Saves a suspicious burst and everyone connected to the server at the time."""
+        incident = self.db.execute("INSERT INTO incidents (server, at, text) VALUES (?, ?, ?)",
+                                   (server, at, text[:500])).lastrowid
+        self.db.executemany("INSERT OR IGNORE INTO incident_players (incident, identity, name) VALUES (?, ?, ?)",
+                            [(incident, p["identity"], p["name"]) for p in players if p.get("identity")])
+        self.db.commit()
+        return incident
+
+    def repeat_suspects(self, incident, days=30):
+        """Players present at this incident who were also present at earlier ones, on any server."""
+        return self.all(
+            "SELECT ip.identity, ip.name, COUNT(*) AS times FROM incident_players ip"
+            " JOIN incidents i ON i.id = ip.incident"
+            " WHERE ip.identity IN (SELECT identity FROM incident_players WHERE incident = ?)"
+            " AND i.at >= ? GROUP BY ip.identity HAVING times > 1 ORDER BY times DESC, ip.name",
+            incident, now() - days * 86400)
+
+    def incidents_for(self, identity, limit=50):
+        return self.all(
+            "SELECT i.* FROM incidents i JOIN incident_players ip ON ip.incident = i.id"
+            " WHERE ip.identity = ? ORDER BY i.at DESC LIMIT ?", identity, limit)
+
+    def prune_incidents(self, days=180):
+        self.write("DELETE FROM incidents WHERE at < ?", now() - days * 86400)
 
     # notes
 
