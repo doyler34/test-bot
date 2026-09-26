@@ -23,6 +23,9 @@ FPS = re.compile(r"\bFPS:\s*([0-9]+(?:\.[0-9]+)?)")
 ZONE = re.compile(r"to the '(\w+)' hit zone")
 VICTIM_AT = re.compile(r" at <(-?[\d.]+), -?[\d.]+, (-?[\d.]+)> was killed by ")
 KILLER_AT = re.compile(r"who was at that time at <(-?[\d.]+), -?[\d.]+, (-?[\d.]+)>")
+# A script exception's reason and class sit on untimestamped lines under it.
+VM_ERROR = re.compile(r"SCRIPT\s*\(E\): Virtual Machine Exception")
+VM_CLASS = re.compile(r"^Class:\s*'(\w+)'")
 SCRIPT_ERROR = re.compile(r"SCRIPT\s*\(E\).*(NULL pointer|INSTIGATOR_OTHER)")
 PENDING_SECONDS = 600
 
@@ -79,6 +82,9 @@ class LogReader:
     def _line(self, line: str, state: dict) -> dict | None:
         stamp = STAMP.match(line)
         if not stamp:
+            if state.get("vm") and (match := VM_CLASS.match(line)):
+                at, state["vm"] = state["vm"], None
+                return {"kind": "error", "at": at, "where": match[1]}
             return None
         clock = int(stamp[1]) * 3600 + int(stamp[2]) * 60 + int(stamp[3])
         if state["clock"] is None:
@@ -99,8 +105,10 @@ class LogReader:
             return {"kind": "leave", "at": at, "text": f"{match[1]} disconnected", "ip": "", "name": match[1]}
         elif " KILL " in line and (match := KILL.fullmatch(line.rstrip())):
             return kill_event(match[2], match[3], at)
-        elif SCRIPT_ERROR.search(line):
-            return {"kind": "error", "at": at}
+        elif VM_ERROR.search(line):
+            state["vm"] = at
+        elif match := SCRIPT_ERROR.search(line):
+            return {"kind": "error", "at": at, "where": match[1]}
         elif match := SIDE.match(line.rstrip()):
             return {"kind": "side", "at": at, "text": f"{match[2]} joined {match[4]}", "ip": ""}
         elif match := FPS.search(line):
@@ -127,12 +135,13 @@ def kill_event(relation, body, at):
     event = {"at": at, "ip": "", "relation": relation, "victim": victim[2].lower(), "distance": metres,
              "damage": damage_type(body), "zone": zone[1] if zone else None,
              "victim_at": (float(where[1]), float(where[2])) if where else None,
-             "killer": None, "killer_name": None, "killer_at": None}
+             "killer": None, "killer_name": None, "killer_at": None, "by_ai": False}
     if len(parts) == 1:
         event.update(kind="kill", text=f"{victim[1]} killed themselves", killer=event["victim"], killer_name=victim[1])
         return event
     killer = PERSON.match(parts[1])
-    name = killer[1] if killer else ("AI" if parts[1].startswith("AI") else parts[1].split(" from ")[0])
+    event["by_ai"] = not killer and re.match(r"AI(\s|$)", parts[1]) is not None
+    name = killer[1] if killer else ("AI" if event["by_ai"] else parts[1].split(" (playerID")[0].split(" from ")[0])
     kind = "teamkill" if relation == "TK" else "kill"
     text = f"{name} {'teamkilled' if relation == 'TK' else 'killed'} {victim[1]}"
     if metres:

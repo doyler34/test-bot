@@ -577,6 +577,8 @@ class SuspicionTests(unittest.TestCase):
                       .replace("KINETIC", "EXPLOSIVE") for i in range(1, 9))
         log += blast("06:30:00.000", 1, 0, 0, damage="COLLISION") * 3
         log += shot("06:31:00.000", "DauntlessNZr", person(81), 5, 0, 0, metres=2700) * 6
+        log += (shot("06:40:00.000", "SOF Reaper1254", person(82), 6, 0, 0).replace(person(82), "")
+                .replace("KINETIC", "EXPLOSIVE") * 5)
         self.assertEqual(self.flags(log), [])
 
     def test_player_patterns(self):
@@ -589,10 +591,16 @@ class SuspicionTests(unittest.TestCase):
                                  "Rogue: 3 teamkills in 10 min"])
 
     def test_script_error_spike(self):
-        line = "06:18:15.000   SCRIPT    (E): NULL pointer to instance. Variable 'faction'\n"
-        flags = self.flags(arrive("06:16:52.000", "Buford", BUFORD, "146.70.168.126") + line * 60)
+        def error(clock, where):
+            return (f"{clock} SCRIPT    (E): Virtual Machine Exception\n\nReason: NULL pointer to instance\n\n"
+                    f"Class:      '{where}'\nFunction: 'Something'\n")
+        ai_loop = error("06:10:00.100", "SCR_AIChangeCompartment") * 70
+        one_frame = error("06:12:00.100", "SCR_MapMarkerSquadLeader") * 40
+        spawns = "".join(error(f"06:18:{i:02d}.000", "SCR_PlayerControllerGroupComponent") for i in range(15, 40))
+        flags = self.flags(ai_loop + one_frame + arrive("06:16:52.000", "Buford", BUFORD, "146.70.168.126") + spawns)
         self.assertEqual(len(flags), 1)
-        self.assertIn("50 NULL / INSTIGATOR_OTHER script errors in 5 min", flags[0]["text"])
+        self.assertIn("script errors in 20 different seconds within 5 min, mostly SCR_PlayerControllerGroupComponent",
+                      flags[0]["text"])
         self.assertIn("joined just before: Buford", flags[0]["text"])
 
     def test_a_burst_waits_for_the_killers_around_it(self):

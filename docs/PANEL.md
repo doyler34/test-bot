@@ -23,7 +23,10 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   - Explosions killing players with the kill credited to AI or "neutral or
     factionless", which never shows in the kill feed: 3 players in the same
     second, or 5 within 5 minutes.
-  - A spike of NULL pointer / INSTIGATOR_OTHER script errors (50 in 5 minutes).
+  - Script errors (NULL pointer / INSTIGATOR_OTHER) in 20 different seconds
+    within 5 minutes, like the failing player spawns in the Buford case. AI
+    behaviour scripts (`SCR_AI...`) are skipped: one broken AI vehicle can throw
+    70 in a second, which is a game bug, not a player.
   - One player getting 6 rifle kills in 30 seconds, 10+ kills in 15 minutes
     with 75% or more to the head, or 3 teamkills in 10 minutes.
 
@@ -44,6 +47,10 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   `rapid_window`, `headshot_kills`, `headshot_share`, `teamkills`,
   `script_errors`, `max_distance`, `nearby`, `joined_before`, `cooldown` and
   `settle`.
+
+  To see what a log would have flagged, without touching the panel:
+  `.venv/bin/python dev/scan_sus.py path/to/console.log` (add
+  `--set same_second=4` to try a different limit).
 - **Server controls**: restart mission, RCON shutdown, and start / stop /
   restart of the systemd service when `service` is set.
 - **Memory check**: each server's memory on the dashboard and server page. A

@@ -30,11 +30,11 @@ def scan(path: Path, settings: dict):
     flags = [f for e in events for f in detector.feed(e)] + detector.flush(10 ** 12)
     counts = Counter(e["kind"] for e in events)
     ai_blasts = sum(1 for e in events if e["kind"] in ("kill", "teamkill") and e.get("damage") in EXPLOSIVE
-                    and (e.get("killer") is None or "NEUTRAL" in e.get("relation", "")))
+                    and e.get("by_ai"))
     print(f"\n{path}")
     print(f"  {counts['identity']} joins, {counts['kill'] + counts['teamkill']} kills "
           f"({counts['teamkill']} teamkills), {ai_blasts} explosive deaths credited to AI, "
-          f"{counts['error']} NULL / INSTIGATOR_OTHER script errors")
+          f"{counts['error']} script errors (NULL pointer / INSTIGATOR_OTHER)")
     if not flags:
         print("  Nothing flagged.")
     for f in sorted(flags, key=lambda f: f["at"]):

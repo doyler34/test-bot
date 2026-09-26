@@ -15,7 +15,7 @@ gunship.
 """
 
 import math
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 
 EXPLOSIVE = {"EXPLOSIVE", "FRAGMENTATION", "INCENDIARY"}
 
@@ -28,7 +28,7 @@ DEFAULTS = {
     "headshot_kills": 10,         # at least this many rifle kills in 15 minutes ...
     "headshot_share": 0.75,       # ... with this share of them to the head
     "teamkills": 3,               # teamkills by one player in 10 minutes
-    "script_errors": 50,          # NULL script errors in 5 minutes
+    "script_errors": 20,          # different seconds with script errors in 5 minutes
     "max_distance": 2000,         # kills credited from further than this are ignored
     "nearby": 150,                # metres: a named killer this close to the explosions is named
     "joined_before": 600,         # seconds: players who connected this long before are named
@@ -91,7 +91,7 @@ class Detector:
         if e.get("killer") == e["victim"]:
             return []
         flags = []
-        if e.get("damage") in EXPLOSIVE and (e.get("killer") is None or "NEUTRAL" in e.get("relation", "")):
+        if e.get("damage") in EXPLOSIVE and e.get("by_ai"):
             self.ai_blasts.append(e)
             trim(self.ai_blasts, at - s["ai_explosions_window"])
             same = [b for b in self.ai_blasts if b["at"] == at]
@@ -132,11 +132,21 @@ class Detector:
         return flags
 
     def _error(self, e):
-        self.errors.append(e["at"])
-        trim_times(self.errors, e["at"] - 300)
-        if len(self.errors) >= self.s["script_errors"]:
-            return self._flag(("errors",), e["at"], f"{len(self.errors)} NULL / INSTIGATOR_OTHER script errors in 5 min",
-                              [{"at": self.errors[0]}])
+        # AI behaviour scripts can loop on one broken vehicle and throw dozens a
+        # frame; that's a game bug, not a player. Counting distinct seconds keeps
+        # one looping frame from looking like a stream of failing spawns.
+        where = e.get("where") or ""
+        if where.startswith("SCR_AI"):
+            return []
+        self.errors.append((e["at"], where))
+        trim(self.errors, e["at"] - 300)
+        seconds = {at for at, _ in self.errors}
+        if len(seconds) >= self.s["script_errors"]:
+            common = Counter(w for _, w in self.errors if w).most_common(1)
+            text = f"script errors in {len(seconds)} different seconds within 5 min"
+            if common:
+                text += f", mostly {common[0][0]}"
+            return self._flag(("errors",), e["at"], text, [{"at": self.errors[0][0]}])
         return []
 
     def _flag(self, key, at, text, blasts=(), identity=""):
@@ -192,9 +202,4 @@ class Detector:
 
 def trim(items: deque, before: int):
     while items and (items[0][0] if isinstance(items[0], tuple) else items[0]["at"]) < before:
-        items.popleft()
-
-
-def trim_times(items: deque, before: int):
-    while items and items[0] < before:
         items.popleft()
