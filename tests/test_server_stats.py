@@ -157,6 +157,12 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len([c for c in self.guild.voice_channels
                               if c.category and c.category.id == stats2.category.id]), 5)
 
+    def test_one_label_inside_another_is_not_mixed_up(self):
+        stats = ServerStats(self.bot)
+        self.assertEqual(stats._key_for_name("🟢 Classic #2 · 21 min"), "server-3")
+        self.assertEqual(stats._key_for_name("🟢 Classic · 46 min"), "server-1")
+        self.assertEqual(stats._key_for_name("🔴 Classic · Offline"), "server-1")
+
     async def test_staging_hides_then_reveals_category_and_tiles(self):
         everyone = self.guild.default_role
         with patch.dict("os.environ", {"OYB_STAGING": "1"}):
@@ -181,7 +187,7 @@ class ServerStatsTests(unittest.IsolatedAsyncioTestCase):
         # Up but no match -> yellow, clearly not the same as offline.
         self.assertEqual(self.stats._desired_name(self.guild, "server-2", counts), "🟡 3x Everon · Waiting for match")
         # Disabled server -> coming soon.
-        self.assertEqual(self.stats._desired_name(self.guild, "server-3", counts), "⚫ Arland · Coming soon")
+        self.assertEqual(self.stats._desired_name(self.guild, "server-3", counts), "⚫ Classic #2 · Coming soon")
         # An enabled server whose process is down reads Offline, not white/idle.
         self.monitors[1] = ("server-2", SimpleNamespace(online=False))
         self.assertEqual(self.stats._desired_name(self.guild, "server-2", counts), "🔴 3x Everon · Offline")
@@ -246,7 +252,7 @@ class LabelTests(unittest.TestCase):
 
     def test_configured_servers_get_their_community_name(self):
         for server_id, expected in [("server-1", "Classic"), ("server-2", "3x Everon"),
-                                    ("server-3", "Arland")]:
+                                    ("server-3", "Classic #2")]:
             self.assertEqual(
                 server_stats.label_for(SimpleNamespace(id=server_id, name="Server X")), expected)
 

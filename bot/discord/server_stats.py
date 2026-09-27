@@ -15,7 +15,7 @@ RENAME_INTERVAL = 300  # Discord allows ~2 channel renames per 10 minutes each.
 POLL = 30
 TRUTHY = ("1", "true", "yes", "on")
 
-LABELS = {"server-1": "Classic", "server-2": "3x Everon", "server-3": "Arland"}
+LABELS = {"server-1": "Classic", "server-2": "3x Everon", "server-3": "Classic #2"}
 
 
 def label_for(server):
@@ -107,8 +107,13 @@ class ServerStats:
 
     def _key_for_name(self, name):
         """Which stat key an existing tile's name belongs to, if any."""
+        # "🟢 Classic #2 · 21 min" -> "Classic #2". Compared whole, so one
+        # server's label can't claim another's tile when it's part of it.
+        label = name.split(" · ")[0].strip()
+        if label[:1] and not label[0].isalnum():
+            label = label.split(" ", 1)[1] if " " in label else ""
         for server in self.bot.config.servers:
-            if name == server.id or label_for(server) in name:
+            if name == server.id or label_for(server) == label:
                 return server.id
         if name == "arma" or "Playing ArmA" in name:
             return "arma"
