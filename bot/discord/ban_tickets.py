@@ -55,18 +55,18 @@ class BanTickets:
         self.bot = bot
         self.path = os.getenv("PANEL_DB", "data/panel.sqlite3")
         self.panel_channel = _id(os.getenv("BAN_TICKET_CHANNEL"))
-        self.category = _id(os.getenv("BAN_TICKET_CATEGORY"))
+        # Ticket King puts tickets in the panel's category, and each option can
+        # have its own, so this can list several.
+        self.categories = {i for i in map(_id, os.getenv("BAN_TICKET_CATEGORY", "").split(",")) if i}
         self.panel_url = os.getenv("PANEL_URL", "").strip()
 
     @property
     def enabled(self):
-        return bool(self.panel_channel or self.category)
+        return bool(self.panel_channel or self.categories)
 
-    def _category(self, guild):
-        if self.category:
-            return self.category
-        panel = guild.get_channel(self.panel_channel)
-        return getattr(panel, "category_id", None)
+    def _categories(self, guild):
+        panel = guild.get_channel(self.panel_channel) if self.panel_channel else None
+        return self.categories | ({panel.category_id} if getattr(panel, "category_id", None) else set())
 
     async def channel_created(self, channel):
         """A ticket made as its own channel: the opener is the member it was shared with."""
@@ -74,8 +74,7 @@ class BanTickets:
             return
         if not isinstance(channel, discord.TextChannel) or channel.id == self.panel_channel:
             return
-        category = self._category(channel.guild)
-        if not category or channel.category_id != category:
+        if channel.category_id not in self._categories(channel.guild):
             return
         await asyncio.sleep(SETTLE_SECONDS)
         ids = {target.id for target in channel.overwrites if not isinstance(target, discord.Role)}
@@ -85,7 +84,7 @@ class BanTickets:
         """A ticket made as a thread off the ticket channel."""
         if not self.enabled or thread.guild.id != self.bot.config.guild_id:
             return
-        if thread.parent_id not in {self.panel_channel, self.category}:
+        if thread.parent_id != self.panel_channel:
             return
         await asyncio.sleep(SETTLE_SECONDS)
         ids = set()
@@ -126,6 +125,6 @@ class BanTickets:
 
 def _id(value):
     try:
-        return int(value) if value else None
+        return int(value.strip()) if value and value.strip() else None
     except ValueError:
         return None

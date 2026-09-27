@@ -134,6 +134,18 @@ class BanTicketTests(unittest.IsolatedAsyncioTestCase):
         await self.tickets.channel_created(ticket)
         self.assertEqual(ticket.sent, [])
 
+    async def test_every_listed_category(self):
+        with patch.dict(os.environ, {"BAN_TICKET_CHANNEL": str(PANEL), "BAN_TICKET_CATEGORY": "601, 602"}):
+            tickets = BanTickets(self.tickets.bot)
+        self.panel.add_ban(HAVOC, "Havoc", "Cheating", "burd")
+        for category in (CATEGORY, 601, 602):
+            ticket = self.channel(Member(10), category=category)
+            await tickets.channel_created(ticket)
+            self.assertEqual(len(ticket.sent), 1, category)
+        other = self.channel(Member(10), category=603)
+        await tickets.channel_created(other)
+        self.assertEqual(other.sent, [])
+
     async def test_other_categories_ignored(self):
         self.panel.add_ban(HAVOC, "Havoc", "Cheating", "burd")
         ticket = self.channel(Member(10), category=601)
