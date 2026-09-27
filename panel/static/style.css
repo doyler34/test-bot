@@ -58,6 +58,8 @@ pre { background: var(--bg); border: 1px solid var(--line); padding: 12px; overf
 .me form { margin: 0; }
 .role { font-size: .78rem; text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold-dim); padding: 0 6px; }
 
+[hidden] { display: none !important; }
+
 /* panels */
 .card { position: relative; display: block; background: linear-gradient(180deg, var(--panel-2), var(--panel));
   border: 1px solid var(--line); padding: 18px 20px; margin-bottom: 18px; color: var(--ink);

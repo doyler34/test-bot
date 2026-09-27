@@ -313,6 +313,7 @@ GUIDE = [
     ("health", "Health and memory", "Uptime, crashes, and when a server needs a full restart.", None),
     ("discord", "Discord", "What gets posted to the staff channel, and linked accounts.", None),
     ("console-audit", "Console and audit log", "Raw RCON commands, and the record of who did what.", "audit"),
+    ("discord-messages", "Discord messages", "Editing the Start here message, its buttons, and the join greeting.", "discord"),
     ("admins", "Admin accounts", "Making accounts, roles and password resets.", "users"),
 ]
 

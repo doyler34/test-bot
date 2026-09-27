@@ -105,6 +105,18 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   each server's console logs: `log_dir` in panel.local.json, or the bot's own
   `servers.local.json` when the panel runs from the bot's folder. Records not
   seen for 180 days are deleted.
+- **Discord** (owners): edit what the bot posts. The **Start here** message:
+  title, colour, channel, text in sections, and up to 25 buttons (link account,
+  my progress, factions, give/take a role, pick one role from a group with an
+  optional lock, open a web link), with a live preview. Save a draft, then
+  publish; the bot updates the message within a minute. Button roles never
+  carry permissions and must sit below the bot's role. Until something is
+  published the bot shows its built-in Start here message. Also a **join
+  greeting**, in a channel or by DM, with `{user}` `{name}` `{server}`
+  `{members}` `{start}` (needs the members intent). The bot reads the panel's
+  database (`PANEL_DB`) and writes `panel_bridge.json` in its data folder with
+  its roles, channels and how publishing went; the panel reads that through
+  `oyb_data`.
 - **Guide**: a how-to for staff with screenshots, one page per topic, linked
   from the welcome box on the home page. Each person only sees the pages for
   what their role can do. The screenshots come from a demo panel full of

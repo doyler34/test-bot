@@ -138,5 +138,24 @@ async function around(page, selectors, pad = 12) {
   await page.goto(BASE + "/account");
   await shot(page, "account");
 
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto(BASE + "/discord/welcome");
+  await page.waitForTimeout(300);
+  await shot(page, "discord-welcome");
+  await page.click("#dc-add-button");
+  const added = page.locator("#dc-buttons .dc-item").last();
+  await added.locator("input").nth(0).fill("Event pings");
+  await added.locator("input").nth(1).fill("🔔");
+  await added.locator("select").nth(2).selectOption({ label: "Event pings" });
+  await added.locator("select").nth(1).selectOption("3");
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { document.querySelector(".dc-actions").style.display = "none"; });
+  await shot(page, "discord-button", "#dc-buttons .dc-editing");
+  await page.evaluate(() => { document.querySelector(".dc-actions").style.display = ""; });
+  await shot(page, "discord-preview", ".dc-preview");
+  await page.goto(BASE + "/discord/greeting");
+  await page.waitForTimeout(300);
+  await shot(page, "discord-greeting");
+
   await browser.close();
 })();

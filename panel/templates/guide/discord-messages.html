@@ -1,0 +1,49 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>Owners can change what the bot posts in Discord from <b>Discord</b> in the top menu: the <b>Start here</b> message new members see, its buttons, and a greeting when someone joins. No code and no restart: publish, and the bot updates Discord within a minute.</p>
+{{ shot("discord-welcome", "The Start here editor, with the preview on the right.") }}
+
+<h2>Editing the Start here message</h2>
+<ol class="steps">
+  <li>Go to <b>Discord → Start here message</b>. The editor starts with exactly what's in Discord now.</li>
+  <li>Under <b>Where and how it looks</b>, pick the channel, and change the title and the colour of the stripe down the side.</li>
+  <li>Under <b>Text</b>, edit the sections. Each has an optional heading. <b>**bold**</b>, <i>*italic*</i> and new lines work like in Discord. Use ↑ ↓ to reorder, ✕ to remove, and <b>+ Add section</b> for more.</li>
+  <li>Watch the <b>Preview</b> as you type. It's roughly how it'll look in Discord.</li>
+</ol>
+
+<h2>Buttons</h2>
+<p>Each button shows as one line: which line of buttons it's on, its colour, its label and what it does. Tap one to edit it; tap its header again to close it. <b>+ Add button</b> makes a new one. Up to 5 buttons fit on each of 5 lines.</p>
+{{ shot("discord-button", "A new button that gives the Event pings role, on line 3.") }}
+<div class="scroll"><table>
+  <thead><tr><th>What it does</th><th>When pressed</th></tr></thead>
+  <tbody>
+    <tr><td>Link Reforger account</td><td>Opens the box where they type their in-game name, as always.</td></tr>
+    <tr><td>My progress</td><td>Shows them what they've done and what's left.</td></tr>
+    <tr><td>Pick a faction / No faction</td><td>The US, USSR and FIA roles, locked once picked, just like before.</td></tr>
+    <tr><td>Give or take a role</td><td>Gives them the role; pressing again takes it off. Good for things like event pings.</td></tr>
+    <tr><td>Pick one role from a group</td><td>Buttons with the same group name work together: picking one takes away the others. Tick <b>Locked</b> and they can't change it themselves after.</td></tr>
+    <tr><td>Open a web link</td><td>Opens a website, like your rules or a sign-up form.</td></tr>
+  </tbody>
+</table></div>
+<p>For the role, pick one of your Discord roles from the list, or choose <b>+ Make a new role…</b> and type a name; the bot makes it when you publish. Tick <b>Only for players who've linked</b> to keep a role for linked players.</p>
+<p class="tip danger">A button can never hand out a role that has permissions (admin, kick, manage anything). Those are greyed out in the list. The bot's own role also has to sit above any role it hands out: if it doesn't, the page tells you.</p>
+
+<h2>Draft, then publish</h2>
+<ul>
+  <li><b>Save draft</b> keeps your changes without touching Discord. Other owners see the draft too. <b>Discard draft</b> goes back to what's live.</li>
+  <li><b>Publish</b> sends it to the bot. The box at the top then shows when it went up and who published it, or what went wrong (a missing role, the bot's role too low, a channel it can't post in).</li>
+  <li>If something needs fixing, publishing stops and lists what to change, and your work is kept as a draft.</li>
+  <li><b>Start again from the original</b> puts the editor back to the bot's original Start here message.</li>
+</ul>
+
+<h2>Join greeting</h2>
+{{ shot("discord-greeting", "The join greeting.") }}
+<ol class="steps">
+  <li>Go to <b>Discord → Join greeting</b> and tick <b>Greet them</b>.</li>
+  <li>Choose to post it in a channel, or send it to them privately.</li>
+  <li>Write the message. Tap <code>{user}</code>, <code>{name}</code>, <code>{server}</code>, <code>{members}</code> or <code>{start}</code> to drop in their mention, their name, the Discord's name, the member count, or a link to the Start here channel.</li>
+  <li>Press <b>Publish</b>.</li>
+</ol>
+<p class="tip">The bot only hears about people joining if <b>Server Members Intent</b> is on for it in Discord's developer portal and <code>ENABLE_MEMBERS_INTENT=1</code> is in its settings. The page warns you if not.</p>
+{% endblock %}
