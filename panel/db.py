@@ -109,6 +109,16 @@ CREATE TABLE IF NOT EXISTS log_positions (
     position INTEGER NOT NULL,
     PRIMARY KEY (server, path)
 );
+CREATE TABLE IF NOT EXISTS discord_docs (
+    key TEXT PRIMARY KEY,
+    draft TEXT,
+    draft_by TEXT,
+    draft_at INTEGER,
+    published TEXT,
+    published_by TEXT,
+    published_at INTEGER,
+    version INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS upload_links (
     id INTEGER PRIMARY KEY,
     token_hash TEXT NOT NULL UNIQUE,
@@ -468,6 +478,26 @@ class PanelDB:
 
     def prune_connections(self, days=180):
         self.write("DELETE FROM connections WHERE last_seen < ?", now() - days * 86400)
+
+    # Discord messages the panel edits (read by the bot)
+
+    def discord_doc(self, key):
+        return self.one("SELECT * FROM discord_docs WHERE key = ?", key)
+
+    def save_discord_draft(self, key, text, by):
+        self.write("INSERT INTO discord_docs (key, draft, draft_by, draft_at) VALUES (?, ?, ?, ?)"
+                   " ON CONFLICT(key) DO UPDATE SET draft = excluded.draft, draft_by = excluded.draft_by,"
+                   " draft_at = excluded.draft_at", key, text, by, now())
+
+    def publish_discord_doc(self, key, text, by):
+        self.write("INSERT INTO discord_docs (key, published, published_by, published_at, version)"
+                   " VALUES (?, ?, ?, ?, 1) ON CONFLICT(key) DO UPDATE SET published = excluded.published,"
+                   " published_by = excluded.published_by, published_at = excluded.published_at,"
+                   " version = version + 1, draft = NULL, draft_by = NULL, draft_at = NULL",
+                   key, text, by, now())
+
+    def discard_discord_draft(self, key):
+        self.write("UPDATE discord_docs SET draft = NULL, draft_by = NULL, draft_at = NULL WHERE key = ?", key)
 
     # upload links
 

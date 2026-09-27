@@ -21,6 +21,7 @@ from bot.discord.join_oyb import prepare_join_channel
 from bot.ranks.rank_sync import RankSync
 from bot.discord.ban_roles import BanRoles
 from bot.discord.ban_tickets import BanTickets
+from bot.discord.welcome import Welcome
 from bot.discord.rank_command import RankCommand
 from bot.storage.combat_store import migrate as migrate_combat
 from bot.tracking.combat_ingestor import CombatIngestor
@@ -131,6 +132,7 @@ class NotificationBot(TimerBot):
         self.maintenance = Maintenance(self)
         self.ban_roles = BanRoles(self)
         self.ban_tickets = BanTickets(self)
+        self.welcome = Welcome(self)
         self._boot_lock = asyncio.Lock()
         self._booted = False
 
@@ -157,6 +159,16 @@ class NotificationBot(TimerBot):
             await mark_unverified(self, member.guild, member)
         except Exception:
             logger.exception("Could not label %s unverified", member.id)
+        try:
+            await self.welcome.greet(member)
+        except Exception:
+            logger.exception("Could not greet %s", member.id)
+
+    async def on_interaction(self, interaction):
+        try:
+            await self.welcome.handle(interaction)
+        except Exception:
+            logger.exception("Start here button failed")
 
     async def on_message(self, message):
         await award_message(self, message)
@@ -324,6 +336,7 @@ class NotificationBot(TimerBot):
             self._jobs.append(asyncio.create_task(self.server_stats.run()))
             self._jobs.append(asyncio.create_task(self.maintenance.run()))
             self._jobs.append(asyncio.create_task(self.ban_roles.run()))
+            self._jobs.append(asyncio.create_task(self.welcome.run()))
             logger.info("Ready: one combined servers card + announcements channel; %s active game monitors",
                         len(self.monitors))
 

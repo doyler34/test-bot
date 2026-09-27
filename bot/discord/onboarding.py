@@ -148,6 +148,36 @@ def progress(bot, guild, member):
     return '\n'.join(lines)
 
 
+async def pick_faction(bot, interaction, name):
+    await ack(interaction)
+    held = current_faction(bot, interaction.guild, interaction.user)
+    if held is not None:
+        await say(interaction, f"You're locked to **{held}**. Ask an admin if you need to switch sides.")
+        return
+    try:
+        if await apply_faction(bot, interaction.guild, interaction.user, name) is None:
+            await say(interaction, f'The **{name}** role is missing on this server. '
+                                   'Ask an admin to restart the bot so it can make it.')
+            return
+        text = (f"You're **{name}** on Discord now, and locked to it here. That's you "
+                "off Renegade — play whatever side you like in game.")
+    except discord.Forbidden:
+        text = 'I need Manage Roles, and my role must sit above the faction roles. Ask an admin.'
+    await say(interaction, text)
+
+
+async def skip_faction(bot, interaction):
+    """Staying Renegade on purpose is a choice, not an unfinished step."""
+    await ack(interaction)
+    held = current_faction(bot, interaction.guild, interaction.user)
+    if held is not None:
+        await say(interaction, f"You're already **{held}**. Ask an admin if you want that removed.")
+        return
+    bot.account_links.set_faction(interaction.guild_id, interaction.user.id, NO_FACTION)
+    await say(interaction, 'No side for you then. You stay **OYB Renegade** — press a '
+                           'faction any time you change your mind.')
+
+
 class OnboardingView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)
@@ -168,42 +198,18 @@ class OnboardingView(discord.ui.View):
                                    custom_id=f'oyb:onboard:faction:{name}')
 
         async def pick(interaction):
-            await ack(interaction)
-            held = current_faction(self.bot, interaction.guild, interaction.user)
-            if held is not None:
-                await say(interaction,
-                          f"You're locked to **{held}**. Ask an admin if you need to switch sides.")
-                return
-            try:
-                if await apply_faction(self.bot, interaction.guild, interaction.user, name) is None:
-                    await say(interaction, f'The **{name}** role is missing on this server. '
-                                           'Ask an admin to restart the bot so it can make it.')
-                    return
-                text = (f"You're **{name}** on Discord now, and locked to it here. That's you "
-                        "off Renegade — play whatever side you like in game.")
-            except discord.Forbidden:
-                text = 'I need Manage Roles, and my role must sit above the faction roles. Ask an admin.'
-            await say(interaction, text)
+            await pick_faction(self.bot, interaction, name)
 
         button.callback = pick
         return button
 
     def _no_faction(self):
-        """Staying Renegade on purpose is a choice, not an unfinished step."""
         button = discord.ui.Button(label='No faction', row=1,
                                    style=discord.ButtonStyle.secondary,
                                    custom_id='oyb:onboard:faction:none')
 
         async def skip(interaction):
-            await ack(interaction)
-            held = current_faction(self.bot, interaction.guild, interaction.user)
-            if held is not None:
-                await say(interaction,
-                          f"You're already **{held}**. Ask an admin if you want that removed.")
-                return
-            self.bot.account_links.set_faction(interaction.guild_id, interaction.user.id, NO_FACTION)
-            await say(interaction, 'No side for you then. You stay **OYB Renegade** — press a '
-                                   'faction any time you change your mind.')
+            await skip_faction(self.bot, interaction)
 
         button.callback = skip
         return button
@@ -239,9 +245,14 @@ def panel_embed():
 
 
 async def prepare_onboarding(bot, guild, channel):
-    """Post or refresh the panel. Edits our own message rather than piling up."""
+    """Post or refresh the panel. Edits our own message rather than piling up.
+    Once one has been published from OYB Control, that version is drawn instead."""
     await ensure_member_role(guild)
     await ensure_unverified_role(guild)
+    welcome = getattr(bot, 'welcome', None)
+    if welcome is not None and welcome.published('welcome'):
+        await welcome.publish_welcome(guild)
+        return None
     # The panel offers the faction buttons, so it owns making sure the roles
     # they hand out exist. They used to be created only by the separate faction
     # picker, which a server without one configured never sets up.

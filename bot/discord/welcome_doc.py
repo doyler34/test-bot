@@ -1,0 +1,210 @@
+"""What the Start here message and the join greeting say, as plain data.
+
+OYB Control edits these and the bot draws them in Discord, so both import
+this: the defaults (today's wording), what each button type needs, and the
+checks that keep a saved message inside Discord's limits.
+"""
+import re
+import secrets
+
+STYLES = ("green", "blurple", "grey", "red")
+# What a button does when pressed. Link / progress / faction are the steps the
+# bot has always had; role, pick and url are the customisable ones.
+TYPES = {
+    "link": "Link Reforger account",
+    "progress": "My progress",
+    "faction": "Pick a faction (US / USSR / FIA)",
+    "no_faction": "No faction",
+    "role": "Give or take a role",
+    "pick": "Pick one role from a group",
+    "url": "Open a web link",
+}
+FACTION_NAMES = ("US", "USSR", "FIA")
+MAX_BUTTONS = 25
+MAX_PER_LINE = 5
+LINES = 5
+TITLE_MAX = 256
+TEXT_MAX = 4000
+LABEL_MAX = 80
+HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def new_id():
+    return secrets.token_hex(4)
+
+
+def default_welcome():
+    """Exactly what the Start here panel said before it could be edited."""
+    return {
+        "channel_id": None,
+        "title": "Start here",
+        "colour": "#A9BC8C",
+        "sections": [
+            {"heading": "1 — Link your Reforger account", "text": (
+                "Play a round on any OYB server, then hit **Link Reforger account** and type your "
+                "in-game name or player ID.\n\n"
+                "Name yours and unclaimed? You are in straight away. Otherwise an admin checks it.\n\n"
+                "Linking opens up the rest of the server and starts your kills, deaths and playtime "
+                "counting towards your rank.")},
+            {"heading": "2 — Pick your side (optional)", "text": (
+                "⚠️ **THIS DOES NOT LOCK YOUR FACTION IN GAME.** Play US, USSR or FIA on the "
+                "servers whenever you like. It is a Discord role and nothing else, and you can "
+                "skip it entirely.\n\n"
+                "If you want one: it colours your name, opens that side's channels and drops "
+                "**OYB Renegade**. You cannot swap it yourself on Discord after, so go with your "
+                "mates. Not fussed? Press **No faction**.")},
+            {"heading": "", "text": "Stuck? **My progress** shows what you are missing."},
+        ],
+        "buttons": [
+            {"id": "link", "type": "link", "label": "1. Link Reforger account", "emoji": "", "style": "green", "line": 1},
+            {"id": "progress", "type": "progress", "label": "My progress", "emoji": "", "style": "grey", "line": 1},
+            {"id": "us", "type": "faction", "faction": "US", "label": "US", "emoji": "🇺🇸", "style": "grey", "line": 2},
+            {"id": "ussr", "type": "faction", "faction": "USSR", "label": "USSR", "emoji": "🇷🇺", "style": "grey", "line": 2},
+            {"id": "fia", "type": "faction", "faction": "FIA", "label": "FIA", "emoji": "🏳️", "style": "grey", "line": 2},
+            {"id": "nofaction", "type": "no_faction", "label": "No faction", "emoji": "", "style": "grey", "line": 2},
+        ],
+    }
+
+
+def default_greeting():
+    return {
+        "enabled": False,
+        "where": "channel",
+        "channel_id": None,
+        "text": "Welcome to **{server}**, {user}! Head to {start} to link your account and get going.",
+    }
+
+
+def description(doc):
+    """The embed text: each section's heading in bold, then its text."""
+    parts = []
+    for section in doc.get("sections", []):
+        heading, text = section.get("heading", "").strip(), section.get("text", "").strip()
+        if heading and text:
+            parts.append(f"**{heading}**\n{text}")
+        elif heading or text:
+            parts.append(f"**{heading}**" if heading else text)
+    return "\n\n".join(parts)
+
+
+def _id(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+        return int(value)
+    raise ValueError
+
+
+def check_welcome(raw):
+    """(clean doc, problems). Problems are sentences an owner can act on;
+    a doc with any is not saved."""
+    problems = []
+    if not isinstance(raw, dict):
+        return default_welcome(), ["That message couldn't be read. Reload and try again."]
+    doc = {"title": str(raw.get("title", "")).strip()[:TITLE_MAX],
+           "colour": str(raw.get("colour", "#A9BC8C")).strip()}
+    try:
+        doc["channel_id"] = _id(raw.get("channel_id"))
+    except ValueError:
+        problems.append("Pick the channel from the list.")
+        doc["channel_id"] = None
+    if not HEX.match(doc["colour"]):
+        problems.append("The colour should look like #A9BC8C.")
+        doc["colour"] = "#A9BC8C"
+    doc["sections"] = []
+    for section in raw.get("sections", []) if isinstance(raw.get("sections"), list) else []:
+        if not isinstance(section, dict):
+            continue
+        heading = str(section.get("heading", "")).strip()[:TITLE_MAX]
+        text = str(section.get("text", "")).replace("\r\n", "\n").strip()
+        if heading or text:
+            doc["sections"].append({"heading": heading, "text": text})
+    if not doc["title"] and not doc["sections"]:
+        problems.append("Give the message a title or some text.")
+    if len(description(doc)) > TEXT_MAX:
+        problems.append(f"The text is {len(description(doc))} characters; Discord allows {TEXT_MAX}.")
+    doc["buttons"] = []
+    seen = set()
+    for n, button in enumerate(raw.get("buttons", []) if isinstance(raw.get("buttons"), list) else [], 1):
+        if not isinstance(button, dict):
+            continue
+        clean, issues = _check_button(button, n)
+        problems += issues
+        if clean["id"] in seen:
+            clean["id"] = new_id()
+        seen.add(clean["id"])
+        doc["buttons"].append(clean)
+    if len(doc["buttons"]) > MAX_BUTTONS:
+        problems.append(f"Discord allows {MAX_BUTTONS} buttons on one message.")
+    for line in range(1, LINES + 1):
+        if sum(b["line"] == line for b in doc["buttons"]) > MAX_PER_LINE:
+            problems.append(f"Line {line} has more than {MAX_PER_LINE} buttons; move some to another line.")
+    return doc, problems
+
+
+def _check_button(raw, n):
+    problems = []
+    kind = raw.get("type") if raw.get("type") in TYPES else "role"
+    label = str(raw.get("label", "")).strip()[:LABEL_MAX]
+    emoji = str(raw.get("emoji", "")).strip()[:40]
+    name = f"Button {n}" + (f" ({label})" if label else "")
+    if not label and not emoji:
+        problems.append(f"{name} needs a label or an emoji.")
+    try:
+        line = min(max(int(raw.get("line", 1)), 1), LINES)
+    except (TypeError, ValueError):
+        line = 1
+    button_id = str(raw.get("id", "")).strip()
+    if not re.fullmatch(r"[a-z0-9]{1,16}", button_id):
+        button_id = new_id()
+    button = {"id": button_id, "type": kind, "label": label, "emoji": emoji, "line": line,
+              "style": raw.get("style") if raw.get("style") in STYLES else "grey"}
+    if kind == "faction":
+        button["faction"] = raw.get("faction") if raw.get("faction") in FACTION_NAMES else "US"
+    elif kind in ("role", "pick"):
+        try:
+            button["role_id"] = _id(raw.get("role_id"))
+        except ValueError:
+            button["role_id"] = None
+        button["role_name"] = str(raw.get("role_name", "")).strip()[:100]
+        if not button["role_id"] and not button["role_name"]:
+            problems.append(f"{name} needs a role: pick one, or type a name for a new one.")
+        button["linked_only"] = bool(raw.get("linked_only"))
+        if kind == "pick":
+            button["group"] = re.sub(r"\s+", " ", str(raw.get("group", "")).strip())[:40] or "Group"
+            button["locked"] = bool(raw.get("locked"))
+    elif kind == "url":
+        button["url"] = str(raw.get("url", "")).strip()[:512]
+        if not re.match(r"^https?://\S+\.\S+", button["url"]):
+            problems.append(f"{name} needs a web address starting with https://.")
+    return button, problems
+
+
+def check_greeting(raw):
+    problems = []
+    if not isinstance(raw, dict):
+        return default_greeting(), ["That greeting couldn't be read. Reload and try again."]
+    doc = {"enabled": bool(raw.get("enabled")),
+           "where": raw.get("where") if raw.get("where") in ("channel", "dm") else "channel",
+           "text": str(raw.get("text", "")).replace("\r\n", "\n").strip()[:2000]}
+    try:
+        doc["channel_id"] = _id(raw.get("channel_id"))
+    except ValueError:
+        doc["channel_id"] = None
+        problems.append("Pick the channel from the list.")
+    if doc["enabled"] and not doc["text"]:
+        problems.append("Write the greeting, or turn it off.")
+    if doc["enabled"] and doc["where"] == "channel" and not doc["channel_id"]:
+        problems.append("Pick which channel the greeting goes in.")
+    return doc, problems
+
+
+PLACEHOLDERS = {"{user}": "mentions them", "{name}": "their name", "{server}": "the Discord's name",
+                "{members}": "how many members there are", "{start}": "a link to the Start here channel"}
+
+
+def fill_greeting(text, mention, name, server, members, start):
+    values = {"{user}": mention, "{name}": name, "{server}": server, "{members}": str(members), "{start}": start}
+    for key, value in values.items():
+        text = text.replace(key, value)
+    return text
