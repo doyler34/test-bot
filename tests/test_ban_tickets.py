@@ -135,7 +135,7 @@ class BanTicketTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ticket.sent, [])
 
     async def test_every_listed_category(self):
-        with patch.dict(os.environ, {"BAN_TICKET_CHANNEL": str(PANEL), "BAN_TICKET_CATEGORY": "601, 602"}):
+        with patch.dict(os.environ, {"PANEL_DB": self.path, "BAN_TICKET_CHANNEL": str(PANEL), "BAN_TICKET_CATEGORY": "601, 602"}):
             tickets = BanTickets(self.tickets.bot)
         self.panel.add_ban(HAVOC, "Havoc", "Cheating", "burd")
         for category in (CATEGORY, 601, 602):
