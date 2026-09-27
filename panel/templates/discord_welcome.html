@@ -1,0 +1,54 @@
+{% extends "discord_base.html" %}
+{% block editor %}
+<form method="post" action="/discord/welcome" id="dc-editor" data-kind="welcome">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="doc" id="dc-doc">
+  <script type="application/json" id="dc-data">{{ doc|tojson }}</script>
+  <script type="application/json" id="dc-default">{{ default_doc|tojson }}</script>
+  <script type="application/json" id="dc-bridge">{{ {"roles": bridge.get("roles", []), "channels": bridge.get("channels", []), "start": bridge.get("start_channel", "")}|tojson }}</script>
+
+  <div class="dc-layout">
+    <div class="dc-edit">
+      <section class="card">
+        <h2>Where and how it looks</h2>
+        <div class="grid">
+          <label class="span">Channel <select data-field="channel_id" id="dc-channel"></select></label>
+          <label class="span">Title <input data-field="title" maxlength="256"></label>
+          <label>Stripe colour
+            <span class="dc-colour"><input type="color" data-field="colour"><input data-field="colour" class="mono" maxlength="7"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Text</h2>
+        <p class="muted">Split it into sections, each with an optional heading. <b>**bold**</b>, <i>*italic*</i> and new lines work like in Discord.</p>
+        <div id="dc-sections"></div>
+        <button type="button" class="small" id="dc-add-section">+ Add section</button>
+      </section>
+
+      <section class="card">
+        <div class="row"><h2>Buttons</h2><span class="muted" id="dc-count"></span></div>
+        <p class="muted">Up to 5 buttons on each of 5 lines. Role buttons only ever hand out roles with no permissions.</p>
+        <div id="dc-buttons"></div>
+        <button type="button" class="small" id="dc-add-button">+ Add button</button>
+      </section>
+    </div>
+
+    <aside class="dc-preview">
+      <p class="kicker">Preview</p>
+      <div class="discord" id="dc-preview"></div>
+      <p class="muted">Roughly how it looks in Discord. Buttons don't work here.</p>
+    </aside>
+  </div>
+
+  <div class="dc-actions">
+    <button name="action" value="publish">Publish</button>
+    <button name="action" value="save" class="ghost">Save draft</button>
+    {% if draft %}<button name="action" value="discard" class="ghost" data-confirm="Throw away the draft and go back to what's live?">Discard draft</button>{% endif %}
+    <button type="button" class="link" id="dc-reset">Start again from the original</button>
+  </div>
+</form>
+<script type="application/json" id="dc-types">{{ types|tojson }}</script>
+<script src="/static/discord.js?v={{ asset_version }}" defer></script>
+{% endblock %}

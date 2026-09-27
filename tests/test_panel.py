@@ -22,6 +22,7 @@ from aiohttp import web as aioweb
 from bot.storage.account_links import AccountLinks
 from bot.storage.combat_store import migrate as migrate_combat, record as record_kill
 from bot.tracking.combat_parser import KillEvent
+from bot.discord import welcome_doc
 from panel import auth, memory
 from panel.alerts import Alerts
 from panel.connections import LogReader
@@ -1073,6 +1074,70 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         banning = await (await self.client.get("/guide/banning")).text()
         self.assertNotIn("Banning needs an admin", banning)
         self.assertIn("Next →", banning)
+
+    async def test_discord_pages_are_owner_only(self):
+        await self.login("mod", "mod-password")
+        self.assertNotIn('href="/discord"', await (await self.client.get("/")).text())
+        self.assertEqual((await self.client.get("/discord/welcome")).status, 403)
+
+    async def test_welcome_draft_then_publish(self):
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/discord/welcome")).text()
+        self.assertIn("Not published", page)
+        self.assertIn("Link your Reforger account", page)
+        token = await self.csrf("/discord/welcome")
+        doc = welcome_doc.default_welcome()
+        doc["title"] = "Welcome to OYB"
+        doc["buttons"].append({"type": "role", "label": "Events", "role_name": "Event pings", "line": 3})
+        saved = await (await self.client.post("/discord/welcome", data={
+            "csrf": token, "action": "save", "doc": json.dumps(doc)})).text()
+        self.assertIn("Draft saved", saved)
+        self.assertIn("Unpublished changes", saved)
+        self.assertIsNone(self.db.discord_doc("welcome")["published"])
+        await self.client.post("/discord/welcome", data={"csrf": token, "action": "publish", "doc": json.dumps(doc)})
+        row = self.db.discord_doc("welcome")
+        self.assertEqual((json.loads(row["published"])["title"], row["version"], row["draft"]), ("Welcome to OYB", 1, None))
+        self.assertEqual(self.db.audit()[0]["action"], "publish welcome")
+        self.assertIn("The bot hasn't reported in", await (await self.client.get("/discord/welcome")).text())
+
+    async def test_welcome_problems_keep_a_draft_but_do_not_publish(self):
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/discord/welcome")
+        doc = welcome_doc.default_welcome()
+        doc["buttons"].append({"type": "url", "label": "Rules", "url": "nope"})
+        page = await (await self.client.post("/discord/welcome", data={
+            "csrf": token, "action": "publish", "doc": json.dumps(doc)})).text()
+        self.assertIn("needs a web address starting with https://", page)
+        row = self.db.discord_doc("welcome")
+        self.assertIsNone(row["published"])
+        self.assertIsNotNone(row["draft"])
+        await self.client.post("/discord/welcome", data={"csrf": token, "action": "discard"})
+        self.assertIsNone(self.db.discord_doc("welcome")["draft"])
+
+    async def test_bot_report_shows_on_the_page(self):
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/discord/welcome")
+        await self.client.post("/discord/welcome", data={
+            "csrf": token, "action": "publish", "doc": json.dumps(welcome_doc.default_welcome())})
+        with tempfile.TemporaryDirectory() as data:
+            self.config.oyb_data = data
+            Path(data, "panel_bridge.json").write_text(json.dumps({
+                "updated": now(), "roles": [{"id": "5", "name": "Events", "colour": "#fff", "problem": None}],
+                "channels": [], "welcome": {"version": 1, "at": now(), "problems": ["The Events button: nope"]}}))
+            page = await (await self.client.get("/discord/welcome")).text()
+        self.assertIn("The bot put it up", page)
+        self.assertIn("The Events button: nope", page)
+        self.assertIn('"name": "Events"', page)
+
+    async def test_greeting(self):
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/discord/greeting")
+        page = await (await self.client.post("/discord/greeting", data={"csrf": token, "action": "publish",
+            "doc": json.dumps({"enabled": True, "where": "channel", "channel_id": None, "text": "Hi {user}"})})).text()
+        self.assertIn("Pick which channel the greeting goes in.", page)
+        await self.client.post("/discord/greeting", data={"csrf": token, "action": "publish",
+            "doc": json.dumps({"enabled": True, "where": "dm", "channel_id": None, "text": "Hi {user}"})})
+        self.assertEqual(json.loads(self.db.discord_doc("greeting")["published"])["where"], "dm")
 
     async def test_ban_needs_a_known_player(self):
         await self.login("boss", "boss-password")

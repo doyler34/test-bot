@@ -9,6 +9,7 @@ password guide-demo-1. Then run dev/guide_shots.js to retake the pictures.
 """
 
 import asyncio
+import json
 import random
 import sqlite3
 import sys
@@ -118,6 +119,25 @@ def seed_logs(root, rng):
     write_game(Path(root, "eu2"), t - 3 * 3600, game_log(t - 3 * 3600, 3 * 3600 - 200, rng))
 
 
+def seed_bridge(data):
+    """What the bot would report back: the Discord's roles and channels."""
+    roles = [("Owner", "#e74c3c", "it has permissions; button roles must have none"),
+             ("OYB Bot", "#d9a441", "it sits above the bot's role; move the bot's role higher"),
+             ("Moderator", "#3498db", "it has permissions; button roles must have none"),
+             ("US", "#3b5b8c", None), ("USSR", "#b23a32", None), ("FIA", "#8a7b3f", None),
+             ("Event pings", "#a9bc8c", None), ("Squad Alpha", "#95a5a6", None), ("Squad Bravo", "#95a5a6", None),
+             ("OYB Member", "#a9bc8c", None)]
+    channels = [("start-here", "WELCOME"), ("rules", "WELCOME"), ("announcements", "WELCOME"),
+                ("general", "COMMUNITY"), ("looking-for-squad", "COMMUNITY"), ("servers", "SERVERS")]
+    (data / "panel_bridge.json").write_text(json.dumps({
+        "updated": now(), "guild": "OYB", "member_events": True, "member_role": "OYB Member",
+        "start_channel": "900000000000000001",
+        "roles": [{"id": str(800000000000000000 + n), "name": name, "colour": colour, "problem": problem}
+                  for n, (name, colour, problem) in enumerate(roles)],
+        "channels": [{"id": str(900000000000000001 + n), "name": name, "category": category}
+                     for n, (name, category) in enumerate(channels)]}))
+
+
 def seed_bot(data):
     data.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(data / "playtime.sqlite3") as db:
@@ -176,6 +196,7 @@ async def main(port):
     root = Path(tempfile.mkdtemp(prefix="oyb-guide-"))
     seed_logs(root / "logs", rng)
     seed_bot(root / "bot")
+    seed_bridge(root / "bot")
     loop = asyncio.get_running_loop()
     rcons = {}
     for server, picks, rcon_port in (("eu1", ON_EU1, 19991), ("eu2", ON_EU2, 19992)):

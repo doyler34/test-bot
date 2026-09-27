@@ -277,3 +277,59 @@ form.inline input[type=date] { display: inline-block; width: auto; margin: 0; pa
   .guide-next { flex-direction: column; }
   .guide-next a { max-width: none; }
 }
+
+/* Discord editors */
+.dc-shell { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; align-items: start; }
+.dc-tabs { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
+.dc-tabs a, .dc-tabs .soon { padding: 8px 12px; border-left: 2px solid var(--line); color: var(--muted); text-decoration: none; }
+.dc-tabs a.on, .dc-tabs a:hover { color: var(--ink); border-left-color: var(--gold); background: var(--panel); }
+.dc-tabs .soon { opacity: .5; }
+.dc-status p { margin: 4px 0; }
+.dc-status .pill { margin-right: 6px; }
+.pill.gold { color: var(--gold); border-color: var(--gold); }
+.dc-problems { margin: 6px 0 0; padding-left: 20px; color: var(--red); }
+.dc-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+.dc-edit .card { margin-bottom: 16px; }
+.dc-item { border: 1px solid var(--line-soft); background: var(--bg); padding: 10px 12px; margin-bottom: 10px; }
+.dc-item .row { margin-bottom: 6px; }
+.dc-item textarea { min-height: 110px; resize: vertical; }
+.dc-move { display: flex; gap: 4px; }
+.dc-colour { display: flex; gap: 8px; }
+.dc-colour input[type=color] { width: 48px; padding: 2px; height: 40px; }
+.dc-styles { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.dc-style { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 4px; color: #fff;
+  text-transform: none; font-family: var(--body); font-size: .88rem; cursor: pointer; }
+.dc-style input { width: auto; margin: 0; }
+.dc-where { margin: 6px 0; }
+.dc-preview { position: sticky; top: 16px; }
+.dc-actions { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  padding: 12px 14px; margin: 0 -14px; background: var(--bg); border-top: 1px solid var(--line); }
+.dc-closed { padding: 6px 10px; }
+.dc-closed .row, .dc-editing > .row { margin: 0; }
+.dc-editing { border-color: var(--gold); }
+.dc-editing > .row { margin-bottom: 8px; }
+button.dc-open { background: none; color: var(--ink); padding: 4px 0; clip-path: none; text-transform: none; font-family: var(--body);
+  letter-spacing: 0; font-size: .95rem; text-align: left; flex: 1; min-width: 0; }
+.dc-summary { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dc-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.chip.dc-token { text-transform: none; font-family: var(--mono, monospace); }
+/* Discord's own colours, so the preview reads like the real thing. */
+.discord { background: #313338; color: #dbdee1; padding: 14px 16px; border-radius: 6px; font-family: "gg sans", "Noto Sans", Arial, sans-serif; font-size: .95rem; }
+.dc-author { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #f2f3f5; }
+.dc-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--gold) url(/static/oyb-mark.svg) center / 70% no-repeat; }
+.dc-app { background: #5865f2; color: #fff; font-size: .65rem; padding: 1px 5px; border-radius: 3px; }
+.dc-embed { background: #2b2d31; border-left: 4px solid #A9BC8C; border-radius: 4px; padding: 10px 14px; margin: 4px 0 8px; line-height: 1.4; }
+.dc-embed-title { font-weight: 700; color: #f2f3f5; margin-bottom: 6px; }
+.dc-embed-footer { font-size: .75rem; color: #b5bac1; margin-top: 10px; }
+.discord code { background: #1e1f22; padding: 0 4px; border-radius: 3px; }
+.discord .mention { background: rgba(88, 101, 242, .3); color: #c9cdfb; border-radius: 3px; padding: 0 2px; }
+.dc-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dc-btn { padding: 6px 14px; border-radius: 4px; color: #fff; font-size: .88rem; font-weight: 500; }
+.s-green { background: #248046; } .s-blurple { background: #5865f2; } .s-grey { background: #4e5058; } .s-red { background: #da373c; }
+@media (max-width: 1100px) { .dc-layout { grid-template-columns: minmax(0, 1fr); } .dc-preview { position: static; } }
+@media (max-width: 800px) {
+  .dc-shell { grid-template-columns: minmax(0, 1fr); }
+  .dc-tabs { position: static; flex-direction: row; flex-wrap: wrap; }
+  .dc-tabs a, .dc-tabs .soon { border-left: 0; border-bottom: 2px solid var(--line); }
+  .dc-tabs a.on { border-bottom-color: var(--gold); }
+}

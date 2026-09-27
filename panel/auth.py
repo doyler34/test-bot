@@ -17,6 +17,7 @@ PERMISSIONS = {
     "audit": "admin",
     "console": "owner",
     "users": "owner",
+    "discord": "owner",
 }
 
 SESSION_SECONDS = 7 * 24 * 3600

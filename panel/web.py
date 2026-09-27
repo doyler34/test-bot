@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import logging
 import re
 import secrets
@@ -9,6 +10,8 @@ from pathlib import Path
 
 import jinja2
 from aiohttp import web
+
+from bot.discord import welcome_doc
 
 from . import archive, auth, memory
 from .alerts import GOLD, GREEN, RED
@@ -22,7 +25,7 @@ from .servers import POWER_RCON, POWER_SERVICE, ServerManager, clean, valid_iden
 log = logging.getLogger("panel.web")
 
 HERE = Path(__file__).parent
-ASSET_VERSION = str(int(max((HERE / "static" / n).stat().st_mtime for n in ("style.css", "app.js"))))
+ASSET_VERSION = str(int(max((HERE / "static" / n).stat().st_mtime for n in ("style.css", "app.js", "discord.js"))))
 BRAND = HERE.parent / "assets" / "rank-card"
 COOKIE = "oyb_panel"
 PUBLIC = ("/login", "/static/", "/brand/", "/drop/")
@@ -801,6 +804,88 @@ async def add_note(request):
     raise web.HTTPFound(f"/player/{identity}")
 
 
+# Discord: what the bot posts, edited here and published to it
+
+DISCORD_PAGES = (("welcome", "Start here message"), ("greeting", "Join greeting"))
+
+
+def bridge(request):
+    """What the bot last reported: roles, channels, and how publishing went."""
+    path = Path(request.app[CONFIG].oyb_data, "panel_bridge.json")
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    data["age"] = now() - int(data.get("updated", 0))
+    return data
+
+
+def discord_state(request, key, defaults, check):
+    row = request.app[DB].discord_doc(key)
+    published = json.loads(row["published"]) if row and row["published"] else None
+    draft = json.loads(row["draft"]) if row and row["draft"] else None
+    doc = draft or published or defaults()
+    return {"row": row, "doc": check(doc)[0], "draft": draft is not None, "live": published is not None}
+
+
+async def discord_home(request):
+    require(request, "discord")
+    raise web.HTTPFound("/discord/welcome")
+
+
+async def discord_page(request):
+    require(request, "discord")
+    key = request.match_info["page"]
+    if key not in dict(DISCORD_PAGES):
+        raise web.HTTPNotFound(text="No such page.")
+    defaults, check = DISCORD_DOCS[key]
+    state = discord_state(request, key, defaults, check)
+    return render(request, f"discord_{key}.html", pages=DISCORD_PAGES, page=key, bridge=bridge(request),
+                  default_doc=defaults(),
+                  problems=[], **state, types=welcome_doc.TYPES, placeholders=welcome_doc.PLACEHOLDERS)
+
+
+async def discord_save(request):
+    require(request, "discord")
+    key = request.match_info["page"]
+    if key not in dict(DISCORD_PAGES):
+        raise web.HTTPNotFound(text="No such page.")
+    defaults, check = DISCORD_DOCS[key]
+    form = await request.post()
+    action = form.get("action", "")
+    db, who = request.app[DB], request[USER]["username"]
+    back = f"/discord/{key}"
+    if action == "discard":
+        db.discard_discord_draft(key)
+        audit(request, f"discard {key} draft")
+        flash(request, "Draft thrown away. The editor shows what's live again.")
+        raise web.HTTPFound(back)
+    try:
+        raw = json.loads(form.get("doc", ""))
+    except ValueError:
+        raw = None
+    doc, problems = check(raw)
+    text = json.dumps(doc)
+    if action == "publish" and not problems:
+        db.publish_discord_doc(key, text, who)
+        audit(request, f"publish {key}")
+        flash(request, "Published. The bot updates Discord within a minute.")
+        raise web.HTTPFound(back)
+    db.save_discord_draft(key, text, who)
+    if action == "publish" or problems:
+        state = discord_state(request, key, defaults, check)
+        return render(request, f"discord_{key}.html", pages=DISCORD_PAGES, page=key, bridge=bridge(request),
+                      default_doc=defaults(), problems=problems,
+                      **{**state, "doc": doc}, types=welcome_doc.TYPES, placeholders=welcome_doc.PLACEHOLDERS)
+    audit(request, f"save {key} draft")
+    flash(request, "Draft saved. Nothing changes in Discord until you publish.")
+    raise web.HTTPFound(back)
+
+
+DISCORD_DOCS = {"welcome": (welcome_doc.default_welcome, welcome_doc.check_welcome),
+                "greeting": (welcome_doc.default_greeting, welcome_doc.check_greeting)}
+
+
 # console
 
 async def console_page(request):
@@ -956,6 +1041,9 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/players/search.json", player_search)
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/notes", add_note)
+    app.router.add_get("/discord", discord_home)
+    app.router.add_get("/discord/{page}", discord_page)
+    app.router.add_post("/discord/{page}", discord_save)
     app.router.add_get("/console", console_page)
     app.router.add_post("/console", console)
     app.router.add_get("/audit", audit_page)

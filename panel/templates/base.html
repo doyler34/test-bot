@@ -19,6 +19,7 @@
     <a href="/bans" {% if path == "/bans" %}class="on"{% endif %}>Bans</a>
     {% if can("console") %}<a href="/console" {% if path == "/console" %}class="on"{% endif %}>Console</a>{% endif %}
     {% if can("audit") %}<a href="/audit" {% if path == "/audit" %}class="on"{% endif %}>Audit log</a>{% endif %}
+    {% if can("discord") %}<a href="/discord" {% if path.startswith("/discord") %}class="on"{% endif %}>Discord</a>{% endif %}
     {% if can("users") %}<a href="/users" {% if path == "/users" %}class="on"{% endif %}>Admins</a>{% endif %}
     <a href="/guide" {% if path.startswith("/guide") %}class="on"{% endif %}>Guide</a>
   </nav>
