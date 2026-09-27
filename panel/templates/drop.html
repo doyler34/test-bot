@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Upload a log · OYB Control{% endblock %}
+{% block body %}
+<form class="card narrow login" method="post" enctype="multipart/form-data">
+  <img class="login-mark" src="/static/oyb-mark.svg" alt="">
+  <h1>Upload a log</h1>
+  <p class="kicker">{{ server }}</p>
+  {% if result %}<div class="flash">Uploaded. {{ result }} is now in {{ server }}'s History. You can upload another.</div>{% endif %}
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  <p>Choose the <b>console.log</b> from a game's <code>logs_&lt;date&gt;</code> folder. It can be renamed, e.g. to a .txt.</p>
+  <label>Log file <input type="file" name="log" required></label>
+  <button>Upload</button>
+  <p class="muted">This link works until {{ expires|ts }}.</p>
+</form>
+{% endblock %}

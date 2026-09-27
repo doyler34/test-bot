@@ -778,6 +778,39 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         stale.add_field("log", text.encode(), filename="x.txt")
         self.assertEqual((await self.client.post("/server/server-1/history/upload?csrf=nope", data=stale)).status, 403)
 
+    async def test_upload_link_without_a_login(self):
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+        html = await (await self.client.get("/server/server-1")).text()
+        token = re.search(r'name="csrf" value="([^"]+)"', html)[1]
+        page = await (await self.client.post("/server/server-1/upload-links", data={"csrf": token})).text()
+        link = re.search(r"https?://[^/\s]+(/drop/[\w-]+)", page)[1]
+        self.assertIn("Link by boss, 0 uploads", page)
+        self.assertNotIn(link, await (await self.client.get("/server/server-1")).text())
+        await self.client.post("/logout", data={"csrf": token})
+        self.assertIn("Upload a log", await (await self.client.get(link)).text())
+        text = "Log /x/logs/logs_2026-09-20_08-00-00/console.log started at 2026-09-20 08:00:00\n" + \
+            arrive("08:05:00.000", "Buford", BUFORD, "146.70.168.126")
+        form = aiohttp.FormData()
+        form.add_field("log", text.encode(), filename="console.log", content_type="text/plain")
+        self.assertIn("is now in Server 1's History", await (await self.client.post(link, data=form)).text())
+        raw = text.replace("2026-09-20_08-00-00", "2026-09-21_08-00-00").encode()
+        response = await self.client.post(link, data=raw)
+        self.assertEqual(await response.text(), "Added logs_2026-09-21_08-00-00 to Server 1's History.\n")
+        self.assertEqual(len(self.db.archived("server-1")), 2)
+        self.assertEqual(self.db.audit()[0]["username"], "upload link (boss)")
+        bad = await self.client.post(link, data=b"no date in here")
+        self.assertEqual(bad.status, 400)
+        self.assertEqual((await self.client.get("/drop/made-up-token")).status, 404)
+        self.db.write("UPDATE upload_links SET revoked = 1")
+        self.assertEqual((await self.client.get(link)).status, 404)
+
+    async def test_moderators_cannot_make_upload_links(self):
+        await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
+        html = await (await self.client.get("/server/server-1")).text()
+        self.assertNotIn("upload-links", html)
+        token = re.search(r'name="csrf" value="([^"]+)"', html)[1]
+        self.assertEqual((await self.client.post("/server/server-1/upload-links", data={"csrf": token})).status, 403)
+
     async def test_moderators_cannot_upload(self):
         await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
         html = await (await self.client.get("/server/server-1")).text()

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import re
 import secrets
@@ -24,7 +25,7 @@ HERE = Path(__file__).parent
 ASSET_VERSION = str(int(max((HERE / "static" / n).stat().st_mtime for n in ("style.css", "app.js"))))
 BRAND = HERE.parent / "assets" / "rank-card"
 COOKIE = "oyb_panel"
-PUBLIC = ("/login", "/static/", "/brand/")
+PUBLIC = ("/login", "/static/", "/brand/", "/drop/")
 DURATIONS = [("3600", "1 hour"), ("86400", "1 day"), ("604800", "7 days"),
              ("2592000", "30 days"), ("0", "Permanent")]
 POWER_LABELS = {
@@ -364,7 +365,8 @@ def history(request, state):
             started = folder_start(folders[-1])
             if since <= started < until:
                 live = {"folder": folders[-1].name, "started": started}
-    return {"games": games, "live": live, "day": day, "today": time.strftime("%Y-%m-%d")}
+    links = request.app[DB].upload_links(state.config.id) if auth.can(request[USER]["role"], "ips") else []
+    return {"games": games, "live": live, "day": day, "today": time.strftime("%Y-%m-%d"), "upload_links": links}
 
 
 def game_file(request, state, folder):
@@ -400,6 +402,53 @@ UPLOAD_LIMIT = 200 * 1024 * 1024
 FOLDER_NAME = re.compile(r"logs_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
 
 
+class UploadError(Exception):
+    pass
+
+
+async def store_upload(app, state, chunks, filename=""):
+    """Saves an uploaded console.log into a server's History. Returns (folder, size)."""
+    manager = app[MANAGER]
+    staging = manager.archive_root / state.config.id / ".upload"
+    staging.mkdir(parents=True, exist_ok=True)
+    temp = staging / f"{secrets.token_hex(8)}.log"
+    size = 0
+    try:
+        with open(temp, "wb") as out:
+            async for chunk in chunks:
+                size += len(chunk)
+                if size > UPLOAD_LIMIT:
+                    raise UploadError("That file is over 200 MB.")
+                out.write(chunk)
+        if not size:
+            raise UploadError("That file was empty.")
+        with open(temp, "rb") as fh:
+            head = fh.read(4096).decode("utf-8", "replace")
+        match = FOLDER_NAME.search(head) or FOLDER_NAME.search(filename or "")
+        if not match:
+            raise UploadError("Couldn't tell when that game started. Upload the console.log from a logs_<date> folder.")
+        folder = match[0]
+        if app[DB].archived_game(state.config.id, folder):
+            raise UploadError(f"{folder} is already in History.")
+        game_dir = staging / folder
+        game_dir.mkdir(exist_ok=True)
+        temp.replace(game_dir / "console.log")
+        dest = manager.archive_root / state.config.id / f"{folder}.tar.gz"
+        try:
+            game = await asyncio.to_thread(archive.archive_game, game_dir, dest)
+        finally:
+            shutil.rmtree(game_dir, ignore_errors=True)
+        app[DB].add_archive(state.config.id, folder, str(dest), dest.stat().st_size, game)
+        return folder, size
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+async def part_chunks(part):
+    while chunk := await part.read_chunk(1 << 20):
+        yield chunk
+
+
 async def upload_log(request):
     """Adds a console.log from anywhere to a server's History, e.g. one saved before the panel ran."""
     require(request, "ips")
@@ -412,43 +461,84 @@ async def upload_log(request):
     if part is None or not part.filename:
         flash(request, "Choose a console.log to upload.", "error")
         raise web.HTTPFound(back)
-    manager = request.app[MANAGER]
-    staging = manager.archive_root / state.config.id / ".upload"
-    staging.mkdir(parents=True, exist_ok=True)
-    temp = staging / f"{secrets.token_hex(8)}.log"
-    size = 0
     try:
-        with open(temp, "wb") as out:
-            while chunk := await part.read_chunk(1 << 20):
-                size += len(chunk)
-                if size > UPLOAD_LIMIT:
-                    flash(request, "That file is over 200 MB.", "error")
-                    raise web.HTTPFound(back)
-                out.write(chunk)
-        with open(temp, "rb") as fh:
-            head = fh.read(4096).decode("utf-8", "replace")
-        match = FOLDER_NAME.search(head) or FOLDER_NAME.search(part.filename)
-        if not match:
-            flash(request, "Couldn't tell when that game started. Upload the console.log from a logs_<date> folder.",
-                  "error")
-            raise web.HTTPFound(back)
-        folder = match[0]
-        if request.app[DB].archived_game(state.config.id, folder):
-            flash(request, f"{folder} is already in History.", "error")
-            raise web.HTTPFound(back)
-        game_dir = staging / folder
-        game_dir.mkdir(exist_ok=True)
-        temp.replace(game_dir / "console.log")
-        dest = manager.archive_root / state.config.id / f"{folder}.tar.gz"
-        try:
-            game = await asyncio.to_thread(archive.archive_game, game_dir, dest)
-        finally:
-            shutil.rmtree(game_dir, ignore_errors=True)
-        request.app[DB].add_archive(state.config.id, folder, str(dest), dest.stat().st_size, game)
-    finally:
-        temp.unlink(missing_ok=True)
+        folder, size = await store_upload(request.app, state, part_chunks(part), part.filename)
+    except UploadError as exc:
+        flash(request, str(exc), "error")
+        raise web.HTTPFound(back)
     audit(request, "upload log", server=state.config.id, target=folder, detail=f"{size // 1024} KB")
     raise web.HTTPFound(f"/server/{state.config.id}/game/{folder}")
+
+
+def link_hash(token):
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def site_url(request):
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip()
+    return f"{scheme}://{request.host}"
+
+
+async def make_upload_link(request):
+    require(request, "ips")
+    state = server_or_404(request, request.match_info["id"])
+    token = secrets.token_urlsafe(24)
+    request.app[DB].add_upload_link(link_hash(token), state.config.id, request[USER]["username"])
+    audit(request, "make upload link", server=state.config.id, detail="24 hours")
+    flash(request, f"Upload link for {state.config.name}, working for 24 hours. Copy it now, it won't be shown "
+                   f"again: {site_url(request)}/drop/{token}")
+    raise web.HTTPFound(f"/server/{state.config.id}#history")
+
+
+async def revoke_upload_link(request):
+    require(request, "ips")
+    state = server_or_404(request, request.match_info["id"])
+    request.app[DB].revoke_upload_link(int(request.match_info["link_id"]), state.config.id)
+    audit(request, "revoke upload link", server=state.config.id)
+    raise web.HTTPFound(f"/server/{state.config.id}#history")
+
+
+async def drop(request):
+    """An upload link: anyone with it can add logs to one server's History
+    for 24 hours, no login. Takes a browser upload or a raw file body."""
+    db = request.app[DB]
+    link = db.upload_link(link_hash(request.match_info["token"]))
+    if link is None:
+        raise web.HTTPNotFound(text="This upload link has expired or was turned off. Ask for a new one.")
+    state = request.app[MANAGER].state(link["server"])
+    if state is None:
+        raise web.HTTPNotFound(text="That server isn't set up any more.")
+    if request.method == "GET":
+        return render(request, "drop.html", server=state.config.name, expires=link["expires_at"],
+                      result=None, error="")
+    form = request.content_type.startswith("multipart/")
+    filename = ""
+    if form:
+        reader = await request.multipart()
+        part = await reader.next()
+        while part is not None and not part.filename:
+            part = await reader.next()
+        if part is None:
+            return render(request, "drop.html", server=state.config.name, expires=link["expires_at"],
+                          result=None, error="Choose a console.log to upload.")
+        chunks, filename = part_chunks(part), part.filename
+    else:
+        chunks = request.content.iter_chunked(1 << 20)
+        filename = request.query.get("name", "")
+    try:
+        folder, size = await store_upload(request.app, state, chunks, filename)
+    except UploadError as exc:
+        if not form:
+            raise web.HTTPBadRequest(text=str(exc))
+        return render(request, "drop.html", server=state.config.name, expires=link["expires_at"],
+                      result=None, error=str(exc))
+    db.used_upload_link(link["id"])
+    db.log(f"upload link ({link['created_by']})", "upload log", state.config.id, folder,
+           f"{size // 1024} KB from {client_ip(request)}")
+    if not form:
+        return web.Response(text=f"Added {folder} to {state.config.name}'s History.\n")
+    return render(request, "drop.html", server=state.config.name, expires=link["expires_at"],
+                  result=folder, error="")
 
 
 async def game_log(request):
@@ -854,6 +944,9 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/server/{id}/game/{folder}", game_page)
     app.router.add_get("/server/{id}/game/{folder}/log", game_log)
     app.router.add_post("/server/{id}/history/upload", upload_log)
+    app.router.add_post("/server/{id}/upload-links", make_upload_link)
+    app.router.add_post("/server/{id}/upload-links/{link_id:\\d+}/revoke", revoke_upload_link)
+    app.router.add_route("*", "/drop/{token}", drop)
     app.router.add_post("/server/{id}/kick", kick)
     app.router.add_post("/server/{id}/power", power)
     app.router.add_get("/bans", bans_page)

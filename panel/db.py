@@ -109,6 +109,16 @@ CREATE TABLE IF NOT EXISTS log_positions (
     position INTEGER NOT NULL,
     PRIMARY KEY (server, path)
 );
+CREATE TABLE IF NOT EXISTS upload_links (
+    id INTEGER PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    server TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    uses INTEGER NOT NULL DEFAULT 0,
+    revoked INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS baselines (
     server TEXT PRIMARY KEY,
     pid INTEGER NOT NULL,
@@ -458,6 +468,26 @@ class PanelDB:
 
     def prune_connections(self, days=180):
         self.write("DELETE FROM connections WHERE last_seen < ?", now() - days * 86400)
+
+    # upload links
+
+    def add_upload_link(self, token_hash, server, by, hours=24) -> int:
+        return self.write("INSERT INTO upload_links (token_hash, server, created_by, created_at, expires_at)"
+                          " VALUES (?, ?, ?, ?, ?)", token_hash, server, by, now(), now() + hours * 3600)
+
+    def upload_link(self, token_hash):
+        return self.one("SELECT * FROM upload_links WHERE token_hash = ? AND revoked = 0 AND expires_at > ?",
+                        token_hash, now())
+
+    def upload_links(self, server):
+        return self.all("SELECT * FROM upload_links WHERE server = ? AND revoked = 0 AND expires_at > ?"
+                        " ORDER BY id DESC", server, now())
+
+    def used_upload_link(self, link_id):
+        self.write("UPDATE upload_links SET uses = uses + 1 WHERE id = ?", link_id)
+
+    def revoke_upload_link(self, link_id, server):
+        self.write("UPDATE upload_links SET revoked = 1 WHERE id = ? AND server = ?", link_id, server)
 
     # archived games
 

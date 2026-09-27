@@ -23,7 +23,12 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   Admins and owners can download the log folder; each download is in the
   audit log. The game in progress can be opened too. Admins can also upload
   an old console.log (from before the panel ran, or from another box) at the
-  bottom of the History tab, and it goes in like any other game.
+  bottom of the History tab, and it goes in like any other game. For someone
+  without a login (like whoever runs the server box), **Make an upload link**
+  gives a web address that works for 24 hours: they open it, pick the
+  console.log and upload, or send the file straight to it (e.g.
+  `curl --data-binary @console.log <link>`). Every upload is in the audit log,
+  and a link can be turned off early.
 - **Live players**: refreshes every 10 seconds, with kick and ban on each row.
 - **Live feed**: joins, leaves, side picks, kills and teamkills from the logs,
   messages the server sends over RCON, and admin actions, newest first,
