@@ -22,7 +22,7 @@ One bot handles up to three Reforger servers on the same box.
 ## What it does
 
 - **Live server status** — a SERVER STATS category shows each server (Classic /
-  3x Everon / Arland) with a live match timer, plus Playing ArmA and Users in VC.
+  3x Everon / Classic #2) with a live match timer, plus Playing ArmA and Users in VC.
 - **Ranks & XP** — 1 XP per 10 minutes played (combined across servers) and 1 XP
   per Discord post once your account is linked. `/rank` shows your card.
 - **Combat leaderboard** — kills/deaths from the vanilla kill log, shown in a
