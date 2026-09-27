@@ -74,10 +74,14 @@ class BanTickets:
             return
         if not isinstance(channel, discord.TextChannel) or channel.id == self.panel_channel:
             return
-        if channel.category_id not in self._categories(channel.guild):
+        watched = self._categories(channel.guild)
+        if channel.category_id not in watched:
+            LOG.info("New channel #%s isn't in a ticket category (it's in %s, watching %s)",
+                     channel.name, channel.category_id, ", ".join(map(str, watched)) or "none")
             return
         await asyncio.sleep(SETTLE_SECONDS)
         ids = {target.id for target in channel.overwrites if not isinstance(target, discord.Role)}
+        LOG.info("New ticket #%s; checking %d member(s) for bans", channel.name, len(ids))
         await self._check(channel, ids)
 
     async def thread_created(self, thread):

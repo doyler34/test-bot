@@ -49,6 +49,7 @@ class Channel(discord.TextChannel):
 
     def __init__(self, guild, channel_id, category_id, overwrites):
         self.guild, self.id, self.category_id, self._shared = guild, channel_id, category_id, overwrites
+        self.name = "ticket-0001"
         self.sent = []
 
     @property
