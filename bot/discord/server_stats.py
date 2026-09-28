@@ -18,9 +18,17 @@ TRUTHY = ("1", "true", "yes", "on")
 LABELS = {"server-1": "Classic", "server-2": "3x Everon", "server-3": "Classic #2"}
 
 
-def label_for(server):
+# Names published from OYB Control; they win over everything below.
+OVERRIDES: dict[str, str] = {}
+
+
+def default_label(server):
     return os.getenv(f"STAT_LABEL_{server.id.replace('-', '_').upper()}", "").strip() \
         or LABELS.get(server.id, server.name)
+
+
+def label_for(server):
+    return OVERRIDES.get(server.id) or default_label(server)
 
 
 def format_elapsed(match):

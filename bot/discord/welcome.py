@@ -17,7 +17,7 @@ import time
 import discord
 
 from bot.config import member_role_name, onboarding_channel_id
-from bot.discord import welcome_doc
+from bot.discord import server_stats, welcome_doc
 from bot.discord.factions import ensure_faction_roles
 from bot.discord.interactions import ack, say
 from bot.discord.onboarding import MARKER, by_name, pick_faction, progress, skip_faction
@@ -89,6 +89,15 @@ class Welcome:
         self.docs = {}
         self.applied = {}
         self.state = self._load_state()
+        # Names are needed before the stat channels are first drawn at boot.
+        found = read_doc(self.path, "names")
+        if found:
+            self._use_names(found)
+
+    def _use_names(self, found):
+        self.docs["names"] = found
+        server_stats.OVERRIDES.clear()
+        server_stats.OVERRIDES.update(found[0].get("names", {}))
 
     def published(self, key):
         found = read_doc(self.path, key)
@@ -108,10 +117,13 @@ class Welcome:
         guild = self.bot.get_guild(self.bot.config.guild_id)
         if guild is None:
             return
-        for key in ("welcome", "greeting"):
+        for key in ("welcome", "greeting", "names"):
             found = await asyncio.to_thread(read_doc, self.path, key)
             if found:
                 self.docs[key] = found
+        names = self.docs.get("names")
+        if names and self.state.get("names", {}).get("version") != names[1]:
+            await self.apply_names(guild, names)
         welcome = self.docs.get("welcome")
         if welcome and self.state.get("welcome", {}).get("version") != welcome[1]:
             await self.publish_welcome(guild)
@@ -119,6 +131,30 @@ class Welcome:
         if greeting:
             self.state["greeting"] = {"version": greeting[1], "at": int(time.time()), "problems": []}
         self._write_bridge(guild)
+
+    async def apply_names(self, guild, found):
+        """Everywhere a server's name shows: the stat channel, the #servers
+        card, the notification buttons; match posts pick it up as they go."""
+        self._use_names(found)
+        problems = []
+        stats = getattr(self.bot, "server_stats", None)
+        if stats is not None:
+            try:
+                await stats.tick()
+            except discord.HTTPException:
+                problems.append("Couldn't rename the SERVER STATUS channels yet; the bot will keep trying.")
+        refresh = getattr(self.bot, "refresh_servers", None)
+        if refresh is not None:
+            await refresh()
+        channel = getattr(self.bot, "notification_channel", None)
+        if channel is not None:
+            try:
+                from bot.discord.notification_roles import prepare_notifications
+                await prepare_notifications(self.bot, guild, channel)
+            except discord.HTTPException:
+                problems.append("Couldn't update the match-notification buttons; check Manage Roles.")
+        self.state["names"] = {"version": found[1], "at": int(time.time()), "problems": problems}
+        LOG.info("Server names now %s", found[0].get("names", {}))
 
     async def publish_welcome(self, guild):
         doc, version = self.docs["welcome"]
@@ -291,7 +327,7 @@ class Welcome:
     def _load_state(self):
         try:
             data = json.loads(self.bridge.read_text())
-            return {k: data[k] for k in ("welcome", "greeting") if isinstance(data.get(k), dict)}
+            return {k: data[k] for k in ("welcome", "greeting", "names") if isinstance(data.get(k), dict)}
         except (OSError, ValueError):
             return {}
 
@@ -305,7 +341,10 @@ class Welcome:
                           "problem": safe_role(guild, role)})
         channels = [{"id": str(c.id), "name": c.name, "category": c.category.name if c.category else ""}
                     for c in guild.text_channels]
+        servers = [{"id": s.id, "default": server_stats.default_label(s), "label": server_stats.label_for(s),
+                    "enabled": s.enabled} for s in getattr(self.bot.config, "servers", [])]
         data = {"updated": int(time.time()), "guild": guild.name, "roles": roles, "channels": channels,
+                "servers": servers,
                 "member_events": bool(self.bot.intents.members),
                 "member_role": member_role_name(),
                 "start_channel": str(onboarding_channel_id() or ""),

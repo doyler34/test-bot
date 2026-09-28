@@ -132,6 +132,9 @@ def seed_bridge(data):
     (data / "panel_bridge.json").write_text(json.dumps({
         "updated": now(), "guild": "OYB", "member_events": True, "member_role": "OYB Member",
         "start_channel": "900000000000000001",
+        "servers": [{"id": "server-1", "default": "Classic", "label": "Classic", "enabled": True},
+                    {"id": "server-2", "default": "3x Everon", "label": "3x Everon", "enabled": True},
+                    {"id": "server-3", "default": "Classic #2", "label": "Classic #2", "enabled": True}],
         "roles": [{"id": str(800000000000000000 + n), "name": name, "colour": colour, "problem": problem}
                   for n, (name, colour, problem) in enumerate(roles)],
         "channels": [{"id": str(900000000000000001 + n), "name": name, "category": category}

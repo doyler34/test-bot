@@ -111,6 +111,7 @@ async def prepare_notifications(bot, guild, channel):
     panel stays a single message however many times the bot restarts.
     """
     from bot.discord.server_stats import label_for
+    bot.notification_channel = channel
     ready = []
     for server in bot.config.servers:
         if server.enabled:

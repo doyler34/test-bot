@@ -335,3 +335,10 @@ button.dc-open { background: none; color: var(--ink); padding: 4px 0; clip-path:
   .dc-tabs a, .dc-tabs .soon { border-left: 0; border-bottom: 2px solid var(--line); }
   .dc-tabs a.on { border-bottom-color: var(--gold); }
 }
+.dc-names { display: grid; gap: 10px; }
+.dc-name { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 12px; align-items: center; }
+.dc-name input { margin: 0; }
+.dc-channels { background: #2b2d31; border-radius: 4px; padding: 8px 10px; margin-bottom: 12px; }
+.dc-category { font-size: .72rem; font-weight: 700; color: #949ba4; letter-spacing: .02em; margin-bottom: 4px; }
+.dc-channel { color: #949ba4; padding: 3px 6px; }
+@media (max-width: 600px) { .dc-name { grid-template-columns: minmax(0, 1fr); gap: 4px; } }

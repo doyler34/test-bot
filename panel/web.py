@@ -313,7 +313,7 @@ GUIDE = [
     ("health", "Health and memory", "Uptime, crashes, and when a server needs a full restart.", None),
     ("discord", "Discord", "What gets posted to the staff channel, and linked accounts.", None),
     ("console-audit", "Console and audit log", "Raw RCON commands, and the record of who did what.", "audit"),
-    ("discord-messages", "Discord messages", "Editing the Start here message, its buttons, and the join greeting.", "discord"),
+    ("discord-messages", "Discord messages", "The Start here message and its buttons, server names, and the join greeting.", "discord"),
     ("admins", "Admin accounts", "Making accounts, roles and password resets.", "users"),
 ]
 
@@ -807,7 +807,7 @@ async def add_note(request):
 
 # Discord: what the bot posts, edited here and published to it
 
-DISCORD_PAGES = (("welcome", "Start here message"), ("greeting", "Join greeting"))
+DISCORD_PAGES = (("welcome", "Start here message"), ("greeting", "Join greeting"), ("names", "Server names"))
 
 
 def bridge(request):
@@ -866,6 +866,8 @@ async def discord_save(request):
     except ValueError:
         raw = None
     doc, problems = check(raw)
+    if key == "names":
+        problems += name_clashes(doc, bridge(request).get("servers", []))
     text = json.dumps(doc)
     if action == "publish" and not problems:
         db.publish_discord_doc(key, text, who)
@@ -884,7 +886,20 @@ async def discord_save(request):
 
 
 DISCORD_DOCS = {"welcome": (welcome_doc.default_welcome, welcome_doc.check_welcome),
-                "greeting": (welcome_doc.default_greeting, welcome_doc.check_greeting)}
+                "greeting": (welcome_doc.default_greeting, welcome_doc.check_greeting),
+                "names": (welcome_doc.default_names, welcome_doc.check_names)}
+
+
+def name_clashes(doc, servers):
+    """A new name that matches another server's name, counting the ones left at their default."""
+    final = {s["id"]: doc["names"].get(s["id"]) or s["default"] for s in servers}
+    problems, seen = [], {}
+    for server_id, name in final.items():
+        other = seen.get(name.lower())
+        if other and (server_id in doc["names"] or other in doc["names"]):
+            problems.append(f"{other} and {server_id} would both be called {name}; give each its own name.")
+        seen[name.lower()] = server_id
+    return problems
 
 
 # console

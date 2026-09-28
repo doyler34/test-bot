@@ -40,6 +40,27 @@ function channelName(id) {
 
 if (form && form.dataset.kind === "welcome") welcomeEditor();
 if (form && form.dataset.kind === "greeting") greetingEditor();
+if (form && form.dataset.kind === "names") namesEditor();
+
+function namesEditor() {
+  const inputs = [...form.querySelectorAll("[data-server]")];
+  const preview = document.getElementById("dc-preview");
+  const name = (input) => input.value.trim() || input.dataset.default;
+  function draw() {
+    const stats = h("div", { class: "dc-channels" }, h("div", { class: "dc-category" }, "⌄ SERVER STATUS"),
+      inputs.map((input, i) => h("div", { class: "dc-channel" }, `${["🟢", "🟡", "🟢"][i % 3]} ${name(input)} · ${["46 min", "Waiting for match", "1h 12m"][i % 3]}`)));
+    const buttons = h("div", { class: "dc-row" }, inputs.map((input) => h("span", { class: "dc-btn s-blurple" }, `🔔 ${name(input)}`)));
+    preview.replaceChildren(h("p", { class: "kicker" }, "Stats channels"), stats,
+      h("p", { class: "kicker" }, "Match notification buttons"), buttons);
+  }
+  form.addEventListener("input", draw);
+  form.addEventListener("submit", () => {
+    const names = {};
+    for (const input of inputs) if (input.value.trim()) names[input.dataset.server] = input.value.trim();
+    document.getElementById("dc-doc").value = JSON.stringify({ names });
+  });
+  draw();
+}
 
 function welcomeEditor() {
   let doc = read("dc-data");

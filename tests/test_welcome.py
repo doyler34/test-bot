@@ -284,6 +284,43 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.guild.start.messages, [])
         self.assertFalse(self.welcome.published("welcome"))
 
+    async def test_server_names_reach_everything(self):
+        from bot.discord import server_stats
+        self.addCleanup(server_stats.OVERRIDES.clear)
+        calls = []
+
+        async def stats_tick():
+            calls.append("stats")
+
+        async def refresh():
+            calls.append("card")
+        self.bot.server_stats = SimpleNamespace(tick=stats_tick)
+        self.bot.refresh_servers = refresh
+        three = SimpleNamespace(id="server-3", name="Server 3", enabled=True)
+        self.bot.config.servers = [three]
+        self.panel.publish_discord_doc("names", json.dumps({"names": {"server-3": "Classic #2"}}), "gaz")
+        await self.welcome.tick()
+        self.assertEqual(server_stats.label_for(three), "Classic #2")
+        self.assertEqual(calls, ["stats", "card"])
+        await self.welcome.tick()
+        self.assertEqual(calls, ["stats", "card"])
+        bridge = json.loads(Path(self.tmp.name, "bridge.json").read_text())
+        self.assertEqual(bridge["servers"], [{"id": "server-3", "default": "Classic #2", "label": "Classic #2",
+                                              "enabled": True}])
+        # A fresh bot knows the names before it first draws anything.
+        server_stats.OVERRIDES.clear()
+        Welcome(self.bot)
+        self.assertEqual(server_stats.label_for(three), "Classic #2")
+
+    def test_names_cannot_use_the_channel_separator(self):
+        doc, problems = welcome_doc.check_names({"names": {"server-3": "Classic #2 · Night"}})
+        self.assertEqual(problems, ["server-3: names can't contain · (the bot uses it in the channel names)."])
+
+    def test_names_must_differ(self):
+        doc, problems = welcome_doc.check_names({"names": {"server-1": " Classic ", "server-3": "classic", "bad id!": "x"}})
+        self.assertEqual(doc, {"names": {"server-1": "Classic", "server-3": "classic"}})
+        self.assertEqual(problems, ["server-1 and server-3 are both called classic; give each its own name."])
+
     def test_view_lines(self):
         doc, _ = welcome_doc.check_welcome(welcome_doc.default_welcome())
         rows = [item.row for item in build_view(doc).children]

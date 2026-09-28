@@ -208,3 +208,30 @@ def fill_greeting(text, mention, name, server, members, start):
     for key, value in values.items():
         text = text.replace(key, value)
     return text
+
+
+def default_names():
+    return {"names": {}}
+
+
+def check_names(raw):
+    """Server id -> display name. Blank means the bot's default name."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("names"), dict):
+        return default_names(), ["Those names couldn't be read. Reload and try again."]
+    names, problems = {}, []
+    for server_id, name in raw["names"].items():
+        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,40}", str(server_id)):
+            continue
+        name = re.sub(r"\s+", " ", str(name or "")).strip()[:40]
+        if "·" in name:
+            # The stat channels read "Name · 21 min"; a dot in the name would split it wrongly.
+            problems.append(f"{server_id}: names can't contain · (the bot uses it in the channel names).")
+            name = name.replace("·", "").strip()
+        if name:
+            names[str(server_id)] = name
+    taken = {}
+    for server_id, name in names.items():
+        if name.lower() in taken:
+            problems.append(f"{taken[name.lower()]} and {server_id} are both called {name}; give each its own name.")
+        taken[name.lower()] = server_id
+    return {"names": names}, problems

@@ -8,7 +8,6 @@
     {% for key, label in pages %}
     <a href="/discord/{{ key }}" {% if key == page %}class="on"{% endif %}>{{ label }}</a>
     {% endfor %}
-    <span class="soon">Server names · soon</span>
   </nav>
   <div class="dc-main">
     <div class="dc-status card">
@@ -26,7 +25,7 @@
         <ul class="dc-problems">{% for p in reported.problems %}<li>{{ p }}</li>{% endfor %}</ul>
         {% endif %}
       {% else %}
-        <p><span class="pill">Not published</span> {% if page == "greeting" %}The bot doesn't greet anyone until you publish one.{% else %}Discord still shows the bot's built-in version. Nothing changes there until you publish.{% endif %}</p>
+        <p><span class="pill">Not published</span> {% if page == "greeting" %}The bot doesn't greet anyone until you publish one.{% elif page == "names" %}The bot uses its built-in names until you publish.{% else %}Discord still shows the bot's built-in version. Nothing changes there until you publish.{% endif %}</p>
       {% endif %}
       {% if draft %}<p><span class="pill gold">Draft</span> Unpublished changes saved {{ row.draft_at|ago }} by <b>{{ row.draft_by }}</b>. Only you and other owners see them here.</p>{% endif %}
       {% if problems %}

@@ -113,7 +113,10 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   carry permissions and must sit below the bot's role. Until something is
   published the bot shows its built-in Start here message. Also a **join
   greeting**, in a channel or by DM, with `{user}` `{name}` `{server}`
-  `{members}` `{start}` (needs the members intent). The bot reads the panel's
+  `{members}` `{start}` (needs the members intent). And **server names**:
+  what each server is called in the SERVER STATUS channels, the #servers
+  card, match posts and the notification buttons, replacing a code change.
+  A published name wins over `STAT_LABEL_SERVER_n` in the bot's `.env`. The bot reads the panel's
   database (`PANEL_DB`) and writes `panel_bridge.json` in its data folder with
   its roles, channels and how publishing went; the panel reads that through
   `oyb_data`.

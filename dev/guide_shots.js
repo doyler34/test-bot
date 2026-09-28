@@ -156,6 +156,10 @@ async function around(page, selectors, pad = 12) {
   await page.goto(BASE + "/discord/greeting");
   await page.waitForTimeout(300);
   await shot(page, "discord-greeting");
+  await page.goto(BASE + "/discord/names");
+  await page.fill('[data-server="server-3"]', "Classic Nights");
+  await page.waitForTimeout(200);
+  await shot(page, "discord-names");
 
   await browser.close();
 })();
