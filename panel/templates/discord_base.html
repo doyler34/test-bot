@@ -22,6 +22,7 @@
         {% else %}
           Waiting for the bot to pick it up (it checks every 30 seconds).
         {% endif %}</p>
+        {% if page == "greeting" and not doc.enabled %}<p class="warn">The greeting is published but turned off: tick <b>Greet them</b> and publish again.</p>{% endif %}
         {% if reported and reported.version == row.version and reported.problems %}
         <ul class="dc-problems">{% for p in reported.problems %}<li>{{ p }}</li>{% endfor %}</ul>
         {% endif %}

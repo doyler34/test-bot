@@ -436,11 +436,15 @@ class Welcome:
     # Join greeting
 
     async def greet(self, member):
-        found = self.docs.get("greeting") or await asyncio.to_thread(read_doc, self.path, "greeting")
-        if not found or member.bot or member.guild.id != self.bot.config.guild_id:
+        if member.bot or member.guild.id != self.bot.config.guild_id:
+            return
+        found = await asyncio.to_thread(read_doc, self.path, "greeting") or self.docs.get("greeting")
+        if not found:
+            LOG.info("%s joined; no greeting has been published", member.display_name)
             return
         doc = found[0]
         if not doc.get("enabled") or not doc.get("text"):
+            LOG.info("%s joined; the greeting is turned off", member.display_name)
             return
         start = self.state.get("welcome", {}).get("channel_id") or onboarding_channel_id()
         text = welcome_doc.fill_greeting(doc["text"], member.mention, member.display_name, member.guild.name,
@@ -449,12 +453,18 @@ class Welcome:
         try:
             if doc["where"] == "dm":
                 await member.send(text, allowed_mentions=mentions)
+                LOG.info("Greeted %s by DM", member.display_name)
             else:
                 channel = member.guild.get_channel(doc.get("channel_id") or 0)
-                if isinstance(channel, discord.TextChannel):
-                    await channel.send(text, allowed_mentions=mentions)
-        except discord.HTTPException:
-            LOG.info("Couldn't greet %s", member.id)
+                if not isinstance(channel, discord.TextChannel):
+                    LOG.warning("%s joined; can't find the greeting channel %s", member.display_name,
+                                doc.get("channel_id"))
+                    return
+                await channel.send(text, allowed_mentions=mentions)
+                LOG.info("Greeted %s in #%s", member.display_name, channel.name)
+        except discord.HTTPException as exc:
+            LOG.warning("Couldn't greet %s: %s (DMs closed, or the bot can't post there)", member.display_name,
+                        exc.text or exc.status)
 
     # What the panel reads back
 

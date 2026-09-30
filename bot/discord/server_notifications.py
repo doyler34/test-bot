@@ -162,6 +162,7 @@ class NotificationBot(TimerBot):
         ENABLE_MEMBERS_INTENT; without it Discord never sends this event."""
         if member.guild.id != self.config.guild_id:
             return
+        logger.info("%s joined the Discord", member.display_name)
         try:
             from bot.discord.onboarding import mark_unverified
             await mark_unverified(self, member.guild, member)
