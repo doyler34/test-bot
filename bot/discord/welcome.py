@@ -66,6 +66,20 @@ def read_posts(path):
     return posts
 
 
+def read_link_actions(path, after):
+    """Link decisions made in OYB Control since the last one carried out.
+    Anything older than a day is left alone, so a lost state file can't
+    replay an old unlink over a newer link."""
+    if not Path(path).is_file():
+        return []
+    try:
+        with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
+            return db.execute("SELECT id, kind, target, identity, by FROM link_actions"
+                              " WHERE id > ? AND at > ? ORDER BY id", (after, time.time() - 86400)).fetchall()
+    except sqlite3.Error:
+        return []
+
+
 def safe_role(guild, role):
     """Why a role can't go on a button, or None if it can. A button must never
     hand out power, and the bot can only give roles below its own."""
@@ -217,6 +231,7 @@ class Welcome:
         for post_id, (doc, version) in self.posts.items():
             if applied.get(post_id, {}).get("version") != version:
                 await self.publish_post(guild, post_id, doc, version)
+        await self.link_actions(guild)
         ping = self.docs.get("matchping")
         if ping:
             from bot.discord import server_notifications
@@ -231,6 +246,39 @@ class Welcome:
         if greeting:
             self.state["greeting"] = {"version": greeting[1], "at": int(time.time()), "problems": []}
         self._write_bridge(guild)
+
+    async def link_actions(self, guild):
+        links = getattr(self.bot, "account_links", None)
+        if links is None:
+            return
+        from bot.discord.link_review import panel_decision
+        done = self.state.setdefault("links", {"last": 0, "results": {}})
+        for action_id, kind, target, identity, by in await asyncio.to_thread(
+                read_link_actions, self.path, done["last"]):
+            try:
+                worked, text = await panel_decision(self.bot, guild, kind, target, identity, by)
+            except Exception:
+                LOG.exception("Link action %s from OYB Control failed", action_id)
+                worked, text = False, "Something went wrong; the bot's log has the details."
+            LOG.info("Link action %s (%s %s by %s): %s", action_id, kind, target, by, text)
+            done["last"] = action_id
+            done["results"][str(action_id)] = {"ok": worked, "text": text, "at": int(time.time())}
+        for old in sorted(done["results"], key=int)[:-50]:
+            del done["results"][old]
+
+    def _link_report(self, guild):
+        links = getattr(self.bot, "account_links", None)
+        if links is None:
+            return None
+
+        def who(discord_id, fallback):
+            member = guild.get_member(discord_id)
+            return member.display_name if member else (fallback or "")
+        pending = [{"token": t, "discord_id": str(d), "member": who(d, n2), "identity": i, "name": n,
+                    "created": int(c)} for t, d, i, n, n2, c in links.waiting(guild.id)]
+        linked = [{"discord_id": str(d), "member": who(d, n2), "identity": i, "name": n or "",
+                   "at": int(a), "how": v} for d, i, a, v, n, n2 in links.linked(guild.id)]
+        return {"pending": pending, "linked": linked}
 
     async def apply_names(self, guild, found):
         """Everywhere a server's name shows: the stat channel, the #servers
@@ -493,7 +541,7 @@ class Welcome:
     def _load_state(self):
         try:
             data = json.loads(self.bridge.read_text())
-            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts", "matchping")
+            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts", "matchping", "links")
                     if isinstance(data.get(k), dict)}
         except (OSError, ValueError):
             return {}
@@ -524,6 +572,7 @@ class Welcome:
                 "member_events": bool(self.bot.intents.members),
                 "member_role": member_role_name(),
                 "start_channel": str(onboarding_channel_id() or ""),
+                "link_requests": self._link_report(guild),
                 **{k: v for k, v in self.state.items()}}
         try:
             self.bridge.parent.mkdir(parents=True, exist_ok=True)

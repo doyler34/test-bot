@@ -119,6 +119,14 @@ CREATE TABLE IF NOT EXISTS discord_docs (
     published_at INTEGER,
     version INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS link_actions (
+    id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL,
+    target TEXT NOT NULL,
+    identity TEXT,
+    by TEXT NOT NULL,
+    at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS upload_links (
     id INTEGER PRIMARY KEY,
     token_hash TEXT NOT NULL UNIQUE,
@@ -498,6 +506,13 @@ class PanelDB:
 
     def discard_discord_draft(self, key):
         self.write("UPDATE discord_docs SET draft = NULL, draft_by = NULL, draft_at = NULL WHERE key = ?", key)
+
+    def add_link_action(self, kind, target, identity, by) -> int:
+        return self.write("INSERT INTO link_actions (kind, target, identity, by, at) VALUES (?, ?, ?, ?, ?)",
+                          kind, target, identity, by, now())
+
+    def link_actions(self, limit=30):
+        return self.all("SELECT * FROM link_actions ORDER BY id DESC LIMIT ?", limit)
 
     # upload links
 

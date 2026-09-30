@@ -1257,6 +1257,42 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("take effect when the bot next restarts", page)
         self.assertEqual(json.loads(self.db.discord_doc("channels")["published"])["channels"], {"LIVE_BOARD_CHANNEL_ID": "300"})
 
+    async def test_link_requests(self):
+        await self.login("boss", "boss-password")
+        token_a, token_b = "a" * 32, "b" * 32
+        rook = "a0b1c2d3-e4f5-4a6b-8c7d-9e0f1a2b3c4d"
+        with tempfile.TemporaryDirectory() as data:
+            self.config.oyb_data = data
+            Path(data, "panel_bridge.json").write_text(json.dumps({"updated": now(), "link_requests": {
+                "pending": [{"token": token_a, "discord_id": "555000000000000001", "member": "Rookie", "identity": rook,
+                             "name": "Rook", "created": now()},
+                            {"token": token_b, "discord_id": "556000000000000001", "member": "Newbie", "identity": None,
+                             "name": "Nobody", "created": now()}],
+                "linked": [{"discord_id": "557000000000000001", "member": "Vet", "identity": rook, "name": "Vet",
+                            "at": now(), "how": "auto:tracker"}]}}))
+            page = await (await self.client.get("/discord/links")).text()
+            self.assertIn("Rookie", page)
+            self.assertIn("No game account matched that name.", page)
+            self.assertIn("By itself", page)
+            token = await self.csrf("/discord/links")
+            await self.client.post("/discord/links", data={"csrf": token, "kind": "approve", "target": token_a})
+            html = await (await self.client.post("/discord/links", data={
+                "csrf": token, "kind": "link", "target": token_b, "player": "Nobody"})).text()
+            self.assertIn("Pick their game account from the list first.", html)
+            await self.client.post("/discord/links", data={"csrf": token, "kind": "unlink", "target": "557000000000000001",
+                                                           "identity": rook})
+            await self.client.post("/discord/links", data={"csrf": token, "kind": "drop", "target": "557000000000000001"})
+            page = await (await self.client.get("/discord/links")).text()
+        rows = [(r["kind"], r["target"], r["identity"]) for r in self.db.link_actions()]
+        self.assertEqual(rows, [("unlink", "557000000000000001", rook), ("approve", token_a, None)])
+        self.assertIn("Sent to the bot", page)
+        self.assertIn("Waiting for the bot", page)
+
+    async def test_link_requests_are_owner_only(self):
+        await self.login("mod", "mod-password")
+        response = await self.client.get("/discord/links", allow_redirects=False)
+        self.assertIn(response.status, (302, 403))
+
     async def test_greeting(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/discord/greeting")

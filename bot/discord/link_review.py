@@ -221,6 +221,74 @@ async def notify_member(bot, guild, discord_id, reason):
     return False
 
 
+async def close_alert(bot, guild, token, label, value, colour):
+    """Mark a request's alert handled when it was decided somewhere other than
+    its own buttons, so nobody here tries to review it again."""
+    cfg = bot.account_links.review_settings(guild.id)
+    channel = guild.get_channel(cfg["channel"]) if cfg["channel"] else None
+    if not isinstance(channel, discord.TextChannel):
+        return False
+    try:
+        async for message in channel.history(limit=200):
+            if message.author.id != bot.user.id:
+                continue
+            embed = next((e for e in message.embeds
+                          if e.footer and e.footer.text == TOKEN_PREFIX + token), None)
+            if embed is None:
+                continue
+            embed.colour = discord.Colour(colour)
+            embed.add_field(name=label, value=value, inline=False)
+            embed.set_footer(text=HANDLED_MARKER)
+            await message.edit(embed=embed, view=None, allowed_mentions=discord.AllowedMentions.none())
+            return True
+    except discord.HTTPException:
+        LOG.warning("Could not mark request %s handled in the review channel", token)
+    return False
+
+
+async def panel_decision(bot, guild, kind, target, identity, by):
+    """Carry out a link decision made in OYB Control, the same way the buttons
+    here would. Returns (worked, what happened)."""
+    from bot.discord.join_oyb import _strip_rank_roles, grant_member
+    links = bot.account_links
+    where = f"in OYB Control by {by}"
+    if kind == "unlink":
+        discord_id = int(target)
+        gone = links.unlink(guild.id, discord_id, identity or None)
+        if not gone:
+            return False, "That link was already removed."
+        await _strip_rank_roles(bot, guild, discord_id)
+        return True, "Link removed and rank roles taken back."
+    request = links.request(guild.id, target)
+    if request is None:
+        return False, "That request no longer exists."
+    discord_id, status = request[0], request[3]
+    if status != "pending":
+        return False, f"That request was already {status}."
+    try:
+        if kind == "link":
+            links.verified_link(guild.id, discord_id, identity, f"panel:{by}")
+            links.close_requests(guild.id, discord_id)
+        else:
+            links.review(guild.id, target, None, kind == "approve", evidence=f"panel:{by}")
+    except LinkConflict as exc:
+        try:
+            links.review(guild.id, target, None, False)
+        except LinkConflict:
+            pass
+        await notify_member(bot, guild, discord_id, str(exc))
+        await close_alert(bot, guild, target, "🚫 Auto-rejected", str(exc), 0xE74C3C)
+        return False, f"{exc} The request was closed and the member told."
+    except ValueError:
+        return False, "That isn't a game identity."
+    if kind == "reject":
+        await close_alert(bot, guild, target, "🚫 Rejected", where, 0xE74C3C)
+        return True, "Rejected."
+    await grant_member(bot, guild, discord_id)
+    await close_alert(bot, guild, target, "✅ Approved", where, 0x2ECC71)
+    return True, "Approved and linked." if kind == "approve" else "Linked."
+
+
 def admin_panel_embed(links, guild_id):
     """The pinned staff panel. pending() caps at 25, so a full page reads 25+."""
     waiting = len(links.pending(guild_id))

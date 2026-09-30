@@ -809,7 +809,7 @@ async def add_note(request):
 
 DISCORD_PAGES = (("welcome", "Start here message"), ("serverinfo", "Server info & rules"), ("names", "Server names"),
                  ("matchping", "Match alerts"), ("greeting", "Join greeting"), ("bans", "Ban messages"),
-                 ("posts", "Posts"), ("channels", "Channels & roles"))
+                 ("posts", "Posts"), ("links", "Link requests"), ("channels", "Channels & roles"))
 
 
 def bridge(request):
@@ -863,6 +863,8 @@ async def discord_page(request):
     key = request.match_info["page"]
     if key == "posts":
         return posts_page(request)
+    if key == "links":
+        return links_page(request)
     if key not in DISCORD_DOCS or key == "post":
         raise web.HTTPNotFound(text="No such page.")
     defaults, check = DISCORD_DOCS[key]
@@ -878,6 +880,8 @@ async def discord_page(request):
 async def discord_save(request):
     require(request, "discord")
     key = request.match_info["page"]
+    if key == "links":
+        return await link_action(request)
     if key not in DISCORD_DOCS or key == "post":
         raise web.HTTPNotFound(text="No such page.")
     return await save_doc(request, key, key, f"discord_{key}.html", discord_context(key))
@@ -987,6 +991,48 @@ async def post_save(request):
         audit(request, "delete post", detail=post_id)
         raise web.HTTPFound("/discord/posts")
     return await save_doc(request, key, "post", "discord_welcome.html", post_context(post_id))
+
+
+LINK_ACTIONS = {"approve": "Approve", "reject": "Reject", "link": "Link", "unlink": "Unlink"}
+
+
+def links_page(request):
+    report = bridge(request)
+    links = report.get("link_requests") or {}
+    results = report.get("links", {}).get("results", {})
+    actions = []
+    for row in request.app[DB].link_actions():
+        done = results.get(str(row["id"]))
+        if done is None and row["at"] < now() - 86400:
+            done = {"ok": False, "text": "The bot never picked this up."}
+        actions.append({**dict(row), "done": done})
+    busy = {a["target"] for a in actions if a["done"] is None}
+    names = {r["discord_id"]: r["member"] for r in links.get("linked", [])}
+    names.update({r["token"]: r["member"] or r["name"] for r in links.get("pending", [])})
+    return render(request, "discord_links.html", bridge=report, links=links, actions=actions, busy=busy,
+                  names=names, action_labels=LINK_ACTIONS, **discord_context("links"))
+
+
+async def link_action(request):
+    """Queue a decision for the bot, which carries it out with the same code
+    as the Approve and Reject buttons in the staff channel."""
+    form = await request.post()
+    kind, target = form.get("kind", ""), form.get("target", "").strip()
+    identity = form.get("identity", "").strip() or form.get("player", "").strip()
+    if kind == "unlink":
+        ok = bool(re.fullmatch(r"\d{5,25}", target)) and (not identity or valid_identity(identity))
+    elif kind in ("approve", "reject", "link"):
+        ok = bool(re.fullmatch(r"[0-9a-f]{32}", target)) and (kind != "link" or valid_identity(identity))
+    else:
+        ok = False
+    if not ok:
+        flash(request, "Pick their game account from the list first." if kind == "link" else "That didn't make sense; nothing was done.")
+        raise web.HTTPFound("/discord/links")
+    request.app[DB].add_link_action(kind, target, identity if kind in ("link", "unlink") else None,
+                                    request[USER]["username"])
+    audit(request, f"link request {kind}", target=identity, detail=target)
+    flash(request, f"{LINK_ACTIONS[kind]} sent to the bot. It happens within a minute; the result shows below.")
+    raise web.HTTPFound("/discord/links")
 
 
 DISCORD_DOCS = {"welcome": (welcome_doc.default_welcome, welcome_doc.check_welcome),

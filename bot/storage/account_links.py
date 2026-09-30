@@ -200,7 +200,23 @@ class AccountLinks:
     def pending(self, guild):
         return self.db.execute("SELECT token,discord_id,identity,name,discord_name FROM link_requests WHERE guild=? AND status='pending' ORDER BY created LIMIT 25", (guild,)).fetchall()
 
-    def review(self, guild, token, reviewer, approve):
+    def waiting(self, guild):
+        """Every pending request, oldest first, for OYB Control."""
+        return self.db.execute(
+            "SELECT token,discord_id,identity,name,discord_name,created FROM link_requests"
+            " WHERE guild=? AND status='pending' ORDER BY created", (guild,)).fetchall()
+
+    def linked(self, guild):
+        """Every link with the name it was made under, newest first."""
+        return self.db.execute(
+            "SELECT l.discord_id, l.identity, l.linked_at, l.verified_by,"
+            " (SELECT r.name FROM link_requests r WHERE r.guild=l.guild AND r.identity=l.identity"
+            "  ORDER BY r.status='approved' DESC, r.created DESC LIMIT 1),"
+            " (SELECT r.discord_name FROM link_requests r WHERE r.guild=l.guild AND r.discord_id=l.discord_id"
+            "  AND r.discord_name IS NOT NULL AND r.discord_name != '' ORDER BY r.created DESC LIMIT 1)"
+            " FROM account_links l WHERE l.guild=? ORDER BY l.linked_at DESC", (guild,)).fetchall()
+
+    def review(self, guild, token, reviewer, approve, evidence=None):
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
             row = self.db.execute("SELECT discord_id,identity FROM link_requests WHERE guild=? AND token=? AND status='pending'", (guild, token)).fetchone()
@@ -210,7 +226,7 @@ class AccountLinks:
                 if row[1] is None:
                     raise LinkConflict("No game account was matched for this one. "
                                        "Use Force-link to pick their account, which closes this request.")
-                self._insert_link(guild, row[0], row[1], f"admin:{reviewer}")
+                self._insert_link(guild, row[0], row[1], evidence or f"admin:{reviewer}")
             self.db.execute("UPDATE link_requests SET status=?,reviewer=? WHERE token=?",
                             ("approved" if approve else "rejected", reviewer, token))
 

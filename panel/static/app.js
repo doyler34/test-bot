@@ -135,3 +135,11 @@ for (const input of document.querySelectorAll("[data-player-search]")) {
   });
   input.addEventListener("blur", () => { list.hidden = true; });
 }
+
+for (const input of document.querySelectorAll("[data-filter-rows]")) {
+  const rows = document.querySelectorAll(input.dataset.filterRows + " tbody tr");
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    for (const row of rows) row.hidden = q && !row.textContent.toLowerCase().includes(q);
+  });
+}

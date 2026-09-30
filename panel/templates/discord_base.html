@@ -10,7 +10,7 @@
     {% endfor %}
   </nav>
   <div class="dc-main">
-    {% if kind != "posts" %}
+    {% if kind not in ("posts", "links") %}
     <div class="dc-status card">
       {% set reported = bridge.get("post") if kind == "post" else bridge.get(page) %}
       {% if live %}

@@ -1,0 +1,115 @@
+{% extends "discord_base.html" %}
+{% macro how(text) %}{% if text == "auto:tracker" %}By itself{% elif text.startswith("panel:") %}Here, by {{ text[6:] }}{% elif text.startswith("admin:") %}In Discord{% else %}{{ text }}{% endif %}{% endmacro %}
+{% block editor %}
+{% set pending = links.get("pending", []) %}
+{% set linked = links.get("linked", []) %}
+{% if not bridge %}
+<p class="warn card">The bot hasn't reported in, so there's nothing to show. Check the bot is running and the panel's <code>oyb_data</code> points at its data folder.</p>
+{% elif not links %}
+<p class="warn card">The bot running now is too old to show link requests. Update it and restart it.</p>
+{% endif %}
+<section class="card dc-pending">
+  <h2>Waiting for review{% if pending %} ({{ pending|length }}){% endif %}</h2>
+  <p class="muted">Members ask to link their Discord to their Reforger account from the join channel. Approving here does exactly what the Approve button in the staff channel does: links them, gives them the member role and marks the alert there as done. Make sure it's really them first; a matching name alone isn't proof.</p>
+  {% if pending %}
+  <div class="dc-requests">
+    {% for r in pending %}
+    <div class="dc-request">
+      <div>
+        <b>{{ r.member or r.discord_id }}</b> <span class="muted mono">{{ r.discord_id }}</span><br>
+        Says they're <b>{{ r.name }}</b> in game <span class="muted">· asked {{ r.created|ago }}</span><br>
+        {% if r.identity %}
+        <span class="muted">Game account:</span> <a class="mono" href="/player/{{ r.identity }}">{{ r.identity }}</a>
+        {% else %}
+        <span class="warn">No game account matched that name.</span> <span class="muted">Pick their account below to link them, or reject if they haven't played here.</span>
+        {% endif %}
+      </div>
+      {% if r.token in busy %}
+      <p class="muted">Sent to the bot…</p>
+      {% else %}
+      <div class="dc-request-actions">
+        {% if r.identity %}
+        <form method="post" action="/discord/links" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="approve"><input type="hidden" name="target" value="{{ r.token }}">
+          <button class="small">Approve</button>
+        </form>
+        {% else %}
+        <form method="post" action="/discord/links" class="dc-link-pick">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="link"><input type="hidden" name="target" value="{{ r.token }}">
+          <div class="picker">
+            <label>Their game account <input name="player" value="{{ r.name }}" placeholder="Type their in-game name" autocomplete="off" data-player-search></label>
+            <input type="hidden" name="identity">
+            <p class="muted mono chosen"></p>
+            <ul class="suggest" hidden></ul>
+          </div>
+          <button class="small">Link</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/discord/links" class="inline" data-confirm="Reject {{ r.member or r.name }}'s request?">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="reject"><input type="hidden" name="target" value="{{ r.token }}">
+          <button class="small ghost">Reject</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Nobody is waiting.</p>
+  {% endif %}
+</section>
+
+{% if actions %}
+<section class="card">
+  <h2>Recent decisions</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>When</th><th>Who</th><th>What</th><th>Member</th><th>Result</th></tr></thead>
+    <tbody>
+    {% for a in actions %}
+    <tr>
+      <td>{{ a.at|ago }}</td>
+      <td>{{ a.by }}</td>
+      <td>{{ action_labels[a.kind] }}</td>
+      <td>{{ names.get(a.target) or (a.target if a.kind == "unlink" else "") }}</td>
+      <td>{% if a.done is none %}<span class="pill gold">Waiting for the bot</span>{% elif a.done.ok %}<span class="pill on">Done</span> {{ a.done.text }}{% else %}<span class="pill down">Didn't happen</span> {{ a.done.text }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="row">
+    <h2>Linked accounts{% if linked %} ({{ linked|length }}){% endif %}</h2>
+    {% if linked|length > 10 %}<input type="search" placeholder="Filter by name or ID" data-filter-rows="#dc-linked" class="dc-filter">{% endif %}
+  </div>
+  <p class="muted">Unlinking takes their rank roles away. Their playtime and XP stay with the game account, so they can link again later and keep it.</p>
+  {% if linked %}
+  <div class="scroll"><table id="dc-linked">
+    <thead><tr><th>Member</th><th>In game</th><th>Game account</th><th>Linked</th><th>How</th><th></th></tr></thead>
+    <tbody>
+    {% for l in linked %}
+    <tr>
+      <td>{{ l.member or "(left the server)" }} <span class="muted mono">{{ l.discord_id }}</span></td>
+      <td>{{ l.name or "—" }}</td>
+      <td><a class="mono" href="/player/{{ l.identity }}">{{ l.identity[:8] }}…</a></td>
+      <td>{{ l.at|ago }}</td>
+      <td>{{ how(l.how) }}</td>
+      <td>
+        {% if l.discord_id in busy %}<span class="muted">Sent…</span>{% else %}
+        <form method="post" action="/discord/links" class="inline" data-confirm="Unlink {{ l.member or l.discord_id }} from {{ l.name or l.identity }}?">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="unlink"><input type="hidden" name="target" value="{{ l.discord_id }}"><input type="hidden" name="identity" value="{{ l.identity }}">
+          <button class="small ghost">Unlink</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">Nobody is linked yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

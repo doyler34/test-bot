@@ -133,6 +133,15 @@ def seed_bridge(data):
     (data / "panel_bridge.json").write_text(json.dumps({
         "updated": now(), "guild": "OYB", "member_events": True, "member_role": "OYB Member",
         "start_channel": "900000000000000001",
+        "link_requests": {
+            "pending": [{"token": "c" * 32, "discord_id": "610000000000000001", "member": "kestrel",
+                         "identity": PLAYERS[5][1], "name": "Kestrel", "created": now() - 1500},
+                        {"token": "d" * 32, "discord_id": "610000000000000002", "member": "boots",
+                         "identity": None, "name": "Dusty Boots", "created": now() - 400}],
+            "linked": [{"discord_id": str(610000000000000010 + n), "member": name.lower().replace(" ", ""),
+                        "identity": identity, "name": name, "at": now() - 86400 * (n + 1),
+                        "how": ("auto:tracker", "admin:1", "panel:gazlagom")[n % 3]}
+                       for n, (name, identity, _, _) in enumerate(PLAYERS[:4])]},
         "servers": [{"id": "server-1", "default": "Classic", "label": "Classic", "enabled": True,
                      "settings": "**Map:** Everon · **Players:** 128 · Vanilla, Conflict"},
                     {"id": "server-2", "default": "3x Everon", "label": "3x Everon", "enabled": True,

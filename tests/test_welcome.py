@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import discord
 
@@ -128,10 +128,16 @@ class Interaction:
 
 class Links:
     def __init__(self, linked=()):
-        self.linked = set(linked)
+        self.members = set(linked)
 
     def identities(self, guild, discord_id):
-        return ["x"] if discord_id in self.linked else []
+        return ["x"] if discord_id in self.members else []
+
+    def waiting(self, guild):
+        return []
+
+    def linked(self, guild):
+        return []
 
 
 class DocTests(unittest.TestCase):
@@ -182,6 +188,21 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.welcome = Welcome(self.bot)
+
+    async def test_link_decisions_run_once_and_report_back(self):
+        self.panel.add_link_action("approve", "a" * 32, None, "gaz")
+        self.panel.add_link_action("unlink", "77", None, "gaz")
+        decide = AsyncMock(side_effect=[(True, "Approved and linked."), (False, "That link was already removed.")])
+        with patch("bot.discord.link_review.panel_decision", decide):
+            await self.welcome.link_actions(self.guild)
+            await self.welcome.link_actions(self.guild)
+        self.assertEqual([c.args[2:] for c in decide.await_args_list],
+                         [("approve", "a" * 32, None, "gaz"), ("unlink", "77", None, "gaz")])
+        self.welcome._write_bridge(self.guild)
+        report = json.loads(Path(self.tmp.name, "bridge.json").read_text())
+        self.assertEqual(report["links"]["results"]["2"]["ok"], False)
+        self.assertEqual(report["link_requests"], {"pending": [], "linked": []})
+        self.assertEqual(Welcome(self.bot).state["links"]["last"], 2)
 
     def publish(self, **changes):
         doc = {"channel_id": 300, "title": "Welcome", "colour": "#D9A441",

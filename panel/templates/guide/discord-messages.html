@@ -79,4 +79,13 @@
   <li>Press <b>Publish</b>.</li>
 </ol>
 <p class="tip">The bot only hears about people joining if <b>Server Members Intent</b> is on for it in Discord's developer portal and <code>ENABLE_MEMBERS_INTENT=1</code> is in its settings. The page warns you if not.</p>
+
+<h2>Link requests</h2>
+<p><b>Discord → Link requests</b> is the same queue as the staff link-request channel in Discord. Deciding in either place does the same thing, and the other one catches up.</p>
+<ol class="steps">
+  <li><b>Approve</b> links them and gives them the member role. Make sure it's really them first.</li>
+  <li>If no game account matched the name they typed, start typing their in-game name, pick them from the list and press <b>Link</b>.</li>
+  <li><b>Unlink</b>, under Linked accounts, takes their rank roles away. Their playtime stays with the game account.</li>
+</ol>
+<p class="tip">The bot carries out each decision within a minute. <b>Recent decisions</b> shows whether it worked and, if not, why.</p>
 {% endblock %}

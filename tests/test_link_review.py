@@ -235,3 +235,81 @@ class AlertTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EditMsg(FakeMsg):
+    async def edit(self, **kwargs):
+        self.edited = kwargs
+
+
+class PanelDecisionTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.links = AccountLinks(Path(self.tmp.name) / "links.db")
+        self.links.save_review_settings(1, channel=42)
+        self.token = self.links.submit(1, 10, IDENT, "Player One")
+        self.alert = EditMsg(5, 500, TOKEN_PREFIX + self.token)
+        self.channel = HistoryChannel([self.alert])
+        self.member = SimpleNamespace(id=10, send=AsyncMock())
+        self.guild = SimpleNamespace(id=1, get_channel=lambda i: self.channel, get_member=lambda i: self.member)
+        self.bot = SimpleNamespace(account_links=self.links, user=SimpleNamespace(id=500))
+        p = patch.object(link_review.discord, "TextChannel", HistoryChannel)
+        p.start()
+        self.addCleanup(p.stop)
+        self.grant = AsyncMock()
+        self.strip = AsyncMock()
+        for name, mock in (("grant_member", self.grant), ("_strip_rank_roles", self.strip)):
+            p = patch(f"bot.discord.join_oyb.{name}", mock)
+            p.start()
+            self.addCleanup(p.stop)
+
+    async def asyncTearDown(self):
+        self.links.close()
+        self.tmp.cleanup()
+
+    async def decide(self, kind, target=None, identity=None):
+        return await link_review.panel_decision(self.bot, self.guild, kind, target or self.token, identity, "gaz")
+
+    async def test_approve_links_grants_and_closes_the_alert(self):
+        worked, _ = await self.decide("approve")
+        self.assertTrue(worked)
+        self.assertEqual(self.links.identities(1, 10), [IDENT])
+        self.assertEqual(self.links.db.execute("SELECT verified_by FROM account_links").fetchone()[0], "panel:gaz")
+        self.grant.assert_awaited_once()
+        embed = self.alert.edited["embed"]
+        self.assertEqual(embed.footer.text, HANDLED_MARKER)
+        self.assertIn("OYB Control by gaz", embed.fields[-1].value)
+        worked, text = await self.decide("approve")
+        self.assertFalse(worked)
+        self.assertIn("already approved", text)
+
+    async def test_reject(self):
+        worked, _ = await self.decide("reject")
+        self.assertTrue(worked)
+        self.assertEqual(self.links.request(1, self.token)[3], "rejected")
+        self.assertEqual(self.links.identities(1, 10), [])
+        self.grant.assert_not_awaited()
+
+    async def test_link_an_unmatched_request(self):
+        token = self.links.submit_unresolved(1, 11, "Somebody")
+        worked, _ = await self.decide("link", token, IDENT)
+        self.assertTrue(worked)
+        self.assertEqual(self.links.identities(1, 11), [IDENT])
+        self.assertEqual(self.links.request(1, token)[3], "approved")
+
+    async def test_a_taken_account_closes_the_request_and_tells_them(self):
+        self.links.verified_link(1, 77, IDENT, "admin:1")
+        worked, text = await self.decide("approve")
+        self.assertFalse(worked)
+        self.assertIn("already linked", text)
+        self.assertEqual(self.links.request(1, self.token)[3], "rejected")
+        self.member.send.assert_awaited_once()
+
+    async def test_unlink(self):
+        self.links.verified_link(1, 77, IDENT, "admin:1")
+        worked, _ = await self.decide("unlink", "77", IDENT)
+        self.assertTrue(worked)
+        self.assertEqual(self.links.identities(1, 77), [])
+        self.strip.assert_awaited_once()
+        worked, text = await self.decide("unlink", "77", IDENT)
+        self.assertFalse(worked)
