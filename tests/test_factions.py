@@ -157,6 +157,68 @@ class ApplyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([e for _, _, e in FACTIONS], ["🇺🇸", "🇷🇺", "🏳️"])
 
 
+class LookTests(unittest.IsolatedAsyncioTestCase):
+    """Names, colours and emojis published from OYB Control."""
+
+    async def asyncSetUp(self):
+        from bot.discord import factions
+        self.factions = factions
+        factions.LOOK.update({"US": {"name": "NATO", "colour": "#112233", "emoji": "🦅"}})
+        self.addCleanup(factions.LOOK.clear)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.links = AccountLinks(Path(self.tmp.name) / "l.db")
+        self.addCleanup(self.links.close)
+
+    async def test_roles_are_renamed_and_recoloured(self):
+        edits = []
+
+        class Role:
+            def __init__(self, rid, name, colour, position=1):
+                self.id, self.name, self.colour, self.managed, self.position = rid, name, SimpleNamespace(value=colour), False, position
+
+            def __ge__(self, other):
+                return self.position >= other.position
+
+            async def edit(self, **kwargs):
+                edits.append((self.id, kwargs["name"], kwargs["colour"].value))
+
+        roles = {100: Role(100, "US", 0x3B5B8C), 101: Role(101, "USSR", 0xB23A32), 102: Role(102, "FIA", 0x8A7B3F, 9)}
+        self.factions.LOOK["FIA"] = {"name": "Guerrillas", "colour": "#8A7B3F", "emoji": ""}
+        for rid, key in zip(roles, ("US", "USSR", "FIA")):
+            self.links.save_faction_role(1, key, rid)
+        bot = SimpleNamespace(account_links=self.links)
+        guild = SimpleNamespace(id=1, roles=list(roles.values()), get_role=roles.get,
+                                me=SimpleNamespace(top_role=Role(0, "bot", 0, 5)))
+        problems = await self.factions.ensure_faction_roles(bot, guild)
+        self.assertEqual(edits, [(100, "NATO", 0x112233)])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("above the bot's role", problems[0])
+
+    async def test_buttons_and_replies_use_the_new_name(self):
+        bot = SimpleNamespace(account_links=self.links, config=SimpleNamespace(guild_id=1))
+        view = FactionView(bot)
+        us = view.children[0]
+        self.assertEqual((us.label, str(us.emoji), us.custom_id), ("NATO", "🦅", "oyb:faction:US"))
+        self.assertEqual(self.factions.label("USSR"), "USSR")
+        held = Role(100, "NATO")
+        self.links.save_faction_role(1, "US", 100)
+        guild = SimpleNamespace(id=1, get_role=lambda i: held if i == 100 else None)
+        interaction = clicked(guild, SimpleNamespace(id=10, roles=[held]))
+        await view.children[1].callback(interaction)
+        self.assertIn("locked to **NATO**", interaction.reply())
+
+    def test_the_panel_check(self):
+        from bot.discord.welcome_doc import check_factions, default_factions
+        doc, problems = check_factions(default_factions())
+        self.assertEqual(problems, [])
+        raw = default_factions()
+        raw["factions"]["USSR"].update(name="us", colour="red")
+        doc, problems = check_factions(raw)
+        self.assertIn("USSR's colour should look like #3B5B8C.", problems)
+        self.assertIn("US and USSR are both called us; each faction needs its own name.", problems)
+
+
 class CardTests(unittest.TestCase):
     def test_render_card_themes_for_every_faction(self):
         from bot.ranks.rank_card import render_card

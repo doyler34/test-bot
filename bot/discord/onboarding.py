@@ -9,7 +9,7 @@ import logging
 import discord
 
 from bot.config import member_role_name, unverified_role_name
-from bot.discord.factions import FACTIONS, apply_faction, current_faction, ensure_faction_roles
+from bot.discord.factions import apply_faction, current_faction, ensure_faction_roles, factions, label
 from bot.discord.interactions import ack, say
 from bot.discord.join_oyb import LinkModal
 
@@ -134,7 +134,7 @@ def progress(bot, guild, member):
         lines = ['⬜ **1.** Reforger account — ' +
                  links.status(guild.id, member.id).split('.')[0].lower()]
     if faction:
-        lines.append(f'✅ **2.** Side — **{faction}**')
+        lines.append(f'✅ **2.** Side — **{label(faction)}**')
     elif chose:
         lines.append('✅ **2.** Side — none, by choice')
     else:
@@ -152,14 +152,14 @@ async def pick_faction(bot, interaction, name):
     await ack(interaction)
     held = current_faction(bot, interaction.guild, interaction.user)
     if held is not None:
-        await say(interaction, f"You're locked to **{held}**. Ask an admin if you need to switch sides.")
+        await say(interaction, f"You're locked to **{label(held)}**. Ask an admin if you need to switch sides.")
         return
     try:
         if await apply_faction(bot, interaction.guild, interaction.user, name) is None:
-            await say(interaction, f'The **{name}** role is missing on this server. '
+            await say(interaction, f'The **{label(name)}** role is missing on this server. '
                                    'Ask an admin to restart the bot so it can make it.')
             return
-        text = (f"You're **{name}** on Discord now, and locked to it here. That's you "
+        text = (f"You're **{label(name)}** on Discord now, and locked to it here. That's you "
                 "off Renegade — play whatever side you like in game.")
     except discord.Forbidden:
         text = 'I need Manage Roles, and my role must sit above the faction roles. Ask an admin.'
@@ -171,7 +171,7 @@ async def skip_faction(bot, interaction):
     await ack(interaction)
     held = current_faction(bot, interaction.guild, interaction.user)
     if held is not None:
-        await say(interaction, f"You're already **{held}**. Ask an admin if you want that removed.")
+        await say(interaction, f"You're already **{label(held)}**. Ask an admin if you want that removed.")
         return
     bot.account_links.set_faction(interaction.guild_id, interaction.user.id, NO_FACTION)
     await say(interaction, 'No side for you then. You stay **OYB Renegade** — press a '
@@ -182,7 +182,7 @@ class OnboardingView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.bot = bot
-        for name, _, emoji in FACTIONS:
+        for name, _, emoji in factions():
             self.add_item(self._faction(name, emoji))
         self.add_item(self._no_faction())
 
@@ -193,7 +193,7 @@ class OnboardingView(discord.ui.View):
         return False
 
     def _faction(self, name, emoji):
-        button = discord.ui.Button(label=name, emoji=emoji, row=1,
+        button = discord.ui.Button(label=label(name), emoji=emoji or None, row=1,
                                    style=discord.ButtonStyle.secondary,
                                    custom_id=f'oyb:onboard:faction:{name}')
 

@@ -19,6 +19,7 @@ import discord
 
 from bot.config import member_role_name, onboarding_channel_id
 from bot.discord import server_stats, welcome_doc
+from bot.discord import factions
 from bot.discord.factions import ensure_faction_roles
 from bot.discord.interactions import ack, say
 from bot.discord.onboarding import MARKER, by_name, pick_faction, progress, skip_faction
@@ -182,6 +183,10 @@ class Welcome:
         found = read_doc(self.path, "names")
         if found:
             self._use_names(found)
+        found = read_doc(self.path, "factions")
+        if found:
+            factions.LOOK.clear()
+            factions.LOOK.update(found[0]["factions"])
         from bot.discord import server_notifications
         for key, target in (("serverinfo", server_notifications.SERVER_INFO),
                             ("matchping", server_notifications.MATCH_PING)):
@@ -213,7 +218,7 @@ class Welcome:
         guild = self.bot.get_guild(self.bot.config.guild_id)
         if guild is None:
             return
-        for key in ("welcome", "greeting", "names", "serverinfo", "bans", "matchping"):
+        for key in ("welcome", "greeting", "names", "serverinfo", "bans", "matchping", "factions"):
             found = await asyncio.to_thread(read_doc, self.path, key)
             if found:
                 self.docs[key] = found
@@ -223,6 +228,9 @@ class Welcome:
         info = self.docs.get("serverinfo")
         if info and self.state.get("serverinfo", {}).get("version") != info[1]:
             await self.apply_serverinfo(info)
+        looks = self.docs.get("factions")
+        if looks and self.state.get("factions", {}).get("version") != looks[1]:
+            await self.apply_factions(guild, looks)
         welcome = self.docs.get("welcome")
         if welcome and self.state.get("welcome", {}).get("version") != welcome[1]:
             await self.publish_welcome(guild)
@@ -303,6 +311,18 @@ class Welcome:
                 problems.append("Couldn't update the match-notification buttons; check Manage Roles.")
         self.state["names"] = {"version": found[1], "at": int(time.time()), "problems": problems}
         LOG.info("Server names now %s", found[0].get("names", {}))
+
+    async def apply_factions(self, guild, found):
+        """Rename and recolour the faction roles and redraw the faction picker."""
+        factions.LOOK.clear()
+        factions.LOOK.update(found[0]["factions"])
+        try:
+            problems = await ensure_faction_roles(self.bot, guild)
+            await factions.refresh_picker(self.bot, guild)
+        except discord.HTTPException:
+            LOG.exception("Couldn't update the faction roles")
+            problems = ["Couldn't update the faction roles; the bot needs Manage Roles."]
+        self.state["factions"] = {"version": found[1], "at": int(time.time()), "problems": problems}
 
     async def apply_serverinfo(self, found):
         from bot.discord import server_notifications
@@ -541,7 +561,7 @@ class Welcome:
     def _load_state(self):
         try:
             data = json.loads(self.bridge.read_text())
-            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts", "matchping", "links")
+            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts", "matchping", "links", "factions")
                     if isinstance(data.get(k), dict)}
         except (OSError, ValueError):
             return {}

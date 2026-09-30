@@ -357,6 +357,21 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         rules = server_notifications.rules_embed(self.bot)
         self.assertEqual((rules.title, rules.description), (server_notifications.RULES_TITLE, "• Be nice"))
 
+    async def test_factions_are_applied_once_per_publish(self):
+        from bot.discord import factions
+        self.addCleanup(factions.LOOK.clear)
+        doc, _ = welcome_doc.check_factions({"factions": {"US": {"name": "NATO", "colour": "#112233", "emoji": ""}}})
+        self.panel.publish_discord_doc("factions", json.dumps(doc), "gaz")
+        roles = AsyncMock(return_value=["The FIA role sits above the bot's role"])
+        picker = AsyncMock(return_value=True)
+        with patch("bot.discord.welcome.ensure_faction_roles", roles), patch.object(factions, "refresh_picker", picker):
+            await self.welcome.tick()
+            await self.welcome.tick()
+        self.assertEqual((roles.await_count, picker.await_count), (1, 1))
+        self.assertEqual(factions.label("US"), "NATO")
+        report = json.loads(Path(self.tmp.name, "bridge.json").read_text())
+        self.assertEqual(report["factions"]["problems"], ["The FIA role sits above the bot's role"])
+
     def test_server_settings_fit_a_discord_field(self):
         _, problems = welcome_doc.check_serverinfo({"settings": {"server-1": "x" * 950}})
         self.assertEqual(problems, ["server-1's settings are 950 characters; keep them under 900."])

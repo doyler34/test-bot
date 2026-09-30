@@ -44,6 +44,7 @@ if (form && form.dataset.kind === "names") namesEditor();
 if (form && form.dataset.kind === "serverinfo") serverInfoEditor();
 if (form && form.dataset.kind === "bans") bansEditor();
 if (form && form.dataset.kind === "matchping") matchPingEditor();
+if (form && form.dataset.kind === "factions") factionsEditor();
 if (form && form.dataset.kind === "channels") {
   form.addEventListener("submit", () => {
     const channels = {}, roles = {};
@@ -193,6 +194,45 @@ function serverInfoEditor() {
     for (const el of form.querySelectorAll("[data-setting]")) if (own(el)) settings[el.dataset.setting] = own(el);
     document.getElementById("dc-doc").value = JSON.stringify({
       title: own(key("title")), intro: own(key("intro")), rules_title: own(key("rules_title")), rules: own(key("rules")), settings });
+  });
+  draw();
+}
+
+function factionsEditor() {
+  const rows = [...form.querySelectorAll("[data-faction]")];
+  const preview = document.getElementById("dc-preview");
+  const look = (row) => {
+    const name = row.querySelector('[data-look="name"]');
+    return { name: name.value.trim() || name.placeholder, emoji: row.querySelector('[data-look="emoji"]').value.trim(),
+             colour: row.querySelector('input[data-look="colour"].mono').value.trim() };
+  };
+  for (const row of rows) {
+    const pair = row.querySelectorAll('[data-look="colour"]');
+    for (const input of pair) input.addEventListener("input", () => {
+      for (const other of pair) if (other !== input && /^#[0-9a-fA-F]{6}$/.test(input.value)) other.value = input.value;
+    });
+  }
+  function draw() {
+    const members = h("div", { class: "dc-members" }, rows.map((row, i) => {
+      const l = look(row);
+      const name = h("b", {}, ["Havoc", "Fennel", "Dusty"][i]);
+      name.style.color = l.colour;
+      const role = h("span", { class: "dc-role" }, l.name);
+      role.style.borderColor = l.colour;
+      return h("div", { class: "dc-member" }, name, " ", role);
+    }));
+    const buttons = h("div", { class: "dc-row" }, rows.map((row) => {
+      const l = look(row);
+      return h("span", { class: "dc-btn s-grey" }, (l.emoji ? l.emoji + " " : "") + l.name);
+    }));
+    preview.replaceChildren(h("p", { class: "kicker" }, "Members who picked one"), members,
+      h("p", { class: "kicker" }, "Faction picker buttons"), buttons);
+  }
+  form.addEventListener("input", draw);
+  form.addEventListener("submit", () => {
+    const factions = {};
+    for (const row of rows) factions[row.dataset.faction] = look(row);
+    document.getElementById("dc-doc").value = JSON.stringify({ factions });
   });
   draw();
 }

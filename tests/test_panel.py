@@ -1366,6 +1366,22 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get("/discord/links", allow_redirects=False)
         self.assertIn(response.status, (302, 403))
 
+    async def test_factions(self):
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/discord/factions")).text()
+        self.assertIn('value="#3B5B8C"', page)
+        token = await self.csrf("/discord/factions")
+        looks = {"US": {"name": "NATO", "colour": "#112233", "emoji": "🦅"},
+                 "USSR": {"name": "nato", "colour": "#B23A32", "emoji": ""}}
+        page = await (await self.client.post("/discord/factions", data={"csrf": token, "action": "publish",
+            "doc": json.dumps({"factions": looks})})).text()
+        self.assertIn("US and USSR are both called nato", page)
+        looks["USSR"]["name"] = "Red Army"
+        await self.client.post("/discord/factions", data={"csrf": token, "action": "publish",
+                                                          "doc": json.dumps({"factions": looks})})
+        doc = json.loads(self.db.discord_doc("factions")["published"])["factions"]
+        self.assertEqual((doc["US"]["name"], doc["USSR"]["name"], doc["FIA"]["name"]), ("NATO", "Red Army", "FIA"))
+
     async def test_greeting(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/discord/greeting")

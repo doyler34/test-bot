@@ -163,6 +163,10 @@ async function around(page, selectors, pad = 12) {
   await page.fill('[data-server="server-3"]', "Classic Nights");
   await page.waitForTimeout(200);
   await shot(page, "discord-names");
+  await page.goto(BASE + "/discord/factions");
+  await page.fill('[data-faction="FIA"] [data-look="name"]', "Resistance");
+  await page.waitForTimeout(200);
+  await shot(page, "discord-factions");
   await page.goto(BASE + "/discord/serverinfo");
   await page.waitForTimeout(300);
   await shot(page, "discord-serverinfo");

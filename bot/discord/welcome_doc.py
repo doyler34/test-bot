@@ -376,3 +376,43 @@ def check_channels(raw):
         if value:
             doc["roles"][key] = value
     return doc, problems
+
+
+# What each faction looks like in Discord. The key (US, USSR, FIA) never
+# changes: rank ladders and the rank card artwork hang off it.
+FACTION_LOOK = {"US": {"name": "US", "colour": "#3B5B8C", "emoji": "🇺🇸"},
+                "USSR": {"name": "USSR", "colour": "#B23A32", "emoji": "🇷🇺"},
+                "FIA": {"name": "FIA", "colour": "#8A7B3F", "emoji": "🏳️"}}
+
+
+def default_factions():
+    return {"factions": {key: dict(look) for key, look in FACTION_LOOK.items()}}
+
+
+def check_factions(raw):
+    if not isinstance(raw, dict) or not isinstance(raw.get("factions"), dict):
+        return default_factions(), ["That couldn't be read. Reload and try again."]
+    doc, problems = default_factions(), []
+    for key, look in doc["factions"].items():
+        given = raw["factions"].get(key)
+        if not isinstance(given, dict):
+            continue
+        name = re.sub(r"\s+", " ", str(given.get("name", "") or "")).strip()[:100]
+        colour = str(given.get("colour", "") or "").strip()
+        emoji = str(given.get("emoji", "") or "").strip()[:40]
+        if name:
+            look["name"] = name
+        else:
+            problems.append(f"{key} needs a name.")
+        if HEX.match(colour):
+            look["colour"] = colour.upper()
+        else:
+            problems.append(f"{key}'s colour should look like #3B5B8C.")
+        look["emoji"] = emoji
+    taken = {}
+    for key, look in doc["factions"].items():
+        if look["name"].lower() in taken:
+            problems.append(f"{taken[look['name'].lower()]} and {key} are both called {look['name']}; "
+                            "each faction needs its own name.")
+        taken[look["name"].lower()] = key
+    return doc, problems

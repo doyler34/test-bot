@@ -1,0 +1,41 @@
+{% extends "discord_base.html" %}
+{% block editor %}
+<form method="post" action="/discord/factions" id="dc-editor" data-kind="factions">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="doc" id="dc-doc">
+
+  <div class="dc-layout">
+    <div class="dc-edit">
+      <section class="card">
+        <h2>How each faction looks in Discord</h2>
+        <p class="muted">The name and colour are the faction's role, so they're what shows on members who picked it. The name and emoji also go on the faction picker's buttons, and the name on their <b>/rank</b> card. Rank names and the card artwork stay as they are.</p>
+        <div class="dc-names">
+          {% for key, look in doc.factions.items() %}
+          <div class="dc-faction" data-faction="{{ key }}">
+            <b>{{ key }} <span class="muted">in game</span></b>
+            <label>Name <input data-look="name" value="{{ look.name }}" maxlength="100" placeholder="{{ default_doc.factions[key].name }}"></label>
+            <label>Colour
+              <span class="dc-colour"><input type="color" data-look="colour" value="{{ look.colour }}"><input data-look="colour" value="{{ look.colour }}" class="mono" maxlength="7"></span>
+            </label>
+            <label>Emoji <input data-look="emoji" value="{{ look.emoji }}" maxlength="40" placeholder="none"></label>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      <p class="muted">The Start here message's faction buttons have their own labels and emojis; change those on the <a href="/discord/welcome">Start here message</a> page.</p>
+    </div>
+
+    <aside class="dc-preview">
+      <p class="kicker">Preview</p>
+      <div class="discord" id="dc-preview"></div>
+    </aside>
+  </div>
+
+  <div class="dc-actions">
+    <button name="action" value="publish">Publish</button>
+    <button name="action" value="save" class="ghost">Save draft</button>
+    {% if draft %}<button name="action" value="discard" class="ghost" data-confirm="Throw away the draft and go back to what's live?">Discard draft</button>{% endif %}
+  </div>
+</form>
+<script src="/static/discord.js?v={{ asset_version }}" defer></script>
+{% endblock %}

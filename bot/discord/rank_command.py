@@ -7,7 +7,7 @@ import logging
 import discord
 from discord import app_commands
 from bot.config import linking_channel, command_auto_clear_seconds
-from bot.discord.factions import current_faction
+from bot.discord.factions import current_faction, label
 from bot.ranks.rank_card import render_card
 
 LOG = logging.getLogger("reforger.rank_command")
@@ -73,7 +73,8 @@ class RankCommand:
                 faction = current_faction(self.bot, interaction.guild, interaction.user)
                 played = self.bot.rank_sync.playtime(interaction.user.id)
                 data = await asyncio.to_thread(render_card, interaction.user.display_name, xp, avatar,
-                                               faction=faction, playtime_ms=played)
+                                               faction=faction, playtime_ms=played,
+                                               faction_label=label(faction) if faction else None)
                 with BytesIO(data) as buffer:
                     with closing(discord.File(buffer, filename="oyb-rank.png")) as attachment:
                         sent = await interaction.followup.send(file=attachment, allowed_mentions=discord.AllowedMentions.none())

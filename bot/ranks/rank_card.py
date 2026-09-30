@@ -102,7 +102,7 @@ def fitted(draw, value, xy, width, size, minimum, fill=INK, display=False, audit
         audit.append((value, draw.textbbox(xy, value, font=face, anchor='lt'), (xy[0], xy[1], xy[0]+width, xy[1]+size+8)))
 
 
-def render_card(name, xp, avatar=None, *, audit=None, faction=None, playtime_ms=0):
+def render_card(name, xp, avatar=None, *, audit=None, faction=None, playtime_ms=0, faction_label=None):
     progress = rank_for_xp(xp, faction)
     accent, crest_file, layers = FACTION_THEMES.get(faction, (ACCENT, None, DEFAULT_LAYERS))
     image = template(layers).copy()
@@ -141,7 +141,7 @@ def render_card(name, xp, avatar=None, *, audit=None, faction=None, playtime_ms=
     if crest_file:
         emblem = crest(crest_file, 48)
         image.alpha_composite(emblem, (840 - emblem.width // 2, 232 - emblem.height // 2))
-        draw.text((840, 262), faction, font=font(22, True), fill=accent, anchor='mt')
+        draw.text((840, 262), faction_label or faction, font=font(22, True), fill=accent, anchor='mt')
     else:
         draw.text((840, 220), 'O.Y.B', font=font(32, True), fill=accent, anchor='mt')
         draw.text((840, 264), 'UNALIGNED', font=font(15), fill=MUTED, anchor='mt')
