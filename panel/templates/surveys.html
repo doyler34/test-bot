@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Box reports · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker">Server box</p>
+<h1>Box reports</h1>
+<p class="muted">What the box report script found on a server box: where the servers and their logs are, free ports, and the bot's settings with passwords hidden. Press and hold in the box to select it all and copy.</p>
+{% if reports %}
+<form method="get" action="/surveys" class="inline">
+  <select name="report" data-autosubmit>{% for r in reports %}<option {% if r == chosen %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+</form>
+<textarea class="mono survey" readonly>{{ text }}</textarea>
+{% else %}
+<p class="muted">No reports yet. Make an upload link on a server's History tab and run the script with it.</p>
+{% endif %}
+{% endblock %}

@@ -527,6 +527,8 @@ async def drop(request):
                           result=None, error="Choose a console.log to upload.")
         chunks, filename = part_chunks(part), part.filename
     else:
+        if request.query.get("kind") == "survey":
+            return await store_survey(request, link, state)
         chunks = request.content.iter_chunked(1 << 20)
         filename = request.query.get("name", "")
     try:
@@ -543,6 +545,39 @@ async def drop(request):
         return web.Response(text=f"Added {folder} to {state.config.name}'s History.\n")
     return render(request, "drop.html", server=state.config.name, expires=link["expires_at"],
                   result=folder, error="")
+
+
+SURVEY_LIMIT = 2 * 1024 * 1024
+
+
+def survey_dir(app):
+    return Path(app[CONFIG].database).resolve().parent / "surveys"
+
+
+async def store_survey(request, link, state):
+    """A report from dev/live_survey.sh about the box a server runs on."""
+    body = await request.content.read(SURVEY_LIMIT + 1)
+    if not body or len(body) > SURVEY_LIMIT:
+        raise web.HTTPBadRequest(text="That report is empty or too big.\n")
+    folder = survey_dir(request.app)
+    folder.mkdir(parents=True, exist_ok=True)
+    name = f"{time.strftime('%Y-%m-%d_%H-%M-%S', time.gmtime())}_{state.config.id}.txt"
+    (folder / name).write_bytes(body)
+    request.app[DB].used_upload_link(link["id"])
+    request.app[DB].log(f"upload link ({link['created_by']})", "box report", state.config.id, name,
+                        f"{len(body) // 1024} KB from {client_ip(request)}")
+    return web.Response(text="Report sent. All done, nothing else to do.\n")
+
+
+async def surveys_page(request):
+    require(request, "ips")
+    folder = survey_dir(request.app)
+    reports = sorted(folder.glob("*.txt"), reverse=True) if folder.is_dir() else []
+    name = request.query.get("report", "")
+    chosen = next((p for p in reports if p.name == name), reports[0] if reports else None)
+    return render(request, "surveys.html", reports=[p.name for p in reports],
+                  chosen=chosen.name if chosen else "",
+                  text=chosen.read_text(errors="replace") if chosen else "")
 
 
 async def game_log(request):
@@ -1220,6 +1255,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/server/{id}/upload-links", make_upload_link)
     app.router.add_post("/server/{id}/upload-links/{link_id:\\d+}/revoke", revoke_upload_link)
     app.router.add_route("*", "/drop/{token}", drop)
+    app.router.add_get("/surveys", surveys_page)
     app.router.add_post("/server/{id}/kick", kick)
     app.router.add_post("/server/{id}/power", power)
     app.router.add_get("/bans", bans_page)

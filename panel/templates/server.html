@@ -103,7 +103,7 @@
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <button class="small">Make an upload link</button>
       </form>
-      <span class="muted">A link anyone can open for 24 hours, with no login, to upload logs to this server's History. For someone without a panel account, like whoever runs the server box.</span>
+      <span class="muted">A link anyone can open for 24 hours, with no login, to upload logs to this server's History. For someone without a panel account, like whoever runs the server box. The box report script can send to it too: <a href="/surveys">Box reports</a>.</span>
       {% for l in upload_links %}
       <form method="post" action="/server/{{ s.id }}/upload-links/{{ l.id }}/revoke" class="inline">
         <input type="hidden" name="csrf" value="{{ csrf }}">

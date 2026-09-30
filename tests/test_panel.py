@@ -878,6 +878,23 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.db.write("UPDATE upload_links SET revoked = 1")
         self.assertEqual((await self.client.get(link)).status, 404)
 
+    async def test_a_box_report_through_an_upload_link(self):
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+        html = await (await self.client.get("/server/server-1")).text()
+        token = re.search(r'name="csrf" value="([^"]+)"', html)[1]
+        page = await (await self.client.post("/server/server-1/upload-links", data={"csrf": token})).text()
+        link = re.search(r"https?://[^/\s]+(/drop/[\w-]+)", page)[1]
+        self.assertIn("No reports yet", await (await self.client.get("/surveys")).text())
+        await self.client.post("/logout", data={"csrf": token})
+        sent = await self.client.post(link + "?kind=survey", data=b"=== machine ===\nUbuntu 24.04\n",
+                                      headers={"Content-Type": "text/plain"})
+        self.assertEqual(await sent.text(), "Report sent. All done, nothing else to do.\n")
+        self.assertEqual(self.db.archived("server-1"), set())
+        self.assertEqual((await self.client.get("/surveys", allow_redirects=False)).status, 302)
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+        self.assertIn("Ubuntu 24.04", await (await self.client.get("/surveys")).text())
+        self.assertIn("box report", [a["action"] for a in self.db.audit()])
+
     async def test_moderators_cannot_make_upload_links(self):
         await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
         html = await (await self.client.get("/server/server-1")).text()

@@ -2,8 +2,9 @@
 # Read-only look at a box running AMP and the OYB bot, so the panel can be set
 # up there without guessing. Changes nothing. Passwords, tokens and keys are
 # never printed: only whether they are set.
-#   bash live_survey.sh            (as root, or a user that can sudo)
-# Everything goes to the screen and to /tmp/oyb-survey.txt.
+#   bash live_survey.sh [panel upload link]   (as root, or a user that can sudo)
+# Everything goes to the screen and to /tmp/oyb-survey.txt, and to the panel
+# if an upload link (made on a server's History tab) is given.
 
 OUT=/tmp/oyb-survey.txt
 exec > >(tee "$OUT") 2>&1
@@ -123,3 +124,8 @@ LINES_MAX=400 run oyb logs | tail -80 | grep -viE 'token='
 
 echo
 echo "Saved to $OUT"
+if [ -n "$1" ]; then
+  sleep 1
+  curl -sS --max-time 30 --data-binary "@$OUT" -H "Content-Type: text/plain" "$1?kind=survey" \
+    || echo "Couldn't send it to the panel; the report is still in $OUT"
+fi
