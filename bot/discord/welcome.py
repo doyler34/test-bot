@@ -155,6 +155,15 @@ class Welcome:
         self.posts = {}
         self.applied = {}
         self.state = self._load_state()
+        # Channels and roles chosen in OYB Control count as if they were in
+        # the .env; the bot sets its channels up at start, so they apply then.
+        found = read_doc(self.path, "channels")
+        if found:
+            for key, value in {**found[0].get("channels", {}), **found[0].get("roles", {})}.items():
+                if key in dict(welcome_doc.CHANNEL_SETTINGS) or key in dict(welcome_doc.ROLE_SETTINGS):
+                    os.environ[key] = str(value)
+            self.state["channels"] = {"version": found[1], "at": int(time.time()), "problems": []}
+            LOG.info("Using the channels and roles published in OYB Control (version %s)", found[1])
         # Names and wording are needed before anything is first drawn at boot.
         found = read_doc(self.path, "names")
         if found:
@@ -511,6 +520,7 @@ class Welcome:
                 "servers": servers, "card": card,
                 "categories": [{"id": str(c.id), "name": c.name} for c in getattr(guild, "categories", [])],
                 "ban_settings": _ban_settings(self.path),
+                "settings_now": settings_now(self.bot),
                 "member_events": bool(self.bot.intents.members),
                 "member_role": member_role_name(),
                 "start_channel": str(onboarding_channel_id() or ""),
@@ -530,3 +540,21 @@ def _ban_settings(path):
     settings["ticket_channel"] = str(settings["ticket_channel"] or "")
     settings["ticket_categories"] = [str(c) for c in settings["ticket_categories"]]
     return settings
+
+
+def settings_now(bot):
+    """The channels and roles the bot is using right now, as the panel shows them."""
+    from bot import config
+    now = {key: os.getenv(key, "") for key, _ in welcome_doc.CHANNEL_SETTINGS}
+    for key, read in (("ONBOARDING_CHANNEL_ID", config.onboarding_channel_id),
+                      ("LIVE_BOARD_CHANNEL_ID", config.live_board_channel_id),
+                      ("GAME_LEADERBOARD_CHANNEL_ID", config.game_leaderboard_channel_id),
+                      ("LEADERBOARD_CHANNEL_ID", config.leaderboard_channel_id),
+                      ("FACTION_CHANNEL_ID", config.faction_channel_id)):
+        now[key] = str(read() or "")
+    alerts = getattr(bot, "announce_channel", None)
+    if alerts is not None and not now["MATCH_ALERT_CHANNEL_ID"]:
+        now["MATCH_ALERT_CHANNEL_ID"] = str(alerts.id)
+    now["MEMBER_ROLE_NAME"] = config.member_role_name()
+    now["UNVERIFIED_ROLE_NAME"] = config.unverified_role_name()
+    return now

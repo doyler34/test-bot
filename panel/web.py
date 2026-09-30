@@ -809,7 +809,7 @@ async def add_note(request):
 
 DISCORD_PAGES = (("welcome", "Start here message"), ("serverinfo", "Server info & rules"), ("names", "Server names"),
                  ("matchping", "Match alerts"), ("greeting", "Join greeting"), ("bans", "Ban messages"),
-                 ("posts", "Posts"))
+                 ("posts", "Posts"), ("channels", "Channels & roles"))
 
 
 def bridge(request):
@@ -853,7 +853,8 @@ def discord_context(key, **extra):
             "ban_placeholders": welcome_doc.BAN_PLACEHOLDERS, "dm_title": welcome_doc.DM_TITLE,
             "dm_text": welcome_doc.DM_TEXT, "ticket_title": welcome_doc.TICKET_TITLE,
             "pages": DISCORD_PAGES, "page": key, "kind": key, "action_url": f"/discord/{key}", "heading": None,
-            "text_ids": text_ids}
+            "text_ids": text_ids, "channel_settings": welcome_doc.CHANNEL_SETTINGS,
+            "role_settings": welcome_doc.ROLE_SETTINGS}
     return {**base, **extra}
 
 
@@ -994,7 +995,8 @@ DISCORD_DOCS = {"welcome": (welcome_doc.default_welcome, welcome_doc.check_welco
                 "serverinfo": (welcome_doc.default_serverinfo, welcome_doc.check_serverinfo),
                 "bans": (welcome_doc.default_bans, welcome_doc.check_bans),
                 "post": (welcome_doc.default_post, welcome_doc.check_post),
-                "matchping": (welcome_doc.default_matchping, welcome_doc.check_matchping)}
+                "matchping": (welcome_doc.default_matchping, welcome_doc.check_matchping),
+                "channels": (welcome_doc.default_channels, welcome_doc.check_channels)}
 
 
 def name_clashes(doc, servers):

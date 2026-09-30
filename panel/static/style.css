@@ -345,3 +345,5 @@ button.dc-open { background: none; color: var(--ink); padding: 4px 0; clip-path:
 .dc-field { margin-top: 8px; } .dc-field b { color: #f2f3f5; }
 .dc-checks { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-bottom: 10px; }
 .dc-preview .kicker + .discord { margin-bottom: 14px; }
+.dc-wide .dc-name { grid-template-columns: 300px minmax(0, 1fr); }
+@media (max-width: 700px) { .dc-wide .dc-name { grid-template-columns: minmax(0, 1fr); } }

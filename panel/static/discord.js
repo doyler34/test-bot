@@ -44,6 +44,14 @@ if (form && form.dataset.kind === "names") namesEditor();
 if (form && form.dataset.kind === "serverinfo") serverInfoEditor();
 if (form && form.dataset.kind === "bans") bansEditor();
 if (form && form.dataset.kind === "matchping") matchPingEditor();
+if (form && form.dataset.kind === "channels") {
+  form.addEventListener("submit", () => {
+    const channels = {}, roles = {};
+    for (const el of form.querySelectorAll("[data-channel]")) if (el.value) channels[el.dataset.channel] = el.value;
+    for (const el of form.querySelectorAll("[data-role]")) if (el.value) roles[el.dataset.role] = el.value;
+    document.getElementById("dc-doc").value = JSON.stringify({ channels, roles });
+  });
+}
 
 function matchPingEditor() {
   const field = (name) => form.querySelector(`[name="${name}"]`);

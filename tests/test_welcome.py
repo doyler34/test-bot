@@ -355,6 +355,21 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         Welcome(self.bot)
         self.assertFalse(server_notifications.MATCH_PING["ping"])
 
+    def test_channels_and_roles_apply_when_the_bot_starts(self):
+        from bot import config
+        doc, problems = welcome_doc.check_channels({"channels": {"ONBOARDING_CHANNEL_ID": "1548058675233423601",
+                                                                 "NOT_A_SETTING": "5"},
+                                                    "roles": {"MEMBER_ROLE_NAME": "Members"}})
+        self.assertEqual(problems, [])
+        self.assertEqual(doc, {"channels": {"ONBOARDING_CHANNEL_ID": "1548058675233423601"},
+                               "roles": {"MEMBER_ROLE_NAME": "Members"}})
+        self.panel.publish_discord_doc("channels", json.dumps(doc), "gaz")
+        self.assertNotEqual(config.onboarding_channel_id(), 1548058675233423601)
+        welcome = Welcome(self.bot)
+        self.assertEqual(config.onboarding_channel_id(), 1548058675233423601)
+        self.assertEqual(config.member_role_name(), "Members")
+        self.assertEqual(welcome.state["channels"]["version"], 1)
+
     def test_names_cannot_use_the_channel_separator(self):
         doc, problems = welcome_doc.check_names({"names": {"server-3": "Classic #2 · Night"}})
         self.assertEqual(problems, ["server-3: names can't contain · (the bot uses it in the channel names)."])

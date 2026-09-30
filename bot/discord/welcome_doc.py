@@ -336,3 +336,43 @@ def check_matchping(raw):
            "text": str(raw.get("text", "") or "").replace("\r\n", "\n").strip()[:1500],
            "ping": bool(raw.get("ping")), "off": sorted(set(off))}
     return doc, []
+
+
+# (setting, what it is) for the Channels & roles page, in the order shown.
+CHANNEL_SETTINGS = (
+    ("ONBOARDING_CHANNEL_ID", "Start here message"),
+    ("MATCH_ALERT_CHANNEL_ID", "Match alerts"),
+    ("LIVE_BOARD_CHANNEL_ID", "Live match board"),
+    ("GAME_LEADERBOARD_CHANNEL_ID", "Match results"),
+    ("LEADERBOARD_CHANNEL_ID", "Weekly leaderboard"),
+    ("FACTION_CHANNEL_ID", "Faction picker and match-notification buttons"),
+    ("RANK_LOG_CHANNEL_ID", "Rank promotions"),
+)
+ROLE_SETTINGS = (
+    ("MEMBER_ROLE_NAME", "Member role (given when someone accepts the rules; point channel permissions at this)"),
+    ("UNVERIFIED_ROLE_NAME", "Unverified label (on people who haven't linked yet)"),
+)
+
+
+def default_channels():
+    """Blank means keep what the bot's .env says."""
+    return {"channels": {}, "roles": {}}
+
+
+def check_channels(raw):
+    if not isinstance(raw, dict):
+        return default_channels(), ["That couldn't be read. Reload and try again."]
+    doc, problems = default_channels(), []
+    for key, _ in CHANNEL_SETTINGS:
+        value = (raw.get("channels") or {}).get(key) if isinstance(raw.get("channels"), dict) else None
+        try:
+            if _id(value):
+                doc["channels"][key] = str(_id(value))
+        except ValueError:
+            problems.append(f"Pick the {dict(CHANNEL_SETTINGS)[key]} channel from the list.")
+    for key, _ in ROLE_SETTINGS:
+        value = (raw.get("roles") or {}).get(key) if isinstance(raw.get("roles"), dict) else None
+        value = str(value or "").strip()[:100]
+        if value:
+            doc["roles"][key] = value
+    return doc, problems

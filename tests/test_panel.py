@@ -1240,6 +1240,23 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         doc = json.loads(self.db.discord_doc("matchping")["published"])
         self.assertEqual((doc["off"], doc["text"], doc["ping"]), (["server-2"], "Get on!", True))
 
+    async def test_channels_and_roles(self):
+        await self.login("boss", "boss-password")
+        with tempfile.TemporaryDirectory() as data:
+            self.config.oyb_data = data
+            Path(data, "panel_bridge.json").write_text(json.dumps({"updated": now(),
+                "roles": [{"id": "9", "name": "OYB Member", "colour": "#fff", "problem": None}],
+                "channels": [{"id": "300", "name": "start-here", "category": "WELCOME"}],
+                "settings_now": {"ONBOARDING_CHANNEL_ID": "300", "MEMBER_ROLE_NAME": "OYB Member"}}))
+            page = await (await self.client.get("/discord/channels")).text()
+            self.assertIn("Now: #start-here", page)
+            token = await self.csrf("/discord/channels")
+            await self.client.post("/discord/channels", data={"csrf": token, "action": "publish",
+                "doc": json.dumps({"channels": {"LIVE_BOARD_CHANNEL_ID": "300"}, "roles": {}})})
+            page = await (await self.client.get("/discord/channels")).text()
+        self.assertIn("take effect when the bot next restarts", page)
+        self.assertEqual(json.loads(self.db.discord_doc("channels")["published"])["channels"], {"LIVE_BOARD_CHANNEL_ID": "300"})
+
     async def test_greeting(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/discord/greeting")
