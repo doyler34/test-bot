@@ -1187,6 +1187,37 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         doc = json.loads(self.db.discord_doc("bans")["published"])
         self.assertEqual((doc["ticket_channel"], doc["ticket_categories"], doc["dm_text"]), (55, [66], "{account} is out {length}."))
 
+    async def test_posts(self):
+        await self.login("boss", "boss-password")
+        self.assertIn("No posts yet", await (await self.client.get("/discord/posts")).text())
+        token = await self.csrf("/discord/posts")
+        response = await self.client.post("/discord/posts/new", data={"csrf": token}, allow_redirects=False)
+        link = response.headers["Location"]
+        self.assertRegex(link, r"^/discord/posts/[0-9a-f]{8}$")
+        page = await (await self.client.get(link)).text()
+        self.assertIn('data-kind="post"', page)
+        self.assertIn("Give or take a role", page)
+        self.assertNotIn("Link Reforger account", page)
+        doc = welcome_doc.default_post()
+        doc.update(title="Event night", sections=[{"heading": "", "text": "Friday 8pm"}])
+        missing = await (await self.client.post(link, data={"csrf": token, "action": "publish", "doc": json.dumps(doc)})).text()
+        self.assertIn("Pick which channel to post it in.", missing)
+        doc["channel_id"] = "300"
+        await self.client.post(link, data={"csrf": token, "action": "publish", "doc": json.dumps(doc)})
+        key = "post:" + link.rsplit("/", 1)[1]
+        self.assertEqual(json.loads(self.db.discord_doc(key)["published"])["title"], "Event night")
+        listing = await (await self.client.get("/discord/posts")).text()
+        self.assertIn("Event night", listing)
+        self.assertIn("Live", listing)
+        await self.client.post(link, data={"csrf": token, "action": "delete"})
+        self.assertEqual(json.loads(self.db.discord_doc(key)["published"]), {"deleted": True})
+        self.assertNotIn("Event night", await (await self.client.get("/discord/posts")).text())
+        response = await self.client.post("/discord/posts/new", data={"csrf": token}, allow_redirects=False)
+        await self.client.post(response.headers["Location"], data={"csrf": token, "action": "delete"})
+        self.assertIsNone(self.db.discord_doc("post:" + response.headers["Location"].rsplit("/", 1)[1]))
+        self.assertEqual((await self.client.get("/discord/posts/nothere1")).status, 404)
+        self.assertEqual((await self.client.get("/discord/post")).status, 404)
+
     async def test_greeting(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/discord/greeting")

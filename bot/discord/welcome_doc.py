@@ -300,3 +300,23 @@ def check_bans(raw):
     if doc["tickets_enabled"] and not doc["ticket_channel"] and not doc["ticket_categories"]:
         problems.append("Pick the ticket panel channel or a ticket category, or turn ban cards in tickets off.")
     return doc, problems
+
+
+POST_TYPES = {key: TYPES[key] for key in ("role", "pick", "url")}
+
+
+def default_post():
+    return {"channel_id": None, "title": "", "colour": "#D9A441",
+            "sections": [{"heading": "", "text": ""}], "buttons": []}
+
+
+def check_post(raw):
+    """A post is a message like Start here, with only the buttons that make
+    sense anywhere: roles, a pick-one group, and web links."""
+    doc, problems = check_welcome(raw)
+    for button in doc["buttons"]:
+        if button["type"] not in POST_TYPES:
+            problems.append(f"The {button['label'] or 'unnamed'} button can't be used on a post.")
+    if not doc["channel_id"]:
+        problems.append("Pick which channel to post it in.")
+    return doc, problems

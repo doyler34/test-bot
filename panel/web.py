@@ -313,7 +313,7 @@ GUIDE = [
     ("health", "Health and memory", "Uptime, crashes, and when a server needs a full restart.", None),
     ("discord", "Discord", "What gets posted to the staff channel, and linked accounts.", None),
     ("console-audit", "Console and audit log", "Raw RCON commands, and the record of who did what.", "audit"),
-    ("discord-messages", "Discord messages", "The Start here message and its buttons, server names, and the join greeting.", "discord"),
+    ("discord-messages", "Discord messages", "Start here, server info and rules, names, ban messages, posts and the greeting.", "discord"),
     ("admins", "Admin accounts", "Making accounts, roles and password resets.", "users"),
 ]
 
@@ -808,7 +808,7 @@ async def add_note(request):
 # Discord: what the bot posts, edited here and published to it
 
 DISCORD_PAGES = (("welcome", "Start here message"), ("serverinfo", "Server info & rules"), ("names", "Server names"),
-                 ("greeting", "Join greeting"), ("bans", "Ban messages"))
+                 ("greeting", "Join greeting"), ("bans", "Ban messages"), ("posts", "Posts"))
 
 
 def bridge(request):
@@ -835,10 +835,20 @@ async def discord_home(request):
     raise web.HTTPFound("/discord/welcome")
 
 
+def discord_context(key, **extra):
+    base = {"types": welcome_doc.TYPES, "placeholders": welcome_doc.PLACEHOLDERS,
+            "ban_placeholders": welcome_doc.BAN_PLACEHOLDERS, "dm_title": welcome_doc.DM_TITLE,
+            "dm_text": welcome_doc.DM_TEXT, "ticket_title": welcome_doc.TICKET_TITLE,
+            "pages": DISCORD_PAGES, "page": key, "kind": key, "action_url": f"/discord/{key}", "heading": None}
+    return {**base, **extra}
+
+
 async def discord_page(request):
     require(request, "discord")
     key = request.match_info["page"]
-    if key not in dict(DISCORD_PAGES):
+    if key == "posts":
+        return posts_page(request)
+    if key not in DISCORD_DOCS or key == "post":
         raise web.HTTPNotFound(text="No such page.")
     defaults, check = DISCORD_DOCS[key]
     state = discord_state(request, key, defaults, check)
@@ -846,25 +856,28 @@ async def discord_page(request):
     if key == "bans" and not state["live"] and not state["draft"] and report.get("ban_settings"):
         # Start from what the bot is using now (its .env), not blank.
         state["doc"] = check(report["ban_settings"])[0]
-    return render(request, f"discord_{key}.html", pages=DISCORD_PAGES, page=key, bridge=report,
-                  default_doc=defaults(), problems=[], **state, types=welcome_doc.TYPES,
-                  placeholders=welcome_doc.PLACEHOLDERS, ban_placeholders=welcome_doc.BAN_PLACEHOLDERS,
-                  dm_title=welcome_doc.DM_TITLE, dm_text=welcome_doc.DM_TEXT, ticket_title=welcome_doc.TICKET_TITLE)
+    return render(request, f"discord_{key}.html", bridge=report, default_doc=defaults(), problems=[], **state,
+                  **discord_context(key))
 
 
 async def discord_save(request):
     require(request, "discord")
     key = request.match_info["page"]
-    if key not in dict(DISCORD_PAGES):
+    if key not in DISCORD_DOCS or key == "post":
         raise web.HTTPNotFound(text="No such page.")
-    defaults, check = DISCORD_DOCS[key]
+    return await save_doc(request, key, key, f"discord_{key}.html", discord_context(key))
+
+
+async def save_doc(request, key, label, template, context):
+    """Save a draft, publish, or throw the draft away, for any of the Discord pages."""
+    defaults, check = DISCORD_DOCS[key.split(":")[0]]
     form = await request.post()
     action = form.get("action", "")
     db, who = request.app[DB], request[USER]["username"]
-    back = f"/discord/{key}"
+    back = context["action_url"]
     if action == "discard":
         db.discard_discord_draft(key)
-        audit(request, f"discard {key} draft")
+        audit(request, f"discard {label} draft")
         flash(request, "Draft thrown away. The editor shows what's live again.")
         raise web.HTTPFound(back)
     try:
@@ -877,27 +890,96 @@ async def discord_save(request):
     text = json.dumps(doc)
     if action == "publish" and not problems:
         db.publish_discord_doc(key, text, who)
-        audit(request, f"publish {key}")
+        audit(request, f"publish {label}")
         flash(request, "Published. The bot updates Discord within a minute.")
         raise web.HTTPFound(back)
     db.save_discord_draft(key, text, who)
     if action == "publish" or problems:
         state = discord_state(request, key, defaults, check)
-        return render(request, f"discord_{key}.html", pages=DISCORD_PAGES, page=key, bridge=bridge(request),
-                      default_doc=defaults(), problems=problems,
-                      **{**state, "doc": doc}, types=welcome_doc.TYPES, placeholders=welcome_doc.PLACEHOLDERS,
-                      ban_placeholders=welcome_doc.BAN_PLACEHOLDERS, dm_title=welcome_doc.DM_TITLE,
-                      dm_text=welcome_doc.DM_TEXT, ticket_title=welcome_doc.TICKET_TITLE)
-    audit(request, f"save {key} draft")
+        return render(request, template, bridge=bridge(request), default_doc=defaults(), problems=problems,
+                      **{**state, "doc": doc}, **context)
+    audit(request, f"save {label} draft")
     flash(request, "Draft saved. Nothing changes in Discord until you publish.")
     raise web.HTTPFound(back)
+
+
+def posts_page(request):
+    db, report = request.app[DB], bridge(request)
+    channels = {c["id"]: c["name"] for c in report.get("channels", [])}
+    posts = []
+    for row in db.all("SELECT * FROM discord_docs WHERE key LIKE 'post:%' ORDER BY COALESCE(published_at, draft_at) DESC"):
+        live = json.loads(row["published"]) if row["published"] else None
+        if live and live.get("deleted"):
+            continue
+        doc = json.loads(row["draft"]) if row["draft"] else live
+        if doc is None:
+            continue
+        post_id = row["key"][5:]
+        state = report.get("posts", {}).get(post_id, {})
+        posts.append({"id": post_id, "title": doc.get("title") or next(
+                          (s["heading"] or s["text"][:60] for s in doc.get("sections", []) if s["heading"] or s["text"]),
+                          "Untitled"),
+                      "channel": channels.get(str(doc.get("channel_id")), ""), "live": bool(live), "draft": bool(row["draft"]),
+                      "row": row, "problems": state.get("problems", []) if state.get("version") == row["version"] else [],
+                      "confirmed": state.get("version") == row["version"] and live is not None})
+    return render(request, "discord_posts.html", posts=posts, bridge=report, **discord_context("posts"))
+
+
+async def new_post(request):
+    require(request, "discord")
+    post_id = secrets.token_hex(4)
+    request.app[DB].save_discord_draft(f"post:{post_id}", json.dumps(welcome_doc.default_post()), request[USER]["username"])
+    audit(request, "new post")
+    raise web.HTTPFound(f"/discord/posts/{post_id}")
+
+
+def post_key(request):
+    post_id = request.match_info["post"]
+    if not re.fullmatch(r"[0-9a-f]{8}", post_id) or request.app[DB].discord_doc(f"post:{post_id}") is None:
+        raise web.HTTPNotFound(text="No such post.")
+    return post_id, f"post:{post_id}"
+
+
+def post_context(post_id):
+    return discord_context("posts", kind="post", action_url=f"/discord/posts/{post_id}", types=welcome_doc.POST_TYPES,
+                           heading="Post")
+
+
+async def post_page(request):
+    require(request, "discord")
+    post_id, key = post_key(request)
+    defaults, check = DISCORD_DOCS["post"]
+    state = discord_state(request, key, defaults, check)
+    report = bridge(request)
+    reported = report.get("posts", {}).get(post_id)
+    return render(request, "discord_welcome.html", bridge={**report, "posts": None, "post": reported},
+                  default_doc=defaults(), problems=[], **state, **post_context(post_id))
+
+
+async def post_save(request):
+    require(request, "discord")
+    post_id, key = post_key(request)
+    form = await request.post()
+    if form.get("action") == "delete":
+        row = request.app[DB].discord_doc(key)
+        if row["published"]:
+            # The bot needs to see it gone to take the message down.
+            request.app[DB].publish_discord_doc(key, json.dumps({"deleted": True}), request[USER]["username"])
+            flash(request, "Deleted. The bot takes it down from Discord within a minute.")
+        else:
+            request.app[DB].write("DELETE FROM discord_docs WHERE key = ?", key)
+            flash(request, "Deleted. It was never posted, so there was nothing to take down.")
+        audit(request, "delete post", detail=post_id)
+        raise web.HTTPFound("/discord/posts")
+    return await save_doc(request, key, "post", "discord_welcome.html", post_context(post_id))
 
 
 DISCORD_DOCS = {"welcome": (welcome_doc.default_welcome, welcome_doc.check_welcome),
                 "greeting": (welcome_doc.default_greeting, welcome_doc.check_greeting),
                 "names": (welcome_doc.default_names, welcome_doc.check_names),
                 "serverinfo": (welcome_doc.default_serverinfo, welcome_doc.check_serverinfo),
-                "bans": (welcome_doc.default_bans, welcome_doc.check_bans)}
+                "bans": (welcome_doc.default_bans, welcome_doc.check_bans),
+                "post": (welcome_doc.default_post, welcome_doc.check_post)}
 
 
 def name_clashes(doc, servers):
@@ -1068,6 +1150,9 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/notes", add_note)
     app.router.add_get("/discord", discord_home)
+    app.router.add_post("/discord/posts/new", new_post)
+    app.router.add_get("/discord/posts/{post}", post_page)
+    app.router.add_post("/discord/posts/{post}", post_save)
     app.router.add_get("/discord/{page}", discord_page)
     app.router.add_post("/discord/{page}", discord_save)
     app.router.add_get("/console", console_page)

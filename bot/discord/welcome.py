@@ -46,6 +46,25 @@ def read_doc(path, key):
         return None
 
 
+def read_posts(path):
+    """{post id: (doc, version)} for every published post."""
+    if not Path(path).is_file():
+        return {}
+    try:
+        with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
+            rows = db.execute("SELECT key, published, version FROM discord_docs"
+                              " WHERE key LIKE 'post:%' AND published IS NOT NULL").fetchall()
+    except sqlite3.Error:
+        return {}
+    posts = {}
+    for key, text, version in rows:
+        try:
+            posts[key[5:]] = (json.loads(text), version)
+        except ValueError:
+            pass
+    return posts
+
+
 def safe_role(guild, role):
     """Why a role can't go on a button, or None if it can. A button must never
     hand out power, and the bot can only give roles below its own."""
@@ -61,7 +80,7 @@ def safe_role(guild, role):
     return None
 
 
-def build_view(doc):
+def build_view(doc, prefix=PREFIX):
     view = discord.ui.View(timeout=None)
     for button in doc["buttons"]:
         kwargs = {"label": button["label"] or None, "row": button["line"] - 1}
@@ -71,14 +90,14 @@ def build_view(doc):
             view.add_item(discord.ui.Button(style=discord.ButtonStyle.link, url=button["url"], **kwargs))
         else:
             view.add_item(discord.ui.Button(style=STYLES[button["style"]],
-                                            custom_id=PREFIX + button["id"], **kwargs))
+                                            custom_id=prefix + button["id"], **kwargs))
     return view
 
 
-def build_embed(doc):
+def build_embed(doc, footer=MARKER):
     embed = discord.Embed(title=doc["title"] or None, description=welcome_doc.description(doc) or None,
                           colour=int(doc["colour"][1:], 16))
-    return embed.set_footer(text=MARKER)
+    return embed.set_footer(text=footer) if footer else embed
 
 
 class Welcome:
@@ -87,6 +106,7 @@ class Welcome:
         self.path = os.getenv("PANEL_DB", "data/panel.sqlite3")
         self.bridge = Path(os.getenv("PANEL_BRIDGE", "data/panel_bridge.json"))
         self.docs = {}
+        self.posts = {}
         self.applied = {}
         self.state = self._load_state()
         # Names are needed before the stat channels are first drawn at boot.
@@ -130,6 +150,11 @@ class Welcome:
         welcome = self.docs.get("welcome")
         if welcome and self.state.get("welcome", {}).get("version") != welcome[1]:
             await self.publish_welcome(guild)
+        self.posts = await asyncio.to_thread(read_posts, self.path)
+        applied = self.state.setdefault("posts", {})
+        for post_id, (doc, version) in self.posts.items():
+            if applied.get(post_id, {}).get("version") != version:
+                await self.publish_post(guild, post_id, doc, version)
         bans = self.docs.get("bans")
         if bans:
             # The ban DMs and ticket cards read these as they go; nothing to redraw.
@@ -174,6 +199,50 @@ class Welcome:
         else:
             problems.append("The #servers card isn't set up on this bot.")
         self.state["serverinfo"] = {"version": found[1], "at": int(time.time()), "problems": problems}
+
+    async def publish_post(self, guild, post_id, doc, version):
+        """Post it, edit it in place, move it, or take it down."""
+        old = self.state["posts"].get(post_id, {})
+        record = {"version": version, "at": int(time.time()), "problems": [],
+                  "channel_id": old.get("channel_id"), "message_id": old.get("message_id")}
+        self.state["posts"][post_id] = record
+        before = guild.get_channel(old.get("channel_id") or 0)
+        if doc.get("deleted") or (old.get("channel_id") and old["channel_id"] != doc.get("channel_id")):
+            if isinstance(before, discord.TextChannel) and old.get("message_id"):
+                try:
+                    await (await before.fetch_message(old["message_id"])).delete()
+                except discord.HTTPException:
+                    pass
+            record["channel_id"] = record["message_id"] = None
+            if doc.get("deleted"):
+                return
+        channel = guild.get_channel(doc.get("channel_id") or 0)
+        if not isinstance(channel, discord.TextChannel):
+            record["problems"].append("Pick a channel the bot can see and post in.")
+            return
+        for button in doc["buttons"]:
+            if button["type"] in ("role", "pick"):
+                _, why = await self._role(guild, button)
+                if why:
+                    record["problems"].append(f"The {button['label'] or button['emoji']} button: {why}")
+        embed, view = build_embed(doc, footer=None), build_view(doc, prefix=f"oyb:p:{post_id}:")
+        try:
+            message = None
+            if record["message_id"]:
+                try:
+                    message = await channel.fetch_message(record["message_id"])
+                except discord.NotFound:
+                    message = None
+            if message is None:
+                message = await channel.send(embed=embed, view=view, silent=True,
+                                             allowed_mentions=discord.AllowedMentions.none())
+            else:
+                await message.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+            record["channel_id"], record["message_id"] = channel.id, message.id
+            LOG.info("Published post %s version %s in #%s", post_id, version, channel.name)
+        except discord.HTTPException as exc:
+            record["problems"].append(f"Discord refused the post ({exc.text or exc.status}). "
+                                      "Check the emojis and that the bot can post in that channel.")
 
     async def publish_welcome(self, guild):
         doc, version = self.docs["welcome"]
@@ -254,10 +323,20 @@ class Welcome:
 
     async def handle(self, interaction):
         custom_id = (interaction.data or {}).get("custom_id", "")
-        if interaction.type != discord.InteractionType.component or not custom_id.startswith(PREFIX):
+        if interaction.type != discord.InteractionType.component or not custom_id.startswith((PREFIX, "oyb:p:")):
             return False
         if interaction.guild_id != self.bot.config.guild_id:
             await say(interaction, "Use this in the OYB server.")
+            return True
+        if custom_id.startswith("oyb:p:"):
+            post_id, _, button_id = custom_id[6:].partition(":")
+            found = self.posts.get(post_id)
+            button = next((b for b in found[0]["buttons"] if b["id"] == button_id), None) if found else None
+            if button is None or button["type"] not in ("role", "pick"):
+                await say(interaction, "That button has been changed. Scroll up to the latest message.")
+                return True
+            await ack(interaction)
+            await say(interaction, await self._press_role(interaction, button, found[0]))
             return True
         found = self.docs.get("welcome")
         button = next((b for b in found[0]["buttons"] if b["id"] == custom_id[len(PREFIX):]), None) if found else None
@@ -346,7 +425,7 @@ class Welcome:
     def _load_state(self):
         try:
             data = json.loads(self.bridge.read_text())
-            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans")
+            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts")
                     if isinstance(data.get(k), dict)}
         except (OSError, ValueError):
             return {}

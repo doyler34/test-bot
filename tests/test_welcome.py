@@ -349,6 +349,50 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(doc, {"names": {"server-1": "Classic", "server-3": "classic"}})
         self.assertEqual(problems, ["server-1 and server-3 are both called classic; give each its own name."])
 
+    def post(self, post_id, **changes):
+        doc = {"channel_id": 300, "title": "Event night", "colour": "#D9A441",
+               "sections": [{"heading": "Friday 8pm", "text": "Bring a squad."}],
+               "buttons": [{"id": "going", "type": "role", "label": "I'm going", "role_name": "Event night"},
+                           {"id": "rules", "type": "url", "label": "Rules", "url": "https://example.com"}]}
+        doc.update(changes)
+        clean, problems = welcome_doc.check_post(doc)
+        self.assertEqual(problems, [])
+        self.panel.publish_discord_doc(f"post:{post_id}", json.dumps(clean), "gaz")
+
+    async def test_posts_go_up_get_edited_and_come_down(self):
+        self.post("ev1")
+        await self.welcome.tick()
+        self.assertEqual(len(self.guild.start.messages), 1)
+        message = self.guild.start.messages[0]
+        self.assertEqual(message.embeds[0].title, "Event night")
+        self.assertIsNone(message.embeds[0].footer.text)
+        self.assertEqual(message.view.children[0].custom_id, "oyb:p:ev1:going")
+        member = Member(7)
+        interaction = Interaction(self.guild, member, "x")
+        interaction.data = {"custom_id": "oyb:p:ev1:going"}
+        self.assertTrue(await self.welcome.handle(interaction))
+        self.assertEqual(interaction.replies[-1], "You've got **Event night**. Press again to remove it.")
+        self.post("ev1", title="Event night (moved to Saturday)")
+        await self.welcome.tick()
+        self.assertEqual(len(self.guild.start.messages), 1)
+        self.assertEqual(message.embeds[0].title, "Event night (moved to Saturday)")
+        deleted = []
+
+        async def delete():
+            deleted.append(True)
+            self.guild.start.messages.remove(message)
+        message.delete = delete
+        self.panel.publish_discord_doc("post:ev1", json.dumps({"deleted": True}), "gaz")
+        await self.welcome.tick()
+        self.assertEqual(deleted, [True])
+
+    def test_posts_only_take_role_pick_and_link_buttons(self):
+        doc = welcome_doc.default_post()
+        doc["buttons"] = [{"type": "link", "label": "Link"}]
+        _, problems = welcome_doc.check_post(doc)
+        self.assertIn("The Link button can't be used on a post.", problems)
+        self.assertIn("Pick which channel to post it in.", problems)
+
     def test_view_lines(self):
         doc, _ = welcome_doc.check_welcome(welcome_doc.default_welcome())
         rows = [item.row for item in build_view(doc).children]

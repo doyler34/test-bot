@@ -116,7 +116,15 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   `{members}` `{start}` (needs the members intent). And **server names**:
   what each server is called in the SERVER STATUS channels, the #servers
   card, match posts and the notification buttons, replacing a code change.
-  A published name wins over `STAT_LABEL_SERVER_n` in the bot's `.env`. The bot reads the panel's
+  A published name wins over `STAT_LABEL_SERVER_n` in the bot's `.env`.
+  **Server info & rules**: the #servers card's title, intro and each server's
+  settings, and the in-game rules card. **Ban messages**: the ban DM's title,
+  wording and appeal line, and the ticket card (panel channel, categories,
+  title, panel link); published settings win over `BAN_APPEAL`,
+  `BAN_TICKET_CHANNEL`, `BAN_TICKET_CATEGORY` and `PANEL_URL` in the bot's
+  `.env`. **Posts**: any number of messages (announcements, sign-ups, FAQs)
+  with role, pick-one and link buttons, posted to a chosen channel, edited in
+  place when published again, taken down when deleted. The bot reads the panel's
   database (`PANEL_DB`) and writes `panel_bridge.json` in its data folder with
   its roles, channels and how publishing went; the panel reads that through
   `oyb_data`.

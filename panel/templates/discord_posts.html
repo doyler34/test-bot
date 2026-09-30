@@ -1,0 +1,35 @@
+{% extends "discord_base.html" %}
+{% block editor %}
+<section class="card">
+  <div class="row">
+    <h2>Posts</h2>
+    <form method="post" action="/discord/posts/new" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="small">+ New post</button>
+    </form>
+  </div>
+  <p class="muted">Announcements, rules, event sign-ups, FAQs: any message you want the bot to post and keep up to date. Each can have buttons that give roles or open links. Edit and publish again to update the message in place.</p>
+  {% if posts %}
+  <div class="scroll"><table>
+    <thead><tr><th>Post</th><th>Channel</th><th>Status</th><th>Last change</th><th></th></tr></thead>
+    <tbody>
+    {% for p in posts %}
+    <tr>
+      <td><a href="/discord/posts/{{ p.id }}">{{ p.title }}</a></td>
+      <td>{{ "#" ~ p.channel if p.channel else "—" }}</td>
+      <td>
+        {% if p.live %}<span class="pill on">Live</span>{% else %}<span class="pill">Not posted</span>{% endif %}
+        {% if p.draft %}<span class="pill gold">Draft</span>{% endif %}
+        {% if p.problems %}<span class="pill down" title="{{ p.problems|join(' ') }}">Problem</span>{% endif %}
+      </td>
+      <td>{{ (p.row.published_at or p.row.draft_at)|ago }} by {{ p.row.published_by or p.row.draft_by }}</td>
+      <td><a href="/discord/posts/{{ p.id }}">Edit</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">No posts yet. Press <b>+ New post</b> to write one.</p>
+  {% endif %}
+</section>
+{% endblock %}

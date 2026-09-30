@@ -38,7 +38,7 @@ function channelName(id) {
   return found ? found.name : "channel";
 }
 
-if (form && form.dataset.kind === "welcome") welcomeEditor();
+if (form && (form.dataset.kind === "welcome" || form.dataset.kind === "post")) welcomeEditor(form.dataset.kind === "post");
 if (form && form.dataset.kind === "greeting") greetingEditor();
 if (form && form.dataset.kind === "names") namesEditor();
 if (form && form.dataset.kind === "serverinfo") serverInfoEditor();
@@ -180,8 +180,9 @@ function namesEditor() {
   draw();
 }
 
-function welcomeEditor() {
+function welcomeEditor(isPost) {
   let doc = read("dc-data");
+  if (!doc.sections.length) doc.sections.push({ heading: "", text: "" });
   const defaults = read("dc-default");
   const bridge = read("dc-bridge");
   const types = read("dc-types");
@@ -196,7 +197,7 @@ function welcomeEditor() {
   // Channel list, grouped by category the way Discord shows them.
   const channelSelect = document.getElementById("dc-channel");
   function fillChannels() {
-    channelSelect.replaceChildren(h("option", { value: "" }, bridge.start
+    channelSelect.replaceChildren(h("option", { value: "" }, isPost ? "Choose a channel…" : bridge.start
       ? `Start here channel from the bot's settings (#${channelName(bridge.start)})` : "The bot's Start here channel"));
     const groups = {};
     for (const c of channels) (groups[c.category || "No category"] ||= []).push(c);
@@ -318,10 +319,9 @@ function welcomeEditor() {
         : h("span", { class: "dc-styles" }, Object.entries(STYLES).map(([value, label]) => h("label", { class: `dc-style s-${value}` },
           h("input", { type: "radio", name: `style-${button.id}`, value, checked: button.style === value,
             on: { change: () => { button.style = value; drawButtons(); } } }), label)));
-      return h("div", { class: "dc-item dc-editing" },
-        h("div", { class: "row" },
-          h("button", { type: "button", class: "dc-open", title: "Close", on: { click: () => { open = null; drawButtons(); } } }, summary(button), " ▴"),
-          mover(doc.buttons, i, drawButtons)),
+      const head = h("button", { type: "button", class: "dc-open", title: "Close", on: { click: () => { open = null; drawButtons(); } } }, summary(button), " ▴");
+      const item = h("div", { class: "dc-item dc-editing", on: { input: () => head.replaceChildren(summary(button), " ▴") } },
+        h("div", { class: "row" }, head, mover(doc.buttons, i, drawButtons)),
         h("div", { class: "grid" },
           field("What it does", bound(button, "type", { options: Object.entries(types), redraw: true }, "select"), "span"),
           field("Label", bound(button, "label", { maxlength: 80 })),
@@ -329,6 +329,7 @@ function welcomeEditor() {
           field("Line", bound(button, "line", { options: lines, redraw: true }, "select"))),
         h("div", {}, h("span", { class: "muted" }, "Colour "), styles),
         ...extra);
+      return item;
     }));
     document.getElementById("dc-count").textContent = `${doc.buttons.length} of 25`;
     draw();
@@ -342,7 +343,8 @@ function welcomeEditor() {
     if (doc.title) embed.append(h("div", { class: "dc-embed-title" }, doc.title));
     const body = h("div", { class: "dc-embed-text" });
     body.innerHTML = markdown(text);
-    embed.append(body, h("div", { class: "dc-embed-footer" }, "OYB • Start here"));
+    embed.append(body);
+    if (!isPost) embed.append(h("div", { class: "dc-embed-footer" }, "OYB • Start here"));
     const rows = [1, 2, 3, 4, 5].map((line) => doc.buttons.filter((b) => Number(b.line) === line)).filter((row) => row.length);
     const buttons = rows.map((row) => h("div", { class: "dc-row" }, row.map((b) =>
       h("span", { class: `dc-btn s-${b.type === "url" ? "grey" : b.style}` }, b.emoji ? b.emoji.replace(/<a?:(\w+):\d+>/, ":$1:") + " " : "", b.label, b.type === "url" ? " ↗" : ""))));
@@ -361,7 +363,7 @@ function welcomeEditor() {
     open = id;
     drawButtons();
   });
-  document.getElementById("dc-reset").addEventListener("click", () => {
+  document.getElementById("dc-reset")?.addEventListener("click", () => {
     if (!confirm("Replace everything in the editor with the original Start here message? Nothing is saved until you press Save or Publish.")) return;
     doc = structuredClone(defaults);
     fillChannels();

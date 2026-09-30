@@ -37,6 +37,30 @@
   <li><b>Start again from the original</b> puts the editor back to the bot's original Start here message.</li>
 </ul>
 
+<h2>Server info &amp; rules</h2>
+<p><b>Discord → Server info &amp; rules</b> edits the #servers card: its title and intro, each server's settings (map, player slots, anything players should know), and the in-game rules card under it. The boxes start with what's in Discord now; a box left as it is keeps following the bot's own wording.</p>
+{{ shot("discord-serverinfo", "The #servers card and rules, with the preview.") }}
+
+<h2>Ban messages</h2>
+<p><b>Discord → Ban messages</b> sets what a banned player is told and what staff see in their ticket:</p>
+<ul>
+  <li><b>The DM</b>: on or off, the title and message (tap <code>{server}</code>, <code>{account}</code> or <code>{length}</code> to drop those in), and how to appeal. Pick a channel from the list to add a link to it, like your ticket channel. The reason and when the ban ends are always added underneath.</li>
+  <li><b>Ban card in tickets</b>: on or off, the channel with your ticket panel, and any other categories tickets land in. Add your panel's address to put a link to the player's page on the card.</li>
+</ul>
+{{ shot("discord-bans", "Ban messages, with the DM and the ticket card previewed.") }}
+
+<h2>Posts</h2>
+<p><b>Discord → Posts</b> is for anything else you want the bot to post and keep up to date: announcements, event sign-ups, FAQs, extra rules.</p>
+<ol class="steps">
+  <li>Press <b>+ New post</b>.</li>
+  <li>Pick the channel, then write it like the Start here message: title, colour, sections of text.</li>
+  <li>Add buttons if you want: give or take a role (e.g. "I'm in" for an event), pick one role from a group, or open a web link.</li>
+  <li>Press <b>Publish</b>. To change it later, open it from the list, edit, and publish again: the same message is updated, not a new one posted.</li>
+  <li><b>Delete post</b> takes it down from Discord.</li>
+</ol>
+{{ shot("discord-post", "Writing an event post with a sign-up button and a link.") }}
+{{ shot("discord-posts", "The list of posts.") }}
+
 <h2>Server names</h2>
 <p><b>Discord → Server names</b> changes what each server is called everywhere the bot names it: the SERVER STATUS channels, the #servers card, match alerts and results, and the match-notification buttons.</p>
 {{ shot("discord-names", "Renaming server 3, with the preview on the right.") }}
