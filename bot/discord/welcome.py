@@ -10,6 +10,7 @@ from contextlib import closing
 import json
 import logging
 import os
+import re
 from pathlib import Path
 import sqlite3
 import time
@@ -92,6 +93,51 @@ def build_view(doc, prefix=PREFIX):
             view.add_item(discord.ui.Button(style=STYLES[button["style"]],
                                             custom_id=prefix + button["id"], **kwargs))
     return view
+
+
+def plain_emojis(doc):
+    """Phones add an invisible variation selector to many emojis (☕️); Discord
+    refuses some of them with it, so this is what's retried without it."""
+    return {**doc, "buttons": [{**b, "emoji": b["emoji"].replace("\ufe0f", "")} for b in doc["buttons"]]}
+
+
+def emoji_culprit(doc, text):
+    """Which button Discord named in "components.R.components.I.emoji", by label."""
+    match = re.search(r"components\.(\d+)\.components\.(\d+)\.emoji", text or "")
+    if not match:
+        return None
+    rows = [[b for b in doc["buttons"] if b["line"] == line] for line in range(1, 6)]
+    rows = [row for row in rows if row]
+    row, index = int(match[1]), int(match[2])
+    if row < len(rows) and index < len(rows[row]):
+        button = rows[row][index]
+        return button["label"] or button["emoji"]
+    return None
+
+
+async def put_message(channel, message, doc, footer, prefix):
+    """Send or edit, retrying once without variation selectors if Discord
+    rejects an emoji. Returns the message; raises HTTPException otherwise."""
+    for attempt in (doc, plain_emojis(doc)):
+        embed, view = build_embed(attempt, footer=footer), build_view(attempt, prefix=prefix)
+        try:
+            if message is None:
+                return await channel.send(embed=embed, view=view, silent=True,
+                                          allowed_mentions=discord.AllowedMentions.none())
+            await message.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+            return message
+        except discord.HTTPException as exc:
+            if "emoji" not in (exc.text or "").lower() or attempt is not doc:
+                raise
+    raise RuntimeError("unreachable")
+
+
+def refused(doc, exc):
+    culprit = emoji_culprit(doc, exc.text)
+    if culprit:
+        return f"Discord doesn't accept the emoji on the {culprit} button. Pick another emoji, or leave it blank."
+    return (f"Discord refused the message ({exc.text or exc.status}). "
+            "Check the emojis and that the bot can post in that channel.")
 
 
 def build_embed(doc, footer=MARKER):
@@ -225,7 +271,6 @@ class Welcome:
                 _, why = await self._role(guild, button)
                 if why:
                     record["problems"].append(f"The {button['label'] or button['emoji']} button: {why}")
-        embed, view = build_embed(doc, footer=None), build_view(doc, prefix=f"oyb:p:{post_id}:")
         try:
             message = None
             if record["message_id"]:
@@ -233,16 +278,12 @@ class Welcome:
                     message = await channel.fetch_message(record["message_id"])
                 except discord.NotFound:
                     message = None
-            if message is None:
-                message = await channel.send(embed=embed, view=view, silent=True,
-                                             allowed_mentions=discord.AllowedMentions.none())
-            else:
-                await message.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+            message = await put_message(channel, message, doc, None, f"oyb:p:{post_id}:")
             record["channel_id"], record["message_id"] = channel.id, message.id
             LOG.info("Published post %s version %s in #%s", post_id, version, channel.name)
         except discord.HTTPException as exc:
-            record["problems"].append(f"Discord refused the post ({exc.text or exc.status}). "
-                                      "Check the emojis and that the bot can post in that channel.")
+            LOG.warning("Discord refused post %s: %s", post_id, exc.text)
+            record["problems"].append(refused(doc, exc))
 
     async def publish_welcome(self, guild):
         doc, version = self.docs["welcome"]
@@ -267,17 +308,12 @@ class Welcome:
                     problems.append(f"The {button['label'] or button['emoji']} button: {why}")
         try:
             message = await self._find_message(guild, channel, record["message_id"])
-            embed, view = build_embed(doc), build_view(doc)
-            if message is None:
-                message = await channel.send(embed=embed, view=view, silent=True,
-                                             allowed_mentions=discord.AllowedMentions.none())
-            else:
-                await message.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+            message = await put_message(channel, message, doc, MARKER, PREFIX)
             record["message_id"], record["channel_id"] = message.id, channel.id
             LOG.info("Published Start here version %s in #%s", version, channel.name)
         except discord.HTTPException as exc:
-            problems.append(f"Discord refused the message ({exc.text or exc.status}). "
-                            "Check the emojis and that the bot can post in that channel.")
+            LOG.warning("Discord refused Start here: %s", exc.text)
+            problems.append(refused(doc, exc))
         self.state["welcome"] = record
         self._write_bridge(guild)
 

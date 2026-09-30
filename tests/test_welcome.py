@@ -386,6 +386,36 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         await self.welcome.tick()
         self.assertEqual(deleted, [True])
 
+    async def test_emoji_with_a_variation_selector_is_retried_plain(self):
+        sent = self.guild.start.send
+        tries = []
+
+        async def picky(text=None, embed=None, view=None, **kwargs):
+            emojis = [str(item.emoji) for item in (view.children if view else []) if item.emoji]
+            tries.append(emojis)
+            if any("\ufe0f" in e for e in emojis):
+                raise discord.HTTPException(SimpleNamespace(status=400, reason="Bad Request"),
+                    "Invalid Form Body\nIn components.0.components.0.emoji.name: Invalid emoji")
+            return await sent(text, embed=embed, view=view, **kwargs)
+        self.guild.start.send = picky
+        self.post("cafe", buttons=[{"id": "tea", "type": "role", "label": "Server role", "emoji": "☕\ufe0f",
+                                    "role_id": 10}])
+        await self.welcome.tick()
+        self.assertEqual(tries, [["☕\ufe0f"], ["☕"]])
+        self.assertEqual(len(self.guild.start.messages), 1)
+        self.assertEqual(self.welcome.state["posts"]["cafe"]["problems"], [])
+
+    async def test_an_emoji_discord_refuses_is_named(self):
+        async def refuse(*args, **kwargs):
+            raise discord.HTTPException(SimpleNamespace(status=400, reason="Bad Request"),
+                "Invalid Form Body\nIn components.1.components.0.emoji.name: Invalid emoji")
+        self.guild.start.send = refuse
+        self.post("bad", buttons=[{"id": "a", "type": "role", "label": "First", "role_id": 10, "line": 1},
+                                  {"id": "b", "type": "role", "label": "Odd one", "emoji": "x", "role_id": 20, "line": 3}])
+        await self.welcome.tick()
+        self.assertEqual(self.welcome.state["posts"]["bad"]["problems"],
+                         ["Discord doesn't accept the emoji on the Odd one button. Pick another emoji, or leave it blank."])
+
     def test_posts_only_take_role_pick_and_link_buttons(self):
         doc = welcome_doc.default_post()
         doc["buttons"] = [{"type": "link", "label": "Link"}]

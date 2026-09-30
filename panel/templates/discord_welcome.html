@@ -3,7 +3,7 @@
 <form method="post" action="{{ action_url }}" id="dc-editor" data-kind="{{ kind }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <input type="hidden" name="doc" id="dc-doc">
-  <script type="application/json" id="dc-data">{{ doc|tojson }}</script>
+  <script type="application/json" id="dc-data">{{ text_ids(doc)|tojson }}</script>
   <script type="application/json" id="dc-default">{{ default_doc|tojson }}</script>
   <script type="application/json" id="dc-bridge">{{ {"roles": bridge.get("roles", []), "channels": bridge.get("channels", []), "start": bridge.get("start_channel", "")}|tojson }}</script>
 

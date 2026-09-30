@@ -835,11 +835,24 @@ async def discord_home(request):
     raise web.HTTPFound("/discord/welcome")
 
 
+def text_ids(value):
+    """Discord ids are longer than a browser's numbers can hold exactly, so
+    the editors get them as text; the checks turn them back into numbers."""
+    if isinstance(value, dict):
+        return {k: text_ids(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [text_ids(v) for v in value]
+    if isinstance(value, int) and not isinstance(value, bool) and value > 2 ** 53:
+        return str(value)
+    return value
+
+
 def discord_context(key, **extra):
     base = {"types": welcome_doc.TYPES, "placeholders": welcome_doc.PLACEHOLDERS,
             "ban_placeholders": welcome_doc.BAN_PLACEHOLDERS, "dm_title": welcome_doc.DM_TITLE,
             "dm_text": welcome_doc.DM_TEXT, "ticket_title": welcome_doc.TICKET_TITLE,
-            "pages": DISCORD_PAGES, "page": key, "kind": key, "action_url": f"/discord/{key}", "heading": None}
+            "pages": DISCORD_PAGES, "page": key, "kind": key, "action_url": f"/discord/{key}", "heading": None,
+            "text_ids": text_ids}
     return {**base, **extra}
 
 

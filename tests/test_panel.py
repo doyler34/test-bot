@@ -1212,7 +1212,14 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post(link, data={"csrf": token, "action": "delete"})
         self.assertEqual(json.loads(self.db.discord_doc(key)["published"]), {"deleted": True})
         self.assertNotIn("Event night", await (await self.client.get("/discord/posts")).text())
+        big = dict(doc, channel_id="1548058675233423601",
+                   buttons=[{"type": "role", "label": "Ping", "role_id": "1548058675233423699"}])
         response = await self.client.post("/discord/posts/new", data={"csrf": token}, allow_redirects=False)
+        await self.client.post(response.headers["Location"], data={"csrf": token, "action": "save", "doc": json.dumps(big)})
+        page = await (await self.client.get(response.headers["Location"])).text()
+        # Kept as text, or the browser would round them to a different channel and role.
+        self.assertIn('"channel_id": "1548058675233423601"', page)
+        self.assertIn('"role_id": "1548058675233423699"', page)
         await self.client.post(response.headers["Location"], data={"csrf": token, "action": "delete"})
         self.assertIsNone(self.db.discord_doc("post:" + response.headers["Location"].rsplit("/", 1)[1]))
         self.assertEqual((await self.client.get("/discord/posts/nothere1")).status, 404)
