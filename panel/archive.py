@@ -86,6 +86,11 @@ def read_game(path: str, folder: str, size: int, mtime: float, settings: tuple) 
             by_name[e["name"]]["last"] = e["at"]
         elif e["kind"] in ("kill", "teamkill") and e.get("victim"):
             killer = players.get(e.get("killer") or "")
+            # Players still on at the end never disconnect, so their kills and
+            # deaths are the last we know of them being there.
+            for someone in (killer, players.get(e["victim"])):
+                if someone:
+                    someone["last"] = max(someone["last"], e["at"])
             if killer and e["killer"] != e["victim"]:
                 killer["teamkills" if e["kind"] == "teamkill" else "kills"] += 1
                 if e["kind"] == "kill" and e.get("damage") == "KINETIC" and (e.get("distance") or 0) <= LONGEST:
