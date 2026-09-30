@@ -97,6 +97,9 @@ async function around(page, selectors, pad = 12) {
   await page.waitForTimeout(300);
   await shot(page, "game");
 
+  await page.goto(BASE + "/players/unusual");
+  await shot(page, "unusual");
+
   await page.goto(BASE + "/players?q=rook");
   await shot(page, "players-search");
   await page.goto(BASE + "/player/" + ROOK);
@@ -166,6 +169,9 @@ async function around(page, selectors, pad = 12) {
   await page.goto(BASE + "/discord/bans");
   await page.waitForTimeout(300);
   await shot(page, "discord-bans");
+  await page.goto(BASE + "/discord/links");
+  await page.waitForTimeout(300);
+  await shot(page, "discord-links");
   await page.goto(BASE + "/discord/posts");
   await Promise.all([page.waitForNavigation(), page.click("text=+ New post")]);
   await page.waitForTimeout(300);

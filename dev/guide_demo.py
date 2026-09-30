@@ -96,7 +96,10 @@ def game_log(start, length, rng, late=()):
 def write_game(root, start, lines):
     folder = Path(root, time.strftime("logs_%Y-%m-%d_%H-%M-%S", time.localtime(start)))
     folder.mkdir(parents=True)
-    ordered = sorted(lines, key=lambda line: line[:8])
+    # Lines only carry a clock time, so anything before the start's time of
+    # day happened after midnight.
+    begun = time.strftime("%H:%M:%S", time.localtime(start))
+    ordered = sorted(lines, key=lambda line: (line[:8] < begun, line[:8]))
     (folder / "console.log").write_text("".join(ordered))
     (folder / "script.log").write_text("")
 
