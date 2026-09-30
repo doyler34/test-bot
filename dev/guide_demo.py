@@ -224,6 +224,24 @@ def seed_panel(db, config):
                         [{"identity": PLAYERS[7][1], "name": PLAYERS[7][0]}, {"identity": PLAYERS[0][1], "name": "Sgt Havoc"}])
 
 
+def seed_numbers(db, rng):
+    """A month of games, so Unusual players has a crowd to compare against."""
+    crowd = [(name, identity) for name, identity, _, _ in PLAYERS]
+    crowd += [(f"Rifleman{n}", f"6{n:07d}-0000-4000-8000-000000000000") for n in range(10)]
+    for game in range(24):
+        started = now() - (game + 1) * 86400
+        players = []
+        for name, identity in rng.sample(crowd, 12):
+            cheat = name == "Dreadful"
+            kills = rng.randint(14, 22) if cheat else rng.randint(3, 12)
+            players.append({"identity": identity, "name": name, "first": 0, "last": rng.randint(3000, 7000),
+                            "kills": kills, "deaths": rng.randint(2, 4) if cheat else rng.randint(4, 12),
+                            "rifle": kills, "heads": int(kills * (0.7 if cheat else rng.uniform(0.15, 0.35))),
+                            "long": int(kills * (0.3 if cheat else rng.uniform(0, 0.1))),
+                            "metres": kills * 180.0, "measured": kills})
+        db.add_game_players("eu1", f"logs_demo_{game}", started, players)
+
+
 async def main(port):
     rng = random.Random(7)
     root = Path(tempfile.mkdtemp(prefix="oyb-guide-"))
@@ -247,6 +265,7 @@ async def main(port):
                          oyb_data=str(root / "bot"), servers=servers)
     db = PanelDB(config.database)
     seed_panel(db, config)
+    seed_numbers(db, rng)
 
     async def sampler(unit):
         pid = 4242 if unit == "reforger-eu1" else 4343

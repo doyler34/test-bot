@@ -43,6 +43,12 @@ def archive_game(folder: Path, dest: Path) -> dict:
     return summary(read_game(str(dest), folder.name, dest.stat().st_size, dest.stat().st_mtime, ()))
 
 
+# A bullet kill from this far counts as long range in the per-player numbers;
+# kills credited from beyond LONGEST are attribution quirks and are left out.
+LONG = 300
+LONGEST = 2000
+
+
 @contextmanager
 def open_log(path: str):
     """console.log as text, from an archived game or a live log folder."""
@@ -71,7 +77,8 @@ def read_game(path: str, folder: str, size: int, mtime: float, settings: tuple) 
         if e["kind"] == "identity":
             p = players.setdefault(e["identity"], {"identity": e["identity"], "name": e["name"], "ip": "",
                                                    "guid": "", "first": e["at"], "last": e["at"],
-                                                   "kills": 0, "deaths": 0, "teamkills": 0})
+                                                   "kills": 0, "deaths": 0, "teamkills": 0,
+                                                   "rifle": 0, "heads": 0, "long": 0, "metres": 0.0, "measured": 0})
             p["name"], p["last"] = e["name"], max(p["last"], e["at"])
             p["ip"], p["guid"] = e["ip"] or p["ip"], e["guid"] or p["guid"]
             by_name[e["name"]] = p
@@ -81,6 +88,13 @@ def read_game(path: str, folder: str, size: int, mtime: float, settings: tuple) 
             killer = players.get(e.get("killer") or "")
             if killer and e["killer"] != e["victim"]:
                 killer["teamkills" if e["kind"] == "teamkill" else "kills"] += 1
+                if e["kind"] == "kill" and e.get("damage") == "KINETIC" and (e.get("distance") or 0) <= LONGEST:
+                    killer["rifle"] += 1
+                    killer["heads"] += e.get("zone") == "Head"
+                    if e.get("distance"):
+                        killer["long"] += e["distance"] >= LONG
+                        killer["metres"] += e["distance"]
+                        killer["measured"] += 1
             if e["victim"] in players:
                 players[e["victim"]]["deaths"] += 1
     feed = [e for e in events if e.get("text")]
@@ -96,4 +110,4 @@ def read_game(path: str, folder: str, size: int, mtime: float, settings: tuple) 
 
 def summary(game: dict) -> dict:
     return {"started": game["started"], "ended": game["ended"], "players": len(game["players"]),
-            "kills": game["kills"], "flags": len(game["flags"])}
+            "kills": game["kills"], "flags": len(game["flags"]), "stats": game["players"]}

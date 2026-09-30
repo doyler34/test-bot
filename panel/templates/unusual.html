@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Unusual players · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/players">Players</a></p>
+<h1>Unusual players</h1>
+<p class="muted">Everyone with at least 25 bullet kills in the saved games, compared with each other. <span class="pill down">Red</span> means that number is in the top 5% of all of them. Good players show up here too, so treat it as a list of who to spectate, not who to ban.</p>
+<form method="get" action="/players/unusual" class="inline">
+  <select name="days" data-autosubmit>{% for value, label in periods %}<option value="{{ value }}" {% if value == period %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+</form>
+{% if scored < archived %}<p class="tip">Still adding up older games: {{ scored }} of {{ archived }} done. The rest are read in the background over the next few hours.</p>{% endif %}
+{% if players %}
+<div class="scroll"><table class="unusual">
+  <thead><tr><th>Player</th><th class="num">Games</th><th class="num">Bullet kills</th>
+    <th class="num">Headshots</th><th class="num">Over 300 m</th><th class="num">Kills / hour</th><th class="num">K/D</th><th class="num">Incidents</th></tr></thead>
+  <tbody>
+  <tr class="muted"><td>Typical player</td><td></td><td></td>
+    <td class="num">{{ "%.0f%%"|format(typical.head_share * 100) if typical.head_share is not none }}</td>
+    <td class="num">{{ "%.0f%%"|format(typical.long_share * 100) if typical.long_share is not none }}</td>
+    <td class="num">{{ "%.1f"|format(typical.per_hour) if typical.per_hour is not none }}</td>
+    <td class="num">{{ "%.1f"|format(typical.kd) if typical.kd is not none }}</td><td></td></tr>
+  {% for p in players %}
+  <tr>
+    <td><a href="/player/{{ p.identity }}">{{ p.name }}</a></td>
+    <td class="num">{{ p.games }}</td>
+    <td class="num">{{ p.rifle }}</td>
+    <td class="num">{% if "head_share" in p.high %}<span class="pill down">{{ "%.0f%%"|format(p.head_share * 100) }}</span>{% else %}{{ "%.0f%%"|format(p.head_share * 100) }}{% endif %}</td>
+    <td class="num">{% if "long_share" in p.high %}<span class="pill down">{{ "%.0f%%"|format(p.long_share * 100) }}</span>{% else %}{{ "%.0f%%"|format(p.long_share * 100) }}{% endif %}</td>
+    <td class="num">{% if p.per_hour is none %}—{% elif "per_hour" in p.high %}<span class="pill down">{{ "%.1f"|format(p.per_hour) }}</span>{% else %}{{ "%.1f"|format(p.per_hour) }}{% endif %}</td>
+    <td class="num">{% if "kd" in p.high %}<span class="pill down">{{ "%.1f"|format(p.kd) }}</span>{% else %}{{ "%.1f"|format(p.kd) }}{% endif %}</td>
+    <td class="num">{{ p.incidents or "" }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="muted">Nobody has 25 bullet kills in the saved games for this period yet.</p>
+{% endif %}
+{% endblock %}

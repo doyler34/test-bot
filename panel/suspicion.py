@@ -12,6 +12,11 @@ Deliberately ignored: kills credited from over 2 km away and COLLISION deaths,
 which are attribution quirks (a crash credited to whoever last damaged the
 vehicle), and long-range explosive kills by a named player, which are usually a
 gunship.
+
+Every kill also says where the killer stood, so a player who turns up far away
+from their last kill sooner than anything in the game can carry them, without
+dying in between, has teleported. A player's victims dying far apart from each
+other in the same moment is the same thing seen from the other side.
 """
 
 import math
@@ -32,6 +37,12 @@ DEFAULTS = {
     "max_distance": 2000,         # kills credited from further than this are ignored
     "nearby": 150,                # metres: a named killer this close to the explosions is named
     "joined_before": 600,         # seconds: players who connected this long before are named
+    "teleport_distance": 1000,    # metres a player moved between two of their kills ...
+    "teleport_speed": 150,        # ... faster than this (m/s; a helicopter does about 80) without dying
+    "long_shot": 800,             # metres: a bullet kill from further than this is a long shot ...
+    "long_shots": 3,              # ... and this many by one player in 15 minutes is flagged
+    "spread": 400,                # metres apart two of one player's victims were ...
+    "spread_window": 2,           # ... dying within this many seconds of each other
     "cooldown": 600,              # seconds before the same flag fires again
     "settle": 120,                # seconds a burst waits, so killers nearby just after count too
 }
@@ -55,6 +66,7 @@ class Detector:
         self.seen: dict[str, int] = {}
         self.left: dict[str, int] = {}
         self.pending: list[dict] = []
+        self.spots: dict[str, tuple] = {}
 
     def feed(self, event: dict) -> list[dict]:
         return self.flush(event["at"]) + self._feed(event)
@@ -73,6 +85,7 @@ class Detector:
             if identity not in self.seen or at - self.seen[identity] > 3600:
                 self.joins.append((at, event["name"], identity, event.get("ip", "")))
             self.seen[identity] = at
+            self.spots.pop(identity, None)
             if len(self.seen) > 5000:
                 self.seen = {k: v for k, v in self.seen.items() if at - v < 3600}
             trim(self.joins, at - self.s["joined_before"] - 3600)
@@ -86,6 +99,8 @@ class Detector:
 
     def _kill(self, e):
         at, s = e["at"], self.s
+        # Dying lets a player respawn anywhere, so their next kill starts afresh.
+        self.spots.pop(e["victim"], None)
         if e.get("damage") == "COLLISION" or (e.get("distance") or 0) > s["max_distance"]:
             return []
         if e.get("killer") == e["victim"]:
@@ -113,6 +128,7 @@ class Detector:
         mine.append(e)
         trim(mine, at - 900)
         who = e["killer_name"]
+        flags += self._teleport(e, who) + self._spread(e, mine, who)
         if e["kind"] == "teamkill":
             tks = [k for k in mine if k["kind"] == "teamkill" and k["at"] >= at - 600]
             if len(tks) >= s["teamkills"]:
@@ -124,12 +140,48 @@ class Detector:
         if len(rapid) >= s["rapid_kills"]:
             flags += self._flag(("rapid", e["killer"]), at, f"{who}: {len(rapid)} kills in {s['rapid_window']} s",
                                 identity=e["killer"])
+        longs = [k for k in rifle if (k.get("distance") or 0) >= s["long_shot"]]
+        if len(longs) >= s["long_shots"]:
+            far = max(k["distance"] for k in longs)
+            text = f"{who}: {len(longs)} bullet kills from over {s['long_shot']} m in 15 min, longest {far:,.0f} m"
+            heads = sum(k.get("zone") == "Head" for k in longs)
+            if heads:
+                text += f", {heads} to the head"
+            flags += self._flag(("long", e["killer"]), at, text, identity=e["killer"])
         heads = sum(k.get("zone") == "Head" for k in rifle)
         if len(rifle) >= s["headshot_kills"] and heads / len(rifle) >= s["headshot_share"]:
             flags += self._flag(("headshots", e["killer"]), at,
                                 f"{who}: {heads} of {len(rifle)} kills were headshots in 15 min",
                                 identity=e["killer"])
         return flags
+
+    def _teleport(self, e, who):
+        if not e.get("killer_at"):
+            return []
+        last = self.spots.get(e["killer"])
+        self.spots[e["killer"]] = (e["at"], e["killer_at"])
+        if last is None or e["at"] - last[0] > 120:
+            return []
+        gap, seconds = metres(last[1], e["killer_at"]), max(e["at"] - last[0], 1)
+        if gap < self.s["teleport_distance"] or gap / seconds < self.s["teleport_speed"]:
+            return []
+        return self._flag(("teleport", e["killer"]), e["at"],
+                          f"{who}: moved {gap:,.0f} m in {seconds} s between two kills without dying",
+                          identity=e["killer"])
+
+    def _spread(self, e, mine, who):
+        if not e.get("victim_at") or e.get("damage") in ("BLEEDING", "FIRE"):
+            return []
+        for k in mine:
+            if k is e or not 0 <= e["at"] - k["at"] <= self.s["spread_window"] or not k.get("victim_at") \
+                    or k.get("damage") in ("BLEEDING", "FIRE"):
+                continue
+            apart = metres(k["victim_at"], e["victim_at"])
+            if apart >= self.s["spread"]:
+                return self._flag(("spread", e["killer"]), e["at"],
+                                  f"{who}: killed two players {apart:,.0f} m apart within "
+                                  f"{e['at'] - k['at']} s", identity=e["killer"])
+        return []
 
     def _error(self, e):
         # AI behaviour scripts can loop on one broken vehicle and throw dozens a

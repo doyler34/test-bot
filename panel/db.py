@@ -155,6 +155,28 @@ CREATE TABLE IF NOT EXISTS log_archive (
     flags INTEGER NOT NULL,
     PRIMARY KEY (server, folder)
 );
+CREATE TABLE IF NOT EXISTS game_players (
+    server TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    identity TEXT NOT NULL,
+    name TEXT NOT NULL,
+    started INTEGER NOT NULL,
+    seconds INTEGER NOT NULL,
+    kills INTEGER NOT NULL,
+    deaths INTEGER NOT NULL,
+    rifle INTEGER NOT NULL,
+    heads INTEGER NOT NULL,
+    long INTEGER NOT NULL,
+    metres REAL NOT NULL,
+    measured INTEGER NOT NULL,
+    PRIMARY KEY (server, folder, identity)
+);
+CREATE INDEX IF NOT EXISTS game_players_started ON game_players(started);
+CREATE TABLE IF NOT EXISTS scored_games (
+    server TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    PRIMARY KEY (server, folder)
+);
 CREATE TABLE IF NOT EXISTS incidents (
     id INTEGER PRIMARY KEY,
     server TEXT NOT NULL,
@@ -543,6 +565,30 @@ class PanelDB:
         self.write("INSERT OR REPLACE INTO log_archive (server, folder, path, started, ended, size, players, kills, flags)"
                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", server, folder, path, int(game["started"]),
                    int(game["ended"]), size, game["players"], game["kills"], game["flags"])
+        if "stats" in game:
+            self.add_game_players(server, folder, int(game["started"]), game["stats"])
+
+    def add_game_players(self, server, folder, started, players):
+        with self.db:
+            self.db.execute("DELETE FROM game_players WHERE server = ? AND folder = ?", (server, folder))
+            self.db.executemany(
+                "INSERT INTO game_players VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [(server, folder, p["identity"], p["name"], started, max(0, int(p["last"] - p["first"])), p["kills"],
+                  p["deaths"], p["rifle"], p["heads"], p["long"], p["metres"], p["measured"]) for p in players])
+            self.db.execute("INSERT OR IGNORE INTO scored_games VALUES (?, ?)", (server, folder))
+
+    def unscored_games(self, server, limit=20):
+        return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM scored_games s"
+                        " WHERE s.server = a.server AND s.folder = a.folder) ORDER BY started DESC LIMIT ?",
+                        server, limit)
+
+    def player_totals(self, since):
+        """Each player's numbers added up over every archived game since then."""
+        return self.all(
+            "SELECT identity, (SELECT name FROM game_players l WHERE l.identity = g.identity ORDER BY started DESC LIMIT 1)"
+            " AS name, COUNT(*) AS games, SUM(seconds) AS seconds, SUM(kills) AS kills, SUM(deaths) AS deaths,"
+            " SUM(rifle) AS rifle, SUM(heads) AS heads, SUM(long) AS long, SUM(metres) AS metres,"
+            " SUM(measured) AS measured FROM game_players g WHERE started >= ? GROUP BY identity", since)
 
     def games(self, server, since, until):
         return self.all("SELECT * FROM log_archive WHERE server = ? AND started >= ? AND started < ?"
@@ -578,6 +624,11 @@ class PanelDB:
         return self.all(
             "SELECT i.* FROM incidents i JOIN incident_players ip ON ip.incident = i.id"
             " WHERE ip.identity = ? ORDER BY i.at DESC LIMIT ?", identity, limit)
+
+    def incident_counts(self, since):
+        return {r["identity"]: r["times"] for r in self.all(
+            "SELECT ip.identity, COUNT(*) AS times FROM incident_players ip JOIN incidents i ON i.id = ip.incident"
+            " WHERE i.at >= ? GROUP BY ip.identity", since)}
 
     def prune_incidents(self, days=180):
         self.write("DELETE FROM incidents WHERE at < ?", now() - days * 86400)

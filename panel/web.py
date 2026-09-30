@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.discord import welcome_doc
 
-from . import archive, auth, memory
+from . import archive, auth, memory, outliers
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
 from .connections import LogReader, folder_start
@@ -756,6 +756,22 @@ async def player_search(request):
     return web.json_response(matches)
 
 
+UNUSUAL_PERIODS = (("7", "7 days"), ("30", "30 days"), ("90", "90 days"), ("all", "All time"))
+
+
+async def unusual_page(request):
+    period = request.query.get("days", "30")
+    if period not in dict(UNUSUAL_PERIODS):
+        period = "30"
+    since = 0 if period == "all" else now() - int(period) * 86400
+    db = request.app[DB]
+    players, typical = outliers.unusual(db.player_totals(since), db.incident_counts(since))
+    return render(request, "unusual.html", players=players, typical=typical, metrics=outliers.METRICS,
+                  periods=UNUSUAL_PERIODS, period=period,
+                  scored=db.one("SELECT COUNT(*) AS n FROM scored_games")["n"],
+                  archived=db.one("SELECT COUNT(*) AS n FROM log_archive")["n"])
+
+
 async def players_page(request):
     q = clean(request.query.get("q", ""), 64)
     rows = [dict(r) for r in request.app[DB].search_players(q, limit=50)]
@@ -1209,6 +1225,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/bans", add_ban)
     app.router.add_post("/bans/{ban_id:\\d+}/remove", remove_ban)
     app.router.add_get("/players", players_page)
+    app.router.add_get("/players/unusual", unusual_page)
     app.router.add_get("/players/search.json", player_search)
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/notes", add_note)

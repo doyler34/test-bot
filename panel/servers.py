@@ -189,6 +189,16 @@ class ServerManager:
                 log.warning("Couldn't archive %s: %s", folder, exc)
                 continue
             self.db.add_archive(state.config.id, folder.name, str(dest), dest.stat().st_size, game)
+        # Games archived before the per-player numbers existed get them a few at a time.
+        for row in self.db.unscored_games(state.config.id):
+            try:
+                info = Path(row["path"]).stat()
+                game = await asyncio.to_thread(archive.read_game, row["path"], row["folder"], info.st_size,
+                                               info.st_mtime, ())
+            except (OSError, tarfile.TarError, EOFError) as exc:
+                log.warning("Couldn't read %s for player numbers: %s", row["path"], exc)
+                game = {"players": []}
+            self.db.add_game_players(state.config.id, row["folder"], row["started"], game["players"])
 
     def suspicious(self, state: ServerState, flag: dict):
         """Puts a flag in the live feed; a fresh one also goes to Discord, and a

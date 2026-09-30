@@ -574,8 +574,9 @@ class SuspicionTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
 
     def flags(self, text, **settings):
-        write_log(self.tmp.name, "logs_2026-09-26_04-14-00", text)
-        events, _ = LogReader(self.tmp.name).scan({})
+        root = tempfile.mkdtemp(dir=self.tmp.name)
+        write_log(root, "logs_2026-09-26_04-14-00", text)
+        events, _ = LogReader(root).scan({})
         detector = Detector(settings)
         return [f for e in events for f in detector.feed(e)] + detector.flush(10 ** 10)
 
@@ -625,6 +626,27 @@ class SuspicionTests(unittest.TestCase):
         self.assertEqual(texts, ["Spray: 6 kills in 30 s", "Aimer: 10 of 10 kills were headshots in 15 min",
                                  "Rogue: 3 teamkills in 10 min"])
 
+    def test_teleporting_between_kills(self):
+        jump = shot("07:00:00.000", "Blink", person(73), 1, 1000, 1000) + shot("07:00:05.000", "Blink", person(73), 2, 4000, 1000)
+        flags = self.flags(jump)
+        self.assertEqual([f["text"] for f in flags], ["Blink: moved 3,000 m in 5 s between two kills without dying"])
+        self.assertEqual(flags[0]["identity"], person(73))
+        died = (shot("07:00:00.000", "Blink", person(73), 1, 1000, 1000)
+                + shot("07:00:02.000", "Someone", person(74), 73, 1000, 1000).replace("Victim73", "Blink")
+                + shot("07:00:30.000", "Blink", person(73), 2, 4000, 1000))
+        self.assertEqual(self.flags(died), [])
+        heli = shot("07:00:00.000", "Pilot", person(75), 1, 1000, 1000) + shot("07:00:40.000", "Pilot", person(75), 2, 4000, 1000)
+        self.assertEqual(self.flags(heli), [])
+
+    def test_long_shots_and_kills_far_apart(self):
+        far = "".join(shot(f"07:0{i}:00.000", "Eagle", person(76), i, 0, 0, zone="Chest" if i else "Head", metres=900 + i * 100)
+                      for i in range(3))
+        self.assertEqual([f["text"] for f in self.flags(far)],
+                         ["Eagle: 3 bullet kills from over 800 m in 15 min, longest 1,100 m, 1 to the head"])
+        apart = (shot("07:00:00.000", "Split", person(77), 1, 0, 0, metres=100)
+                 + shot("07:00:01.000", "Split", person(77), 2, 0, 900, metres=100).replace("<60, 30, 920>", "<0, 30, 0>"))
+        self.assertEqual([f["text"] for f in self.flags(apart)], ["Split: killed two players 900 m apart within 1 s"])
+
     def test_script_error_spike(self):
         def error(clock, where):
             return (f"{clock} SCRIPT    (E): Virtual Machine Exception\n\nReason: NULL pointer to instance\n\n"
@@ -650,7 +672,7 @@ class SuspicionTests(unittest.TestCase):
     def test_thresholds_come_from_the_config(self):
         log = blast("06:19:09.000", 1, 0, 0) + blast("06:19:09.000", 2, 0, 0)
         self.assertEqual(self.flags(log), [])
-        self.assertEqual(len(self.flags("", same_second=2)), 1)
+        self.assertEqual(len(self.flags(log, same_second=2)), 1)
 
 
 class IncidentTests(unittest.TestCase):
@@ -722,6 +744,34 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         shutil.rmtree(Path(self.logs, "logs_2026-09-25_10-16-32"))
         await self.archive()
         self.assertEqual(len(self.db.archived("server-1")), 1)
+
+    async def test_each_game_keeps_per_player_numbers(self):
+        await self.archive()
+        rows = {r["identity"]: r for r in self.db.all("SELECT * FROM game_players")}
+        gaz = rows[GAZ]
+        self.assertEqual((gaz["kills"], gaz["rifle"], gaz["heads"], gaz["long"]), (1, 1, 1, 0))
+        # A game archived before these numbers existed is read again in the background.
+        self.db.write("DELETE FROM game_players")
+        self.db.write("DELETE FROM scored_games")
+        await self.archive()
+        self.assertEqual(self.db.one("SELECT rifle FROM game_players WHERE identity = ?", GAZ)["rifle"], 1)
+        self.assertEqual(self.db.unscored_games("server-1"), [])
+
+    async def test_unusual_players(self):
+        for n in range(12):
+            heads = 30 if n == 0 else 8
+            self.db.add_game_players("server-1", f"logs_2026-09-25_1{n % 10}-00-0{n // 10}", now() - 3600, [{
+                "identity": person(n), "name": f"P{n}", "first": 0, "last": 7200, "kills": 30, "deaths": 20,
+                "rifle": 30, "heads": heads, "long": 3, "metres": 3000.0, "measured": 30}])
+        self.db.add_game_players("server-1", "logs_2026-09-25_09-00-00", now() - 3600, [{
+            "identity": person(99), "name": "Few", "first": 0, "last": 600, "kills": 3, "deaths": 1,
+            "rifle": 3, "heads": 3, "long": 0, "metres": 0.0, "measured": 0}])
+        await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
+        html = await (await self.client.get("/players/unusual")).text()
+        self.assertLess(html.index("P0"), html.index("P1<"))
+        self.assertEqual(html.count('class="pill down"'), 2)
+        self.assertIn('<span class="pill down">100%</span>', html)
+        self.assertNotIn("Few", html)
 
     async def test_history_and_a_past_game(self):
         await self.archive()
