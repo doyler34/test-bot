@@ -41,6 +41,50 @@ function channelName(id) {
 if (form && form.dataset.kind === "welcome") welcomeEditor();
 if (form && form.dataset.kind === "greeting") greetingEditor();
 if (form && form.dataset.kind === "names") namesEditor();
+if (form && form.dataset.kind === "serverinfo") serverInfoEditor();
+
+function serverInfoEditor() {
+  const bridge = read("dc-bridge");
+  const preview = document.getElementById("dc-preview");
+  const value = (el) => el.value.trim() || el.dataset.default;
+  const key = (name) => form.querySelector(`[data-key="${name}"]`);
+  const author = () => h("div", { class: "dc-author" }, h("span", { class: "dc-avatar" }), h("b", {}, "OYB"), h("span", { class: "dc-app" }, "APP"));
+  function embed(colour, title, text, fields = []) {
+    const box = h("div", { class: "dc-embed" });
+    box.style.borderLeftColor = colour;
+    box.append(h("div", { class: "dc-embed-title" }, title));
+    const body = h("div", { class: "dc-embed-text" });
+    body.innerHTML = markdown(text);
+    box.append(body);
+    for (const [name, value] of fields) {
+      const field = h("div", { class: "dc-field" }, h("b", {}, name));
+      const text = h("div", {});
+      text.innerHTML = markdown(value);
+      field.append(text);
+      box.append(field);
+    }
+    return box;
+  }
+  function draw() {
+    const fields = [...form.querySelectorAll("[data-setting]")].map((el, i) => {
+      const server = bridge.servers.find((s) => s.id === el.dataset.setting);
+      return [server ? server.label : el.dataset.setting, `${["🟢 Match running · 46 min", "🟡 Up, waiting for a match", "🟢 Match running · 1h 12m"][i % 3]}\n**Settings:** ${value(el)}`];
+    });
+    preview.replaceChildren(author(),
+      embed("#2ECC71", value(key("title")), value(key("intro")), fields),
+      embed("#5865F2", value(key("rules_title")), value(key("rules"))));
+  }
+  form.addEventListener("input", draw);
+  form.addEventListener("submit", () => {
+    // Anything left as the bot's own wording is stored blank, so it keeps following the bot.
+    const own = (el) => (el.value.trim() === (el.dataset.default || "").trim() ? "" : el.value.trim());
+    const settings = {};
+    for (const el of form.querySelectorAll("[data-setting]")) if (own(el)) settings[el.dataset.setting] = own(el);
+    document.getElementById("dc-doc").value = JSON.stringify({
+      title: own(key("title")), intro: own(key("intro")), rules_title: own(key("rules_title")), rules: own(key("rules")), settings });
+  });
+  draw();
+}
 
 function namesEditor() {
   const inputs = [...form.querySelectorAll("[data-server]")];

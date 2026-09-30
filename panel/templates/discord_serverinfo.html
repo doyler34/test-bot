@@ -1,0 +1,53 @@
+{% extends "discord_base.html" %}
+{% block editor %}
+{% set servers = bridge.get("servers") or [] %}
+{% set card = bridge.get("card") or {} %}
+<form method="post" action="/discord/serverinfo" id="dc-editor" data-kind="serverinfo">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="doc" id="dc-doc">
+  <script type="application/json" id="dc-bridge">{{ {"servers": servers, "card": card}|tojson }}</script>
+  {% if not servers %}
+  <p class="warn">The bot hasn't sent its servers and current wording yet. Make sure it's running and has been updated, then reload this page.</p>
+  {% endif %}
+
+  <div class="dc-layout">
+    <div class="dc-edit">
+      <section class="card">
+        <h2>The #servers card</h2>
+        <p class="muted">The top of the card, above each server's live status.</p>
+        <label>Title <input data-key="title" data-default="{{ card.get('title', '') }}" value="{{ doc.title or card.get('title', '') }}" maxlength="256"></label>
+        <label>Intro <textarea data-key="intro" data-default="{{ card.get('intro', '') }}" rows="3" maxlength="1000">{{ doc.intro or card.get('intro', '') }}</textarea></label>
+      </section>
+
+      <section class="card">
+        <h2>Each server's settings</h2>
+        <p class="muted">Shown under the server's live status: map, player slots, anything players should know.</p>
+        {% for s in servers %}
+        <label>{{ s.label }} <span class="muted">({{ s.id }})</span>
+          <textarea data-setting="{{ s.id }}" data-default="{{ s.settings }}" rows="3" maxlength="900">{{ doc.settings.get(s.id) or s.settings }}</textarea>
+        </label>
+        {% endfor %}
+      </section>
+
+      <section class="card">
+        <h2>In-game rules</h2>
+        <p class="muted">The rules card under the servers card. The same rules apply on every server. One rule per line reads best; start lines with • for bullets.</p>
+        <label>Title <input data-key="rules_title" data-default="{{ card.get('rules_title', '') }}" value="{{ doc.rules_title or card.get('rules_title', '') }}" maxlength="256"></label>
+        <label>Rules <textarea data-key="rules" data-default="{{ card.get('rules', '') }}" rows="10" maxlength="4000">{{ doc.rules or card.get('rules', '') }}</textarea></label>
+      </section>
+    </div>
+
+    <aside class="dc-preview">
+      <p class="kicker">Preview</p>
+      <div class="discord" id="dc-preview"></div>
+    </aside>
+  </div>
+
+  <div class="dc-actions">
+    <button name="action" value="publish">Publish</button>
+    <button name="action" value="save" class="ghost">Save draft</button>
+    {% if draft %}<button name="action" value="discard" class="ghost" data-confirm="Throw away the draft and go back to what's live?">Discard draft</button>{% endif %}
+  </div>
+</form>
+<script src="/static/discord.js?v={{ asset_version }}" defer></script>
+{% endblock %}

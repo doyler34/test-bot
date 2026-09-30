@@ -1146,6 +1146,23 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
                 "doc": json.dumps({"names": {"server-3": "Classic #2"}})})
         self.assertEqual(json.loads(self.db.discord_doc("names")["published"]), {"names": {"server-3": "Classic #2"}})
 
+    async def test_server_info(self):
+        await self.login("boss", "boss-password")
+        with tempfile.TemporaryDirectory() as data:
+            self.config.oyb_data = data
+            Path(data, "panel_bridge.json").write_text(json.dumps({"updated": now(), "roles": [], "channels": [],
+                "servers": [{"id": "server-1", "default": "Classic", "label": "Classic", "enabled": True,
+                             "settings": "Everon, vanilla"}],
+                "card": {"title": "OYB Servers", "intro": "Live status", "rules_title": "Rules", "rules": "• Be nice"}}))
+            page = await (await self.client.get("/discord/serverinfo")).text()
+        self.assertIn("Everon, vanilla</textarea>", page)
+        self.assertIn("• Be nice</textarea>", page)
+        token = await self.csrf("/discord/serverinfo")
+        await self.client.post("/discord/serverinfo", data={"csrf": token, "action": "publish",
+            "doc": json.dumps({"rules": "• No teamkilling", "settings": {"server-1": "Everon, 128 players"}})})
+        doc = json.loads(self.db.discord_doc("serverinfo")["published"])
+        self.assertEqual((doc["rules"], doc["settings"], doc["intro"]), ("• No teamkilling", {"server-1": "Everon, 128 players"}, ""))
+
     async def test_greeting(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/discord/greeting")

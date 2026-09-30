@@ -235,3 +235,25 @@ def check_names(raw):
             problems.append(f"{taken[name.lower()]} and {server_id} are both called {name}; give each its own name.")
         taken[name.lower()] = server_id
     return {"names": names}, problems
+
+
+def default_serverinfo():
+    """Blank means the bot's own wording; the panel shows that wording in the boxes."""
+    return {"title": "", "intro": "", "settings": {}, "rules_title": "", "rules": ""}
+
+
+def check_serverinfo(raw):
+    if not isinstance(raw, dict):
+        return default_serverinfo(), ["That couldn't be read. Reload and try again."]
+    text = lambda key, limit: str(raw.get(key, "") or "").replace("\r\n", "\n").strip()[:limit]
+    doc = {"title": text("title", TITLE_MAX), "intro": text("intro", 1000),
+           "rules_title": text("rules_title", TITLE_MAX), "rules": text("rules", TEXT_MAX), "settings": {}}
+    problems = []
+    for server_id, value in (raw.get("settings") or {}).items() if isinstance(raw.get("settings"), dict) else []:
+        if re.fullmatch(r"[a-zA-Z0-9_-]{1,40}", str(server_id)):
+            value = str(value or "").replace("\r\n", "\n").strip()
+            if len(value) > 900:
+                problems.append(f"{server_id}'s settings are {len(value)} characters; keep them under 900.")
+            if value:
+                doc["settings"][str(server_id)] = value[:900]
+    return doc, problems

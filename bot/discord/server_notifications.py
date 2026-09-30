@@ -53,16 +53,25 @@ def server_status_line(bot, server):
     return "🔴 Offline — server is not running."
 
 
+SERVERS_TITLE = "🎮 OYB Servers"
+SERVERS_INTRO = ("Live status for all OYB servers. When a match starts, the announcements channel "
+                 "pings whoever opted in to that server's alerts. This channel is read-only.")
+RULES_TITLE = "🎮 OYB · In-game rules"
+# Wording published from OYB Control; anything left blank there keeps the above.
+SERVER_INFO: dict = {}
+
+
+def default_rules(bot):
+    return next((s.rules for s in bot.config.servers if s.enabled), bot.config.servers[0].rules)
+
+
 def servers_embed(bot):
     """One combined card: every server's live status and settings."""
-    embed = discord.Embed(
-        title="🎮 OYB Servers",
-        description="Live status for all OYB servers. When a match starts, the "
-                    "announcements channel pings whoever opted in to that server's "
-                    "alerts. This channel is read-only.",
-        colour=0x2ECC71)
+    embed = discord.Embed(title=SERVER_INFO.get("title") or SERVERS_TITLE,
+                          description=SERVER_INFO.get("intro") or SERVERS_INTRO, colour=0x2ECC71)
+    settings = SERVER_INFO.get("settings", {})
     for server in bot.config.servers:
-        value = f"{server_status_line(bot, server)}\n**Settings:** {server.settings}"
+        value = f"{server_status_line(bot, server)}\n**Settings:** {settings.get(server.id) or server.settings}"
         embed.add_field(name=label_for(server), value=value[:1024], inline=False)
     embed.set_footer(text=SERVERS_CARD_MARKER)
     return embed
@@ -70,9 +79,8 @@ def servers_embed(bot):
 
 def rules_embed(bot):
     """Universal in-game rules (identical across all servers), like the old cards."""
-    rules = next((s.rules for s in bot.config.servers if s.enabled),
-                 bot.config.servers[0].rules)
-    embed = discord.Embed(title="🎮 OYB · In-game rules", description=rules[:4096],
+    rules = SERVER_INFO.get("rules") or default_rules(bot)
+    embed = discord.Embed(title=SERVER_INFO.get("rules_title") or RULES_TITLE, description=rules[:4096],
                           colour=0x5865F2)
     embed.set_footer(text=RULES_MARKER)
     return embed

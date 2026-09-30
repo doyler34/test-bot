@@ -807,7 +807,8 @@ async def add_note(request):
 
 # Discord: what the bot posts, edited here and published to it
 
-DISCORD_PAGES = (("welcome", "Start here message"), ("greeting", "Join greeting"), ("names", "Server names"))
+DISCORD_PAGES = (("welcome", "Start here message"), ("serverinfo", "Server info & rules"), ("names", "Server names"),
+                 ("greeting", "Join greeting"))
 
 
 def bridge(request):
@@ -887,7 +888,8 @@ async def discord_save(request):
 
 DISCORD_DOCS = {"welcome": (welcome_doc.default_welcome, welcome_doc.check_welcome),
                 "greeting": (welcome_doc.default_greeting, welcome_doc.check_greeting),
-                "names": (welcome_doc.default_names, welcome_doc.check_names)}
+                "names": (welcome_doc.default_names, welcome_doc.check_names),
+                "serverinfo": (welcome_doc.default_serverinfo, welcome_doc.check_serverinfo)}
 
 
 def name_clashes(doc, servers):

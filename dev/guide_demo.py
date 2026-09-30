@@ -132,9 +132,19 @@ def seed_bridge(data):
     (data / "panel_bridge.json").write_text(json.dumps({
         "updated": now(), "guild": "OYB", "member_events": True, "member_role": "OYB Member",
         "start_channel": "900000000000000001",
-        "servers": [{"id": "server-1", "default": "Classic", "label": "Classic", "enabled": True},
-                    {"id": "server-2", "default": "3x Everon", "label": "3x Everon", "enabled": True},
-                    {"id": "server-3", "default": "Classic #2", "label": "Classic #2", "enabled": True}],
+        "servers": [{"id": "server-1", "default": "Classic", "label": "Classic", "enabled": True,
+                     "settings": "**Map:** Everon · **Players:** 128 · Vanilla, Conflict"},
+                    {"id": "server-2", "default": "3x Everon", "label": "3x Everon", "enabled": True,
+                     "settings": "**Map:** Everon · **Players:** 128 · 3x supply and XP"},
+                    {"id": "server-3", "default": "Classic #2", "label": "Classic #2", "enabled": True,
+                     "settings": "**Map:** Everon · **Players:** 128 · Vanilla, Conflict"}],
+        "card": {"title": "🎮 OYB Servers", "rules_title": "🎮 OYB · In-game rules",
+                 "intro": "Live status for all OYB servers. When a match starts, the announcements channel pings "
+                          "whoever opted in to that server's alerts. This channel is read-only.",
+                 "rules": "• No cheating, exploits, intentional teamkilling or griefing.\n"
+                          "• Do not steal or deliberately destroy friendly vehicles or equipment.\n"
+                          "• Stay **400 metres** from the enemy MOB.\n• Maximum **6 supply crates per base**.\n"
+                          "• No abusive behaviour or radio spam."},
         "roles": [{"id": str(800000000000000000 + n), "name": name, "colour": colour, "problem": problem}
                   for n, (name, colour, problem) in enumerate(roles)],
         "channels": [{"id": str(900000000000000001 + n), "name": name, "category": category}

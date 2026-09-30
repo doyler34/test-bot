@@ -117,13 +117,16 @@ class Welcome:
         guild = self.bot.get_guild(self.bot.config.guild_id)
         if guild is None:
             return
-        for key in ("welcome", "greeting", "names"):
+        for key in ("welcome", "greeting", "names", "serverinfo"):
             found = await asyncio.to_thread(read_doc, self.path, key)
             if found:
                 self.docs[key] = found
         names = self.docs.get("names")
         if names and self.state.get("names", {}).get("version") != names[1]:
             await self.apply_names(guild, names)
+        info = self.docs.get("serverinfo")
+        if info and self.state.get("serverinfo", {}).get("version") != info[1]:
+            await self.apply_serverinfo(info)
         welcome = self.docs.get("welcome")
         if welcome and self.state.get("welcome", {}).get("version") != welcome[1]:
             await self.publish_welcome(guild)
@@ -155,6 +158,18 @@ class Welcome:
                 problems.append("Couldn't update the match-notification buttons; check Manage Roles.")
         self.state["names"] = {"version": found[1], "at": int(time.time()), "problems": problems}
         LOG.info("Server names now %s", found[0].get("names", {}))
+
+    async def apply_serverinfo(self, found):
+        from bot.discord import server_notifications
+        server_notifications.SERVER_INFO.clear()
+        server_notifications.SERVER_INFO.update(found[0])
+        problems = []
+        refresh = getattr(self.bot, "refresh_servers", None)
+        if refresh is not None:
+            await refresh()
+        else:
+            problems.append("The #servers card isn't set up on this bot.")
+        self.state["serverinfo"] = {"version": found[1], "at": int(time.time()), "problems": problems}
 
     async def publish_welcome(self, guild):
         doc, version = self.docs["welcome"]
@@ -327,7 +342,7 @@ class Welcome:
     def _load_state(self):
         try:
             data = json.loads(self.bridge.read_text())
-            return {k: data[k] for k in ("welcome", "greeting", "names") if isinstance(data.get(k), dict)}
+            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo") if isinstance(data.get(k), dict)}
         except (OSError, ValueError):
             return {}
 
@@ -342,9 +357,15 @@ class Welcome:
         channels = [{"id": str(c.id), "name": c.name, "category": c.category.name if c.category else ""}
                     for c in guild.text_channels]
         servers = [{"id": s.id, "default": server_stats.default_label(s), "label": server_stats.label_for(s),
-                    "enabled": s.enabled} for s in getattr(self.bot.config, "servers", [])]
+                    "enabled": s.enabled, "settings": getattr(s, "settings", "")}
+                   for s in getattr(self.bot.config, "servers", [])]
+        from bot.discord import server_notifications
+        configured = [s for s in getattr(self.bot.config, "servers", []) if hasattr(s, "rules")]
+        card = {"title": server_notifications.SERVERS_TITLE, "intro": server_notifications.SERVERS_INTRO,
+                "rules_title": server_notifications.RULES_TITLE,
+                "rules": server_notifications.default_rules(self.bot) if configured else ""}
         data = {"updated": int(time.time()), "guild": guild.name, "roles": roles, "channels": channels,
-                "servers": servers,
+                "servers": servers, "card": card,
                 "member_events": bool(self.bot.intents.members),
                 "member_role": member_role_name(),
                 "start_channel": str(onboarding_channel_id() or ""),

@@ -305,12 +305,40 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         await self.welcome.tick()
         self.assertEqual(calls, ["stats", "card"])
         bridge = json.loads(Path(self.tmp.name, "bridge.json").read_text())
-        self.assertEqual(bridge["servers"], [{"id": "server-3", "default": "Classic #2", "label": "Classic #2",
-                                              "enabled": True}])
+        self.assertEqual([{k: v for k, v in s.items() if k != "settings"} for s in bridge["servers"]],
+                         [{"id": "server-3", "default": "Classic #2", "label": "Classic #2", "enabled": True}])
         # A fresh bot knows the names before it first draws anything.
         server_stats.OVERRIDES.clear()
         Welcome(self.bot)
         self.assertEqual(server_stats.label_for(three), "Classic #2")
+
+    async def test_server_info_redraws_the_card(self):
+        from bot.discord import server_notifications
+        self.addCleanup(server_notifications.SERVER_INFO.clear)
+        redrawn = []
+
+        async def refresh():
+            redrawn.append(True)
+        self.bot.refresh_servers = refresh
+        one = SimpleNamespace(id="server-1", name="Server 1", enabled=True, settings="Old settings", rules="Old rules",
+                              status="online")
+        self.bot.config.servers = [one]
+        doc, problems = welcome_doc.check_serverinfo({"intro": "Hello", "settings": {"server-1": "Everon, 128 players"},
+                                                      "rules": "• Be nice", "title": "", "rules_title": ""})
+        self.assertEqual(problems, [])
+        self.panel.publish_discord_doc("serverinfo", json.dumps(doc), "gaz")
+        await self.welcome.tick()
+        self.assertEqual(redrawn, [True])
+        with patch.object(server_notifications, "server_status_line", lambda bot, server: "🟢 up"):
+            card = server_notifications.servers_embed(self.bot)
+        self.assertEqual((card.title, card.description), (server_notifications.SERVERS_TITLE, "Hello"))
+        self.assertEqual(card.fields[0].value, "🟢 up\n**Settings:** Everon, 128 players")
+        rules = server_notifications.rules_embed(self.bot)
+        self.assertEqual((rules.title, rules.description), (server_notifications.RULES_TITLE, "• Be nice"))
+
+    def test_server_settings_fit_a_discord_field(self):
+        _, problems = welcome_doc.check_serverinfo({"settings": {"server-1": "x" * 950}})
+        self.assertEqual(problems, ["server-1's settings are 950 characters; keep them under 900."])
 
     def test_names_cannot_use_the_channel_separator(self):
         doc, problems = welcome_doc.check_names({"names": {"server-3": "Classic #2 · Night"}})
