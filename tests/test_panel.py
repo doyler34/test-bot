@@ -1163,6 +1163,30 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         doc = json.loads(self.db.discord_doc("serverinfo")["published"])
         self.assertEqual((doc["rules"], doc["settings"], doc["intro"]), ("• No teamkilling", {"server-1": "Everon, 128 players"}, ""))
 
+    async def test_ban_messages_start_from_the_bots_settings(self):
+        await self.login("boss", "boss-password")
+        with tempfile.TemporaryDirectory() as data:
+            self.config.oyb_data = data
+            Path(data, "panel_bridge.json").write_text(json.dumps({"updated": now(), "roles": [],
+                "channels": [{"id": "55", "name": "open-support-ticket", "category": "SUPPORT"}],
+                "categories": [{"id": "66", "name": "SUPPORT"}, {"id": "67", "name": "OTHER"}],
+                "ban_settings": {**welcome_doc.default_bans(), "appeal": "Open a ticket in <#55>",
+                                 "ticket_channel": "55", "ticket_categories": ["66"]}}))
+            page = await (await self.client.get("/discord/bans")).text()
+        self.assertIn("Open a ticket in &lt;#55&gt;</textarea>", page)
+        self.assertIn('<option value="55" selected>', page)
+        self.assertIn('value="66" checked', page)
+        self.assertNotIn('value="67" checked', page)
+        token = await self.csrf("/discord/bans")
+        page = await (await self.client.post("/discord/bans", data={"csrf": token, "action": "publish", "doc": json.dumps(
+            {"dm_enabled": True, "tickets_enabled": True, "ticket_channel": None, "ticket_categories": []})})).text()
+        self.assertIn("Pick the ticket panel channel or a ticket category", page)
+        await self.client.post("/discord/bans", data={"csrf": token, "action": "publish", "doc": json.dumps(
+            {"dm_enabled": True, "dm_text": "{account} is out {length}.", "tickets_enabled": True,
+             "ticket_channel": "55", "ticket_categories": ["66"], "appeal": "Ticket in <#55>"})})
+        doc = json.loads(self.db.discord_doc("bans")["published"])
+        self.assertEqual((doc["ticket_channel"], doc["ticket_categories"], doc["dm_text"]), (55, [66], "{account} is out {length}."))
+
     async def test_greeting(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/discord/greeting")

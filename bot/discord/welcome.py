@@ -117,7 +117,7 @@ class Welcome:
         guild = self.bot.get_guild(self.bot.config.guild_id)
         if guild is None:
             return
-        for key in ("welcome", "greeting", "names", "serverinfo"):
+        for key in ("welcome", "greeting", "names", "serverinfo", "bans"):
             found = await asyncio.to_thread(read_doc, self.path, key)
             if found:
                 self.docs[key] = found
@@ -130,6 +130,10 @@ class Welcome:
         welcome = self.docs.get("welcome")
         if welcome and self.state.get("welcome", {}).get("version") != welcome[1]:
             await self.publish_welcome(guild)
+        bans = self.docs.get("bans")
+        if bans:
+            # The ban DMs and ticket cards read these as they go; nothing to redraw.
+            self.state["bans"] = {"version": bans[1], "at": int(time.time()), "problems": []}
         greeting = self.docs.get("greeting")
         if greeting:
             self.state["greeting"] = {"version": greeting[1], "at": int(time.time()), "problems": []}
@@ -342,7 +346,8 @@ class Welcome:
     def _load_state(self):
         try:
             data = json.loads(self.bridge.read_text())
-            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo") if isinstance(data.get(k), dict)}
+            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans")
+                    if isinstance(data.get(k), dict)}
         except (OSError, ValueError):
             return {}
 
@@ -366,6 +371,8 @@ class Welcome:
                 "rules": server_notifications.default_rules(self.bot) if configured else ""}
         data = {"updated": int(time.time()), "guild": guild.name, "roles": roles, "channels": channels,
                 "servers": servers, "card": card,
+                "categories": [{"id": str(c.id), "name": c.name} for c in getattr(guild, "categories", [])],
+                "ban_settings": _ban_settings(self.path),
                 "member_events": bool(self.bot.intents.members),
                 "member_role": member_role_name(),
                 "start_channel": str(onboarding_channel_id() or ""),
@@ -377,3 +384,11 @@ class Welcome:
             partial.replace(self.bridge)
         except OSError:
             LOG.warning("Couldn't write %s for OYB Control", self.bridge)
+
+
+def _ban_settings(path):
+    from bot.discord.ban_roles import ban_settings
+    settings = dict(ban_settings(path))
+    settings["ticket_channel"] = str(settings["ticket_channel"] or "")
+    settings["ticket_categories"] = [str(c) for c in settings["ticket_categories"]]
+    return settings

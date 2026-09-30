@@ -70,13 +70,20 @@ def new_bans(path, since):
         return None
 
 
-def ban_message(guild_name, name, reason, created, expires, appeal=""):
+def ban_message(guild_name, name, reason, created, expires, appeal="", title="", text=""):
     """The DM a linked player gets when they're banned."""
+    from bot.discord.welcome_doc import DM_TEXT, DM_TITLE
     label = length_label(created, expires)
-    length = "permanently" if label == "Permanent" else f"for **{label}**"
-    who = f"Your account **{discord.utils.escape_markdown(name)}**" if name else "Your account"
-    embed = discord.Embed(title=f"You've been banned from {guild_name}", colour=0x6E2F29,
-                          description=f"{who} is banned from all our servers {length}.")
+    values = {"{server}": guild_name,
+              "{account}": f"Your account **{discord.utils.escape_markdown(name)}**" if name else "Your account",
+              "{length}": "permanently" if label == "Permanent" else f"for **{label}**"}
+
+    def fill(template):
+        for key, value in values.items():
+            template = template.replace(key, value)
+        return template
+    embed = discord.Embed(title=fill(title or DM_TITLE)[:256], colour=0x6E2F29,
+                          description=fill(text or DM_TEXT)[:4000])
     # An IP ban's reason names the other account on the IP; that may be
     # someone else in their house, so it stays out of the DM.
     embed.add_field(name="Reason", value=SAME_IP.sub("", reason or "")[:1000] or "Not given", inline=False)
@@ -85,6 +92,21 @@ def ban_message(guild_name, name, reason, created, expires, appeal=""):
     if appeal:
         embed.add_field(name="Appeal", value=appeal[:1000], inline=False)
     return embed
+
+
+def ban_settings(path):
+    """What the panel published for ban messages, or the old .env settings."""
+    from bot.discord import welcome_doc
+    from bot.discord.welcome import read_doc
+    found = read_doc(path, "bans")
+    if found:
+        return found[0]
+    ids = [c.strip() for c in os.getenv("BAN_TICKET_CATEGORY", "").split(",") if c.strip().isdigit()]
+    channel = os.getenv("BAN_TICKET_CHANNEL", "").strip()
+    return {**welcome_doc.default_bans(), "appeal": os.getenv("BAN_APPEAL", "").strip(),
+            "ticket_channel": int(channel) if channel.isdigit() else None,
+            "ticket_categories": [int(i) for i in ids], "panel_url": os.getenv("PANEL_URL", "").strip(),
+            "tickets_enabled": bool(channel or ids)}
 
 
 def active_bans(path):
@@ -113,7 +135,6 @@ class BanRoles:
         self.applied: dict[int, str] = {}
         self.cleared: set[int] = set()
         self.checked = 0
-        self.appeal = os.getenv("BAN_APPEAL", "").strip()
         self.dm_state = Path(os.getenv("BAN_DM_STATE", "data/ban_dms.json"))
         self.messaged = self._load_messaged()
 
@@ -191,6 +212,11 @@ class BanRoles:
         rows = [r for r in rows or [] if r[0] not in self.messaged]
         if not rows:
             return
+        settings = await asyncio.to_thread(ban_settings, self.path)
+        if not settings["dm_enabled"]:
+            self.messaged.update(r[0] for r in rows)
+            self._save_messaged()
+            return
         # One DM per person, about their longest ban, however many accounts it covered.
         people = {}
         for row in rows:
@@ -210,7 +236,8 @@ class BanRoles:
                 self.messaged.update(b[0] for b in bans)
                 continue
             try:
-                await member.send(embed=ban_message(guild.name, name, reason, created, expires, self.appeal))
+                await member.send(embed=ban_message(guild.name, name, reason, created, expires, settings["appeal"],
+                                                    settings["dm_title"], settings["dm_text"]))
                 LOG.info("Sent ban DM to %s", member_id)
             except discord.Forbidden:
                 LOG.info("Couldn't DM %s about their ban; their DMs are closed", member_id)

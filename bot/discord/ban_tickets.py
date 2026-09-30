@@ -11,7 +11,7 @@ import time
 
 import discord
 
-from bot.discord.ban_roles import SAME_IP, length_label
+from bot.discord.ban_roles import SAME_IP, ban_settings, length_label
 
 LOG = logging.getLogger("reforger.ban_tickets")
 # The ticket bot sets up the channel and greets the opener a moment after
@@ -35,8 +35,8 @@ def bans_for(path, identities):
     return sorted(rows, key=lambda r: float("inf") if r[4] is None else r[4] - r[3], reverse=True)
 
 
-def ban_card(member, bans, panel_url=""):
-    embed = discord.Embed(title="This player is banned", colour=0x6E2F29,
+def ban_card(member, bans, panel_url="", title=""):
+    embed = discord.Embed(title=title or "This player is banned", colour=0x6E2F29,
                           description=f"{member.mention} opened this ticket while banned on "
                                       f"{'these accounts' if len(bans) > 1 else 'this account'}.")
     for identity, name, reason, created, expires in bans[:10]:
@@ -54,15 +54,22 @@ class BanTickets:
     def __init__(self, bot):
         self.bot = bot
         self.path = os.getenv("PANEL_DB", "data/panel.sqlite3")
-        self.panel_channel = _id(os.getenv("BAN_TICKET_CHANNEL"))
+        self._load()
+
+    def _load(self):
+        """Settings from OYB Control if published there, else the bot's .env."""
+        settings = ban_settings(self.path)
+        self.on = settings["tickets_enabled"]
+        self.panel_channel = settings["ticket_channel"]
         # Ticket King puts tickets in the panel's category, and each option can
         # have its own, so this can list several.
-        self.categories = {i for i in map(_id, os.getenv("BAN_TICKET_CATEGORY", "").split(",")) if i}
-        self.panel_url = os.getenv("PANEL_URL", "").strip()
+        self.categories = set(settings["ticket_categories"])
+        self.panel_url = settings["panel_url"]
+        self.title = settings["ticket_title"]
 
     @property
     def enabled(self):
-        return bool(self.panel_channel or self.categories)
+        return self.on and bool(self.panel_channel or self.categories)
 
     def _categories(self, guild):
         panel = guild.get_channel(self.panel_channel) if self.panel_channel else None
@@ -70,6 +77,7 @@ class BanTickets:
 
     async def channel_created(self, channel):
         """A ticket made as its own channel: the opener is the member it was shared with."""
+        self._load()
         if not self.enabled or channel.guild.id != self.bot.config.guild_id:
             return
         if not isinstance(channel, discord.TextChannel) or channel.id == self.panel_channel:
@@ -86,6 +94,7 @@ class BanTickets:
 
     async def thread_created(self, thread):
         """A ticket made as a thread off the ticket channel."""
+        self._load()
         if not self.enabled or thread.guild.id != self.bot.config.guild_id:
             return
         if thread.parent_id != self.panel_channel:
@@ -120,7 +129,7 @@ class BanTickets:
             if member.bot:
                 continue
             try:
-                await where.send(embed=ban_card(member, bans, self.panel_url),
+                await where.send(embed=ban_card(member, bans, self.panel_url, self.title),
                                  allowed_mentions=discord.AllowedMentions.none())
                 LOG.info("Posted the ban for %s into ticket %s", member_id, where.id)
             except discord.HTTPException:

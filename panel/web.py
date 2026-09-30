@@ -808,7 +808,7 @@ async def add_note(request):
 # Discord: what the bot posts, edited here and published to it
 
 DISCORD_PAGES = (("welcome", "Start here message"), ("serverinfo", "Server info & rules"), ("names", "Server names"),
-                 ("greeting", "Join greeting"))
+                 ("greeting", "Join greeting"), ("bans", "Ban messages"))
 
 
 def bridge(request):
@@ -842,9 +842,14 @@ async def discord_page(request):
         raise web.HTTPNotFound(text="No such page.")
     defaults, check = DISCORD_DOCS[key]
     state = discord_state(request, key, defaults, check)
-    return render(request, f"discord_{key}.html", pages=DISCORD_PAGES, page=key, bridge=bridge(request),
-                  default_doc=defaults(),
-                  problems=[], **state, types=welcome_doc.TYPES, placeholders=welcome_doc.PLACEHOLDERS)
+    report = bridge(request)
+    if key == "bans" and not state["live"] and not state["draft"] and report.get("ban_settings"):
+        # Start from what the bot is using now (its .env), not blank.
+        state["doc"] = check(report["ban_settings"])[0]
+    return render(request, f"discord_{key}.html", pages=DISCORD_PAGES, page=key, bridge=report,
+                  default_doc=defaults(), problems=[], **state, types=welcome_doc.TYPES,
+                  placeholders=welcome_doc.PLACEHOLDERS, ban_placeholders=welcome_doc.BAN_PLACEHOLDERS,
+                  dm_title=welcome_doc.DM_TITLE, dm_text=welcome_doc.DM_TEXT, ticket_title=welcome_doc.TICKET_TITLE)
 
 
 async def discord_save(request):
@@ -880,7 +885,9 @@ async def discord_save(request):
         state = discord_state(request, key, defaults, check)
         return render(request, f"discord_{key}.html", pages=DISCORD_PAGES, page=key, bridge=bridge(request),
                       default_doc=defaults(), problems=problems,
-                      **{**state, "doc": doc}, types=welcome_doc.TYPES, placeholders=welcome_doc.PLACEHOLDERS)
+                      **{**state, "doc": doc}, types=welcome_doc.TYPES, placeholders=welcome_doc.PLACEHOLDERS,
+                      ban_placeholders=welcome_doc.BAN_PLACEHOLDERS, dm_title=welcome_doc.DM_TITLE,
+                      dm_text=welcome_doc.DM_TEXT, ticket_title=welcome_doc.TICKET_TITLE)
     audit(request, f"save {key} draft")
     flash(request, "Draft saved. Nothing changes in Discord until you publish.")
     raise web.HTTPFound(back)
@@ -889,7 +896,8 @@ async def discord_save(request):
 DISCORD_DOCS = {"welcome": (welcome_doc.default_welcome, welcome_doc.check_welcome),
                 "greeting": (welcome_doc.default_greeting, welcome_doc.check_greeting),
                 "names": (welcome_doc.default_names, welcome_doc.check_names),
-                "serverinfo": (welcome_doc.default_serverinfo, welcome_doc.check_serverinfo)}
+                "serverinfo": (welcome_doc.default_serverinfo, welcome_doc.check_serverinfo),
+                "bans": (welcome_doc.default_bans, welcome_doc.check_bans)}
 
 
 def name_clashes(doc, servers):

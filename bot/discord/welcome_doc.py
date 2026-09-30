@@ -257,3 +257,46 @@ def check_serverinfo(raw):
             if value:
                 doc["settings"][str(server_id)] = value[:900]
     return doc, problems
+
+
+DM_TITLE = "You've been banned from {server}"
+DM_TEXT = "{account} is banned from all our servers {length}."
+TICKET_TITLE = "This player is banned"
+BAN_PLACEHOLDERS = {"{server}": "the Discord's name", "{account}": "their game account's name",
+                    "{length}": "\"for 7 days\" or \"permanently\""}
+
+
+def default_bans():
+    """Blank text means the built-in wording; the settings the bot's .env used to hold live here now."""
+    return {"dm_enabled": True, "dm_title": "", "dm_text": "", "appeal": "",
+            "tickets_enabled": True, "ticket_channel": None, "ticket_categories": [], "ticket_title": "",
+            "panel_url": ""}
+
+
+def check_bans(raw):
+    if not isinstance(raw, dict):
+        return default_bans(), ["That couldn't be read. Reload and try again."]
+    problems = []
+    text = lambda key, limit: str(raw.get(key, "") or "").replace("\r\n", "\n").strip()[:limit]
+    doc = {"dm_enabled": bool(raw.get("dm_enabled")), "dm_title": text("dm_title", TITLE_MAX),
+           "dm_text": text("dm_text", 2000), "appeal": text("appeal", 1000),
+           "tickets_enabled": bool(raw.get("tickets_enabled")), "ticket_title": text("ticket_title", TITLE_MAX),
+           "panel_url": text("panel_url", 200).rstrip("/")}
+    try:
+        doc["ticket_channel"] = _id(raw.get("ticket_channel"))
+    except ValueError:
+        doc["ticket_channel"] = None
+        problems.append("Pick the ticket panel channel from the list.")
+    categories = []
+    for value in raw.get("ticket_categories") or [] if isinstance(raw.get("ticket_categories"), list) else []:
+        try:
+            if _id(value):
+                categories.append(_id(value))
+        except ValueError:
+            pass
+    doc["ticket_categories"] = sorted(set(categories))[:10]
+    if doc["panel_url"] and not re.match(r"^https?://\S+$", doc["panel_url"]):
+        problems.append("The panel address should start with https://.")
+    if doc["tickets_enabled"] and not doc["ticket_channel"] and not doc["ticket_categories"]:
+        problems.append("Pick the ticket panel channel or a ticket category, or turn ban cards in tickets off.")
+    return doc, problems

@@ -97,8 +97,10 @@ class BanSetup(unittest.IsolatedAsyncioTestCase):
         self.bot = bot
         self.env = {"PANEL_DB": self.path, "BAN_DM_STATE": str(Path(self.tmp.name, "ban_dms.json")),
                     "BAN_APPEAL": "Appeal in #ban-appeals"}
-        with patch.dict(os.environ, self.env):
-            self.roles = BanRoles(bot)
+        env_patch = patch.dict(os.environ, self.env)
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        self.roles = BanRoles(bot)
 
     def names(self, member):
         return [r.name for r in member.roles]
@@ -206,6 +208,31 @@ class BanDmTests(BanSetup):
         self.panel.add_ban(HAVOC, "Havoc", "a", "boss")
         await self.roles.tick()
         self.havoc.closed = False
+        await self.roles.tick()
+        self.assertEqual(self.havoc.dms, [])
+
+    def publish(self, **changes):
+        import json
+        from bot.discord import welcome_doc
+        doc, problems = welcome_doc.check_bans({**welcome_doc.default_bans(), "tickets_enabled": False, **changes})
+        self.assertEqual(problems, [])
+        self.panel.publish_discord_doc("bans", json.dumps(doc), "gaz")
+
+    async def test_wording_from_the_panel(self):
+        self.publish(dm_title="Banned from {server}", dm_text="{account} can't play here {length}. Sorry!",
+                     appeal="Open a ticket in <#123>")
+        self.panel.add_ban(HAVOC, "Havoc", "Teamkilling", "boss", expires_at=int(time.time()) + 86400)
+        await self.roles.tick()
+        embed = self.havoc.dms[0]
+        self.assertEqual(embed.title, "Banned from OYB")
+        self.assertEqual(embed.description, "Your account **Havoc** can't play here for **1 day**. Sorry!")
+        self.assertEqual(self.fields(embed)["Appeal"], "Open a ticket in <#123>")
+
+    async def test_dms_turned_off_in_the_panel(self):
+        self.publish(dm_enabled=False)
+        self.panel.add_ban(HAVOC, "Havoc", "a", "boss")
+        await self.roles.tick()
+        self.publish(dm_enabled=True)
         await self.roles.tick()
         self.assertEqual(self.havoc.dms, [])
 

@@ -98,8 +98,10 @@ class BanTicketTests(unittest.IsolatedAsyncioTestCase):
         bot = SimpleNamespace(config=SimpleNamespace(guild_id=1),
                               account_links=Links({10: [HAVOC, HAVOC_PS], 20: []}))
         env = {"PANEL_DB": self.path, "BAN_TICKET_CHANNEL": str(PANEL), "PANEL_URL": "https://panel.example.com/"}
-        with patch.dict(os.environ, env):
-            self.tickets = BanTickets(bot)
+        env_patch = patch.dict(os.environ, env)
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        self.tickets = BanTickets(bot)
         patcher = patch.object(ban_tickets, "SETTLE_SECONDS", 0)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -136,8 +138,8 @@ class BanTicketTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ticket.sent, [])
 
     async def test_every_listed_category(self):
-        with patch.dict(os.environ, {"PANEL_DB": self.path, "BAN_TICKET_CHANNEL": str(PANEL), "BAN_TICKET_CATEGORY": "601, 602"}):
-            tickets = BanTickets(self.tickets.bot)
+        os.environ["BAN_TICKET_CATEGORY"] = "601, 602"
+        tickets = BanTickets(self.tickets.bot)
         self.panel.add_ban(HAVOC, "Havoc", "Cheating", "burd")
         for category in (CATEGORY, 601, 602):
             ticket = self.channel(Member(10), category=category)
@@ -162,9 +164,24 @@ class BanTicketTests(unittest.IsolatedAsyncioTestCase):
         await self.tickets.thread_created(elsewhere)
         self.assertEqual(elsewhere.sent, [])
 
+    async def test_settings_from_the_panel_win(self):
+        import json
+        from bot.discord import welcome_doc
+        doc, _ = welcome_doc.check_bans({**welcome_doc.default_bans(), "ticket_categories": ["601"],
+                                         "ticket_title": "Ban appeal", "panel_url": ""})
+        self.panel.publish_discord_doc("bans", json.dumps(doc), "gaz")
+        self.panel.add_ban(HAVOC, "Havoc", "Cheating", "burd")
+        panel_category = self.channel(Member(10))
+        await self.tickets.channel_created(panel_category)
+        self.assertEqual(panel_category.sent, [])
+        ticket = self.channel(Member(10), category=601)
+        await self.tickets.channel_created(ticket)
+        self.assertEqual(ticket.sent[0].title, "Ban appeal")
+        self.assertNotIn("panel.example.com", ticket.sent[0].fields[0].value)
+
     async def test_off_without_settings(self):
-        with patch.dict(os.environ, {"BAN_TICKET_CHANNEL": "", "BAN_TICKET_CATEGORY": ""}):
-            tickets = BanTickets(self.tickets.bot)
+        os.environ.update(BAN_TICKET_CHANNEL="", BAN_TICKET_CATEGORY="")
+        tickets = BanTickets(self.tickets.bot)
         self.panel.add_ban(HAVOC, "Havoc", "Cheating", "burd")
         ticket = self.channel(Member(10))
         await tickets.channel_created(ticket)

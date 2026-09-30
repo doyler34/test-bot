@@ -42,6 +42,80 @@ if (form && form.dataset.kind === "welcome") welcomeEditor();
 if (form && form.dataset.kind === "greeting") greetingEditor();
 if (form && form.dataset.kind === "names") namesEditor();
 if (form && form.dataset.kind === "serverinfo") serverInfoEditor();
+if (form && form.dataset.kind === "bans") bansEditor();
+
+function bansEditor() {
+  const bridge = read("dc-bridge");
+  channels = bridge.channels;
+  const field = (name) => form.querySelector(`[name="${name}"]`);
+  const author = () => h("div", { class: "dc-author" }, h("span", { class: "dc-avatar" }), h("b", {}, "OYB"), h("span", { class: "dc-app" }, "APP"));
+  function embed(title, text, fields) {
+    const box = h("div", { class: "dc-embed" });
+    box.style.borderLeftColor = "#6E2F29";
+    box.append(h("div", { class: "dc-embed-title" }, title));
+    if (text) { const body = h("div", {}); body.innerHTML = markdown(text); box.append(body); }
+    for (const [name, value] of fields) {
+      const f = h("div", { class: "dc-field" }, h("b", {}, name));
+      const v = h("div", {});
+      v.innerHTML = markdown(value);
+      f.append(v);
+      box.append(f);
+    }
+    return box;
+  }
+  function fill(text) {
+    return text.split("{server}").join(bridge.guild || "OYB").split("{account}").join("Your account **Buford**")
+      .split("{length}").join("for **7 days**");
+  }
+  function draw() {
+    const dm = document.getElementById("dc-preview");
+    if (!field("dm_enabled").checked) dm.replaceChildren(h("p", { class: "muted" }, "Off: banned players get no DM."));
+    else {
+      const fields = [["Reason", "Spawning explosions"], ["Ends", "Tuesday 7 October 2026 21:40 (in 7 days)"]];
+      if (field("appeal").value.trim()) fields.push(["Appeal", field("appeal").value.trim()]);
+      dm.replaceChildren(author(), embed(fill(field("dm_title").value || field("dm_title").dataset.default),
+        fill(field("dm_text").value || field("dm_text").dataset.default), fields));
+    }
+    const ticket = document.getElementById("dc-preview-ticket");
+    if (!field("tickets_enabled").checked) ticket.replaceChildren(h("p", { class: "muted" }, "Off: nothing is posted in tickets."));
+    else {
+      const url = field("panel_url").value.trim().replace(/\/$/, "");
+      const lines = ["**Length:** 7 days", "**Ends:** Tuesday 7 October 2026 21:40 (in 7 days)",
+        "**Reason:** Spawning explosions", "`4bd39e3d-a6e3-4090-a338-00e1dc08ca69`"];
+      if (url) lines.push(`${url}/player/4bd39e3d-…`);
+      ticket.replaceChildren(author(), embed(field("ticket_title").value || field("ticket_title").dataset.default,
+        "@Buford opened this ticket while banned on this account.", [["Buford", lines.join("\n")]]));
+    }
+  }
+  document.getElementById("dc-appeal-channel").addEventListener("change", (event) => {
+    if (!event.target.value) return;
+    const appeal = field("appeal");
+    appeal.value = (appeal.value ? appeal.value.trimEnd() + " " : "") + `<#${event.target.value}>`;
+    event.target.value = "";
+    draw();
+  });
+  for (const chip of form.querySelectorAll("[data-insert]")) {
+    chip.addEventListener("click", () => {
+      const box = field(chip.dataset.into);
+      const at = box.selectionStart ?? box.value.length;
+      box.value = box.value.slice(0, at) + chip.dataset.insert + box.value.slice(box.selectionEnd ?? at);
+      box.focus();
+      draw();
+    });
+  }
+  form.addEventListener("input", draw);
+  form.addEventListener("change", draw);
+  form.addEventListener("submit", () => {
+    const own = (name) => { const el = field(name); return el.value.trim() === (el.dataset.default || "") ? "" : el.value.trim(); };
+    document.getElementById("dc-doc").value = JSON.stringify({
+      dm_enabled: field("dm_enabled").checked, dm_title: own("dm_title"), dm_text: own("dm_text"),
+      appeal: field("appeal").value.trim(), tickets_enabled: field("tickets_enabled").checked,
+      ticket_channel: field("ticket_channel").value || null,
+      ticket_categories: [...form.querySelectorAll('[name="ticket_categories"]:checked')].map((c) => c.value),
+      ticket_title: own("ticket_title"), panel_url: field("panel_url").value.trim() });
+  });
+  draw();
+}
 
 function serverInfoEditor() {
   const bridge = read("dc-bridge");

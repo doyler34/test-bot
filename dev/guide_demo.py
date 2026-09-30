@@ -128,7 +128,8 @@ def seed_bridge(data):
              ("Event pings", "#a9bc8c", None), ("Squad Alpha", "#95a5a6", None), ("Squad Bravo", "#95a5a6", None),
              ("OYB Member", "#a9bc8c", None)]
     channels = [("start-here", "WELCOME"), ("rules", "WELCOME"), ("announcements", "WELCOME"),
-                ("general", "COMMUNITY"), ("looking-for-squad", "COMMUNITY"), ("servers", "SERVERS")]
+                ("general", "COMMUNITY"), ("looking-for-squad", "COMMUNITY"), ("servers", "SERVERS"),
+                ("open-support-ticket", "SUPPORT")]
     (data / "panel_bridge.json").write_text(json.dumps({
         "updated": now(), "guild": "OYB", "member_events": True, "member_role": "OYB Member",
         "start_channel": "900000000000000001",
@@ -138,6 +139,12 @@ def seed_bridge(data):
                      "settings": "**Map:** Everon · **Players:** 128 · 3x supply and XP"},
                     {"id": "server-3", "default": "Classic #2", "label": "Classic #2", "enabled": True,
                      "settings": "**Map:** Everon · **Players:** 128 · Vanilla, Conflict"}],
+        "categories": [{"id": "700000000000000001", "name": "WELCOME"}, {"id": "700000000000000002", "name": "SUPPORT"},
+                       {"id": "700000000000000003", "name": "COMMUNITY"}],
+        "ban_settings": {"dm_enabled": True, "dm_title": "", "dm_text": "", "tickets_enabled": True,
+                         "appeal": "Open a General Support ticket in <#900000000000000007> to appeal.",
+                         "ticket_channel": "900000000000000007", "ticket_categories": ["700000000000000002"],
+                         "ticket_title": "", "panel_url": ""},
         "card": {"title": "🎮 OYB Servers", "rules_title": "🎮 OYB · In-game rules",
                  "intro": "Live status for all OYB servers. When a match starts, the announcements channel pings "
                           "whoever opted in to that server's alerts. This channel is read-only.",
