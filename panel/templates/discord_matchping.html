@@ -1,0 +1,38 @@
+{% extends "discord_base.html" %}
+{% block editor %}
+{% set servers = bridge.get("servers") or [] %}
+<form method="post" action="/discord/matchping" id="dc-editor" data-kind="matchping">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="doc" id="dc-doc">
+  <div class="dc-layout">
+    <div class="dc-edit">
+      <section class="card">
+        <h2>Which servers post an alert</h2>
+        <p class="muted">When a match starts, the bot posts in the announcements channel. Players choose which servers they want pinged for with the 🔔 buttons.</p>
+        {% for s in servers %}
+        <label class="check"><input type="checkbox" data-server="{{ s.id }}" data-label="{{ s.label }}" {% if s.id not in doc.off %}checked{% endif %}> {{ s.label }} <span class="muted">({{ s.id }})</span></label>
+        {% else %}
+        <p class="warn">The bot hasn't sent its servers yet. Make sure it's running and updated, then reload.</p>
+        {% endfor %}
+        <label class="check"><input type="checkbox" name="ping" {% if doc.ping %}checked{% endif %}> Ping the players who asked for that server's alerts (untick to post quietly)</label>
+      </section>
+      <section class="card">
+        <h2>Wording</h2>
+        <label>Title <input name="title" value="{{ doc.title or '🟢 {server} — match started' }}" data-default="🟢 {server} — match started" maxlength="200"></label>
+        <label>Message <textarea name="text" rows="3" maxlength="1500" data-default="A new match is live. Join the server!">{{ doc.text or "A new match is live. Join the server!" }}</textarea></label>
+        <p class="muted"><code>{server}</code> becomes the server's name. When the match started, and when the alert disappears (30 minutes after), are always added underneath.</p>
+      </section>
+    </div>
+    <aside class="dc-preview">
+      <p class="kicker">Preview</p>
+      <div class="discord" id="dc-preview"></div>
+    </aside>
+  </div>
+  <div class="dc-actions">
+    <button name="action" value="publish">Publish</button>
+    <button name="action" value="save" class="ghost">Save draft</button>
+    {% if draft %}<button name="action" value="discard" class="ghost" data-confirm="Throw away the draft and go back to what's live?">Discard draft</button>{% endif %}
+  </div>
+</form>
+<script src="/static/discord.js?v={{ asset_version }}" defer></script>
+{% endblock %}

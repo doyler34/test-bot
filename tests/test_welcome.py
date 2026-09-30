@@ -340,6 +340,21 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         _, problems = welcome_doc.check_serverinfo({"settings": {"server-1": "x" * 950}})
         self.assertEqual(problems, ["server-1's settings are 950 characters; keep them under 900."])
 
+    async def test_match_alert_wording(self):
+        from bot.discord import server_notifications
+        self.addCleanup(server_notifications.MATCH_PING.clear)
+        self.assertEqual(server_notifications.ping_title("Classic"), "🟢 Classic — match started")
+        doc, _ = welcome_doc.check_matchping({"title": "⚔️ {server} is live", "text": "Get on {server}!",
+                                              "ping": False, "off": ["server-2", "bad id!"]})
+        self.assertEqual(doc["off"], ["server-2"])
+        self.panel.publish_discord_doc("matchping", json.dumps(doc), "gaz")
+        await self.welcome.tick()
+        self.assertEqual(server_notifications.ping_title("Classic"), "⚔️ Classic is live")
+        self.assertEqual(server_notifications.MATCH_PING["off"], ["server-2"])
+        server_notifications.MATCH_PING.clear()
+        Welcome(self.bot)
+        self.assertFalse(server_notifications.MATCH_PING["ping"])
+
     def test_names_cannot_use_the_channel_separator(self):
         doc, problems = welcome_doc.check_names({"names": {"server-3": "Classic #2 · Night"}})
         self.assertEqual(problems, ["server-3: names can't contain · (the bot uses it in the channel names)."])

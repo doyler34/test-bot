@@ -59,6 +59,14 @@ SERVERS_INTRO = ("Live status for all OYB servers. When a match starts, the anno
 RULES_TITLE = "🎮 OYB · In-game rules"
 # Wording published from OYB Control; anything left blank there keeps the above.
 SERVER_INFO: dict = {}
+PING_TITLE = "🟢 {server} — match started"
+PING_TEXT = "A new match is live. Join the server!"
+# The match-started post, as published from OYB Control.
+MATCH_PING: dict = {}
+
+
+def ping_title(name):
+    return (MATCH_PING.get("title") or PING_TITLE).replace("{server}", name)[:256]
 
 
 def default_rules(bot):
@@ -301,6 +309,9 @@ class NotificationBot(TimerBot):
                     # Recovered old matches must not trigger a fresh notification.
                     if elapsed >= ANNOUNCEMENT_TTL:
                         return
+                    if server.id in MATCH_PING.get("off", []):
+                        logger.info("Match alerts for %s are turned off in OYB Control", server.id)
+                        return
                     now = time.time()
                     channel = self.announce_channel or self.channels_by_server.get(server.id)
                     if channel is None:
@@ -507,7 +518,7 @@ class NotificationBot(TimerBot):
             if candidate.author.id == self.user.id and any(
                 e.timestamp is not None
                 and int(e.timestamp.timestamp()) == int(row["started"])
-                and e.title == f"🟢 {row['name']} — match started"
+                and e.title in (ping_title(row["name"]), f"🟢 {row['name']} — match started")
                 for e in candidate.embeds
             ):
                 message = candidate
@@ -516,9 +527,10 @@ class NotificationBot(TimerBot):
             if time.time() >= row["started"] + ANNOUNCEMENT_TTL:
                 self.store.finish(row)
                 return
+            text = (MATCH_PING.get("text") or PING_TEXT).replace("{server}", row["name"])
             embed = discord.Embed(
-                title=f"🟢 {row['name']} — match started",
-                description=f"A new match is live. Join the server!\n"
+                title=ping_title(row["name"]),
+                description=f"{text}\n"
                             f"Started <t:{int(row['started'])}:R>.\n\n"
                             f"Expires <t:{int(row['started'] + ANNOUNCEMENT_TTL)}:R> "
                             "(30 minutes after match start).",
@@ -529,7 +541,7 @@ class NotificationBot(TimerBot):
             # Only the people who asked for this server's alerts. With no role
             # to mention the card still goes up, quietly, rather than falling
             # back to pinging the whole guild.
-            role = self.roles_by_server.get(row["server"])
+            role = self.roles_by_server.get(row["server"]) if MATCH_PING.get("ping", True) else None
             message = await channel.send(
                 content=role.mention if role is not None else None, embed=embed,
                 allowed_mentions=discord.AllowedMentions(

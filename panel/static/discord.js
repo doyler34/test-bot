@@ -43,6 +43,35 @@ if (form && form.dataset.kind === "greeting") greetingEditor();
 if (form && form.dataset.kind === "names") namesEditor();
 if (form && form.dataset.kind === "serverinfo") serverInfoEditor();
 if (form && form.dataset.kind === "bans") bansEditor();
+if (form && form.dataset.kind === "matchping") matchPingEditor();
+
+function matchPingEditor() {
+  const field = (name) => form.querySelector(`[name="${name}"]`);
+  const servers = [...form.querySelectorAll("[data-server]")];
+  function draw() {
+    const preview = document.getElementById("dc-preview");
+    const on = servers.find((s) => s.checked);
+    if (!on) { preview.replaceChildren(h("p", { class: "muted" }, "Every server is off: no match alerts at all.")); return; }
+    const name = on.dataset.label;
+    const fill = (text) => text.split("{server}").join(name);
+    const box = h("div", { class: "dc-embed" });
+    box.style.borderLeftColor = "#2ECC71";
+    const body = h("div", {});
+    body.innerHTML = markdown(fill(field("text").value || field("text").dataset.default) + "\nStarted 2 minutes ago.\n\nExpires in 28 minutes (30 minutes after match start).");
+    box.append(h("div", { class: "dc-embed-title" }, fill(field("title").value || field("title").dataset.default)), body,
+      h("div", { class: "dc-embed-footer" }, "OYB • Match notifications"));
+    const ping = field("ping").checked ? h("div", {}, h("span", { class: "mention" }, `@${name} Notifications`)) : null;
+    preview.replaceChildren(h("div", { class: "dc-author" }, h("span", { class: "dc-avatar" }), h("b", {}, "OYB"), h("span", { class: "dc-app" }, "APP")), ping, box);
+  }
+  form.addEventListener("input", draw);
+  form.addEventListener("change", draw);
+  form.addEventListener("submit", () => {
+    const own = (name) => { const el = field(name); return el.value.trim() === el.dataset.default ? "" : el.value.trim(); };
+    document.getElementById("dc-doc").value = JSON.stringify({ title: own("title"), text: own("text"), ping: field("ping").checked,
+      off: servers.filter((s) => !s.checked).map((s) => s.dataset.server) });
+  });
+  draw();
+}
 
 function bansEditor() {
   const bridge = read("dc-bridge");

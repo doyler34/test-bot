@@ -1225,6 +1225,21 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.client.get("/discord/posts/nothere1")).status, 404)
         self.assertEqual((await self.client.get("/discord/post")).status, 404)
 
+    async def test_match_alerts(self):
+        await self.login("boss", "boss-password")
+        with tempfile.TemporaryDirectory() as data:
+            self.config.oyb_data = data
+            Path(data, "panel_bridge.json").write_text(json.dumps({"updated": now(), "roles": [], "channels": [],
+                "servers": [{"id": "server-1", "default": "Classic", "label": "Classic", "enabled": True},
+                            {"id": "server-2", "default": "3x Everon", "label": "3x Everon", "enabled": True}]}))
+            page = await (await self.client.get("/discord/matchping")).text()
+        self.assertIn('data-server="server-2" data-label="3x Everon" checked', page)
+        token = await self.csrf("/discord/matchping")
+        await self.client.post("/discord/matchping", data={"csrf": token, "action": "publish",
+            "doc": json.dumps({"title": "", "text": "Get on!", "ping": True, "off": ["server-2"]})})
+        doc = json.loads(self.db.discord_doc("matchping")["published"])
+        self.assertEqual((doc["off"], doc["text"], doc["ping"]), (["server-2"], "Get on!", True))
+
     async def test_greeting(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/discord/greeting")

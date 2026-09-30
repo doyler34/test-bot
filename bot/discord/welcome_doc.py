@@ -320,3 +320,19 @@ def check_post(raw):
     if not doc["channel_id"]:
         problems.append("Pick which channel to post it in.")
     return doc, problems
+
+
+def default_matchping():
+    """Blank wording keeps the bot's own; every server is on and pings by default."""
+    return {"title": "", "text": "", "ping": True, "off": []}
+
+
+def check_matchping(raw):
+    if not isinstance(raw, dict):
+        return default_matchping(), ["That couldn't be read. Reload and try again."]
+    off = [str(s) for s in raw.get("off", []) if re.fullmatch(r"[a-zA-Z0-9_-]{1,40}", str(s))] \
+        if isinstance(raw.get("off"), list) else []
+    doc = {"title": str(raw.get("title", "") or "").strip()[:200],
+           "text": str(raw.get("text", "") or "").replace("\r\n", "\n").strip()[:1500],
+           "ping": bool(raw.get("ping")), "off": sorted(set(off))}
+    return doc, []

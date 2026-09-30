@@ -155,10 +155,17 @@ class Welcome:
         self.posts = {}
         self.applied = {}
         self.state = self._load_state()
-        # Names are needed before the stat channels are first drawn at boot.
+        # Names and wording are needed before anything is first drawn at boot.
         found = read_doc(self.path, "names")
         if found:
             self._use_names(found)
+        from bot.discord import server_notifications
+        for key, target in (("serverinfo", server_notifications.SERVER_INFO),
+                            ("matchping", server_notifications.MATCH_PING)):
+            found = read_doc(self.path, key)
+            if found:
+                target.clear()
+                target.update(found[0])
 
     def _use_names(self, found):
         self.docs["names"] = found
@@ -183,7 +190,7 @@ class Welcome:
         guild = self.bot.get_guild(self.bot.config.guild_id)
         if guild is None:
             return
-        for key in ("welcome", "greeting", "names", "serverinfo", "bans"):
+        for key in ("welcome", "greeting", "names", "serverinfo", "bans", "matchping"):
             found = await asyncio.to_thread(read_doc, self.path, key)
             if found:
                 self.docs[key] = found
@@ -201,6 +208,12 @@ class Welcome:
         for post_id, (doc, version) in self.posts.items():
             if applied.get(post_id, {}).get("version") != version:
                 await self.publish_post(guild, post_id, doc, version)
+        ping = self.docs.get("matchping")
+        if ping:
+            from bot.discord import server_notifications
+            server_notifications.MATCH_PING.clear()
+            server_notifications.MATCH_PING.update(ping[0])
+            self.state["matchping"] = {"version": ping[1], "at": int(time.time()), "problems": []}
         bans = self.docs.get("bans")
         if bans:
             # The ban DMs and ticket cards read these as they go; nothing to redraw.
@@ -471,7 +484,7 @@ class Welcome:
     def _load_state(self):
         try:
             data = json.loads(self.bridge.read_text())
-            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts")
+            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts", "matchping")
                     if isinstance(data.get(k), dict)}
         except (OSError, ValueError):
             return {}
