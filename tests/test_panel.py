@@ -595,10 +595,10 @@ class SuspicionTests(unittest.TestCase):
         self.assertEqual(len(flags), 1)
         text = flags[0]["text"]
         self.assertTrue(flags[0]["incident"])
-        self.assertIn("3 players killed by explosions credited to AI in the same second", text)
-        self.assertIn("2 of 3 to the head", text)
-        self.assertIn("joined just before: Buford (146.70.168.126)", text)
-        self.assertIn("killing nearby: Buford", text)
+        self.assertIn("3 players were blown up in the same second by explosions the game credits to AI", text)
+        self.assertIn("2 of the 3 were hit in the head.", text)
+        self.assertIn("Joined shortly before: Buford (146.70.168.126).", text)
+        self.assertIn("Getting kills close by at the time: Buford.", text)
         for innocent in ("pook4lyfe", "Gone", "Regular"):
             self.assertNotIn(innocent, text)
 
@@ -606,7 +606,7 @@ class SuspicionTests(unittest.TestCase):
         log = "".join(blast(f"06:2{i}:00.000", i, 1000 * i, 500, zone="Chest") for i in range(1, 6))
         flags = self.flags(log)
         self.assertEqual(len(flags), 1)
-        self.assertIn("5 explosive deaths credited to AI in 5 min", flags[0]["text"])
+        self.assertIn("5 players were killed by explosions in the last 5 minutes that the game credits to AI", flags[0]["text"])
 
     def test_gunships_and_attribution_quirks_are_left_alone(self):
         log = "".join(shot(f"06:0{i}:00.000", "SEPHRAP", person(80), i, 100 * i, 100, zone="Chest", metres=700)
@@ -623,13 +623,25 @@ class SuspicionTests(unittest.TestCase):
         tks = "".join(shot(f"09:0{i}:00.000", "Rogue", person(72), i, 0, 0).replace("KILL ENEMY", "KILL TK")
                       for i in range(3))
         texts = [f["text"] for f in self.flags(rapid + heads + tks)]
-        self.assertEqual(texts, ["Spray: 6 kills in 30 s", "Aimer: 10 of 10 kills were headshots in 15 min",
-                                 "Rogue: 3 teamkills in 10 min"])
+        self.assertEqual(texts, ["Spray got 6 kills in 30 seconds", "Aimer got 10 kills in 15 minutes and 10 of them were headshots",
+                                 "Rogue has teamkilled 3 times this game. Killed: Victim0, Victim1, Victim2"])
+
+    def test_a_teamkiller_gets_one_running_line(self):
+        tks = "".join(shot(f"09:{i:02d}:00.000", "Rogue", person(72), i % 4, 0, 0).replace("KILL ENEMY", "KILL TK")
+                      for i in range(12))
+        flags = self.flags(tks)
+        self.assertEqual({f["key"] for f in flags}, {("teamkills", person(72))})
+        self.assertEqual(flags[-1]["text"], "Rogue has teamkilled 12 times this game. "
+                                            "Killed: Victim0 (3x), Victim1 (3x), Victim2 (3x), Victim3 (3x)")
+        # Spread out, they never add up to a flag.
+        slow = "".join(shot(f"0{i}:00:00.000", "Clumsy", person(78), i, 0, 0).replace("KILL ENEMY", "KILL TK")
+                       for i in range(5))
+        self.assertEqual(self.flags(slow), [])
 
     def test_teleporting_between_kills(self):
         jump = shot("07:00:00.000", "Blink", person(73), 1, 1000, 1000) + shot("07:00:05.000", "Blink", person(73), 2, 4000, 1000)
         flags = self.flags(jump)
-        self.assertEqual([f["text"] for f in flags], ["Blink: moved 3,000 m in 5 s between two kills without dying"])
+        self.assertEqual([f["text"] for f in flags], ["Blink got a kill 3,000 m away from their last one only 5 seconds later, without dying in between. Nothing in the game moves that fast"])
         self.assertEqual(flags[0]["identity"], person(73))
         died = (shot("07:00:00.000", "Blink", person(73), 1, 1000, 1000)
                 + shot("07:00:02.000", "Someone", person(74), 73, 1000, 1000).replace("Victim73", "Blink")
@@ -642,10 +654,10 @@ class SuspicionTests(unittest.TestCase):
         far = "".join(shot(f"07:0{i}:00.000", "Eagle", person(76), i, 0, 0, zone="Chest" if i else "Head", metres=900 + i * 100)
                       for i in range(3))
         self.assertEqual([f["text"] for f in self.flags(far)],
-                         ["Eagle: 3 bullet kills from over 800 m in 15 min, longest 1,100 m, 1 to the head"])
+                         ["Eagle shot and killed 3 players from over 800 m away in 15 minutes. The longest was 1,100 m and 1 was a headshot."])
         apart = (shot("07:00:00.000", "Split", person(77), 1, 0, 0, metres=100)
                  + shot("07:00:01.000", "Split", person(77), 2, 0, 900, metres=100).replace("<60, 30, 920>", "<0, 30, 0>"))
-        self.assertEqual([f["text"] for f in self.flags(apart)], ["Split: killed two players 900 m apart within 1 s"])
+        self.assertEqual([f["text"] for f in self.flags(apart)], ["Split killed two players who were 900 m apart from each other within 1 second"])
 
     def test_script_error_spike(self):
         def error(clock, where):
@@ -656,9 +668,9 @@ class SuspicionTests(unittest.TestCase):
         spawns = "".join(error(f"06:18:{i:02d}.000", "SCR_PlayerControllerGroupComponent") for i in range(15, 40))
         flags = self.flags(ai_loop + one_frame + arrive("06:16:52.000", "Buford", BUFORD, "146.70.168.126") + spawns)
         self.assertEqual(len(flags), 1)
-        self.assertIn("script errors in 20 different seconds within 5 min, mostly SCR_PlayerControllerGroupComponent",
+        self.assertIn("The server hit script errors in 20 separate seconds over the last 5 minutes, mostly in SCR_PlayerControllerGroupComponent",
                       flags[0]["text"])
-        self.assertIn("joined just before: Buford", flags[0]["text"])
+        self.assertIn("Joined shortly before: Buford", flags[0]["text"])
 
     def test_a_burst_waits_for_the_killers_around_it(self):
         write_log(self.tmp.name, "logs_2026-09-26_04-14-00", blast("06:19:09.000", 1, 0, 0) * 3)
@@ -692,12 +704,23 @@ class IncidentTests(unittest.TestCase):
         self.assertNotIn("earlier incidents", self.db.feed("one")[0]["text"])
         self.incident("two", ("Buford", BUFORD), ("Someone", person(6)))
         self.assertEqual(self.db.feed("two")[0]["kind"], "sus")
-        self.assertIn("At earlier incidents too: Buford (2x)", self.db.feed("two")[0]["text"])
+        self.assertIn("Also online at earlier incidents: Buford (2 times)", self.db.feed("two")[0]["text"])
         title, _, fields = self.manager.alerts.sent[-1]
         self.assertEqual(title, "Suspicious on Two")
         self.assertIn(BUFORD, fields["Buford"])
         self.assertEqual(len(self.db.incidents_for(BUFORD)), 2)
         self.assertEqual(len(self.db.incidents_for(person(5))), 1)
+
+    def test_a_running_tally_updates_its_line(self):
+        state = self.manager.states["one"]
+        for count in (3, 4, 10, 11):
+            self.manager.suspicious(state, {"at": now(), "text": f"Rogue has teamkilled {count} times this game.",
+                                            "identity": person(7), "incident": False,
+                                            "key": ("teamkills", person(7)), "count": count})
+        rows = [r for r in self.db.feed("one") if r["kind"] == "sus"]
+        self.assertEqual([r["text"] for r in rows], ["Rogue has teamkilled 11 times this game."])
+        self.assertEqual([a[1] for a in self.manager.alerts.sent],
+                         ["Rogue has teamkilled 3 times this game.", "Rogue has teamkilled 10 times this game."])
 
     def test_old_flags_from_a_backlog_only_go_in_the_feed(self):
         state = self.manager.states["one"]
@@ -785,7 +808,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get("/server/server-1/game/logs_2026-09-25_10-16-32")).text()
         self.assertIn("GazLagom", html)
         self.assertIn("203.0.113.7", html)
-        self.assertIn("3 players killed by explosions credited to AI in the same second", html)
+        self.assertIn("3 players were blown up in the same second", html)
         live = await (await self.client.get("/server/server-1/game/logs_2026-09-25_11-00-00")).text()
         self.assertIn("Buford", live)
         response = await self.client.get("/server/server-1/game/logs_2026-09-25_10-16-32/log")

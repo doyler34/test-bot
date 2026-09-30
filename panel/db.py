@@ -457,8 +457,12 @@ class PanelDB:
                             (server, path, position))
         self.db.commit()
 
-    def add_feed(self, server, kind, text, at=None):
-        self.write("INSERT INTO feed (server, at, kind, text) VALUES (?, ?, ?, ?)", server, at or now(), kind, text[:300])
+    def add_feed(self, server, kind, text, at=None) -> int:
+        return self.write("INSERT INTO feed (server, at, kind, text) VALUES (?, ?, ?, ?)", server, at or now(), kind,
+                          text[:2000 if kind == "sus" else 300])
+
+    def update_feed(self, row, text, at):
+        self.write("UPDATE feed SET text = ?, at = ? WHERE id = ?", text[:2000], at, row)
 
     def feed(self, server, limit=200):
         """Log events, RCON messages and admin actions for one server, newest first."""

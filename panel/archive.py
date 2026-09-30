@@ -71,6 +71,9 @@ def read_game(path: str, folder: str, size: int, mtime: float, settings: tuple) 
         events = read_lines(fh, started)
     detector = Detector(dict(settings))
     flags = [f for e in events for f in detector.feed(e)] + detector.flush(10 ** 12)
+    # A running tally is one line, as it stood at the end of the game.
+    latest = {f.get("key") or n: f for n, f in enumerate(flags)}
+    flags = sorted(latest.values(), key=lambda f: f["at"])
     players: dict[str, dict] = {}
     by_name: dict[str, dict] = {}
     for e in events:

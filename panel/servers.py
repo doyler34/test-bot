@@ -70,6 +70,7 @@ class ServerState:
     was_online: bool | None = None
     detector: Detector = field(default_factory=Detector)
     recent: dict = field(default_factory=dict)
+    running: dict = field(default_factory=dict)
 
 
 class ServerManager:
@@ -206,16 +207,26 @@ class ServerManager:
         incidents stand out."""
         text, fields = flag["text"], []
         fresh = now() - flag["at"] < 900
+        if flag.get("key") in state.running:
+            # A running tally (a teamkiller's total): keep the one line up to date.
+            self.db.update_feed(state.running[flag["key"]], text, flag["at"])
+            if fresh and flag.get("count") == 10:
+                self.alerts.send(f"Suspicious on {state.config.name}", text, alert_colours.GOLD,
+                                 [("Identity", flag["identity"])])
+            return
         present = [{"identity": i, "name": n} for i, (n, seen) in state.recent.items() if now() - seen <= 300]
         if flag["incident"] and fresh and present:
             incident = self.db.add_incident(state.config.id, flag["at"], text, present)
             repeat = self.db.repeat_suspects(incident)
             if repeat:
-                text += ". At earlier incidents too: " + ", ".join(f"{r['name']} ({r['times']}x)" for r in repeat[:5])
+                text += " Also online at earlier incidents: " + ", ".join(
+                    f"{r['name']} ({r['times']} times)" for r in repeat[:5]) + "."
                 fields = [(r["name"], f"{r['identity']}\n{r['times']} incidents") for r in repeat[:5]]
         elif flag["identity"]:
             fields = [("Identity", flag["identity"])]
-        self.db.add_feed(state.config.id, "sus", text, at=flag["at"])
+        row = self.db.add_feed(state.config.id, "sus", text, at=flag["at"])
+        if flag.get("key"):
+            state.running[flag["key"]] = row
         if fresh:
             self.alerts.send(f"Suspicious on {state.config.name}", text, alert_colours.GOLD, fields)
 

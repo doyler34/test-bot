@@ -85,6 +85,7 @@ class LogReader:
             for line in data[:end].decode("utf-8", errors="replace").splitlines():
                 event = self._line(line, state)
                 if event:
+                    event["game"] = state["base"]
                     events.append(event)
             moved[key] = start + end
         return events, moved
@@ -142,7 +143,8 @@ def kill_event(relation, body, at):
         return None
     parts = body.split(" was killed by ", 1)
     metres, zone, where = distance(body), ZONE.search(body), VICTIM_AT.search(body)
-    event = {"at": at, "ip": "", "relation": relation, "victim": victim[2].lower(), "distance": metres,
+    event = {"at": at, "ip": "", "relation": relation, "victim": victim[2].lower(), "victim_name": victim[1],
+             "distance": metres,
              "damage": damage_type(body), "zone": zone[1] if zone else None,
              "victim_at": (float(where[1]), float(where[2])) if where else None,
              "killer": None, "killer_name": None, "killer_at": None, "by_ai": False}

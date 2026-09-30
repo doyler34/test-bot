@@ -67,8 +67,14 @@ class Detector:
         self.left: dict[str, int] = {}
         self.pending: list[dict] = []
         self.spots: dict[str, tuple] = {}
+        self.teamkills: dict[str, dict] = {}
+        self.game = None
 
     def feed(self, event: dict) -> list[dict]:
+        if event.get("game") and event["game"] != self.game:
+            # Teamkill tallies are per game.
+            self.game = event["game"]
+            self.teamkills.clear()
         return self.flush(event["at"]) + self._feed(event)
 
     def flush(self, at: int) -> list[dict]:
@@ -112,13 +118,14 @@ class Detector:
             same = [b for b in self.ai_blasts if b["at"] == at]
             if len(same) >= s["same_second"]:
                 flags += self._flag(("same_second",), at,
-                                    f"{len(same)} players killed by explosions credited to AI in the same second",
-                                    self.ai_blasts)
+                                    f"{len(same)} players were blown up in the same second by explosions the game "
+                                    "credits to AI, so they don't show in the kill feed", self.ai_blasts)
             if len(self.ai_blasts) >= s["ai_explosions"]:
                 window = s["ai_explosions_window"] // 60
                 flags += self._flag(("ai_explosions",), at,
-                                    f"{len(self.ai_blasts)} explosive deaths credited to AI in {window} min "
-                                    "(these don't show in the kill feed)", self.ai_blasts)
+                                    f"{len(self.ai_blasts)} players were killed by explosions in the last {window} "
+                                    "minutes that the game credits to AI, so they don't show in the kill feed",
+                                    self.ai_blasts)
             return flags
         if not e.get("killer") or e.get("killer_name") is None:
             return []
@@ -130,28 +137,24 @@ class Detector:
         who = e["killer_name"]
         flags += self._teleport(e, who) + self._spread(e, mine, who)
         if e["kind"] == "teamkill":
-            tks = [k for k in mine if k["kind"] == "teamkill" and k["at"] >= at - 600]
-            if len(tks) >= s["teamkills"]:
-                flags += self._flag(("teamkills", e["killer"]), at, f"{who}: {len(tks)} teamkills in 10 min",
-                                    identity=e["killer"])
-            return flags
+            return flags + self._teamkill(e, mine, who)
         rifle = [k for k in mine if k["kind"] == "kill" and k.get("damage") == "KINETIC"]
         rapid = [k for k in rifle if k["at"] >= at - s["rapid_window"]]
         if len(rapid) >= s["rapid_kills"]:
-            flags += self._flag(("rapid", e["killer"]), at, f"{who}: {len(rapid)} kills in {s['rapid_window']} s",
-                                identity=e["killer"])
+            flags += self._flag(("rapid", e["killer"]), at,
+                                f"{who} got {len(rapid)} kills in {s['rapid_window']} seconds", identity=e["killer"])
         longs = [k for k in rifle if (k.get("distance") or 0) >= s["long_shot"]]
         if len(longs) >= s["long_shots"]:
             far = max(k["distance"] for k in longs)
-            text = f"{who}: {len(longs)} bullet kills from over {s['long_shot']} m in 15 min, longest {far:,.0f} m"
+            text = (f"{who} shot and killed {len(longs)} players from over {s['long_shot']} m away in 15 minutes. "
+                    f"The longest was {far:,.0f} m")
             heads = sum(k.get("zone") == "Head" for k in longs)
-            if heads:
-                text += f", {heads} to the head"
+            text += f" and {plural(heads, 'was a headshot', 'were headshots')}." if heads else "."
             flags += self._flag(("long", e["killer"]), at, text, identity=e["killer"])
         heads = sum(k.get("zone") == "Head" for k in rifle)
         if len(rifle) >= s["headshot_kills"] and heads / len(rifle) >= s["headshot_share"]:
             flags += self._flag(("headshots", e["killer"]), at,
-                                f"{who}: {heads} of {len(rifle)} kills were headshots in 15 min",
+                                f"{who} got {len(rifle)} kills in 15 minutes and {heads} of them were headshots",
                                 identity=e["killer"])
         return flags
 
@@ -166,7 +169,9 @@ class Detector:
         if gap < self.s["teleport_distance"] or gap / seconds < self.s["teleport_speed"]:
             return []
         return self._flag(("teleport", e["killer"]), e["at"],
-                          f"{who}: moved {gap:,.0f} m in {seconds} s between two kills without dying",
+                          f"{who} got a kill {gap:,.0f} m away from their last one only "
+                          f"{plural(seconds, 'second')} later, without dying in between. Nothing in the game "
+                          "moves that fast",
                           identity=e["killer"])
 
     def _spread(self, e, mine, who):
@@ -179,9 +184,26 @@ class Detector:
             apart = metres(k["victim_at"], e["victim_at"])
             if apart >= self.s["spread"]:
                 return self._flag(("spread", e["killer"]), e["at"],
-                                  f"{who}: killed two players {apart:,.0f} m apart within "
-                                  f"{e['at'] - k['at']} s", identity=e["killer"])
+                                  f"{who} killed two players who were {apart:,.0f} m apart from each other "
+                                  + ("in the same second" if e["at"] == k["at"]
+                                     else f"within {plural(e['at'] - k['at'], 'second')}"),
+                                  identity=e["killer"])
         return []
+
+    def _teamkill(self, e, mine, who):
+        """Once someone has teamkilled enough to flag, every teamkill after
+        that in the same game updates one running line for them rather than
+        adding another."""
+        tally = self.teamkills.setdefault(e["killer"], {"victims": Counter(), "flagged": False})
+        tally["victims"][e.get("victim_name") or "someone"] += 1
+        recent = [k for k in mine if k["kind"] == "teamkill" and k["at"] >= e["at"] - 600]
+        if not tally["flagged"] and len(recent) < self.s["teamkills"]:
+            return []
+        tally["flagged"] = True
+        count = sum(tally["victims"].values())
+        names = ", ".join(name if n == 1 else f"{name} ({n}x)" for name, n in tally["victims"].most_common())
+        return [{"at": e["at"], "identity": e["killer"], "incident": False, "key": ("teamkills", e["killer"]),
+                 "count": count, "text": f"{who} has teamkilled {plural(count, 'time')} this game. Killed: {names}"}]
 
     def _error(self, e):
         # AI behaviour scripts can loop on one broken vehicle and throw dozens a
@@ -195,9 +217,9 @@ class Detector:
         seconds = {at for at, _ in self.errors}
         if len(seconds) >= self.s["script_errors"]:
             common = Counter(w for _, w in self.errors if w).most_common(1)
-            text = f"script errors in {len(seconds)} different seconds within 5 min"
+            text = f"The server hit script errors in {len(seconds)} separate seconds over the last 5 minutes"
             if common:
-                text += f", mostly {common[0][0]}"
+                text += f", mostly in {common[0][0]}"
             return self._flag(("errors",), e["at"], text, [{"at": self.errors[0][0]}])
         return []
 
@@ -214,16 +236,15 @@ class Detector:
         text, blasts, details = pending["text"], pending["blasts"], []
         heads = sum(b.get("zone") == "Head" for b in blasts)
         if heads:
-            details.append(f"{heads} of {len(blasts)} to the head")
+            details.append(f"{heads} of the {len(blasts)} were hit in the head.")
         joined = self._joined_before(blasts[0]["at"], {b.get("victim") for b in blasts})
         if joined:
-            details.append("joined just before: " + ", ".join(joined))
+            details.append("Joined shortly before: " + ", ".join(joined) + ".")
         if blasts[0].get("victim"):
             near = self._nearby(blasts)
             if near:
-                details.append("killing nearby: " + ", ".join(near))
-        if details:
-            text += ". " + "; ".join(details)
+                details.append("Getting kills close by at the time: " + ", ".join(near) + ".")
+        text += ". " + " ".join(details) if details else "."
         return {"at": pending["at"], "text": text, "identity": "", "incident": True}
 
     def _joined_before(self, start, victims):
@@ -250,6 +271,12 @@ class Detector:
                         and metres(k["killer_at"], b["victim_at"]) <= self.s["nearby"]:
                     counts[k["killer_name"]] = counts.get(k["killer_name"], 0) + 1
         return [name for name, _ in sorted(counts.items(), key=lambda c: -c[1])][:5]
+
+
+def plural(n, one, many=None):
+    if many is None:
+        return f"{n:,} {one}" + ("" if n == 1 else "s")
+    return f"{n:,} {one if n == 1 else many}"
 
 
 def trim(items: deque, before: int):
