@@ -919,6 +919,10 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
         self.assertIn("Ubuntu 24.04", await (await self.client.get("/surveys")).text())
         self.assertIn("box report", [a["action"] for a in self.db.audit()])
+        await self.client.post("/logout", data={"csrf": await self.csrf("/surveys") if False else token})
+        script = await self.client.get("/survey.sh")
+        self.assertEqual(script.status, 200)
+        self.assertIn("OYB box report", await script.text())
 
     async def test_moderators_cannot_make_upload_links(self):
         await self.client.post("/login", data={"username": "mod", "password": "mod-password"})

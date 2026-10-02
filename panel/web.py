@@ -29,7 +29,8 @@ ASSET_VERSION = str(int(max((HERE / "static" / n).stat().st_mtime
                            for n in ("style.css", "app.js", "discord.js", "site.css", "site.js"))))
 BRAND = HERE.parent / "assets" / "rank-card"
 COOKIE = "oyb_panel"
-PUBLIC = ("/login", "/static/", "/brand/", "/drop/")
+PUBLIC = ("/login", "/static/", "/brand/", "/drop/", "/survey.sh")
+SURVEY = HERE.parent / "dev" / "live_survey.sh"
 DURATIONS = [("3600", "1 hour"), ("86400", "1 day"), ("604800", "7 days"),
              ("2592000", "30 days"), ("0", "Permanent")]
 POWER_LABELS = {
@@ -597,6 +598,11 @@ async def store_survey(request, link, state):
     request.app[DB].log(f"upload link ({link['created_by']})", "box report", state.config.id, name,
                         f"{len(body) // 1024} KB from {client_ip(request)}")
     return web.Response(text="Report sent. All done, nothing else to do.\n")
+
+
+async def survey_script(request):
+    """The box report script, so a server box can fetch it with one short line."""
+    return web.Response(text=SURVEY.read_text(), content_type="text/plain")
 
 
 async def surveys_page(request):
@@ -1391,6 +1397,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/server/{id}/upload-links/{link_id:\\d+}/revoke", revoke_upload_link)
     app.router.add_route("*", "/drop/{token}", drop)
     app.router.add_get("/surveys", surveys_page)
+    app.router.add_get("/survey.sh", survey_script)
     app.router.add_get("/website", website_page)
     app.router.add_post("/website", website_save)
     app.router.add_get("/website/preview", website_preview)

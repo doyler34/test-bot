@@ -7,6 +7,7 @@
 # if an upload link (made on a server's History tab) is given.
 
 OUT=/tmp/oyb-survey.txt
+echo "OYB box report: looking around, this takes about 30 seconds..."
 exec > >(tee "$OUT") 2>&1
 SECRET='pass|token|secret|key|webhook'
 
