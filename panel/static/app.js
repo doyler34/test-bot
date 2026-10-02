@@ -153,3 +153,7 @@ for (const button of document.querySelectorAll("[data-copy]")) {
     setTimeout(() => { button.textContent = "Copy"; }, 1500);
   });
 }
+
+for (const select of document.querySelectorAll("[data-jump]")) {
+  select.addEventListener("change", () => { location.href = select.value; });
+}

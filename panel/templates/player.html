@@ -8,6 +8,14 @@
 </div>
 <p class="mono muted">{{ identity }}</p>
 
+<nav class="tabs">
+  <a href="#overview" data-tab="overview">Overview</a>
+  <a href="#kills" data-tab="kills">Kill log</a>
+  {% if can("ips") %}<a href="#connections" data-tab="connections">Connections</a>{% endif %}
+  {% if bans or incidents %}<a href="#record" data-tab="record">Bans &amp; incidents</a>{% endif %}
+</nav>
+
+<div data-tab-panel="overview">
 {% include "_oyb.html" %}
 
 <div class="split">
@@ -43,8 +51,10 @@
   {% endfor %}
 </section>
 </div>
+</div>
 
 {% if can("ips") %}
+<div data-tab-panel="connections" hidden>
 <section class="card">
   <h2>Connections</h2>
   {% if ips %}
@@ -76,12 +86,14 @@
   <p class="muted">No connections recorded yet. They're read from the server logs, so the server needs <code>log_dir</code> in panel.local.json.</p>
   {% endif %}
 </section>
+</div>
 {% endif %}
 
+<div data-tab-panel="kills" hidden>
 <section class="card" id="kill-log">
   <h2>Kill log</h2>
   <p class="muted">Pulled from the server logs on every server, including saved games, so you don't have to dig through them. Times are the log's own.</p>
-  <form method="get" action="/player/{{ identity }}#kill-log" class="kill-form">
+  <form method="get" action="/player/{{ identity }}#kills" class="kill-form">
     <select name="period">{% for value, label in kill_periods %}<option value="{{ value }}" {% if kills and kills.period == value and not kills.day %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
     <label class="inline-label">or day <input type="date" name="day" value="{{ kills.day if kills else '' }}"></label>
     {% for value, label in kill_logs %}<button name="log" value="{{ value }}" class="small{{ '' if kills and kills.mode == value else ' ghost' }}">{{ label }}</button>{% endfor %}
@@ -120,6 +132,9 @@
   {% endif %}
 </section>
 
+</div>
+
+<div data-tab-panel="record" hidden>
 {% if incidents %}
 <section class="card">
   <h2>On at suspicious incidents ({{ incidents|length }})</h2>
@@ -153,4 +168,5 @@
   </table></div>
 </section>
 {% endif %}
+</div>
 {% endblock %}

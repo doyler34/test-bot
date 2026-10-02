@@ -11,7 +11,9 @@
 {% if not s.online %}<p class="muted">{{ s.error or "Connecting…" }}</p>{% endif %}
 
 {% if can("power") %}
-<div class="controls">
+<details class="controls">
+  <summary>Server actions</summary>
+  <div class="control-list">
   {% for action in actions %}
   <form method="post" action="/server/{{ s.id }}/power" data-confirm="{{ labels[action] }} on {{ s.name }}? Everyone on it will be affected.">
     <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -20,7 +22,8 @@
   </form>
   {% endfor %}
   {% if not s.service %}<span class="muted">Starting and stopping the server itself is done outside the panel (in AMP, or set <code>service</code> in panel.local.json).</span>{% endif %}
-</div>
+  </div>
+</details>
 {% endif %}
 
 <div data-refresh="/server/{{ s.id }}/summary.part">

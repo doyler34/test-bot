@@ -386,3 +386,58 @@ textarea.survey { width: 100%; min-height: 70vh; font-size: .8rem; white-space: 
   .kill-log td { border: 0; padding: 2px 0; }
   .kill-log td:first-child { font-size: .8rem; color: var(--muted); }
 }
+
+/* menu: everything past the main three links sits behind Menu on phones */
+.menu { display: none; position: relative; margin-left: auto; }
+.menu summary { list-style: none; cursor: pointer; padding: 4px 12px; border: 1px solid var(--line); color: var(--ink);
+  font-family: var(--display); text-transform: uppercase; letter-spacing: .06em; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu summary::after { content: " ☰"; }
+.menu[open] summary { border-color: var(--gold); }
+.menu-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 200px; display: flex;
+  flex-direction: column; background: var(--panel-2); border: 1px solid var(--gold); padding: 6px; }
+.menu-list a, .menu-list button.link { display: block; padding: 10px 12px; color: var(--ink); text-align: left;
+  font-family: var(--display); text-transform: uppercase; letter-spacing: .05em; font-size: 1rem; }
+.menu-list a.on { color: var(--gold); }
+.menu-list form { margin: 0; border-top: 1px solid var(--line-soft); }
+
+/* server actions behind one button */
+details.controls { padding: 0; }
+details.controls summary { list-style: none; cursor: pointer; padding: 9px 12px; font-family: var(--display);
+  text-transform: uppercase; letter-spacing: .06em; color: var(--gold); }
+details.controls summary::-webkit-details-marker { display: none; }
+details.controls summary::after { content: " ▾"; }
+details.controls[open] summary::after { content: " ▴"; }
+.control-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 12px 12px; }
+.control-list form { margin: 0; }
+.control-list .muted { font-size: .85rem; flex-basis: 100%; }
+
+.players-table td.actions { white-space: nowrap; }
+.players-table td.actions form { display: inline-block; margin: 0; }
+.dc-jump { display: none; }
+
+@media (max-width: 720px) {
+  .top { gap: 6px 10px; padding: 8px 14px; }
+  .top nav { order: 3; flex-basis: 100%; }
+  .top nav a.extra, .top .me { display: none; }
+  .top nav a { padding: 5px 10px; }
+  .menu { display: block; }
+  .summary { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .summary .stat { padding: 8px 8px; }
+  .summary .stat b { font-size: 1.15rem; }
+  .summary .stat span { font-size: .65rem; }
+  .summary .minor { display: none; }
+  .players-table .num-col { display: none; }
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  table.stack td { border: 0; padding: 2px 0; }
+  table.stack td.wide { display: none; }
+  table.stack td:empty { display: none; }
+  table.stack td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); }
+  table.stack td.strong { font-weight: 600; }
+  .tabs { overflow-x: auto; }
+  .tabs a { white-space: nowrap; padding: 6px 12px; }
+  .dc-jump { display: block; margin-bottom: 14px; }
+  .dc-tabs { display: none; }
+}

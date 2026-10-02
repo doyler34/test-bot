@@ -17,13 +17,24 @@
     <a href="/" {% if path == "/" %}class="on"{% endif %}>Servers</a>
     <a href="/players" {% if path.startswith("/player") %}class="on"{% endif %}>Players</a>
     <a href="/bans" {% if path == "/bans" %}class="on"{% endif %}>Bans</a>
-    {% if can("console") %}<a href="/console" {% if path == "/console" %}class="on"{% endif %}>Console</a>{% endif %}
-    {% if can("audit") %}<a href="/audit" {% if path == "/audit" %}class="on"{% endif %}>Audit log</a>{% endif %}
-    {% if can("discord") %}<a href="/discord" {% if path.startswith("/discord") %}class="on"{% endif %}>Discord</a>{% endif %}
-    {% if can("discord") %}<a href="/website" {% if path.startswith("/website") %}class="on"{% endif %}>Website</a>{% endif %}
-    {% if can("users") %}<a href="/users" {% if path == "/users" %}class="on"{% endif %}>Admins</a>{% endif %}
-    <a href="/guide" {% if path.startswith("/guide") %}class="on"{% endif %}>Guide</a>
+    {% set more %}
+    {% if can("console") %}<a href="/console" class="extra{{ ' on' if path == '/console' }}">Console</a>{% endif %}
+    {% if can("audit") %}<a href="/audit" class="extra{{ ' on' if path == '/audit' }}">Audit log</a>{% endif %}
+    {% if can("discord") %}<a href="/discord" class="extra{{ ' on' if path.startswith('/discord') }}">Discord</a>{% endif %}
+    {% if can("discord") %}<a href="/website" class="extra{{ ' on' if path.startswith('/website') }}">Website</a>{% endif %}
+    {% if can("users") %}<a href="/users" class="extra{{ ' on' if path == '/users' }}">Admins</a>{% endif %}
+    <a href="/guide" class="extra{{ ' on' if path.startswith('/guide') }}">Guide</a>
+    {% endset %}
+    {{ more }}
   </nav>
+  <details class="menu">
+    <summary>Menu</summary>
+    <div class="menu-list">
+      {{ more }}
+      <a href="/account" class="extra">Account · {{ user.username }}</a>
+      <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Log out</button></form>
+    </div>
+  </details>
   <div class="me">
     <a href="/account">{{ user.username }}</a> <span class="role">{{ user.role }}</span>
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Log out</button></form>

@@ -1,14 +1,14 @@
 {% if recent %}
-<div class="scroll"><table>
+<div class="scroll"><table class="stack">
   <thead><tr><th>When</th><th>Who</th><th>What</th><th>Server</th><th>Target</th><th>Detail</th></tr></thead>
   <tbody>
   {% for r in recent %}
   <tr class="{{ '' if r.ok else 'bad' }}">
-    <td title="{{ r.at|ts }}">{{ r.at|ago }}</td>
-    <td>{{ r.username }}</td>
-    <td>{{ r.action }}</td>
-    <td>{{ r.server or "—" }}</td>
-    <td>{{ r.target or "—" }}</td>
+    <td title="{{ r.at|ts }}" class="muted">{{ r.at|ago }}</td>
+    <td data-label="By">{{ r.username }}</td>
+    <td class="strong">{{ r.action }}</td>
+    <td data-label="Server">{{ r.server or "—" }}</td>
+    <td data-label="Target">{{ r.target or "—" }}</td>
     <td class="wrap detail">{{ r.detail }}</td>
   </tr>
   {% endfor %}

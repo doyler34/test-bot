@@ -34,15 +34,15 @@
     <a href="/bans{{ '' if show_old else '?all=1' }}">{{ "Active only" if show_old else "Show expired and removed" }}</a>
   </div>
   {% if bans %}
-  <div class="scroll"><table>
+  <div class="scroll"><table class="stack">
     <thead><tr><th>Player</th><th>Reason</th><th>Length</th><th>By</th><th class="wide">Servers</th><th></th></tr></thead>
     <tbody>
     {% for b in bans %}
     <tr>
       <td><a href="/player/{{ b.identity }}">{{ b.name or b.identity }}</a>{% if b.ips %} <span class="pill down" title="{{ b.ips|join(', ') if can('ips') else '' }}">IP</span>{% endif %}</td>
       <td class="wrap">{{ b.reason }}</td>
-      <td>{% if b.removed_at %}Removed by {{ b.removed_by }}{% else %}{{ b.expires_at|until }}{% endif %}</td>
-      <td title="{{ b.created_at|ts }}">{{ b.created_by }}</td>
+      <td data-label="Length">{% if b.removed_at %}Removed by {{ b.removed_by }}{% else %}{{ b.expires_at|until }}{% endif %}</td>
+      <td title="{{ b.created_at|ts }}" data-label="Banned by">{{ b.created_by }}</td>
       <td class="wide">
         {% for srv in servers if srv.configured %}
           {% set done = b.synced.get(srv.id, []) %}

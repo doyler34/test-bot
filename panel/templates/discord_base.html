@@ -4,6 +4,9 @@
 <p class="kicker">Discord</p>
 <h1>{{ heading or dict(pages)[page] }}</h1>
 <div class="dc-shell">
+  <select class="dc-jump" data-jump aria-label="Discord page">
+    {% for key, label in pages %}<option value="/discord/{{ key }}" {% if key == page %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
   <nav class="dc-tabs">
     {% for key, label in pages %}
     <a href="/discord/{{ key }}" {% if key == page %}class="on"{% endif %}>{{ label }}</a>
