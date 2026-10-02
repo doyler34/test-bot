@@ -5,6 +5,7 @@
   "cookie_secure": true,
   "discord_webhook": "",
   "oyb_data": "data",
+  "site_hosts": [],
   "servers": [
     {
       "id": "server-1",

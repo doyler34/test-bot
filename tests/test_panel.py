@@ -1080,6 +1080,43 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get(path)).text()
         return re.search(r'name="csrf" value="([^"]+)"', html).group(1)
 
+    async def test_public_site_on_its_own_domain(self):
+        self.config.site_hosts = ["oybgaming.com"]
+        home = await self.client.get("/", headers={"Host": "www.oybgaming.com"})
+        html = await home.text()
+        self.assertEqual(home.status, 200)
+        self.assertIn("Old Young Bastards.", html)
+        self.assertIn("3 in game right now · 1 of 2 servers up", html)
+        self.assertNotIn("Log in", html)
+        live = await (await self.client.get("/status.json", headers={"Host": "oybgaming.com"})).json()
+        self.assertEqual((live["online"], live["playing"]), (1, 3))
+        self.assertNotIn("name", json.dumps(live["servers"]))
+        for path in ("/login", "/bans", "/website", "/drop/x", "/static/app.js", "/api/status"):
+            self.assertEqual((await self.client.get(path, headers={"Host": "oybgaming.com"})).status, 404, path)
+        panel = await self.client.get("/login")
+        self.assertEqual(panel.headers["X-Robots-Tag"], "noindex, nofollow")
+        self.assertIn("Disallow: /", await (await self.client.get("/robots.txt")).text())
+
+    async def test_editing_the_website(self):
+        await self.login("mod", "mod-password")
+        self.assertEqual((await self.client.get("/website")).status, 403)
+        await self.client.post("/logout", data={"csrf": await self.csrf()})
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/website")
+        bad = await (await self.client.post("/website", data={"csrf": token, "name": "OYB", "discord": "discord.gg"})).text()
+        self.assertIn("should look like https://discord.gg/", bad)
+        await self.client.post("/website", data={
+            "csrf": token, "name": "OYB Gaming", "tagline": "Come play", "about": "Hi\nThere",
+            "discord": "https://discord.gg/oyb123", "game_server-1": "Arma Reforger", "join_server-1": "Join via IP"})
+        self.config.site_hosts = ["oybgaming.com"]
+        html = await (await self.client.get("/", headers={"Host": "oybgaming.com"})).text()
+        self.assertIn("OYB Gaming", html)
+        self.assertIn('href="https://discord.gg/oyb123"', html)
+        self.assertNotIn("Join via IP", html)
+        self.assertNotIn("data-server", html)
+        preview = await (await self.client.get("/website/preview")).text()
+        self.assertIn("Preview of the public site", preview)
+
     async def test_pages_need_a_login(self):
         response = await self.client.get("/bans", allow_redirects=False)
         self.assertEqual(response.status, 302)

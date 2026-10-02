@@ -13,7 +13,7 @@ from aiohttp import web
 
 from bot.discord import welcome_doc
 
-from . import archive, auth, memory, outliers
+from . import archive, auth, memory, outliers, site
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
 from .connections import LogReader, folder_start
@@ -25,7 +25,8 @@ from .servers import POWER_RCON, POWER_SERVICE, ServerManager, clean, valid_iden
 log = logging.getLogger("panel.web")
 
 HERE = Path(__file__).parent
-ASSET_VERSION = str(int(max((HERE / "static" / n).stat().st_mtime for n in ("style.css", "app.js", "discord.js"))))
+ASSET_VERSION = str(int(max((HERE / "static" / n).stat().st_mtime
+                           for n in ("style.css", "app.js", "discord.js", "site.css", "site.js"))))
 BRAND = HERE.parent / "assets" / "rank-card"
 COOKIE = "oyb_panel"
 PUBLIC = ("/login", "/static/", "/brand/", "/drop/")
@@ -175,6 +176,35 @@ async def security(request, handler):
         exc.headers.update(SECURITY_HEADERS)
         raise
     response.headers.update(SECURITY_HEADERS)
+    return response
+
+
+SITE_FILES = ("/static/site.css", "/static/site.js", "/static/site/oyb-logo.jpg", "/static/site/oyb-icon.png",
+              "/static/site/banner.jpg")
+
+
+@web.middleware
+async def public_site(request, handler):
+    """On the public domain only the website exists; everywhere else the
+    panel asks search engines to stay away."""
+    if site.is_site_host(request.host, request.app[CONFIG].site_hosts):
+        if request.method == "GET" and request.path == "/":
+            return site_page(request)
+        if request.method == "GET" and request.path == "/status.json":
+            return web.json_response(site.status(site_view(request)), headers={"Cache-Control": "no-store"})
+        if request.method == "GET" and request.path == "/robots.txt":
+            return web.Response(text="User-agent: *\nAllow: /\n")
+        if request.method == "GET" and request.path in SITE_FILES:
+            return await handler(request)
+        raise web.HTTPNotFound(text="Not found.")
+    if request.path == "/robots.txt":
+        return web.Response(text="User-agent: *\nDisallow: /\n")
+    try:
+        response = await handler(request)
+    except web.HTTPException as exc:
+        exc.headers["X-Robots-Tag"] = "noindex, nofollow"
+        raise
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
 
 
@@ -578,6 +608,56 @@ async def surveys_page(request):
     return render(request, "surveys.html", reports=[p.name for p in reports],
                   chosen=chosen.name if chosen else "",
                   text=chosen.read_text(errors="replace") if chosen else "")
+
+
+def site_doc(request):
+    row = request.app[DB].discord_doc("site")
+    raw = json.loads(row["published"]) if row and row["published"] else site.default_site()
+    return site.check_site(raw, [s.id for s in request.app[CONFIG].servers])[0]
+
+
+def site_view(request, doc=None):
+    return site.view(doc or site_doc(request), request.app[CONFIG].servers, request.app[MANAGER].states,
+                     bridge(request))
+
+
+def site_page(request, preview=False):
+    doc = site_doc(request)
+    html = request.app[JINJA].get_template("site.html").render(
+        doc=doc, site=site_view(request, doc), preview=preview, asset_version=ASSET_VERSION)
+    return web.Response(text=html, content_type="text/html")
+
+
+async def website_page(request):
+    require(request, "discord")
+    return website_form(request, site_doc(request), [])
+
+
+def website_form(request, doc, problems):
+    labels = {s.get("id"): s.get("label") for s in bridge(request).get("servers", [])}
+    servers = [{"id": s.id, "name": labels.get(s.id) or s.name} for s in request.app[CONFIG].servers]
+    return render(request, "website.html", doc=doc, problems=problems, site_servers=servers,
+                  hosts=request.app[CONFIG].site_hosts)
+
+
+async def website_save(request):
+    require(request, "discord")
+    form = await request.post()
+    raw = {key: form.get(key, "") for key in ("name", "tagline", "about", "discord")}
+    raw["servers"] = {s.id: {"show": f"show_{s.id}" in form, "game": form.get(f"game_{s.id}", ""),
+                             "join": form.get(f"join_{s.id}", "")} for s in request.app[CONFIG].servers}
+    doc, problems = site.check_site(raw, [s.id for s in request.app[CONFIG].servers])
+    if problems:
+        return website_form(request, {**doc, "discord": raw["discord"]}, problems)
+    request.app[DB].publish_discord_doc("site", json.dumps(doc), request[USER]["username"])
+    audit(request, "edit website")
+    flash(request, "Saved. The public site shows it now.")
+    raise web.HTTPFound("/website")
+
+
+async def website_preview(request):
+    require(request, "discord")
+    return site_page(request, preview=True)
 
 
 async def game_log(request):
@@ -1214,7 +1294,7 @@ async def change_user(request):
 
 def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerManager | None = None,
                start_manager: bool = True) -> web.Application:
-    app = web.Application(middlewares=[security, session], client_max_size=64 * 1024)
+    app = web.Application(middlewares=[security, public_site, session], client_max_size=64 * 1024)
     app[CONFIG] = config
     app[DB] = db or PanelDB(config.database)
     app[MANAGER] = manager or ServerManager(config, app[DB])
@@ -1256,6 +1336,9 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/server/{id}/upload-links/{link_id:\\d+}/revoke", revoke_upload_link)
     app.router.add_route("*", "/drop/{token}", drop)
     app.router.add_get("/surveys", surveys_page)
+    app.router.add_get("/website", website_page)
+    app.router.add_post("/website", website_save)
+    app.router.add_get("/website/preview", website_preview)
     app.router.add_post("/server/{id}/kick", kick)
     app.router.add_post("/server/{id}/power", power)
     app.router.add_get("/bans", bans_page)

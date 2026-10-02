@@ -264,7 +264,7 @@ async def main(port):
                      log_dir=str(root / "logs" / "eu2")),
         ServerConfig("eu3", "OYB #3 Training", rcon_port=19993, rcon_password="demo"),
     ]
-    config = PanelConfig(database=str(root / "data" / "panel.sqlite3"), cookie_secure=False, poll_seconds=2,
+    config = PanelConfig(database=str(root / "data" / "panel.sqlite3"), cookie_secure=False, poll_seconds=2, site_hosts=["site.localhost"],
                          oyb_data=str(root / "bot"), servers=servers)
     db = PanelDB(config.database)
     seed_panel(db, config)

@@ -367,3 +367,8 @@ button.dc-open { background: none; color: var(--ink); padding: 4px 0; clip-path:
 .dc-members { display: grid; gap: 6px; margin-bottom: 14px; }
 .dc-role { font-size: .75rem; border: 1px solid; border-radius: 4px; padding: 0 6px; color: #dbdee1; }
 textarea.survey { width: 100%; min-height: 70vh; font-size: .8rem; white-space: pre; margin-top: 12px; }
+.site-server { display: grid; grid-template-columns: 200px 180px minmax(0, 1fr); gap: 12px; align-items: end;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line-soft); }
+.site-server:last-child { border-bottom: 0; }
+.site-server label { margin: 0; }
+@media (max-width: 800px) { .site-server { grid-template-columns: minmax(0, 1fr); } }

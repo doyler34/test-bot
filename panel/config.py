@@ -47,6 +47,7 @@ class PanelConfig:
     discord_webhook: str = ""
     oyb_data: str = "data"
     suspicion: dict = field(default_factory=dict)
+    site_hosts: list[str] = field(default_factory=list)
     servers: list[ServerConfig] = field(default_factory=list)
 
     def server(self, server_id: str) -> ServerConfig | None:
@@ -119,5 +120,6 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
         discord_webhook=str(raw.get("discord_webhook") or ""),
         oyb_data=str(raw.get("oyb_data") or "data"),
         suspicion=suspicion,
+        site_hosts=[str(h).strip().lower() for h in raw.get("site_hosts", []) if str(h).strip()],
         servers=servers,
     )

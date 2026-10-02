@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Website · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker">Public site</p>
+<h1>Website</h1>
+<section class="card">
+  {% if hosts %}
+  <p>The public site is at {% for h in hosts %}<a href="https://{{ h }}" rel="noopener">{{ h }}</a>{{ ", " if not loop.last }}{% endfor %}. Nothing of this panel can be reached on that address.</p>
+  {% else %}
+  <p class="warn">No domain is set up for it yet, so only you can see it, through the preview.</p>
+  {% endif %}
+  <p class="muted">It shows who you are, each server with whether it's up and how many are playing, how to join, and your Discord invite. It never shows player names, IPs or anything else from the panel. Saving changes it straight away.</p>
+  <p><a href="/website/preview">Open the preview →</a></p>
+  {% if problems %}<ul class="dc-problems">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>{% endif %}
+</section>
+
+<form method="post" action="/website">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <section class="card">
+    <h2>The words</h2>
+    <label>Name <input name="name" value="{{ doc.name }}" maxlength="40" required></label>
+    <label>Headline <span class="muted">(the big line at the top)</span> <input name="tagline" value="{{ doc.tagline }}" maxlength="200"></label>
+    <label>About us <span class="muted">(the first paragraph goes under the headline, the rest under "Who we are"; new lines start new paragraphs)</span> <textarea name="about" rows="6" maxlength="2000">{{ doc.about }}</textarea></label>
+    <label>Discord invite <span class="muted">(make one that never expires in Discord: Invite People → Edit invite link)</span>
+      <input name="discord" value="{{ doc.discord }}" placeholder="https://discord.gg/abc123" maxlength="200"></label>
+  </section>
+
+  <section class="card">
+    <h2>Servers</h2>
+    <p class="muted">Servers are grouped by game on the site, so a new game just gets its own group. Untick one to keep it off the site.</p>
+    <div class="dc-names">
+      {% for s in site_servers %}
+      {% set look = doc.servers[s.id] %}
+      <div class="site-server">
+        <label class="check"><input type="checkbox" name="show_{{ s.id }}" {% if look.show %}checked{% endif %}> <b>{{ s.name }}</b></label>
+        <label>Game <input name="game_{{ s.id }}" value="{{ look.game }}" maxlength="60"></label>
+        <label>How to join <input name="join_{{ s.id }}" value="{{ look.join }}" maxlength="200" placeholder="Search for “{{ s.name }}” in the server browser."></label>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  <div class="dc-actions"><button>Save</button></div>
+</form>
+{% endblock %}

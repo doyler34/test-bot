@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ doc.name }}{% if doc.tagline %} · {{ doc.tagline }}{% endif %}</title>
+<meta name="description" content="{{ doc.tagline or doc.about[:150] }}">
+<meta property="og:title" content="{{ doc.name }}">
+<meta property="og:description" content="{{ doc.tagline or doc.about[:150] }}">
+<meta name="theme-color" content="#0a0a0b">
+<meta property="og:image" content="/static/site/oyb-logo.jpg">
+<link rel="icon" href="/static/site/oyb-icon.png" type="image/png">
+<link rel="stylesheet" href="/static/site.css?v={{ asset_version }}">
+<script src="/static/site.js?v={{ asset_version }}" defer></script>
+</head>
+<body>
+{% if preview %}<div class="preview">Preview of the public site · <a href="/website">Back to editing</a></div>{% endif %}
+<nav class="bar">
+  <a class="logo" href="#top"><img src="/static/site/oyb-icon.png" alt=""><span>{{ doc.name }}</span></a>
+  <div class="links">
+    {% if site.count %}<a href="#servers">Servers</a>{% endif %}
+    {% if "\n" in doc.about.strip() %}<a href="#about">Who we are</a>{% endif %}
+    {% if doc.discord %}<a class="pill-button" href="{{ doc.discord }}" rel="noopener">Join {{ doc.name }}</a>{% endif %}
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="intro">
+  {% if site.count %}
+  <p class="status" data-live><span class="dot {{ 'on' if site.online }}"></span><span data-summary>{{ site.playing }} in game right now · {{ site.online }} of {{ site.count }} server{{ "" if site.count == 1 else "s" }} up</span></p>
+  {% endif %}
+  <h1>{{ doc.tagline or doc.name }}</h1>
+  {% set paras = doc.about.split("\n")|select("ne", "")|list %}
+  {% if paras %}<p class="lead">{{ paras[0] }}</p>{% endif %}
+  <div class="actions">
+    {% if doc.discord %}<a class="button primary" href="{{ doc.discord }}" rel="noopener">Join the {{ doc.name }} Discord</a>{% endif %}
+    {% if site.count %}<a class="button" href="#servers">Pick a server <span aria-hidden="true">→</span></a>{% endif %}
+  </div>
+  </div>
+</header>
+
+<main>
+  {% if site.count %}
+  <section id="servers">
+    <div class="heading">
+      <h2>Our servers</h2>
+      <p>Live. Pick one and get stuck in.</p>
+    </div>
+    {% for game, list in site.games.items() %}
+    <div class="game">
+      <h3>{{ game }}</h3>
+      <ul class="servers">
+        {% for s in list %}
+        <li data-server="{{ s.id }}">
+          <div class="name">
+            <span class="dot {{ 'on' if s.online }}" data-dot></span>
+            <div>
+              <b>{{ s.name }}</b>
+              {% if s.settings %}<small>{{ s.settings }}</small>{% endif %}
+            </div>
+          </div>
+          <div class="count"><b data-players>{{ s.players }}</b><small data-state>{{ "playing" if s.online else "offline" }}</small></div>
+          <p class="join">{{ s.join }}</p>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if paras|length > 1 %}
+  <section id="about" class="about">
+    <div class="heading"><h2>Who we are</h2></div>
+    <div class="text">
+      {% for para in paras[1:] %}<p>{{ para }}</p>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if doc.discord %}
+  <section class="cta">
+    <h2>Your squad's waiting.</h2>
+    <p>Grab your roles, find a squad and start climbing the {{ doc.name }} ranks.</p>
+    <a class="button primary" href="{{ doc.discord }}" rel="noopener">Join the {{ doc.name }} Discord</a>
+  </section>
+  {% endif %}
+</main>
+
+<footer>
+  <span>© {{ doc.name }} · Old Young Bastards</span>
+  <span>Game names belong to their owners; we aren't connected to them.</span>
+</footer>
+</body>
+</html>
