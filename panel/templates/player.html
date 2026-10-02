@@ -78,6 +78,48 @@
 </section>
 {% endif %}
 
+<section class="card" id="kill-log">
+  <h2>Kill log</h2>
+  <p class="muted">Pulled from the server logs on every server, including saved games, so you don't have to dig through them. Times are the log's own.</p>
+  <form method="get" action="/player/{{ identity }}#kill-log" class="kill-form">
+    <select name="period">{% for value, label in kill_periods %}<option value="{{ value }}" {% if kills and kills.period == value and not kills.day %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <label class="inline-label">or day <input type="date" name="day" value="{{ kills.day if kills else '' }}"></label>
+    {% for value, label in kill_logs %}<button name="log" value="{{ value }}" class="small{{ '' if kills and kills.mode == value else ' ghost' }}">{{ label }}</button>{% endfor %}
+  </form>
+  {% if kills %}
+  <h3>{{ kills.title }} · {{ kills.label }} ({{ kills.lines|length }}{{ "+" if kills.full }})</h3>
+  {% if kills.lines %}
+  <div class="scroll"><table class="kill-log">
+    <thead><tr><th>When</th><th>Server</th><th>What happened</th><th>How</th><th></th></tr></thead>
+    <tbody>
+    {% for l in kills.lines %}
+    <tr {% if l.revenge %}class="revenge"{% endif %}>
+      <td class="mono nowrap">{{ l.stamp }}</td>
+      <td>{{ l.server }}</td>
+      <td class="wrap">
+        {% if l.row.killer and l.row.killer != identity %}<a href="/player/{{ l.row.killer }}">{{ l.killer }}</a>{% else %}<b>{{ l.killer }}</b>{% endif %}
+        {{ l.what }}
+        {% if l.row.killer != l.row.victim %}{% if l.row.victim != identity %}<a href="/player/{{ l.row.victim }}">{{ l.row.victim_name }}</a>{% else %}<b>{{ l.row.victim_name }}</b>{% endif %}{% endif %}
+        {% if l.revenge %}<br><span class="pill gold">Revenge?</span> <span class="muted">{{ l.revenge }}</span>{% endif %}
+      </td>
+      <td class="muted">{{ l.extra }}</td>
+      <td>{% if l.game %}<a href="/server/{{ l.row.server }}/game/{{ l.game }}">Game</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if kills.full %}<p class="muted">Showing the latest 500. Pick a shorter period or a single day to see the rest.</p>{% endif %}
+  <details class="copy-box">
+    <summary>Copy as text</summary>
+    <textarea readonly rows="8" class="mono" id="kill-text">{{ kills.text }}</textarea>
+    <button type="button" class="small" data-copy="#kill-text">Copy</button>
+  </details>
+  {% else %}
+  <p class="muted">Nothing found for that.</p>
+  {% endif %}
+  {% endif %}
+</section>
+
 {% if incidents %}
 <section class="card">
   <h2>On at suspicious incidents ({{ incidents|length }})</h2>

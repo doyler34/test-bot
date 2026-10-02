@@ -157,6 +157,7 @@ class ServerManager:
                     self.db.prune_connections()
                     self.db.prune_feed()
                     self.db.prune_incidents()
+                    self.db.prune_kills()
             except Exception:
                 log.exception("reading logs failed for %s", state.config.id)
             await asyncio.sleep(self.config.poll_seconds)
@@ -169,6 +170,7 @@ class ServerManager:
                 state.fps, state.fps_at = event["fps"], event["at"]
         if moved:
             self.db.add_connections(state.config.id, events, moved)
+            self.db.add_kills(state.config.id, archive.kill_rows(events))
         flags = [f for event in events for f in state.detector.feed(event)]
         for flag in flags + state.detector.flush(now()):
             self.suspicious(state, flag)
@@ -200,6 +202,16 @@ class ServerManager:
                 log.warning("Couldn't read %s for player numbers: %s", row["path"], exc)
                 game = {"players": []}
             self.db.add_game_players(state.config.id, row["folder"], row["started"], game["players"])
+        # Likewise every kill in games saved before the kill log existed.
+        for row in self.db.unread_kill_games(state.config.id):
+            try:
+                info = Path(row["path"]).stat()
+                game = await asyncio.to_thread(archive.read_game, row["path"], row["folder"], info.st_size,
+                                               info.st_mtime, ())
+            except (OSError, tarfile.TarError, EOFError) as exc:
+                log.warning("Couldn't read %s for the kill log: %s", row["path"], exc)
+                game = {"kill_rows": []}
+            self.db.add_kills(state.config.id, game["kill_rows"], row["folder"])
 
     def suspicious(self, state: ServerState, flag: dict):
         """Puts a flag in the live feed; a fresh one also goes to Discord, and a

@@ -16,6 +16,7 @@
 {{ shot("player", "A player's page.") }}
 <ul>
   <li><b>In-game record</b>: time played, kills, deaths, K/D and teamkills, and the Discord account they linked.</li>
+  <li><b>Kill log</b>: pick a period (their last game, 24 hours, 7 or 30 days, or a single day) and press <b>Teamkills they did</b>, <b>Who teamkilled them</b> or <b>All their kills and deaths</b>. Every line has the date and log time, the server, what killed them and from how far, and a link to that game. A teamkill marked <b>Revenge?</b> happened within 10 minutes of the victim teamkilling them first. <b>Copy as text</b> gives you the lot as plain lines to paste anywhere.</li>
   <li><b>History</b>: first and last seen, and a <b>Ban</b> button{% if not can("ban") %} (admins){% endif %}.</li>
   <li><b>Admin notes</b>, the names they've used, their ban history, and any suspicious incidents they were online for.</li>
 </ul>

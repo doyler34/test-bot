@@ -177,6 +177,27 @@ CREATE TABLE IF NOT EXISTS scored_games (
     folder TEXT NOT NULL,
     PRIMARY KEY (server, folder)
 );
+CREATE TABLE IF NOT EXISTS kills (
+    server TEXT NOT NULL,
+    game INTEGER NOT NULL,
+    at INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    killer TEXT NOT NULL,
+    killer_name TEXT NOT NULL,
+    victim TEXT NOT NULL,
+    victim_name TEXT NOT NULL,
+    damage TEXT NOT NULL,
+    distance REAL,
+    zone TEXT NOT NULL,
+    UNIQUE (server, at, kind, killer, victim)
+);
+CREATE INDEX IF NOT EXISTS kills_killer ON kills(killer, at);
+CREATE INDEX IF NOT EXISTS kills_victim ON kills(victim, at);
+CREATE TABLE IF NOT EXISTS kills_read (
+    server TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    PRIMARY KEY (server, folder)
+);
 CREATE TABLE IF NOT EXISTS incidents (
     id INTEGER PRIMARY KEY,
     server TEXT NOT NULL,
@@ -571,6 +592,51 @@ class PanelDB:
                    int(game["ended"]), size, game["players"], game["kills"], game["flags"])
         if "stats" in game:
             self.add_game_players(server, folder, int(game["started"]), game["stats"])
+        if "kill_rows" in game:
+            self.add_kills(server, game["kill_rows"], folder)
+
+    # every kill, for the kill log on a player's page
+
+    def add_kills(self, server, rows, folder=None):
+        with self.db:
+            self.db.executemany("INSERT OR IGNORE INTO kills VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                [(server, *row) for row in rows])
+            if folder:
+                self.db.execute("INSERT OR IGNORE INTO kills_read VALUES (?, ?)", (server, folder))
+
+    def unread_kill_games(self, server, limit=20):
+        return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM kills_read r"
+                        " WHERE r.server = a.server AND r.folder = a.folder) ORDER BY started DESC LIMIT ?",
+                        server, limit)
+
+    def kill_log(self, identity, mode, since=0, until=None, limit=500):
+        """A player's kills, deaths or teamkills, oldest first. 'last' is the
+        last game they were in, on whichever server that was."""
+        who = {"tk_by": "kind = 'teamkill' AND killer = ?", "tk_on": "kind = 'teamkill' AND victim = ?",
+               "all": "(killer = ? OR victim = ?)"}[mode]
+        args = [identity] * who.count("?")
+        if since == "last":
+            last = self.one("SELECT server, game FROM kills WHERE killer = ? OR victim = ? ORDER BY at DESC LIMIT 1",
+                            identity, identity)
+            if last is None:
+                return []
+            where, more = "server = ? AND game = ?", [last["server"], last["game"]]
+        else:
+            where, more = "at >= ? AND at < ?", [since, until or now() + 86400]
+        rows = self.all(f"SELECT * FROM kills WHERE {who} AND {where} ORDER BY at DESC LIMIT ?", *args, *more, limit)
+        return list(reversed(rows))
+
+    def revenge_for(self, row, window=600):
+        """The teamkill this one may have been paying back: the victim
+        teamkilling the killer shortly before, on the same server."""
+        if row["kind"] != "teamkill" or not row["killer"]:
+            return None
+        return self.one("SELECT * FROM kills WHERE server = ? AND kind = 'teamkill' AND killer = ? AND victim = ?"
+                        " AND at <= ? AND at >= ? ORDER BY at DESC LIMIT 1",
+                        row["server"], row["victim"], row["killer"], row["at"], row["at"] - window)
+
+    def prune_kills(self, days=180):
+        self.write("DELETE FROM kills WHERE at < ?", now() - days * 86400)
 
     def add_game_players(self, server, folder, started, players):
         with self.db:

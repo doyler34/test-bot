@@ -110,12 +110,27 @@ def read_game(path: str, folder: str, size: int, mtime: float, settings: tuple) 
     feed.sort(key=lambda e: e["at"])
     ended = max((e["at"] for e in events), default=started)
     return {"started": started, "ended": ended, "players": sorted(players.values(), key=lambda p: p["first"]),
-            "feed": feed, "flags": flags,
+            "feed": feed, "flags": flags, "kill_rows": kill_rows(events, started),
             "kills": sum(e["kind"] == "kill" and bool(e.get("victim")) and e.get("killer") != e["victim"]
                          for e in events),
             "teamkills": sum(e["kind"] == "teamkill" for e in events)}
 
 
+def kill_rows(events, game=None):
+    """Kills and teamkills as rows for the kill log. Live events carry their
+    game's start; a whole past game passes it in."""
+    rows = []
+    for e in events:
+        if e["kind"] not in ("kill", "teamkill") or not e.get("victim"):
+            continue
+        killer_name = e.get("killer_name") or ("AI" if e.get("by_ai") else "")
+        rows.append((int(game if game is not None else e.get("game") or 0), int(e["at"]), e["kind"],
+                     e.get("killer") or "", killer_name, e["victim"], e.get("victim_name") or "",
+                     e.get("damage") or "", e.get("distance"), e.get("zone") or ""))
+    return rows
+
+
 def summary(game: dict) -> dict:
     return {"started": game["started"], "ended": game["ended"], "players": len(game["players"]),
-            "kills": game["kills"], "flags": len(game["flags"]), "stats": game["players"]}
+            "kills": game["kills"], "flags": len(game["flags"]), "stats": game["players"],
+            "kill_rows": game["kill_rows"]}

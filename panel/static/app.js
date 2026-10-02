@@ -143,3 +143,13 @@ for (const input of document.querySelectorAll("[data-filter-rows]")) {
     for (const row of rows) row.hidden = q && !row.textContent.toLowerCase().includes(q);
   });
 }
+
+for (const button of document.querySelectorAll("[data-copy]")) {
+  button.addEventListener("click", async () => {
+    const box = document.querySelector(button.dataset.copy);
+    box.select();
+    try { await navigator.clipboard.writeText(box.value); } catch { document.execCommand("copy"); }
+    button.textContent = "Copied";
+    setTimeout(() => { button.textContent = "Copy"; }, 1500);
+  });
+}

@@ -899,6 +899,60 @@ async def players_page(request):
     return render(request, "players.html", q=q, rows=rows)
 
 
+KILL_LOGS = (("tk_by", "Teamkills they did"), ("tk_on", "Who teamkilled them"), ("all", "All their kills and deaths"))
+KILL_PERIODS = (("last", "Their last game"), ("1", "Last 24 hours"), ("7", "Last 7 days"), ("30", "Last 30 days"))
+DAMAGE = {"KINETIC": "bullet", "EXPLOSIVE": "explosion", "FRAGMENTATION": "grenade or shrapnel", "INCENDIARY": "fire",
+          "FIRE": "fire", "BLEEDING": "bled out", "COLLISION": "vehicle", "MELEE": "melee"}
+
+
+def body_part(zone):
+    """The log's hit zones (RArm, LThigh, Head) as plain words."""
+    side = {"L": "left ", "R": "right "}.get(zone[:1], "") if zone[1:2].isupper() else ""
+    rest = zone[len(side) and 1:]
+    return side + re.sub(r"(?<!^)(?=[A-Z])", " ", rest).lower()
+
+
+def kill_log(request, identity):
+    """The kill log asked for on a player's page, or None if none was."""
+    mode = request.query.get("log", "")
+    if mode not in dict(KILL_LOGS):
+        return None
+    period, day = request.query.get("period", "last"), request.query.get("day", "")
+    db, names = request.app[DB], {s.id: s.name for s in request.app[CONFIG].servers}
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+        start = int(time.mktime(time.strptime(day, "%Y-%m-%d")))
+        rows, label = db.kill_log(identity, mode, start, start + 86400), day
+    else:
+        period = period if period in dict(KILL_PERIODS) else "last"
+        since = "last" if period == "last" else now() - int(period) * 86400
+        rows, label, day = db.kill_log(identity, mode, since), dict(KILL_PERIODS)[period], ""
+    lines = []
+    for r in rows:
+        stamp = time.strftime("%d %b %Y · %H:%M:%S", time.localtime(r["at"]))
+        what = "teamkilled" if r["kind"] == "teamkill" else "killed"
+        killer = r["killer_name"] or "Unknown"
+        if r["killer"] == r["victim"]:
+            what, killer = "died by their own hand", r["victim_name"]
+        how = DAMAGE.get(r["damage"], r["damage"].lower())
+        extra = ", ".join(x for x in (how, f"{r['distance']:.0f} m" if r["distance"] else "",
+                                      f"hit in the {body_part(r['zone'])}" if r["zone"] else "") if x)
+        revenge = db.revenge_for(r)
+        note = ""
+        if revenge:
+            gap = r["at"] - revenge["at"]
+            note = (f"{gap // 60} min {gap % 60} s after {revenge['killer_name']} teamkilled "
+                    f"{revenge['victim_name']} at {time.strftime('%H:%M:%S', time.localtime(revenge['at']))}")
+        lines.append({"row": r, "stamp": stamp, "server": names.get(r["server"], r["server"]), "what": what,
+                      "killer": killer, "extra": extra, "revenge": note,
+                      "game": time.strftime("logs_%Y-%m-%d_%H-%M-%S", time.localtime(r["game"])) if r["game"] else ""})
+    text = "\n".join(f"{l['stamp']} [{l['server']}] {l['killer']} {l['what']}"
+                     + ("" if l["row"]["killer"] == l["row"]["victim"] else f" {l['row']['victim_name']}")
+                     + (f" ({l['extra']})" if l["extra"] else "") + (f" - {l['revenge']}" if l["revenge"] else "")
+                     for l in lines)
+    return {"mode": mode, "title": dict(KILL_LOGS)[mode], "period": period, "day": day, "label": label,
+            "lines": lines, "text": text, "full": len(rows) >= 500}
+
+
 async def player_page(request):
     identity = request.match_info["identity"].lower()
     if not valid_identity(identity):
@@ -919,7 +973,8 @@ async def player_page(request):
                   banned_ips=db.banned_ips() if auth.can(request[USER]["role"], "ips") else set(),
                   alts=db.alts(identity) if auth.can(request[USER]["role"], "ips") else [],
                   names=db.player_names(identity), notes=db.notes(identity), bans=bans,
-                  incidents=db.incidents_for(identity),
+                  incidents=db.incidents_for(identity), kills=kill_log(request, identity),
+                  kill_logs=KILL_LOGS, kill_periods=KILL_PERIODS,
                   active=db.active_ban(identity), durations=DURATIONS)
 
 

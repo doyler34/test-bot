@@ -372,3 +372,17 @@ textarea.survey { width: 100%; min-height: 70vh; font-size: .8rem; white-space: 
 .site-server:last-child { border-bottom: 0; }
 .site-server label { margin: 0; }
 @media (max-width: 800px) { .site-server { grid-template-columns: minmax(0, 1fr); } }
+.kill-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.kill-form select, .kill-form input { width: auto; margin: 0; }
+.inline-label { display: flex; gap: 6px; align-items: center; margin: 0; }
+.kill-log .nowrap { white-space: nowrap; }
+.kill-log tr.revenge td { background: rgba(217, 164, 65, .07); }
+.copy-box { margin-top: 12px; }
+.copy-box textarea { width: 100%; font-size: .8rem; white-space: pre; margin: 8px 0; }
+@media (max-width: 700px) {
+  .kill-log thead { display: none; }
+  .kill-log, .kill-log tbody, .kill-log tr, .kill-log td { display: block; width: 100%; }
+  .kill-log tr { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .kill-log td { border: 0; padding: 2px 0; }
+  .kill-log td:first-child { font-size: .8rem; color: var(--muted); }
+}

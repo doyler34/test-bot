@@ -796,6 +796,31 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('<span class="pill down">100%</span>', html)
         self.assertNotIn("Few", html)
 
+    async def test_kill_log_finds_a_revenge_teamkill(self):
+        tk = lambda clock, killer, killer_id, victim: shot(clock, killer, killer_id, victim, 0, 0).replace("KILL ENEMY", "KILL TK")
+        log = (tk("12:03:10.000", "Victim5", person(5), 72) + tk("12:05:40.000", "Rogue", person(72), 5)
+               + shot("12:20:00.000", "Rogue", person(72), 6, 0, 0, metres=120))
+        write_log(self.logs, "logs_2026-09-26_12-00-00", log)
+        write_log(self.logs, "logs_2026-09-26_13-00-00", "")
+        await self.archive()
+        await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
+        html = await (await self.client.get(f"/player/{person(72)}?log=tk_by&period=last")).text()
+        self.assertIn("Teamkills they did · Their last game (1)", html)
+        self.assertIn("26 Sep 2026 · 12:05:40", html)
+        self.assertIn("2 min 30 s after Victim5 teamkilled Victim72 at 12:03:10", html)
+        self.assertIn("/server/server-1/game/logs_2026-09-26_12-00-00", html)
+        everything = await (await self.client.get(f"/player/{person(72)}?log=all&day=2026-09-26")).text()
+        self.assertIn("All their kills and deaths · 2026-09-26 (3)", everything)
+        self.assertIn("bullet, 120 m, hit in the head", everything)
+        victim = await (await self.client.get(f"/player/{person(5)}?log=tk_on&period=7")).text()
+        self.assertIn("Who teamkilled them", victim)
+        self.assertNotIn("Revenge?", victim.split("Kill log")[1].split("Rogue")[0])
+        # A game saved before the kill log existed is read in the background.
+        self.db.write("DELETE FROM kills")
+        self.db.write("DELETE FROM kills_read")
+        await self.archive()
+        self.assertEqual(self.db.one("SELECT COUNT(*) AS n FROM kills WHERE killer = ?", person(72))["n"], 2)
+
     async def test_history_and_a_past_game(self):
         await self.archive()
         await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
