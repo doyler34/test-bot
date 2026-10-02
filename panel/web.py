@@ -12,6 +12,7 @@ import jinja2
 from aiohttp import web
 
 from bot.discord import welcome_doc
+from bot.discord.ban_roles import length_text
 
 from . import archive, auth, memory, outliers, site
 from .alerts import GOLD, GREEN, RED
@@ -31,8 +32,22 @@ BRAND = HERE.parent / "assets" / "rank-card"
 COOKIE = "oyb_panel"
 PUBLIC = ("/login", "/static/", "/brand/", "/drop/", "/survey.sh")
 SURVEY = HERE.parent / "dev" / "live_survey.sh"
-DURATIONS = [("3600", "1 hour"), ("86400", "1 day"), ("604800", "7 days"),
-             ("2592000", "30 days"), ("0", "Permanent")]
+DURATIONS = [("300", "5 minutes"), ("1800", "30 minutes"), ("3600", "1 hour"), ("21600", "6 hours"),
+             ("86400", "1 day"), ("259200", "3 days"), ("604800", "7 days"), ("1209600", "14 days"),
+             ("2592000", "30 days"), ("0", "Permanent"), ("custom", "Custom…")]
+BAN_UNITS = (("60", "minutes"), ("3600", "hours"), ("86400", "days"))
+LONGEST_BAN = 3650 * 86400
+
+
+def ban_seconds(form):
+    """The length picked on the ban form in seconds (0 = permanent), or None."""
+    duration = form.get("duration", "")
+    if duration == "custom":
+        amount, unit = form.get("amount", "").strip(), form.get("unit", "")
+        if not amount.isdigit() or unit not in dict(BAN_UNITS) or not 0 < int(amount) * int(unit) <= LONGEST_BAN:
+            return None
+        return int(amount) * int(unit)
+    return int(duration) if duration in dict(DURATIONS) else None
 POWER_LABELS = {
     "restart_mission": "Restart mission",
     "shutdown": "Shut down (RCON)",
@@ -776,7 +791,7 @@ async def bans_page(request):
     show_old = request.query.get("all") == "1"
     rows = [dict(b, synced=db.synced(b["id"]), ips=db.ban_ips(b["id"])) for b in db.bans(include_old=show_old)]
     prefill = {k: clean(request.query.get(k, ""), 64) for k in ("identity", "name")}
-    return render(request, "bans.html", bans=rows, show_old=show_old, durations=DURATIONS,
+    return render(request, "bans.html", bans=rows, show_old=show_old, durations=DURATIONS, ban_units=BAN_UNITS,
                   prefill=prefill, error="")
 
 
@@ -788,7 +803,7 @@ async def add_ban(request):
     identity = form.get("identity", "").strip().lower()
     name = ""
     reason = clean(form.get("reason", ""))
-    duration = form.get("duration", "")
+    seconds = ban_seconds(form)
     if valid_identity(typed.lower()):
         identity = typed.lower()
     elif valid_identity(identity):
@@ -800,14 +815,14 @@ async def add_ban(request):
                   f"{len(found)} players have gone by {typed}. Pick the right one from the list.", "error")
             raise web.HTTPFound("/bans")
         identity, name = found[0]["identity"], found[0]["name"]
-    if duration not in dict(DURATIONS) or not reason:
-        flash(request, "Pick a length and give a reason.", "error")
+    if seconds is None or not reason:
+        flash(request, "Pick a length (a custom one needs a number, up to 10 years) and give a reason.", "error")
         raise web.HTTPFound("/bans")
     if db.active_ban(identity):
         flash(request, "That player is already banned. Unban them first to change the ban.", "error")
         raise web.HTTPFound("/bans")
-    seconds = int(duration)
     expires = now() + seconds if seconds else None
+    length = length_text(seconds) if seconds else "Permanent"
     name = name or (db.player(identity) or {"name": ""})["name"]
     by = request[USER]["username"]
     ip_ban = form.get("ip") == "1" and auth.can(request[USER]["role"], "ips")
@@ -828,9 +843,9 @@ async def add_ban(request):
         if kicked:
             summary += f"; kicked from {', '.join(kicked)}"
         audit(request, "ban", target=target_name or target,
-              detail=f"{dict(DURATIONS)[duration]} — {target_reason} ({summary})")
+              detail=f"{length} — {target_reason} ({summary})")
         alert(request, f"Banned {target_name or target}", colour=RED, fields=(
-            ("Length", dict(DURATIONS)[duration]), ("Reason", target_reason), ("Identity", target)))
+            ("Length", length), ("Reason", target_reason), ("Identity", target)))
         lines.append(f"{target_name or target} ({summary})")
     extra = ""
     if ip_ban:

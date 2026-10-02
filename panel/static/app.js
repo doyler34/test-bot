@@ -157,3 +157,13 @@ for (const button of document.querySelectorAll("[data-copy]")) {
 for (const select of document.querySelectorAll("[data-jump]")) {
   select.addEventListener("change", () => { location.href = select.value; });
 }
+
+for (const select of document.querySelectorAll("[data-ban-length]")) {
+  const custom = select.form.querySelector("[data-ban-custom]");
+  const show = () => {
+    custom.hidden = select.value !== "custom";
+    custom.querySelector("input").required = select.value === "custom";
+  };
+  select.addEventListener("change", show);
+  show();
+}

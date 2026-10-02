@@ -243,5 +243,15 @@ class BanDmTests(BanSetup):
         self.assertEqual(len(self.havoc.dms), 1)
 
 
+class LengthTests(unittest.TestCase):
+    def test_any_length_reads_naturally_and_ranks(self):
+        from bot.discord.ban_roles import length_label, length_text, rank
+        self.assertEqual([length_text(s) for s in (300, 2700, 3600, 21600, 86400, 604800)],
+                         ["5 minutes", "45 minutes", "1 hour", "6 hours", "1 day", "7 days"])
+        self.assertEqual(length_label(100, None), "Permanent")
+        self.assertLess(rank("45 minutes"), rank("1 hour"))
+        self.assertLess(rank("30 days"), rank("Permanent"))
+
+
 if __name__ == "__main__":
     unittest.main()

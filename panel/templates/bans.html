@@ -17,8 +17,12 @@
       <ul class="suggest" hidden></ul>
     </div>
     <label>Length
-      <select name="duration">{% for value, label in durations %}<option value="{{ value }}" {% if value == "86400" %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      <select name="duration" data-ban-length>{% for value, label in durations %}<option value="{{ value }}" {% if value == "86400" %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
     </label>
+    <div class="ban-custom" data-ban-custom hidden>
+      <label>How long <input name="amount" type="number" min="1" inputmode="numeric" placeholder="e.g. 45"></label>
+      <label>&nbsp;<select name="unit">{% for value, label in ban_units %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+    </div>
     <label>Reason <input name="reason" maxlength="200" required></label>
   </div>
   {% if can("ips") %}

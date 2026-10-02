@@ -1504,6 +1504,19 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             "doc": json.dumps({"enabled": True, "where": "dm", "channel_id": None, "text": "Hi {user}"})})
         self.assertEqual(json.loads(self.db.discord_doc("greeting")["published"])["where"], "dm")
 
+    async def test_a_ban_of_any_length(self):
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/bans")
+        await self.client.post("/bans", data={"csrf": token, "player": BUFORD, "reason": "cooling off",
+                                              "duration": "custom", "amount": "45", "unit": "60"})
+        ban = self.db.active_ban(BUFORD)
+        self.assertAlmostEqual(ban["expires_at"] - ban["created_at"], 2700, delta=2)
+        self.assertIn("45 minutes", self.db.audit()[0]["detail"])
+        html = await (await self.client.post("/bans", data={"csrf": token, "player": person(9), "reason": "x",
+                                                            "duration": "custom", "amount": "0", "unit": "60"})).text()
+        self.assertIn("a custom one needs a number", html)
+        self.assertIsNone(self.db.active_ban(person(9)))
+
     async def test_ban_needs_a_known_player(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/bans")

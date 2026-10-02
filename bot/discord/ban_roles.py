@@ -26,15 +26,27 @@ DM_WINDOW = 3600
 SAME_IP = re.compile(r"\s*\(same IP as [^)]*\)$")
 
 
+UNITS = ((86400, "day"), (3600, "hour"), (60, "minute"))
+
+
+def length_text(span):
+    """A ban's length in the biggest whole unit it fits: 5 minutes, 6 hours, 7 days."""
+    span = max(int(span), 60)
+    for seconds, unit in UNITS:
+        count = span / seconds
+        if count >= 1 and abs(count - round(count)) <= 0.02 * count:
+            count = round(count)
+            return f"{count} {unit}{'' if count == 1 else 's'}"
+    for seconds, unit in UNITS:
+        if span >= seconds:
+            count = round(span / seconds)
+            return f"{count} {unit}{'' if count == 1 else 's'}"
+
+
 def length_label(created, expires):
     if expires is None:
         return "Permanent"
-    span = max(int(expires) - int(created), 1)
-    seconds, name = min(LENGTHS, key=lambda item: abs(item[0] - span))
-    if abs(seconds - span) <= seconds // 20:
-        return name
-    days = round(span / 86400)
-    return f"{days} days" if days > 1 else f"{max(round(span / 3600), 1)} hours"
+    return length_text(int(expires) - int(created))
 
 
 def read_bans(path, ended_since):
@@ -118,10 +130,9 @@ def rank(label):
     """Longest ban wins when one member has several banned accounts."""
     if label == "Permanent":
         return float("inf")
-    for seconds, name in LENGTHS:
-        if name == label:
-            return seconds
-    return 0
+    count, _, unit = label.partition(" ")
+    seconds = dict((u, s) for s, u in UNITS).get(unit.rstrip("s"))
+    return int(count) * seconds if count.isdigit() and seconds else 0
 
 
 class BanRoles:
