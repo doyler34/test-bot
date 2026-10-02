@@ -376,7 +376,9 @@ async def dashboard_part(request):
 
 async def server_page(request):
     state = server_or_404(request, request.match_info["id"])
-    actions = list(POWER_RCON) + (list(POWER_SERVICE) if state.config.service else [])
+    # A blank command (e.g. shutdown on a box where AMP runs the servers) hides its button.
+    actions = [a for a in POWER_RCON if state.config.commands.get(a)] + \
+        (list(POWER_SERVICE) if state.config.service else [])
     db = request.app[DB]
     recent = db.audit(server=state.config.id, limit=15)
     return render(request, "server.html", s=server_view(state), actions=actions, labels=POWER_LABELS,

@@ -19,7 +19,7 @@
     <button class="small {{ 'danger' if action in ('stop', 'shutdown') else '' }}">{{ labels[action] }}</button>
   </form>
   {% endfor %}
-  {% if not s.service %}<span class="muted">Set <code>service</code> in panel.local.json for Start / Stop / Restart and memory tracking.</span>{% endif %}
+  {% if not s.service %}<span class="muted">Starting and stopping the server itself is done outside the panel (in AMP, or set <code>service</code> in panel.local.json).</span>{% endif %}
 </div>
 {% endif %}
 

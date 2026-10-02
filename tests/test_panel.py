@@ -1109,6 +1109,15 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get(path)).text()
         return re.search(r'name="csrf" value="([^"]+)"', html).group(1)
 
+    async def test_a_blank_command_hides_its_button(self):
+        await self.login("boss", "boss-password")
+        self.assertIn("Shut down (RCON)", await (await self.client.get("/server/server-1")).text())
+        self.config.servers[0].commands["shutdown"] = ""
+        self.assertNotIn("Shut down (RCON)", await (await self.client.get("/server/server-1")).text())
+        token = await self.csrf("/server/server-1")
+        await self.client.post("/server/server-1/power", data={"csrf": token, "action": "shutdown"})
+        self.assertIn("switched off", self.db.audit()[0]["detail"])
+
     async def test_public_site_on_its_own_domain(self):
         self.config.site_hosts = ["oybgaming.com"]
         home = await self.client.get("/", headers={"Host": "www.oybgaming.com"})

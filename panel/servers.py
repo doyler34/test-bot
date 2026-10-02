@@ -494,6 +494,8 @@ class ServerManager:
 
     async def power(self, server_id: str, action: str) -> str:
         state = self.states[server_id]
+        if action in POWER_RCON and not state.config.commands.get(action):
+            raise RconError("that button is switched off for this server")
         if action != "restart_mission":
             self.expect_restart(server_id)
         if action in POWER_RCON:
