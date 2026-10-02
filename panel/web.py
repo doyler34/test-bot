@@ -842,7 +842,7 @@ async def add_ban(request):
 
 
 async def remove_ban(request):
-    require(request, "ban")
+    require(request, "unban")
     db = request.app[DB]
     ban = db.ban(int(request.match_info["ban_id"]))
     if ban is None or ban["removed_at"]:

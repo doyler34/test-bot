@@ -1109,6 +1109,24 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get(path)).text()
         return re.search(r'name="csrf" value="([^"]+)"', html).group(1)
 
+    async def test_admins_ban_but_cannot_unban_or_see_ips(self):
+        self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
+        ban = self.db.add_ban(BUFORD, "Buford", "cheating", "boss", None)
+        await self.login("adm", "adm-password")
+        bans = await (await self.client.get("/bans")).text()
+        self.assertIn('action="/bans"', bans)
+        self.assertNotIn("/remove", bans)
+        token = await self.csrf("/bans")
+        response = await self.client.post(f"/bans/{ban}/remove", data={"csrf": token}, allow_redirects=False)
+        self.assertEqual(response.status, 403)
+        self.assertIsNone(self.db.ban(ban)["removed_at"])
+        server = await (await self.client.get("/server/server-1")).text()
+        self.assertNotIn("/power", server)
+        self.assertNotIn("upload-links", server)
+        player = await (await self.client.get(f"/player/{BUFORD}")).text()
+        self.assertNotIn("Connections", player)
+        self.assertIn("Kill log", player)
+
     async def test_a_blank_command_hides_its_button(self):
         await self.login("boss", "boss-password")
         self.assertIn("Shut down (RCON)", await (await self.client.get("/server/server-1")).text())

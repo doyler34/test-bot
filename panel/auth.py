@@ -12,8 +12,10 @@ PERMISSIONS = {
     "kick": "moderator",
     "notes": "moderator",
     "ban": "admin",
-    "ips": "admin",
-    "power": "admin",
+    # Admins kick and ban; taking a ban back, IPs and server power stay with owners.
+    "unban": "owner",
+    "ips": "owner",
+    "power": "owner",
     "audit": "admin",
     "console": "owner",
     "users": "owner",
