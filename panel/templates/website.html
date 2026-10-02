@@ -33,6 +33,7 @@
       {% set look = doc.servers[s.id] %}
       <div class="site-server">
         <label class="check"><input type="checkbox" name="show_{{ s.id }}" {% if look.show %}checked{% endif %}> <b>{{ s.name }}</b></label>
+        <label>Name on the site <input name="name_{{ s.id }}" value="{{ look.name }}" maxlength="60" placeholder="{{ s.name }}"></label>
         <label>Game <input name="game_{{ s.id }}" value="{{ look.game }}" maxlength="60"></label>
         <label>How to join <input name="join_{{ s.id }}" value="{{ look.join }}" maxlength="200" placeholder="Search for “{{ s.name }}” in the server browser."></label>
       </div>

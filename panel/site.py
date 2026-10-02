@@ -39,6 +39,7 @@ def check_site(raw, server_ids):
     for server_id in server_ids:
         given = servers.get(server_id) if isinstance(servers.get(server_id), dict) else {}
         doc["servers"][server_id] = {"show": bool(given.get("show", True)),
+                                     "name": re.sub(r"\s+", " ", str(given.get("name", "") or "")).strip()[:60],
                                      "game": str(given.get("game", "") or "").strip()[:60] or "Arma Reforger",
                                      "join": str(given.get("join", "") or "").strip()[:200]}
     return doc, problems
@@ -68,7 +69,7 @@ def view(doc, servers, states, bridge):
         count = len(state.players) if up else 0
         online += up
         playing += count
-        name = (reported.get(config.id) or {}).get("label") or config.name
+        name = look.get("name") or (reported.get(config.id) or {}).get("label") or config.name
         games.setdefault(look["game"], []).append({
             "id": config.id, "name": name, "online": up, "players": count,
             "settings": plain((reported.get(config.id) or {}).get("settings", "")),

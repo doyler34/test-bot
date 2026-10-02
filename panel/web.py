@@ -652,7 +652,8 @@ async def website_save(request):
     require(request, "discord")
     form = await request.post()
     raw = {key: form.get(key, "") for key in ("name", "tagline", "about", "discord")}
-    raw["servers"] = {s.id: {"show": f"show_{s.id}" in form, "game": form.get(f"game_{s.id}", ""),
+    raw["servers"] = {s.id: {"show": f"show_{s.id}" in form, "name": form.get(f"name_{s.id}", ""),
+                             "game": form.get(f"game_{s.id}", ""),
                              "join": form.get(f"join_{s.id}", "")} for s in request.app[CONFIG].servers}
     doc, problems = site.check_site(raw, [s.id for s in request.app[CONFIG].servers])
     if problems:

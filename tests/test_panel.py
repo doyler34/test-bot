@@ -1145,13 +1145,15 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("should look like https://discord.gg/", bad)
         await self.client.post("/website", data={
             "csrf": token, "name": "OYB Gaming", "tagline": "Come play", "about": "Hi\nThere",
-            "discord": "https://discord.gg/oyb123", "game_server-1": "Arma Reforger", "join_server-1": "Join via IP"})
+            "discord": "https://discord.gg/oyb123", "game_server-1": "Arma Reforger", "join_server-1": "Join via IP",
+            "show_server-1": "on", "name_server-1": "OYB Main"})
         self.config.site_hosts = ["oybgaming.com"]
         html = await (await self.client.get("/", headers={"Host": "oybgaming.com"})).text()
         self.assertIn("OYB Gaming", html)
         self.assertIn('href="https://discord.gg/oyb123"', html)
-        self.assertNotIn("Join via IP", html)
-        self.assertNotIn("data-server", html)
+        self.assertIn("Join via IP", html)
+        self.assertIn("OYB Main", html)
+        self.assertNotIn("Server 2", html)
         preview = await (await self.client.get("/website/preview")).text()
         self.assertIn("Preview of the public site", preview)
 
