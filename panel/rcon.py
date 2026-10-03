@@ -9,6 +9,7 @@ import zlib
 # Reforger acks a command with an empty reply, then sends the actual output as
 # server messages: "Processing Command: <cmd>" followed by the result.
 PROCESSING = "Processing Command: "
+QUIET = 0.6
 
 
 class RconError(Exception):
@@ -100,7 +101,7 @@ class RconClient:
             future = asyncio.get_running_loop().create_future()
             self._pending[seq] = future
             self._parts.pop(seq, None)
-            output = self._output = {"command": text, "seen": False, "lines": [], "got": asyncio.Event()}
+            output = self._output = {"command": text, "seen": False, "lines": [], "last": 0.0, "got": asyncio.Event()}
             self._transport.sendto(packet(1, bytes([seq]) + text.encode()))
             sent = time.monotonic()
             try:
@@ -109,9 +110,12 @@ class RconClient:
                 if not reply:
                     try:
                         await asyncio.wait_for(output["got"].wait(), self.output_wait)
-                        await asyncio.sleep(0.2)
                     except asyncio.TimeoutError:
                         pass
+                    # Long output, like #players on a full server, comes in several messages.
+                    until = time.monotonic() + self.output_wait
+                    while output["lines"] and time.monotonic() < until and time.monotonic() - output["last"] < QUIET:
+                        await asyncio.sleep(0.1)
                     reply = "\n".join(output["lines"])
             except asyncio.TimeoutError:
                 raise RconError("command timed out") from None
@@ -150,6 +154,7 @@ class RconClient:
             output["seen"] = True
         elif output["seen"]:
             output["lines"].append(text)
+            output["last"] = time.monotonic()
             output["got"].set()
         else:
             return text.startswith(PROCESSING)

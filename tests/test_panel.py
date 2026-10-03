@@ -963,6 +963,19 @@ class RconClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await client.command("#players"), self.fake.players_text())
         self.assertEqual(await client.command("#kick 1"), "Player 1 kicked")
 
+    async def test_long_output_in_several_messages(self):
+        self.fake.direct = False
+        self.fake.pieces = 2
+        self.fake.players = [(str(n), f"Player{n}", f"{n:08d}-aaaa-bbbb-cccc-dddddddddddd") for n in range(1, 10)]
+        client = RconClient("127.0.0.1", self.port, "secret", timeout=2)
+        stray = []
+        client.on_message = stray.append
+        await client.connect()
+        self.addCleanup(client.close)
+        self.assertEqual(await client.command("#players"), self.fake.players_text())
+        await asyncio.sleep(0.5)
+        self.assertEqual([t for t in stray if not t.startswith("Logged In!")], [])
+
     async def test_unknown_command_is_an_error(self):
         self.fake.direct = False
         client = RconClient("127.0.0.1", self.port, "secret", timeout=2)

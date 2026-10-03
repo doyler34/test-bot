@@ -15,6 +15,8 @@ from .db import PanelDB, now
 from .rcon import RconClient, RconError
 from .suspicion import Detector
 
+PLAYER_ROW = re.compile(r"\d+\s*;\s*[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}\s*;")
+
 log = logging.getLogger("panel.servers")
 
 UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
@@ -323,7 +325,7 @@ class ServerManager:
         self._changed(state, True)
 
     def _rcon_message(self, state: ServerState, text: str):
-        if text.strip() and not text.startswith("Logged In!"):
+        if text.strip() and not text.startswith("Logged In!") and not PLAYER_ROW.search(text):
             self.db.add_feed(state.config.id, "rcon", " ".join(text.split()))
 
     def _offline(self, state: ServerState, exc):

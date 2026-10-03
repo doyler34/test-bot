@@ -28,6 +28,7 @@ class FakeRcon(asyncio.DatagramProtocol):
         self.message_seq = 0
         self.players = list(players if players is not None else SAMPLE_PLAYERS)
         self.chunk = chunk
+        self.pieces = 0
         self.commands = []
         self.bans = {}
         self.clients = set()
@@ -79,7 +80,13 @@ class FakeRcon(asyncio.DatagramProtocol):
             if text and not self.direct:
                 self.transport.sendto(packet(1, bytes([seq])), addr)
                 self.say(f"Processing Command: {text}")
-                self.say(answer.decode())
+                lines = answer.decode().split("\n")
+                if self.pieces and len(lines) > self.pieces:
+                    loop = asyncio.get_running_loop()
+                    for n, start in enumerate(range(0, len(lines), self.pieces)):
+                        loop.call_later(0.3 * n, self.say, "\n".join(lines[start:start + self.pieces]))
+                else:
+                    self.say(answer.decode())
             elif self.chunk and len(answer) > self.chunk:
                 parts = [answer[i:i + self.chunk] for i in range(0, len(answer), self.chunk)]
                 for index, part in reversed(list(enumerate(parts))):
