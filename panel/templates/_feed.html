@@ -8,6 +8,8 @@
   </li>
   {% endfor %}
 </ul>
+{% elif show and show != "all" %}
+<p class="muted">None of these yet.</p>
 {% else %}
 <p class="muted">Nothing yet. Joins, leaves, kills and admin actions show up here as they happen{{ "" if s.log_dir else " (joins and kills need log_dir set for this server)" }}.</p>
 {% endif %}

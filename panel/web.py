@@ -714,7 +714,8 @@ async def summary_part(request):
 
 async def feed_part(request):
     state = server_or_404(request, request.match_info["id"])
-    return render(request, "_feed.html", s=server_view(state), feed=request.app[DB].feed(state.config.id))
+    show = request.query.get("show", "all")
+    return render(request, "_feed.html", s=server_view(state), feed=request.app[DB].feed(state.config.id, show=show), show=show)
 
 
 def alt_flags(request, state):

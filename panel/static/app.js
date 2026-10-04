@@ -7,15 +7,21 @@ document.addEventListener("change", (event) => {
   if (event.target.matches("[data-autosubmit]")) event.target.form.submit();
 });
 
+async function refresh(box) {
+  const pane = box.closest("[data-filter]");
+  const url = pane ? `${box.dataset.refresh}?show=${encodeURIComponent(pane.dataset.filter)}` : box.dataset.refresh;
+  try {
+    const response = await fetch(url, { credentials: "same-origin" });
+    if (response.status === 401) return location.reload();
+    if (response.ok) box.innerHTML = await response.text();
+  } catch (err) {}
+}
+
 for (const box of document.querySelectorAll("[data-refresh]")) {
   const every = Number(box.dataset.every) || 10000;
-  setInterval(async () => {
+  setInterval(() => {
     if (document.hidden || box.contains(document.activeElement)) return;
-    try {
-      const response = await fetch(box.dataset.refresh, { credentials: "same-origin" });
-      if (response.status === 401) return location.reload();
-      if (response.ok) box.innerHTML = await response.text();
-    } catch (err) {}
+    refresh(box);
   }, every);
 }
 
@@ -51,6 +57,8 @@ document.addEventListener("click", (event) => {
   if (!chip) return;
   const pane = chip.closest("[data-filter]");
   pane.dataset.filter = chip.dataset.show;
+  const box = pane.querySelector("[data-refresh]");
+  if (box) refresh(box);
 });
 
 function showTab(name) {

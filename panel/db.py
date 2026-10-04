@@ -2,6 +2,9 @@ import sqlite3
 import time
 from pathlib import Path
 
+FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"), "sus": ("sus",),
+              "rcon": ("rcon", "server"), "admin": ()}
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
@@ -97,6 +100,7 @@ CREATE TABLE IF NOT EXISTS feed (
     ip TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS feed_at ON feed(server, at);
+CREATE INDEX IF NOT EXISTS feed_kind ON feed(server, kind, at);
 CREATE TABLE IF NOT EXISTS ip_bans (
     ban_id INTEGER NOT NULL REFERENCES bans(id),
     ip TEXT NOT NULL,
@@ -485,16 +489,24 @@ class PanelDB:
     def update_feed(self, row, text, at):
         self.write("UPDATE feed SET text = ?, at = ? WHERE id = ?", text[:2000], at, row)
 
-    def feed(self, server, limit=200):
-        """Log events, RCON messages and admin actions for one server, newest first."""
-        return self.all(
-            "SELECT at, kind, text, ip FROM ("
-            " SELECT id, at, kind, text, ip, 0 AS src FROM feed WHERE server = ?"
-            " UNION ALL SELECT id, at, 'admin' AS kind,"
-            "  username || ': ' || action || CASE WHEN target != '' THEN ' ' || target ELSE '' END"
-            "  || CASE WHEN detail != '' THEN ' (' || detail || ')' ELSE '' END, '' AS ip, 1 AS src"
-            "  FROM audit WHERE server = ?"
-            ") ORDER BY at DESC, src, id DESC LIMIT ?", server, server, limit)
+    def feed(self, server, limit=200, show="all"):
+        """Log events, RCON messages and admin actions for one server, newest first.
+        show picks one of FEED_SHOWS, so a rare kind isn't buried under the last 200 kills."""
+        kinds = FEED_SHOWS.get(show)
+        events = ("SELECT id, at, kind, text, ip, 0 AS src FROM feed WHERE server = ?"
+                  + (f" AND kind IN ({', '.join('?' * len(kinds))})" if kinds else ""))
+        actions = ("SELECT id, at, 'admin' AS kind,"
+                   " username || ': ' || action || CASE WHEN target != '' THEN ' ' || target ELSE '' END"
+                   " || CASE WHEN detail != '' THEN ' (' || detail || ')' ELSE '' END AS text, '' AS ip, 1 AS src"
+                   " FROM audit WHERE server = ?")
+        if show == "admin":
+            parts, args = [actions], [server]
+        elif kinds:
+            parts, args = [events], [server, *kinds]
+        else:
+            parts, args = [events, actions], [server, server]
+        return self.all(f"SELECT at, kind, text, ip FROM ({' UNION ALL '.join(parts)})"
+                        " ORDER BY at DESC, src, id DESC LIMIT ?", *args, limit)
 
     def prune_feed(self, days=7, sus_days=180):
         self.write("DELETE FROM feed WHERE at < ? AND (kind != 'sus' OR at < ?)",

@@ -1783,6 +1783,24 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Something from the server", part)
         self.assertNotIn("Logged In!", part)
 
+    async def test_feed_filter_reaches_past_a_busy_minute(self):
+        self.db.add_feed("server-1", "sus", "Hubcaps got 7 kills in 30 seconds", at=1000)
+        self.db.log("boss", "kick", "server-1", "Hubcaps", "camping")
+        for n in range(250):
+            self.db.add_feed("server-1", "kill", f"Someone killed Player{n} (50 m)")
+        await self.login("boss", "boss-password")
+        everything = await (await self.client.get("/server/server-1/feed.part")).text()
+        self.assertNotIn("7 kills in 30 seconds", everything)
+        sus = await (await self.client.get("/server/server-1/feed.part?show=sus")).text()
+        self.assertIn("7 kills in 30 seconds", sus)
+        self.assertNotIn("Player1 ", sus)
+        admin = await (await self.client.get("/server/server-1/feed.part?show=admin")).text()
+        self.assertIn("boss: kick Hubcaps (camping)", admin)
+        self.assertNotIn("Player1 ", admin)
+        rcon = await (await self.client.get("/server/server-1/feed.part?show=rcon")).text()
+        self.assertIn("Server 1 is online", rcon)
+        self.assertNotIn("Player1 ", rcon)
+
     async def test_console_is_audited(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/console")
