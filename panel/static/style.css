@@ -427,7 +427,7 @@ details.controls[open] summary::after { content: " ▴"; }
   .summary .stat b { font-size: 1.15rem; }
   .summary .stat span { font-size: .65rem; }
   .summary .minor { display: none; }
-  .players-table .num-col { display: none; }
+  .players-table .num-col, .players-table .wide { display: none; }
   table.stack thead { display: none; }
   table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
   table.stack tr { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
