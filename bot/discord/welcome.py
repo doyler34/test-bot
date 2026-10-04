@@ -458,11 +458,18 @@ class Welcome:
             post_id, _, button_id = custom_id[6:].partition(":")
             found = self.posts.get(post_id)
             button = next((b for b in found[0]["buttons"] if b["id"] == button_id), None) if found else None
-            if button is None or button["type"] not in ("role", "pick"):
+            if button is None or button["type"] not in ("link", "progress", "role", "pick"):
                 await say(interaction, "That button has been changed. Scroll up to the latest message.")
                 return True
-            await ack(interaction)
-            await say(interaction, await self._press_role(interaction, button, found[0]))
+            if button["type"] == "link":
+                from bot.discord.join_oyb import LinkModal
+                await interaction.response.send_modal(LinkModal(self.bot))
+            elif button["type"] == "progress":
+                await ack(interaction)
+                await say(interaction, progress(self.bot, interaction.guild, interaction.user))
+            else:
+                await ack(interaction)
+                await say(interaction, await self._press_role(interaction, button, found[0]))
             return True
         found = self.docs.get("welcome")
         button = next((b for b in found[0]["buttons"] if b["id"] == custom_id[len(PREFIX):]), None) if found else None

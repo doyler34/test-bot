@@ -1,7 +1,9 @@
+import asyncio
 import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -482,12 +484,30 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.welcome.state["posts"]["bad"]["problems"],
                          ["Discord doesn't accept the emoji on the Odd one button. Pick another emoji, or leave it blank."])
 
-    def test_posts_only_take_role_pick_and_link_buttons(self):
+    def test_posts_take_no_faction_buttons(self):
         doc = welcome_doc.default_post()
-        doc["buttons"] = [{"type": "link", "label": "Link"}]
+        doc["buttons"] = [{"type": "link", "label": "Link"}, {"type": "faction", "label": "US", "faction": "US"}]
         _, problems = welcome_doc.check_post(doc)
-        self.assertIn("The Link button can't be used on a post.", problems)
+        self.assertNotIn("The Link button can't be used on a post.", problems)
+        self.assertIn("The US button can't be used on a post.", problems)
         self.assertIn("Pick which channel to post it in.", problems)
+
+    async def test_link_and_progress_on_a_post(self):
+        self.post("link", title="Link your account",
+                  buttons=[{"id": "link", "type": "link", "label": "Link Reforger account"},
+                           {"id": "mine", "type": "progress", "label": "My progress"}])
+        await self.welcome.tick()
+        modals = []
+        interaction = Interaction(self.guild, Member(7), "x")
+        interaction.response.send_modal = lambda modal: modals.append(modal) or asyncio.sleep(0)
+        interaction.data = {"custom_id": "oyb:p:link:link"}
+        self.assertTrue(await self.welcome.handle(interaction))
+        self.assertEqual([type(m).__name__ for m in modals], ["LinkModal"])
+        interaction = Interaction(self.guild, Member(7), "x")
+        interaction.data = {"custom_id": "oyb:p:link:mine"}
+        with mock.patch("bot.discord.welcome.progress", return_value="Linked: no"):
+            self.assertTrue(await self.welcome.handle(interaction))
+        self.assertEqual(interaction.replies, ["Linked: no"])
 
     def test_view_lines(self):
         doc, _ = welcome_doc.check_welcome(welcome_doc.default_welcome())
