@@ -115,15 +115,17 @@ class Client:
         ban = data["data"][0]
         return {"id": related(ban, "banList"), "name": "", "org": related(ban, "organization")}
 
-    async def player_ids(self, player):
+    async def player_info(self, player):
+        """A BattleMetrics player's Reforger IDs and name."""
         data = await self.call("GET", f"/players/{player}?include=identifier")
+        name = clean(str(((data.get("data") or {}).get("attributes") or {}).get("name") or ""), 64)
         found = []
         for item in data.get("included", []):
             attrs = item.get("attributes", {})
             value = str(attrs.get("identifier") or "").lower()
             if item.get("type") == "identifier" and attrs.get("type") == "reforgerUUID" and valid_identity(value):
                 found.append(value)
-        return found
+        return found, name
 
     async def active_bans(self, ban_list):
         pages, url = [], (f"/bans?filter[banList]={ban_list}&filter[expired]=false"
@@ -210,23 +212,26 @@ class BanSync:
                            unmatched=sum(1 for b in remote if not b["identities"] and not b.get("pending")))
 
     async def find_players(self, remote):
-        """Fill in Reforger IDs BattleMetrics only gives on the player, a few lookups a round,
-        remembering each player so it is asked once."""
+        """Fill in what BattleMetrics only gives on the player (a private Reforger ID, or the
+        name on older bans), a few lookups a round, remembering each player so it is asked once."""
         budget, waiting = LOOKUPS_PER_ROUND, 0
         for ban in remote:
-            if ban["identities"] or not ban.get("player"):
+            if not ban.get("player") or (ban["identities"] and ban.get("name")):
                 continue
             known = self.db.bm_player(ban["player"])
-            if known and (known["identities"] or now() - known["at"] < RECHECK):
-                ban["identities"] = known["identities"]
+            if known and known["named"] and (known["identities"] or now() - known["at"] < RECHECK):
+                ban["identities"] = ban["identities"] or known["identities"]
+                ban["name"] = ban.get("name") or known["name"]
                 continue
             if budget <= 0:
-                ban["pending"] = True
+                ban["pending"] = not ban["identities"]
                 waiting += 1
                 continue
             budget -= 1
-            ban["identities"] = await self.client.player_ids(ban["player"])
-            self.db.save_bm_player(ban["player"], ban["identities"])
+            identities, name = await self.client.player_info(ban["player"])
+            self.db.save_bm_player(ban["player"], identities, name)
+            ban["identities"] = ban["identities"] or identities
+            ban["name"] = ban.get("name") or name
         return waiting
 
     def bring_in(self, remote):

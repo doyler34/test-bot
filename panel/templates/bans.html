@@ -57,7 +57,7 @@
     {% if q or source %}<a href="/bans{{ '?all=1' if show_old else '' }}">Clear</a>{% endif %}
   </form>
   {% if bans %}
-  <div class="scroll"><table class="stack">
+  <div class="scroll"><table class="stack bans-table">
     <thead><tr><th>Player</th><th>Reason</th><th>Length</th><th>By</th><th class="wide">Servers</th><th></th></tr></thead>
     <tbody>
     {% for b in bans %}
@@ -66,7 +66,7 @@
       <td class="wrap">{{ b.reason }}</td>
       <td data-label="Length">{% if b.removed_at %}Removed by {{ b.removed_by }}{% else %}{{ b.expires_at|until }}{% endif %}</td>
       <td title="{{ b.created_at|ts }}" data-label="Banned by">{{ b.created_by }}</td>
-      <td class="wide">
+      <td class="wide"><div class="srv-tags">
         {% for srv in servers if srv.configured %}
           {% set done = b.synced.get(srv.id, []) %}
           {% if b.removed_at %}
@@ -75,7 +75,7 @@
             <span class="pill {{ 'on' if 'ban' in done else 'down' }}" title="{{ 'applied' if 'ban' in done else 'waiting for the server' }}">{{ srv.id }}</span>
           {% endif %}
         {% endfor %}
-      </td>
+      </div></td>
       <td class="actions">
         {% if can("ban") and b.created_by == user.username and not b.removed_at %}
         <details class="edit-ban">

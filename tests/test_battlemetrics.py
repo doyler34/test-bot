@@ -29,9 +29,9 @@ class FakeBM:
     async def ban_home(self):
         return {"id": "list-1", "name": "", "org": "777"}
 
-    async def player_ids(self, player):
+    async def player_info(self, player):
         self.lookups += 1
-        return self.players.get(player, [])
+        return self.players.get(player, []), f"Name of {player}"
 
     async def active_bans(self, ban_list):
         return [dict(b, bm_id=bm_id) for bm_id, b in self.bans.items()]
@@ -122,6 +122,16 @@ class BanSyncTests(unittest.IsolatedAsyncioTestCase):
         self.bm.bans["10"] = {"identities": [HAVOC], "reason": "TK", "expires": None, "by": "Blitz", "name": "Havoc"}
         await self.sync.round()
         self.assertEqual(self.db.active_ban(HAVOC)["name"], "Havoc")
+
+    async def test_older_bans_get_the_players_name(self):
+        self.bm.players = {"p1": [BUFORD]}
+        self.db.save_bm_player("p1", [BUFORD])
+        self.db.db.execute("DELETE FROM bm_player_names")
+        self.bm.bans["9"] = {"identities": [], "player": "p1", "reason": "TK", "expires": None, "by": "Blitz"}
+        await self.sync.round()
+        await self.sync.round()
+        self.assertEqual(self.db.active_ban(BUFORD)["name"], "Name of p1")
+        self.assertEqual(self.bm.lookups, 1)
 
     async def test_lookups_are_spread_over_rounds(self):
         for n in range(45):
