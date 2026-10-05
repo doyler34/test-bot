@@ -14,9 +14,8 @@
   <tbody>
   {% for r in rows %}
   <tr>
-    {% set st = oyb(r.identity) %}
     <td><a href="/player/{{ r.identity }}">{{ r.name }}</a></td>
-    <td class="num">{{ st.playtime|span if st else "—" }}</td>
+    <td class="num">{{ played[r.identity]|span if r.identity in played else "—" }}</td>
     <td class="wide mono">{{ r.identity }}</td>
     <td title="{{ r.last_seen|ts }}">{{ r.last_seen|ago }}</td>
     <td>{{ r.last_server }}</td>

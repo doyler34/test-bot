@@ -329,6 +329,12 @@ class OybStatsTests(unittest.TestCase):
         self.assertEqual((stats["discord"], stats["name"]), (42, "Sgt Havoc"))
         self.assertNotIn("xp", stats)
 
+    def test_playtimes_for_a_list(self):
+        unknown = "00000000-0000-4000-8000-000000000000"
+        self.assertEqual(self.stats.playtimes([HAVOC, unknown, HAVOC]), {HAVOC: 10_000})
+        self.assertEqual(self.stats.playtimes([HAVOC]), {HAVOC: 10_000})
+        self.assertEqual(OybStats("/nonexistent").playtimes([HAVOC]), {})
+
     def test_unknown_and_missing(self):
         self.assertIsNone(self.stats.player("00000000-0000-4000-8000-000000000000"))
         self.assertIsNone(OybStats("/nonexistent").player(HAVOC))

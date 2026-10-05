@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS ip_bans (
     PRIMARY KEY (ban_id, ip)
 );
 CREATE INDEX IF NOT EXISTS ip_bans_ip ON ip_bans(ip);
+CREATE INDEX IF NOT EXISTS bans_identity ON bans(identity);
 CREATE TABLE IF NOT EXISTS log_positions (
     server TEXT NOT NULL,
     path TEXT NOT NULL,
@@ -608,11 +609,24 @@ class PanelDB:
 
     def alt_summary(self, identities) -> dict[str, dict]:
         """For the live list: how many other accounts share an address, and whether one is banned."""
+        identities = list(dict.fromkeys(identities))
         result = {}
-        for identity in identities:
-            rows = self.alts(identity)
-            if rows:
-                result[identity] = {"count": len(rows), "banned": [r["name"] for r in rows if r["banned"]]}
+        for start in range(0, len(identities), 500):
+            chunk = identities[start:start + 500]
+            marks = ",".join("?" * len(chunk))
+            rows = self.all(
+                "SELECT mine.identity AS me, other.identity, COALESCE(p.name, MAX(other.name)) AS name,"
+                " EXISTS (SELECT 1 FROM bans b WHERE b.identity = other.identity AND b.removed_at IS NULL"
+                "   AND (b.expires_at IS NULL OR b.expires_at > ?)) AS banned"
+                " FROM connections mine JOIN connections other ON other.ip = mine.ip AND other.identity != mine.identity"
+                " LEFT JOIN players p ON p.identity = other.identity"
+                f" WHERE mine.identity IN ({marks}) GROUP BY mine.identity, other.identity"
+                " ORDER BY MAX(other.last_seen) DESC", now(), *chunk)
+            for r in rows:
+                entry = result.setdefault(r["me"], {"count": 0, "banned": []})
+                entry["count"] += 1
+                if r["banned"]:
+                    entry["banned"].append(r["name"])
         return result
 
     def search_ip(self, text, limit=100):

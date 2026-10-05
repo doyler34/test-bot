@@ -188,11 +188,16 @@ SECURITY_HEADERS = {
 
 @web.middleware
 async def security(request, handler):
+    started = time.monotonic()
     try:
         response = await handler(request)
     except web.HTTPException as exc:
         exc.headers.update(SECURITY_HEADERS)
         raise
+    finally:
+        took = time.monotonic() - started
+        if took > 1:
+            log.warning("slow page: %s took %.1fs", request.path, took)
     response.headers.update(SECURITY_HEADERS)
     return response
 
@@ -400,6 +405,7 @@ async def server_page(request):
     recent = db.audit(server=state.config.id, limit=15)
     return render(request, "server.html", s=server_view(state), actions=actions, labels=POWER_LABELS,
                   recent=recent, health=health_data(db, state), alts=alt_flags(request, state),
+                  played=played(request, [p["identity"] for p in state.players]),
                   feed=db.feed(state.config.id), **history(request, state))
 
 
@@ -720,6 +726,10 @@ async def feed_part(request):
     return render(request, "_feed.html", s=server_view(state), feed=request.app[DB].feed(state.config.id, show=show), show=show)
 
 
+def played(request, identities):
+    return request.app[STATS].playtimes([i for i in identities if i])
+
+
 def alt_flags(request, state):
     if not auth.can(request[USER]["role"], "ips"):
         return {}
@@ -728,7 +738,8 @@ def alt_flags(request, state):
 
 async def players_part(request):
     state = server_or_404(request, request.match_info["id"])
-    return render(request, "_players.html", s=server_view(state), alts=alt_flags(request, state))
+    return render(request, "_players.html", s=server_view(state), alts=alt_flags(request, state),
+                  played=played(request, [p["identity"] for p in state.players]))
 
 
 async def memory_part(request):
@@ -967,7 +978,7 @@ async def players_page(request):
     if q:
         seen = {r["identity"] for r in rows}
         rows += [dict(r, last_seen=0, last_server="") for r in request.app[STATS].search(q) if r["identity"] not in seen]
-    return render(request, "players.html", q=q, rows=rows)
+    return render(request, "players.html", q=q, rows=rows, played=played(request, [r["identity"] for r in rows]))
 
 
 KILL_LOGS = (("tk_by", "Teamkills they did"), ("tk_on", "Who teamkilled them"), ("all", "All their kills and deaths"))

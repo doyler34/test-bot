@@ -33,6 +33,7 @@ class OybStats:
     def __init__(self, data_dir: str = "data"):
         self.data = Path(data_dir)
         self._cache: dict[str, tuple[float, dict | None]] = {}
+        self._played: dict[str, tuple[float, int | None]] = {}
 
     @property
     def available(self) -> bool:
@@ -44,6 +45,36 @@ class OybStats:
             return hit[1]
         result = self._read(identity)
         self._cache[identity] = (time.monotonic(), result)
+        return result
+
+    def playtimes(self, identities) -> dict[str, int]:
+        """Time played for a whole list of players at once, for the player lists."""
+        now, result, wanted = time.monotonic(), {}, []
+        for identity in dict.fromkeys(identities):
+            hit = self._played.get(identity)
+            if hit and now - hit[0] < CACHE_SECONDS:
+                if hit[1] is not None:
+                    result[identity] = hit[1]
+            else:
+                wanted.append(identity)
+        playtime = _open(self.data / "playtime.sqlite3") if wanted else None
+        found = {}
+        if playtime:
+            with closing(playtime):
+                for start in range(0, len(wanted), 500):
+                    chunk = wanted[start:start + 500]
+                    marks = ",".join("?" * len(chunk))
+                    try:
+                        found.update((i, int(sec)) for i, sec in playtime.execute(
+                            f"SELECT identity, SUM(seconds) FROM totals WHERE identity IN ({marks}) GROUP BY identity", chunk))
+                        found.update((i, int(ms / 1000)) for i, ms in playtime.execute(
+                            f"SELECT identity, milliseconds FROM global_time WHERE identity IN ({marks})", chunk))
+                    except sqlite3.Error:
+                        pass
+        for identity in wanted:
+            self._played[identity] = (now, found.get(identity))
+            if identity in found:
+                result[identity] = found[identity]
         return result
 
     def _read(self, identity: str) -> dict | None:
