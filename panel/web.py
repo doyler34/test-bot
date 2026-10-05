@@ -789,16 +789,36 @@ async def power(request):
 
 # bans
 
+BANS_PER_PAGE = 25
+
+
 async def bans_page(request):
     db = request.app[DB]
     show_old = request.query.get("all") == "1"
+    q = clean(request.query.get("q", ""), 64).lower()
+    source = request.query.get("from", "")
     on_bm = db.bm_sources()
+    found = []
+    for b in db.bans(include_old=show_old):
+        made_on_bm = on_bm.get(b["id"]) == "battlemetrics"
+        if (source == "bm" and not made_on_bm) or (source == "panel" and made_on_bm):
+            continue
+        if q and not any(q in str(b[k] or "").lower() for k in ("name", "identity", "reason", "created_by")):
+            continue
+        found.append(b)
+    pages = max(1, -(-len(found) // BANS_PER_PAGE))
+    try:
+        page = min(max(int(request.query.get("page", "1")), 1), pages)
+    except ValueError:
+        page = 1
     rows = [dict(b, synced=db.synced(b["id"]), ips=db.ban_ips(b["id"]), bm=on_bm.get(b["id"]))
-            for b in db.bans(include_old=show_old)]
+            for b in found[(page - 1) * BANS_PER_PAGE:page * BANS_PER_PAGE]]
+    keep = {k: v for k, v in (("all", "1" if show_old else ""), ("q", q), ("from", source)) if v}
     prefill = {k: clean(request.query.get(k, ""), 64) for k in ("identity", "name")}
     sync = request.app[BM]
     return render(request, "bans.html", bans=rows, show_old=show_old, durations=DURATIONS, ban_units=BAN_UNITS,
-                  prefill=prefill, error="", bm=sync.status if sync else None)
+                  prefill=prefill, error="", bm=sync.status if sync else None, q=q, source=source,
+                  page=page, pages=pages, total=len(found), keep=keep, synced_on=bool(on_bm))
 
 
 async def add_ban(request):

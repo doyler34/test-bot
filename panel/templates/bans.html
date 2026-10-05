@@ -40,9 +40,22 @@
 
 <section class="card">
   <div class="row">
-    <h2>{{ "All bans" if show_old else "Active bans" }}</h2>
+    <h2>{{ "All bans" if show_old else "Active bans" }} <span class="muted">{{ total }}</span></h2>
     <a href="/bans{{ '' if show_old else '?all=1' }}">{{ "Active only" if show_old else "Show expired and removed" }}</a>
   </div>
+  <form method="get" action="/bans" class="ban-search">
+    {% if show_old %}<input type="hidden" name="all" value="1">{% endif %}
+    <input name="q" value="{{ q }}" placeholder="Search name, ID, reason or admin" aria-label="Search bans">
+    {% if synced_on %}
+    <select name="from" aria-label="Made on" data-autosubmit>
+      <option value="" {% if not source %}selected{% endif %}>Made anywhere</option>
+      <option value="panel" {% if source == "panel" %}selected{% endif %}>Made in the panel</option>
+      <option value="bm" {% if source == "bm" %}selected{% endif %}>Made on BattleMetrics</option>
+    </select>
+    {% endif %}
+    <button class="small">Search</button>
+    {% if q or source %}<a href="/bans{{ '?all=1' if show_old else '' }}">Clear</a>{% endif %}
+  </form>
   {% if bans %}
   <div class="scroll"><table class="stack">
     <thead><tr><th>Player</th><th>Reason</th><th>Length</th><th>By</th><th class="wide">Servers</th><th></th></tr></thead>
@@ -85,8 +98,15 @@
     {% endfor %}
     </tbody>
   </table></div>
+  {% if pages > 1 %}
+  <nav class="pager">
+    {% if page > 1 %}<a class="button small ghost" href="/bans?{{ dict(keep, page=page - 1)|urlencode }}">← Newer</a>{% else %}<span></span>{% endif %}
+    <span class="muted">Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}<a class="button small ghost" href="/bans?{{ dict(keep, page=page + 1)|urlencode }}">Older →</a>{% else %}<span></span>{% endif %}
+  </nav>
+  {% endif %}
   {% else %}
-  <p class="muted">No bans.</p>
+  <p class="muted">{{ "No bans match that." if q or source else "No bans." }}</p>
   {% endif %}
 </section>
 {% endblock %}

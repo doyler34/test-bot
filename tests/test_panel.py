@@ -1140,6 +1140,24 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Connections", player)
         self.assertIn("Kill log", player)
 
+    async def test_bans_come_in_pages_and_can_be_searched(self):
+        for n in range(60):
+            self.db.add_ban(f"{n:08d}-aaaa-4bbb-8ccc-dddddddddddd", f"Player{n:02d}", "Teamkilling" if n % 2 else "Cheating", "boss")
+        await self.login("boss", "boss-password")
+        first = await (await self.client.get("/bans")).text()
+        self.assertIn("Page 1 of 3", first)
+        self.assertIn("Player59", first)
+        self.assertNotIn("Player10<", first)
+        last = await (await self.client.get("/bans?page=3")).text()
+        self.assertIn("Player00", last)
+        found = await (await self.client.get("/bans?q=player1")).text()
+        self.assertIn("Player19", found)
+        self.assertNotIn("Player20", found)
+        self.assertNotIn("Page 1 of", found)
+        cheats = await (await self.client.get("/bans?q=cheat&page=2")).text()
+        self.assertIn("Page 2 of 2", cheats)
+        self.assertIn("q=cheat", cheats)
+
     async def test_only_whoever_banned_can_reword_it(self):
         self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
         mine = self.db.add_ban(BUFORD, "Buford", "tk", "adm", None)

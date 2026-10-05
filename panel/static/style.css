@@ -413,6 +413,10 @@ details.controls[open] summary::after { content: " ▴"; }
 .control-list .muted { font-size: .85rem; flex-basis: 100%; }
 
 .players-table td.actions { white-space: nowrap; }
+.ban-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+.ban-search input[name=q] { flex: 1 1 220px; min-width: 0; }
+.ban-search select { flex: 0 1 auto; width: auto; }
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; }
 details.edit-ban { display: inline-block; vertical-align: top; }
 details.edit-ban summary { list-style: none; }
 details.edit-ban summary::-webkit-details-marker { display: none; }
