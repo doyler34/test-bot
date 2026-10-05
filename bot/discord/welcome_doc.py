@@ -345,6 +345,7 @@ CHANNEL_SETTINGS = (
     ("LIVE_BOARD_CHANNEL_ID", "Live match board"),
     ("GAME_LEADERBOARD_CHANNEL_ID", "Match results"),
     ("LEADERBOARD_CHANNEL_ID", "Weekly leaderboard"),
+    ("WEEKLY_WINNERS_CHANNEL_ID", "Weekly top 3 when the board resets (blank: the weekly leaderboard channel)"),
     ("FACTION_CHANNEL_ID", "Faction picker and match-notification buttons"),
     ("RANK_LOG_CHANNEL_ID", "Rank promotions"),
 )

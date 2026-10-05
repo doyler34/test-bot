@@ -26,6 +26,9 @@ class NotificationStore:
                 guild INTEGER PRIMARY KEY, channel INTEGER, message INTEGER,
                 page INTEGER NOT NULL DEFAULT 0, retry_at REAL NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS weekly_winners (
+                guild INTEGER PRIMARY KEY, week TEXT NOT NULL
+            );
         """)
 
     def channel(self, server):
@@ -40,6 +43,14 @@ class NotificationStore:
             self.db.execute('''INSERT INTO leaderboard_display VALUES (:guild,:channel,:message,:page,:retry_at)
                 ON CONFLICT(guild) DO UPDATE SET channel=excluded.channel,
                 message=excluded.message,page=excluded.page,retry_at=excluded.retry_at''', state)
+
+    def weekly_announced(self, guild):
+        row = self.db.execute('SELECT week FROM weekly_winners WHERE guild=?', (guild,)).fetchone()
+        return row['week'] if row else None
+
+    def save_weekly_announced(self, guild, week):
+        with self.db:
+            self.db.execute('INSERT OR REPLACE INTO weekly_winners VALUES (?, ?)', (guild, week))
 
     def save_channel(self, server, channel, info=None):
         with self.db:

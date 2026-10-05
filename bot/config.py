@@ -45,6 +45,11 @@ def leaderboard_channel_id() -> int | None:
     return _channel_id("LEADERBOARD_CHANNEL_ID", None)
 
 
+def weekly_winners_channel_id() -> int | None:
+    """Where the weekly top 3 goes when the board resets. Unset, it goes in the leaderboard channel."""
+    return _channel_id("WEEKLY_WINNERS_CHANNEL_ID", None)
+
+
 def faction_channel_id() -> int | None:
     """Where the faction picker lives."""
     return _channel_id("FACTION_CHANNEL_ID", FACTION_CHANNEL)
