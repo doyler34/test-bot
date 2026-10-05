@@ -1140,6 +1140,25 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Connections", player)
         self.assertIn("Kill log", player)
 
+    async def test_only_whoever_banned_can_reword_it(self):
+        self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
+        mine = self.db.add_ban(BUFORD, "Buford", "tk", "adm", None)
+        theirs = self.db.add_ban("11111111-2222-4333-8444-555555555555", "Other", "cheating", "boss", None)
+        await self.login("adm", "adm-password")
+        bans = await (await self.client.get("/bans")).text()
+        self.assertIn(f"/bans/{mine}/edit", bans)
+        self.assertNotIn(f"/bans/{theirs}/edit", bans)
+        token = await self.csrf("/bans")
+        await self.client.post(f"/bans/{mine}/edit", data={"csrf": token, "reason": "Teamkilled three times after a warning"})
+        self.assertEqual(self.db.ban(mine)["reason"], "Teamkilled three times after a warning")
+        self.assertEqual(self.db.audit()[0]["action"], "edit ban")
+        response = await self.client.post(f"/bans/{theirs}/edit", data={"csrf": token, "reason": "x"},
+                                          allow_redirects=False)
+        self.assertEqual(response.status, 403)
+        self.assertEqual(self.db.ban(theirs)["reason"], "cheating")
+        await self.client.post(f"/bans/{mine}/edit", data={"csrf": token, "reason": "  "})
+        self.assertEqual(self.db.ban(mine)["reason"], "Teamkilled three times after a warning")
+
     async def test_a_blank_command_hides_its_button(self):
         await self.login("boss", "boss-password")
         self.assertIn("Shut down (RCON)", await (await self.client.get("/server/server-1")).text())

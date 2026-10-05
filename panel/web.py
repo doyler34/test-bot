@@ -857,6 +857,27 @@ async def add_ban(request):
     raise web.HTTPFound("/bans")
 
 
+async def edit_ban(request):
+    """Only whoever made a ban can reword its reason, while it's still in force."""
+    require(request, "ban")
+    db = request.app[DB]
+    ban = db.ban(int(request.match_info["ban_id"]))
+    by = request[USER]["username"]
+    if ban is None or ban["removed_at"] or (ban["expires_at"] and ban["expires_at"] <= now()):
+        raise web.HTTPFound("/bans")
+    if ban["created_by"] != by:
+        raise web.HTTPForbidden(text="Only the admin who made this ban can change its reason.")
+    reason = clean((await request.post()).get("reason", ""))
+    if not reason:
+        flash(request, "The reason can't be empty.", "error")
+        raise web.HTTPFound("/bans")
+    if reason != ban["reason"]:
+        db.set_ban_reason(ban["id"], reason)
+        audit(request, "edit ban", target=ban["name"] or ban["identity"], detail=f"{ban['reason']} → {reason}")
+    flash(request, f"Reason for {ban['name'] or ban['identity']} updated.")
+    raise web.HTTPFound("/bans")
+
+
 async def remove_ban(request):
     require(request, "unban")
     db = request.app[DB]
@@ -1426,6 +1447,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/bans", bans_page)
     app.router.add_post("/bans", add_ban)
     app.router.add_post("/bans/{ban_id:\\d+}/remove", remove_ban)
+    app.router.add_post("/bans/{ban_id:\\d+}/edit", edit_ban)
     app.router.add_get("/players", players_page)
     app.router.add_get("/players/unusual", unusual_page)
     app.router.add_get("/players/search.json", player_search)

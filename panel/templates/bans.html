@@ -58,6 +58,16 @@
         {% endfor %}
       </td>
       <td class="actions">
+        {% if can("ban") and b.created_by == user.username and not b.removed_at %}
+        <details class="edit-ban">
+          <summary class="button small ghost">Edit</summary>
+          <form method="post" action="/bans/{{ b.id }}/edit">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <textarea name="reason" rows="3" maxlength="200" required>{{ b.reason }}</textarea>
+            <button class="small">Save</button>
+          </form>
+        </details>
+        {% endif %}
         {% if can("unban") and not b.removed_at %}
         <form method="post" action="/bans/{{ b.id }}/remove" data-confirm="Unban {{ b.name or b.identity }} on every server?">
           <input type="hidden" name="csrf" value="{{ csrf }}">

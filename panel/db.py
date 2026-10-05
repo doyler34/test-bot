@@ -311,6 +311,9 @@ class PanelDB:
         return self.one("SELECT * FROM bans WHERE identity = ? AND removed_at IS NULL"
                         " AND (expires_at IS NULL OR expires_at > ?) ORDER BY id DESC", identity, now())
 
+    def set_ban_reason(self, ban_id: int, reason: str):
+        self.write("UPDATE bans SET reason = ? WHERE id = ?", reason, ban_id)
+
     def remove_ban(self, ban_id: int, removed_by: str):
         self.write("UPDATE bans SET removed_by = ?, removed_at = ? WHERE id = ? AND removed_at IS NULL",
                    removed_by, now(), ban_id)
