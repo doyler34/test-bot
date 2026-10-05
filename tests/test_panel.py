@@ -1439,6 +1439,17 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         doc = json.loads(self.db.discord_doc("matchping")["published"])
         self.assertEqual((doc["off"], doc["text"], doc["ping"]), (["server-2"], "Get on!", True))
 
+    async def test_weekly_top_three_wording(self):
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/discord/weekly")).text()
+        self.assertIn('data-kind="weekly"', page)
+        self.assertIn("Top 3 for the week of {week}", page)
+        token = await self.csrf("/discord/weekly")
+        await self.client.post("/discord/weekly", data={"csrf": token, "action": "publish",
+            "doc": json.dumps({"on": True, "title": "Kings of {week}", "intro": "", "outro": "GG all"})})
+        doc = json.loads(self.db.discord_doc("weekly")["published"])
+        self.assertEqual(doc, {"on": True, "title": "Kings of {week}", "intro": "", "outro": "GG all"})
+
     async def test_channels_and_roles(self):
         await self.login("boss", "boss-password")
         with tempfile.TemporaryDirectory() as data:

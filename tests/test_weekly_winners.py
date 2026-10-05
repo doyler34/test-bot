@@ -8,6 +8,7 @@ import uuid
 
 import discord
 
+from bot.discord import weekly_winners
 from bot.discord.weekly_winners import WeeklyWinners
 from bot.storage.account_links import AccountLinks
 from bot.storage.combat_store import migrate, stamp, week_start
@@ -54,6 +55,7 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
         self.last_week = self.monday - timedelta(days=7)
 
     async def asyncTearDown(self):
+        weekly_winners.WEEKLY.clear()
         self.links.close()
         self.tmp.cleanup()
 
@@ -95,6 +97,24 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(f'{self.last_week:%d %b}', self.channel.sent[0]['embed'].title)
 
     async def test_a_quiet_week_posts_nothing(self):
+        self.store.save_weekly_announced(1, self.last_week.date().isoformat())
+        await self.tick(self.monday + timedelta(hours=1))
+        self.assertEqual(self.channel.sent, [])
+        self.assertEqual(self.store.weekly_announced(1), self.monday.date().isoformat())
+
+    async def test_owners_wording(self):
+        weekly_winners.WEEKLY.update({"on": True, "title": "Kings of {week}", "intro": "", "outro": "GG all"})
+        self.player(10, 'Hubcaps', 30)
+        self.store.save_weekly_announced(1, self.last_week.date().isoformat())
+        await self.tick(self.monday + timedelta(hours=1))
+        embed = self.channel.sent[0]['embed']
+        self.assertEqual(embed.title, f'Kings of {self.last_week:%d %b}')
+        self.assertTrue(embed.description.startswith(weekly_winners.INTRO))
+        self.assertTrue(embed.description.endswith('GG all'))
+
+    async def test_turned_off(self):
+        weekly_winners.WEEKLY.update({"on": False})
+        self.player(10, 'Hubcaps', 30)
         self.store.save_weekly_announced(1, self.last_week.date().isoformat())
         await self.tick(self.monday + timedelta(hours=1))
         self.assertEqual(self.channel.sent, [])

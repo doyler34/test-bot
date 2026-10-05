@@ -44,6 +44,7 @@ if (form && form.dataset.kind === "names") namesEditor();
 if (form && form.dataset.kind === "serverinfo") serverInfoEditor();
 if (form && form.dataset.kind === "bans") bansEditor();
 if (form && form.dataset.kind === "matchping") matchPingEditor();
+if (form && form.dataset.kind === "weekly") weeklyEditor();
 if (form && form.dataset.kind === "factions") factionsEditor();
 if (form && form.dataset.kind === "channels") {
   form.addEventListener("submit", () => {
@@ -78,6 +79,28 @@ function matchPingEditor() {
     const own = (name) => { const el = field(name); return el.value.trim() === el.dataset.default ? "" : el.value.trim(); };
     document.getElementById("dc-doc").value = JSON.stringify({ title: own("title"), text: own("text"), ping: field("ping").checked,
       off: servers.filter((s) => !s.checked).map((s) => s.dataset.server) });
+  });
+  draw();
+}
+
+function weeklyEditor() {
+  const field = (name) => form.querySelector(`[name="${name}"]`);
+  function draw() {
+    const preview = document.getElementById("dc-preview");
+    if (!field("on").checked) { preview.replaceChildren(h("p", { class: "muted" }, "Off: nothing is posted when the board resets.")); return; }
+    const fill = (name) => (field(name).value || field(name).dataset.default).split("{week}").join("28 Sep");
+    const box = h("div", { class: "dc-embed" });
+    box.style.borderLeftColor = "#D9A441";
+    const body = h("div", {});
+    body.innerHTML = markdown([fill("intro"), "🥇 @Roastbeeff — **40** kills, 3 deaths\n🥈 @Hubcaps — **30** kills, 5 deaths\n🥉 @Duxillec — **25** kills, 4 deaths", fill("outro")].join("\n\n"));
+    box.append(h("div", { class: "dc-embed-title" }, fill("title")), body);
+    preview.replaceChildren(h("div", { class: "dc-author" }, h("span", { class: "dc-avatar" }), h("b", {}, "OYB"), h("span", { class: "dc-app" }, "APP")), box);
+  }
+  form.addEventListener("input", draw);
+  form.addEventListener("change", draw);
+  form.addEventListener("submit", () => {
+    const own = (name) => { const el = field(name); return el.value.trim() === el.dataset.default ? "" : el.value.trim(); };
+    document.getElementById("dc-doc").value = JSON.stringify({ on: field("on").checked, title: own("title"), intro: own("intro"), outro: own("outro") });
   });
   draw();
 }

@@ -338,6 +338,19 @@ def check_matchping(raw):
     return doc, []
 
 
+def default_weekly():
+    """Blank wording keeps the bot's own."""
+    return {"on": True, "title": "", "intro": "", "outro": ""}
+
+
+def check_weekly(raw):
+    if not isinstance(raw, dict):
+        return default_weekly(), ["That couldn't be read. Reload and try again."]
+    text = lambda key, limit: str(raw.get(key, "") or "").replace("\r\n", "\n").strip()[:limit]
+    return {"on": bool(raw.get("on")), "title": text("title", 200), "intro": text("intro", 1500),
+            "outro": text("outro", 1500)}, []
+
+
 # (setting, what it is) for the Channels & roles page, in the order shown.
 CHANNEL_SETTINGS = (
     ("ONBOARDING_CHANNEL_ID", "Start here message"),

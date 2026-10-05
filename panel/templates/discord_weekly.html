@@ -1,0 +1,37 @@
+{% extends "discord_base.html" %}
+{% block editor %}
+{% set title_default = "🏆 Top 3 for the week of {week}" %}
+{% set intro_default = "The weekly leaderboard has reset. Last week's best:" %}
+{% set outro_default = "New week, clean slate. Good luck." %}
+<form method="post" action="/discord/weekly" id="dc-editor" data-kind="weekly">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="doc" id="dc-doc">
+  <div class="dc-layout">
+    <div class="dc-edit">
+      <section class="card">
+        <h2>When the weekly board resets</h2>
+        <p class="muted">Every Monday at midnight Eastern the weekly leaderboard starts again, and the bot posts last week's top 3. It goes in the channel picked under <a href="/discord/channels">Channels &amp; roles</a>, or the weekly leaderboard channel if none is picked. Nobody is pinged.</p>
+        <label class="check"><input type="checkbox" name="on" {% if doc.on %}checked{% endif %}> Post the top 3 each week</label>
+      </section>
+      <section class="card">
+        <h2>Wording</h2>
+        <label>Title <input name="title" value="{{ doc.title or title_default }}" data-default="{{ title_default }}" maxlength="200"></label>
+        <label>Above the top 3 <textarea name="intro" rows="2" maxlength="1500" data-default="{{ intro_default }}">{{ doc.intro or intro_default }}</textarea></label>
+        <label>Below the top 3 <textarea name="outro" rows="2" maxlength="1500" data-default="{{ outro_default }}">{{ doc.outro or outro_default }}</textarea></label>
+        <p class="muted"><code>{week}</code> becomes the date the week started, like 28 Sep. The three players, with their kills and deaths, always go in the middle. <b>**bold**</b> and new lines work like in Discord.</p>
+      </section>
+    </div>
+    <aside class="dc-preview">
+      <p class="kicker">Preview</p>
+      <div class="discord" id="dc-preview"></div>
+      <p class="muted">With made-up players.</p>
+    </aside>
+  </div>
+  <div class="dc-actions">
+    <button name="action" value="publish">Publish</button>
+    <button name="action" value="save" class="ghost">Save draft</button>
+    {% if draft %}<button name="action" value="discard" class="ghost" data-confirm="Throw away the draft and go back to what's live?">Discard draft</button>{% endif %}
+  </div>
+</form>
+<script src="/static/discord.js?v={{ asset_version }}" defer></script>
+{% endblock %}

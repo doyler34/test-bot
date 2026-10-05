@@ -11,6 +11,11 @@ from bot.storage.combat_store import week_start, window_standings
 LOG = logging.getLogger('reforger.weekly_winners')
 POLL = 60
 MEDALS = ('🥇', '🥈', '🥉')
+TITLE = '🏆 Top 3 for the week of {week}'
+INTRO = "The weekly leaderboard has reset. Last week's best:"
+OUTRO = 'New week, clean slate. Good luck.'
+# The wording as published from OYB Control; blank keeps the above.
+WEEKLY: dict = {}
 
 
 def winners_embed(rows, guild, start):
@@ -19,10 +24,12 @@ def winners_embed(rows, guild, start):
         member = guild.get_member(member_id)
         who = member.mention if member else (name or f'Member {member_id}')
         lines.append(f'{medal} {who} — **{kills}** kills, {deaths} deaths')
-    embed = discord.Embed(title=f'🏆 Top 3 for the week of {start:%d %b}', colour=0xD9A441,
-                          description='The weekly leaderboard has reset. Last week\'s best:\n\n'
-                                      + '\n'.join(lines) + '\n\nNew week, clean slate. Good luck.')
-    return embed
+    week = f'{start:%d %b}'
+    title = (WEEKLY.get('title') or TITLE).replace('{week}', week)[:256]
+    intro = (WEEKLY.get('intro') or INTRO).replace('{week}', week)
+    outro = (WEEKLY.get('outro') or OUTRO).replace('{week}', week)
+    return discord.Embed(title=title, colour=0xD9A441,
+                         description='\n\n'.join([intro, '\n'.join(lines), outro])[:4096])
 
 
 class WeeklyWinners:
@@ -49,6 +56,9 @@ class WeeklyWinners:
             self.bot.store.save_weekly_announced(guild.id, week)
             return
         if last >= week:
+            return
+        if not WEEKLY.get('on', True):
+            self.bot.store.save_weekly_announced(guild.id, week)
             return
         previous = start - timedelta(days=7)
         rows = [r for r in window_standings(self.bot.account_links.db, guild.id, previous, start) if r[1] > 0][:3]

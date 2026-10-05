@@ -187,9 +187,10 @@ class Welcome:
         if found:
             factions.LOOK.clear()
             factions.LOOK.update(found[0]["factions"])
-        from bot.discord import server_notifications
+        from bot.discord import server_notifications, weekly_winners
         for key, target in (("serverinfo", server_notifications.SERVER_INFO),
-                            ("matchping", server_notifications.MATCH_PING)):
+                            ("matchping", server_notifications.MATCH_PING),
+                            ("weekly", weekly_winners.WEEKLY)):
             found = read_doc(self.path, key)
             if found:
                 target.clear()
@@ -218,7 +219,7 @@ class Welcome:
         guild = self.bot.get_guild(self.bot.config.guild_id)
         if guild is None:
             return
-        for key in ("welcome", "greeting", "names", "serverinfo", "bans", "matchping", "factions"):
+        for key in ("welcome", "greeting", "names", "serverinfo", "bans", "matchping", "weekly", "factions"):
             found = await asyncio.to_thread(read_doc, self.path, key)
             if found:
                 self.docs[key] = found
@@ -246,6 +247,12 @@ class Welcome:
             server_notifications.MATCH_PING.clear()
             server_notifications.MATCH_PING.update(ping[0])
             self.state["matchping"] = {"version": ping[1], "at": int(time.time()), "problems": []}
+        weekly = self.docs.get("weekly")
+        if weekly:
+            from bot.discord import weekly_winners
+            weekly_winners.WEEKLY.clear()
+            weekly_winners.WEEKLY.update(weekly[0])
+            self.state["weekly"] = {"version": weekly[1], "at": int(time.time()), "problems": []}
         bans = self.docs.get("bans")
         if bans:
             # The ban DMs and ticket cards read these as they go; nothing to redraw.
@@ -568,7 +575,7 @@ class Welcome:
     def _load_state(self):
         try:
             data = json.loads(self.bridge.read_text())
-            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts", "matchping", "links", "factions")
+            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts", "matchping", "weekly", "links", "factions")
                     if isinstance(data.get(k), dict)}
         except (OSError, ValueError):
             return {}
