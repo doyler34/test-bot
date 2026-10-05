@@ -94,7 +94,7 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
                          ['🥇 Roastbeeff', '🥈 Hubcaps', '🥉 Duxillec'])
         self.assertNotIn('Fourth', text)
         self.assertNotIn('ThisWeek', text)
-        self.assertIn(f'{self.last_week:%d %b}', self.channel.sent[0]['embed'].title)
+        self.assertEqual(self.channel.sent[0]['embed'].title, weekly_winners.TITLE)
 
     async def test_a_quiet_week_posts_nothing(self):
         self.store.save_weekly_announced(1, self.last_week.date().isoformat())

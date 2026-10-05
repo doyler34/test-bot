@@ -11,9 +11,10 @@ from bot.storage.combat_store import week_start, window_standings
 LOG = logging.getLogger('reforger.weekly_winners')
 POLL = 60
 MEDALS = ('🥇', '🥈', '🥉')
-TITLE = '🏆 Top 3 for the week of {week}'
-INTRO = "The weekly leaderboard has reset. Last week's best:"
-OUTRO = 'New week, clean slate. Good luck.'
+TITLE = '🏆 WEEKLY LEADERBOARD — RESET'
+INTRO = "That's the end of this week's leaderboard.\nBig shoutout to the top 3:"
+OUTRO = ('Fair play lads. 👏\n\nThe leaderboard is now resetting for the new week.\n'
+         'Everyone starts back at zero — time to see who takes the top spot this week. 🔥')
 # The wording as published from OYB Control; blank keeps the above.
 WEEKLY: dict = {}
 
@@ -22,8 +23,8 @@ def winners_embed(rows, guild, start):
     lines = []
     for medal, (member_id, kills, deaths, name) in zip(MEDALS, rows):
         member = guild.get_member(member_id)
-        who = member.mention if member else (name or f'Member {member_id}')
-        lines.append(f'{medal} {who} — **{kills}** kills, {deaths} deaths')
+        who = name or (member.display_name if member else f'Member {member_id}')
+        lines.append(f'{medal} {who} — {kills} kills')
     week = f'{start:%d %b}'
     title = (WEEKLY.get('title') or TITLE).replace('{week}', week)[:256]
     intro = (WEEKLY.get('intro') or INTRO).replace('{week}', week)

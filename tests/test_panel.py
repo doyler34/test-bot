@@ -1443,7 +1443,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("boss", "boss-password")
         page = await (await self.client.get("/discord/weekly")).text()
         self.assertIn('data-kind="weekly"', page)
-        self.assertIn("Top 3 for the week of {week}", page)
+        self.assertIn("WEEKLY LEADERBOARD — RESET", page)
         token = await self.csrf("/discord/weekly")
         await self.client.post("/discord/weekly", data={"csrf": token, "action": "publish",
             "doc": json.dumps({"on": True, "title": "Kings of {week}", "intro": "", "outro": "GG all"})})

@@ -92,7 +92,7 @@ function weeklyEditor() {
     const box = h("div", { class: "dc-embed" });
     box.style.borderLeftColor = "#D9A441";
     const body = h("div", {});
-    body.innerHTML = markdown([fill("intro"), "🥇 @Roastbeeff — **40** kills, 3 deaths\n🥈 @Hubcaps — **30** kills, 5 deaths\n🥉 @Duxillec — **25** kills, 4 deaths", fill("outro")].join("\n\n"));
+    body.innerHTML = markdown([fill("intro"), "🥇 MONEYSPREAD78 — 632 kills\n🥈 vDutch-- — 499 kills\n🥉 Broadside-1 — 484 kills", fill("outro")].join("\n\n"));
     box.append(h("div", { class: "dc-embed-title" }, fill("title")), body);
     preview.replaceChildren(h("div", { class: "dc-author" }, h("span", { class: "dc-avatar" }), h("b", {}, "OYB"), h("span", { class: "dc-app" }, "APP")), box);
   }
