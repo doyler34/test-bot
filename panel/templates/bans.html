@@ -6,7 +6,7 @@
 {% if bm %}
 <p class="{{ 'warn' if bm.ok == false else 'muted' }}">BattleMetrics:
   {% if bm.ok is none %}first sync starting…
-  {% elif bm.ok %}in sync, checked {{ bm.at|ago }}.{% if bm.unmatched %} {{ bm.unmatched }} of its bans have no Reforger ID, so they can't be shown here.{% endif %}
+  {% elif bm.ok %}in sync, checked {{ bm.at|ago }}.{% if bm.waiting %} Still matching {{ bm.waiting }} of its bans to players; a few each minute.{% endif %}{% if bm.unmatched %} {{ bm.unmatched }} of its bans have no Reforger ID, so they can't be shown here.{% endif %}
   {% else %}not syncing: {{ bm.error }}{% endif %}</p>
 {% endif %}
 

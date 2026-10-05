@@ -19,6 +19,8 @@ log = logging.getLogger("panel.battlemetrics")
 API = "https://api.battlemetrics.com"
 EVERY = 60
 PUSH_PER_ROUND = 20
+LOOKUPS_PER_ROUND = 30
+RECHECK = 86400
 
 
 class BattleMetricsError(Exception):
@@ -56,8 +58,13 @@ def reforger_ids(ban, included):
     return found
 
 
+def related(item, name):
+    return str((((item.get("relationships") or {}).get(name) or {}).get("data") or {}).get("id") or "")
+
+
 def read_bans(pages):
-    """Active bans from the listing pages: (bm_id, reforger ids, reason, expires, banned by)."""
+    """Active bans from the listing pages. A Reforger ID BattleMetrics keeps private
+    comes without its value, so the ban's player is kept to look it up by."""
     included = {}
     for page in pages:
         for item in page.get("included", []):
@@ -68,6 +75,7 @@ def read_bans(pages):
             user = (ban.get("relationships", {}).get("user") or {}).get("data") or {}
             by = (included.get(("user", str(user.get("id")))) or {}).get("nickname") or "BattleMetrics"
             bans.append({"bm_id": str(ban["id"]), "identities": reforger_ids(ban, included),
+                         "player": related(ban, "player"),
                          "reason": plain_reason(ban["attributes"].get("reason")),
                          "expires": epoch(ban["attributes"].get("expires")), "by": clean(by, 40)})
     return bans
@@ -98,9 +106,27 @@ class Client:
                  "org": ((b.get("relationships", {}).get("owner") or {}).get("data") or {}).get("id")}
                 for b in data.get("data", [])]
 
+    async def ban_home(self):
+        """The ban list and organization of the newest ban, for a token that can't list ban lists."""
+        data = await self.call("GET", "/bans?page[size]=1")
+        if not data.get("data"):
+            return None
+        ban = data["data"][0]
+        return {"id": related(ban, "banList"), "name": "", "org": related(ban, "organization")}
+
+    async def player_ids(self, player):
+        data = await self.call("GET", f"/players/{player}?include=identifier")
+        found = []
+        for item in data.get("included", []):
+            attrs = item.get("attributes", {})
+            value = str(attrs.get("identifier") or "").lower()
+            if item.get("type") == "identifier" and attrs.get("type") == "reforgerUUID" and valid_identity(value):
+                found.append(value)
+        return found
+
     async def active_bans(self, ban_list):
         pages, url = [], (f"/bans?filter[banList]={ban_list}&filter[expired]=false"
-                          "&include=user,playerIdentifier&page[size]=100")
+                          "&include=user&page[size]=100")
         while url:
             page = await self.call("GET", url)
             pages.append(page)
@@ -158,6 +184,9 @@ class BanSync:
 
     async def pick_list(self):
         lists = await self.client.ban_lists()
+        if not lists:
+            home = await self.client.ban_home()
+            lists = [home] if home and home["id"] and home["org"] else []
         if self.ban_list:
             chosen = next((b for b in lists if b["id"] == self.ban_list), None)
             if chosen is None:
@@ -173,10 +202,31 @@ class BanSync:
         if not self.org:
             await self.pick_list()
         remote = await self.client.active_bans(self.ban_list)
+        waiting = await self.find_players(remote)
         imported = self.bring_in(remote)
         sent = await self.send_out()
-        self.status.update(ok=True, at=now(), error="", imported=imported, sent=sent,
-                           unmatched=sum(1 for b in remote if not b["identities"]))
+        self.status.update(ok=True, at=now(), error="", imported=imported, sent=sent, waiting=waiting,
+                           unmatched=sum(1 for b in remote if not b["identities"] and not b.get("pending")))
+
+    async def find_players(self, remote):
+        """Fill in Reforger IDs BattleMetrics only gives on the player, a few lookups a round,
+        remembering each player so it is asked once."""
+        budget, waiting = LOOKUPS_PER_ROUND, 0
+        for ban in remote:
+            if ban["identities"] or not ban.get("player"):
+                continue
+            known = self.db.bm_player(ban["player"])
+            if known and (known["identities"] or now() - known["at"] < RECHECK):
+                ban["identities"] = known["identities"]
+                continue
+            if budget <= 0:
+                ban["pending"] = True
+                waiting += 1
+                continue
+            budget -= 1
+            ban["identities"] = await self.client.player_ids(ban["player"])
+            self.db.save_bm_player(ban["player"], ban["identities"])
+        return waiting
 
     def bring_in(self, remote):
         """New BattleMetrics bans become panel bans; ones gone from BattleMetrics are lifted here."""

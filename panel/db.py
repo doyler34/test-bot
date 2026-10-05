@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import time
 from pathlib import Path
@@ -53,6 +54,11 @@ CREATE TABLE IF NOT EXISTS bm_bans (
     removed INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS bm_bans_bm ON bm_bans(bm_id);
+CREATE TABLE IF NOT EXISTS bm_players (
+    player TEXT PRIMARY KEY,
+    identities TEXT NOT NULL,
+    at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS ban_sync (
     ban_id INTEGER NOT NULL REFERENCES bans(id),
     server_id TEXT NOT NULL,
@@ -360,6 +366,14 @@ class PanelDB:
 
     def mark_bm_removed(self, ban_id):
         self.write("UPDATE bm_bans SET removed = 1 WHERE ban_id = ?", ban_id)
+
+    def bm_player(self, player):
+        row = self.one("SELECT * FROM bm_players WHERE player = ?", player)
+        return {"identities": json.loads(row["identities"]), "at": row["at"]} if row else None
+
+    def save_bm_player(self, player, identities):
+        self.write("INSERT OR REPLACE INTO bm_players (player, identities, at) VALUES (?, ?, ?)",
+                   player, json.dumps(identities), now())
 
     def bm_sources(self) -> dict[int, str]:
         return {r["ban_id"]: r["source"] for r in self.all("SELECT ban_id, source FROM bm_bans")}

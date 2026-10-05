@@ -20,8 +20,18 @@ class FakeBM:
         self.calls = []
         self.next = 100
 
+    players = {}
+    lookups = 0
+
     async def ban_lists(self):
         return [{"id": "list-1", "name": "OYB", "org": "777"}]
+
+    async def ban_home(self):
+        return {"id": "list-1", "name": "", "org": "777"}
+
+    async def player_ids(self, player):
+        self.lookups += 1
+        return self.players.get(player, [])
 
     async def active_bans(self, ban_list):
         return [dict(b, bm_id=bm_id) for bm_id, b in self.bans.items()]
@@ -92,6 +102,32 @@ class BanSyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.db.bans()), 1)
         self.assertEqual(self.bm.calls, [])
 
+    async def test_private_ids_are_looked_up_once(self):
+        self.bm.players = {"p1": [BUFORD]}
+        self.bm.bans["9"] = {"identities": [], "player": "p1", "reason": "Cheating", "expires": None, "by": "Blitz"}
+        self.bm.bans["10"] = {"identities": [], "player": "p2", "reason": "Old", "expires": None, "by": "Blitz"}
+        await self.sync.round()
+        await self.sync.round()
+        self.assertEqual(self.db.active_ban(BUFORD)["reason"], "Cheating")
+        self.assertEqual(self.bm.lookups, 2)
+        self.assertEqual(self.sync.status["unmatched"], 1)
+
+    async def test_lookups_are_spread_over_rounds(self):
+        for n in range(45):
+            self.bm.bans[str(n)] = {"identities": [], "player": f"p{n}", "reason": "x", "expires": None, "by": "B"}
+        await self.sync.round()
+        self.assertEqual((self.bm.lookups, self.sync.status["waiting"]), (30, 15))
+        await self.sync.round()
+        self.assertEqual((self.bm.lookups, self.sync.status["waiting"]), (45, 0))
+
+    async def test_no_visible_lists_uses_the_bans_own(self):
+        async def none():
+            return []
+        self.bm.ban_lists = none
+        self.db.add_ban(HAVOC, "Havoc", "Teamkilling", "gaz")
+        await self.sync.round()
+        self.assertEqual(self.bm.calls, [("create", HAVOC, "list-1", "777")])
+
     async def test_several_lists_need_one_picked(self):
         async def two():
             return [{"id": "a", "name": "Main", "org": "1"}, {"id": "b", "name": "Other", "org": "1"}]
@@ -114,6 +150,15 @@ class ReadingTests(unittest.TestCase):
         self.assertEqual(bans[0]["identities"], [BUFORD])
         self.assertEqual((bans[0]["reason"], bans[0]["by"], bans[0]["expires"]), ("Aimbot", "Blitz", 1893456000))
         self.assertEqual((bans[1]["identities"], bans[1]["expires"]), ([HAVOC], None))
+
+    def test_private_id_keeps_the_player(self):
+        page = {"data": [{"id": "1", "attributes": {"reason": "Teamkilling {{duration}} Appeal @ discord.gg/oyb {{expires}}",
+                                                    "expires": None, "identifiers": [
+                                                        {"id": 701775764, "type": "reforgerUUID", "private": True}]},
+                          "relationships": {"player": {"data": {"type": "player", "id": "1198250383"}}}}]}
+        ban = read_bans([page])[0]
+        self.assertEqual((ban["identities"], ban["player"]), ([], "1198250383"))
+        self.assertEqual(ban["reason"], "Teamkilling Appeal @ discord.gg/oyb")
 
     def test_plain_reason(self):
         self.assertEqual(plain_reason("Cheating - expires {{timeLeft}}"), "Cheating - expires")
@@ -156,6 +201,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["data"]["relationships"]["banList"]["data"]["id"], "list-1")
         self.assertEqual(seen[1][:2], ("DELETE", "/bans/42"))
         self.assertIn("filter[banList]=list-1", unquote(seen[2][1]))
+        self.assertIn("include=user&", unquote(seen[2][1]))
         self.assertEqual(len(seen), 4)
 
 
