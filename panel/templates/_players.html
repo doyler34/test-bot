@@ -2,7 +2,7 @@
 <div class="scroll"><table class="players-table">
   <thead><tr><th class="num-col">#</th><th>Name</th><th class="num">Played</th><th class="wide">Identity</th><th></th></tr></thead>
   <tbody>
-  {% for p in s.players %}
+  {% for p in s.players|sort(attribute="name") %}
   {% set st = oyb(p.identity) if p.identity else none %}
   <tr>
     <td class="num-col">{{ p.id }}</td>
