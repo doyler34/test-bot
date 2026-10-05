@@ -367,6 +367,11 @@ class PanelDB:
     def mark_bm_removed(self, ban_id):
         self.write("UPDATE bm_bans SET removed = 1 WHERE ban_id = ?", ban_id)
 
+    def name_bm_bans(self, bm_id, name):
+        """Bans that came in before their player's name was known."""
+        self.write("UPDATE bans SET name = ? WHERE name = '' AND id IN (SELECT ban_id FROM bm_bans WHERE bm_id = ?)",
+                   name, bm_id)
+
     def bm_player(self, player):
         row = self.one("SELECT * FROM bm_players WHERE player = ?", player)
         return {"identities": json.loads(row["identities"]), "at": row["at"]} if row else None

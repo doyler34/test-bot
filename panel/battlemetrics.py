@@ -76,6 +76,7 @@ def read_bans(pages):
             by = (included.get(("user", str(user.get("id")))) or {}).get("nickname") or "BattleMetrics"
             bans.append({"bm_id": str(ban["id"]), "identities": reforger_ids(ban, included),
                          "player": related(ban, "player"),
+                         "name": clean(str((ban.get("meta") or {}).get("player") or ""), 64),
                          "reason": plain_reason(ban["attributes"].get("reason")),
                          "expires": epoch(ban["attributes"].get("expires")), "by": clean(by, 40)})
     return bans
@@ -234,6 +235,8 @@ class BanSync:
         live = {b["bm_id"] for b in remote}
         for ban in remote:
             if self.db.bm_link(ban["bm_id"]):
+                if ban.get("name"):
+                    self.db.name_bm_bans(ban["bm_id"], ban["name"])
                 continue
             for identity in ban["identities"]:
                 current = self.db.active_ban(identity)
@@ -241,7 +244,7 @@ class BanSync:
                     if not self.db.bm_ban(current["id"]):
                         self.db.link_bm(current["id"], ban["bm_id"], "panel")
                     continue
-                name = (self.db.player(identity) or {"name": ""})["name"]
+                name = (self.db.player(identity) or {"name": ""})["name"] or ban.get("name", "")
                 ban_id = self.db.add_ban(identity, name, ban["reason"], f"{ban['by']} (BattleMetrics)", ban["expires"])
                 self.db.link_bm(ban_id, ban["bm_id"], "battlemetrics")
                 added += 1

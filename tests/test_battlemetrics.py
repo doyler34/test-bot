@@ -112,6 +112,17 @@ class BanSyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bm.lookups, 2)
         self.assertEqual(self.sync.status["unmatched"], 1)
 
+    async def test_names_come_from_battlemetrics(self):
+        self.bm.bans["9"] = {"identities": [BUFORD], "reason": "Cheating", "expires": None, "by": "Blitz"}
+        await self.sync.round()
+        self.assertEqual(self.db.active_ban(BUFORD)["name"], "")
+        self.bm.bans["9"]["name"] = "OpXXFINITYYY"
+        await self.sync.round()
+        self.assertEqual(self.db.active_ban(BUFORD)["name"], "OpXXFINITYYY")
+        self.bm.bans["10"] = {"identities": [HAVOC], "reason": "TK", "expires": None, "by": "Blitz", "name": "Havoc"}
+        await self.sync.round()
+        self.assertEqual(self.db.active_ban(HAVOC)["name"], "Havoc")
+
     async def test_lookups_are_spread_over_rounds(self):
         for n in range(45):
             self.bm.bans[str(n)] = {"identities": [], "player": f"p{n}", "reason": "x", "expires": None, "by": "B"}
@@ -158,6 +169,7 @@ class ReadingTests(unittest.TestCase):
                           "relationships": {"player": {"data": {"type": "player", "id": "1198250383"}}}}]}
         ban = read_bans([page])[0]
         self.assertEqual((ban["identities"], ban["player"]), ([], "1198250383"))
+        self.assertEqual(ban["name"], "")
         self.assertEqual(ban["reason"], "Teamkilling Appeal @ discord.gg/oyb")
 
     def test_plain_reason(self):
