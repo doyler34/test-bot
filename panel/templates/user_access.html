@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Access · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/users">Admins</a></p>
+<h1>{{ target.username }}</h1>
+<form class="card access-form" method="post" action="/users/{{ target.id }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="action" value="grants">
+  <h2>Extra access</h2>
+  <p class="muted">{{ target.username }} is a <b>{{ target.role }}</b>. Tick anything they should have on top of that. Their menu and Guide only ever show what they can use.</p>
+  {% for key, label in grant_list if not role_can(target.role, key) %}
+  <label class="check"><input type="checkbox" name="grant" value="{{ key }}" {% if key in mine %}checked{% endif %}> {{ label }}</label>
+  {% endfor %}
+  {% if not role_can(target.role, "discord") %}
+  <div class="grant-pages">
+    <p class="muted">Or only some Discord pages (ignored if "Every Discord page" is ticked):</p>
+    {% for key, label in discord_pages %}
+    <label class="check"><input type="checkbox" name="grant" value="discord:{{ key }}" {% if ("discord:" ~ key) in mine %}checked{% endif %}> {{ label }}</label>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="dc-actions"><button>Save access</button> <a class="button ghost" href="/users">Back</a></div>
+</form>
+{% endblock %}

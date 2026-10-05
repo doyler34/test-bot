@@ -21,15 +21,16 @@
   </div>
   <button>Create account</button>
   <p class="muted"><b>Moderator</b>: watch the servers, look players up (kill logs included), kick, add notes. <b>Admin</b>: also ban, and see the audit log. <b>Owner</b>: everything else: unbanning, IPs and other accounts on the same IP, restarts, uploads, the raw console, Discord, the website and admin accounts.</p>
+  <p class="muted">Need someone to have just one extra thing, like the Start here message in Discord? Give them the role, then use <b>Edit access</b> next to their name.</p>
 </form>
 
-<div class="scroll"><table>
-  <thead><tr><th>Username</th><th>Role</th><th>Last login</th><th></th></tr></thead>
+<div class="scroll"><table class="stack">
+  <thead><tr><th>Username</th><th>Role</th><th>Last login</th><th>Access</th><th></th></tr></thead>
   <tbody>
   {% for u in rows %}
   <tr class="{{ 'bad' if u.disabled else '' }}">
     <td>{{ u.username }}{% if u.disabled %} <span class="muted">(disabled)</span>{% endif %}</td>
-    <td>
+    <td data-label="Role">
       <form method="post" action="/users/{{ u.id }}" class="inline">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="action" value="role">
@@ -37,7 +38,14 @@
         <noscript><button class="small">Save</button></noscript>
       </form>
     </td>
-    <td>{{ u.last_login|ago }}</td>
+    <td data-label="Last login">{{ u.last_login|ago }}</td>
+    <td class="access" data-label="Access">
+      {% if u.role == "owner" %}<span class="muted">Everything</span>
+      {% else %}
+      {% set mine = grants.get(u.id, []) %}
+      {{ "Role only" if not mine else (mine|length) ~ " extra" }} · <a href="/users/{{ u.id }}/access">Edit access</a>
+      {% endif %}
+    </td>
     <td class="actions">
       <form method="post" action="/users/{{ u.id }}" data-confirm="Give {{ u.username }} a new temporary password? They'll be logged out.">
         <input type="hidden" name="csrf" value="{{ csrf }}">

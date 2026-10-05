@@ -416,6 +416,8 @@ details.controls[open] summary::after { content: " ▴"; }
 .srv-tags { display: grid; grid-template-columns: repeat(2, max-content); gap: 4px; }
 .srv-tags .pill { margin: 0; }
 .bans-table td:first-child { overflow-wrap: anywhere; min-width: 150px; }
+.access-form { display: grid; gap: 6px; max-width: 640px; }
+.access-form .grant-pages { display: grid; gap: 6px; margin-top: 6px; padding-left: 14px; border-left: 1px solid var(--line); }
 .ban-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
 .ban-search input[name=q] { flex: 1 1 220px; min-width: 0; }
 .ban-search select { flex: 0 1 auto; width: auto; }

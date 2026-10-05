@@ -17,6 +17,11 @@ CREATE TABLE IF NOT EXISTS users (
     created_at INTEGER NOT NULL,
     last_login INTEGER
 );
+CREATE TABLE IF NOT EXISTS user_grants (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    grant_key TEXT NOT NULL,
+    PRIMARY KEY (user_id, grant_key)
+);
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -279,6 +284,21 @@ class PanelDB:
 
     def user_by_name(self, username: str):
         return self.one("SELECT * FROM users WHERE username = ?", username)
+
+    def grants(self, user_id) -> set[str]:
+        return {r["grant_key"] for r in self.all("SELECT grant_key FROM user_grants WHERE user_id = ?", user_id)}
+
+    def all_grants(self) -> dict[int, set[str]]:
+        found = {}
+        for r in self.all("SELECT user_id, grant_key FROM user_grants"):
+            found.setdefault(r["user_id"], set()).add(r["grant_key"])
+        return found
+
+    def set_grants(self, user_id, grants):
+        self.db.execute("DELETE FROM user_grants WHERE user_id = ?", (user_id,))
+        self.db.executemany("INSERT INTO user_grants (user_id, grant_key) VALUES (?, ?)",
+                            [(user_id, g) for g in sorted(grants)])
+        self.db.commit()
 
     def users(self):
         return self.all("SELECT * FROM users ORDER BY username COLLATE NOCASE")

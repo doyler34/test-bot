@@ -22,12 +22,12 @@
 <div class="scroll"><table>
   <thead><tr><th>Role</th><th>Can</th></tr></thead>
   <tbody>
-    <tr><td>Moderator</td><td>See the servers and players, kick, and leave notes on players.</td></tr>
-    <tr><td>Admin</td><td>Everything a moderator can, plus ban and unban, see IPs and alt accounts, start, stop and restart servers, download and upload game logs, and read the audit log.</td></tr>
-    <tr><td>Owner</td><td>Everything, plus the raw RCON console and making admin accounts.</td></tr>
+    <tr><td>Moderator</td><td>See the servers and players (kill logs included), kick, and leave notes on players.</td></tr>
+    <tr><td>Admin</td><td>Everything a moderator can, plus ban, and read the audit log.</td></tr>
+    <tr><td>Owner</td><td>Everything: unbanning, IPs and alt accounts, server power, game log uploads, the raw console, Discord, the website and admin accounts.</td></tr>
   </tbody>
 </table></div>
-<p>You're {{ "an" if user.role in ("admin", "owner") else "a" }} <b>{{ user.role }}</b>. Some pages in this guide cover things only admins or owners can do, and say so.</p>
+<p>You're {{ "an" if user.role in ("admin", "owner") else "a" }} <b>{{ user.role }}</b>. An owner can also give you single extras on top of your role. This guide only shows you the pages for what you can do.</p>
 
 <h2>Your password</h2>
 <ol class="steps">

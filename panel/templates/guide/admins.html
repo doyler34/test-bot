@@ -17,5 +17,15 @@
   <li><b>Reset password</b>: gives them a new temporary password, shown once. Use it when someone's locked out.</li>
   <li><b>Disable</b>: stops them logging in, without losing their history in the audit log.</li>
 </ul>
-<p class="tip">Give people the lowest role that does the job. Start new staff as moderators.</p>
+
+<h2>Extra access for one person</h2>
+<p>Sometimes one person needs one thing their role doesn't give, like editing the Start here message without being an owner. In the <b>Access</b> column (it says <b>Role only</b> until they have something extra):</p>
+<ol class="steps">
+  <li>Press <b>Edit access</b> next to their name.</li>
+  <li>Tick what they should have: banning, unbanning, IPs, the audit log, the console, server power, the website, every Discord page, or only some Discord pages.</li>
+  <li>Press <b>Save access</b>. It applies on their next page load.</li>
+</ol>
+<p>Their menu and this guide change to match: they only see the pages they can use, and the guide pages that explain them. Owners always have everything, and only owners can change anyone's access.</p>
+
+<p class="tip">Give people the lowest role that does the job, and add single things with Access rather than making them owner. Start new staff as moderators.</p>
 {% endblock %}

@@ -20,15 +20,40 @@ PERMISSIONS = {
     "console": "owner",
     "users": "owner",
     "discord": "owner",
+    "website": "owner",
 }
+
+# What an owner can hand to one person on top of their role. "discord" is every
+# Discord page; "discord:<page>" is just that one. Admin accounts stay with owners.
+GRANTS = (
+    ("ban", "Ban players"),
+    ("unban", "Unban players"),
+    ("ips", "See IPs and other accounts on the same IP"),
+    ("audit", "Read the audit log"),
+    ("console", "Use the raw RCON console"),
+    ("power", "Start, stop and restart servers"),
+    ("website", "Edit the public website"),
+    ("discord", "Every Discord page"),
+)
 
 SESSION_SECONDS = 7 * 24 * 3600
 MIN_PASSWORD = 10
 
 
 def can(role: str, permission: str) -> bool:
-    need = PERMISSIONS[permission]
+    need = PERMISSIONS[permission.split(":")[0]]
     return role in ROLES and ROLES.index(role) >= ROLES.index(need)
+
+
+def allows(role: str, grants, permission: str) -> bool:
+    """The role's own permissions plus anything granted to this one person. Plain
+    "discord" asks whether they may open any Discord page at all."""
+    if can(role, permission):
+        return True
+    base = permission.split(":")[0]
+    if base in grants or permission in grants:
+        return True
+    return permission == "discord" and any(g.startswith("discord:") for g in grants)
 
 
 def hash_password(password: str) -> str:
