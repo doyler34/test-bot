@@ -45,6 +45,14 @@ CREATE TABLE IF NOT EXISTS bans (
     removed_by TEXT,
     removed_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS bm_bans (
+    ban_id INTEGER PRIMARY KEY REFERENCES bans(id),
+    bm_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    reason_sent TEXT NOT NULL DEFAULT '',
+    removed INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS bm_bans_bm ON bm_bans(bm_id);
 CREATE TABLE IF NOT EXISTS ban_sync (
     ban_id INTEGER NOT NULL REFERENCES bans(id),
     server_id TEXT NOT NULL,
@@ -317,6 +325,44 @@ class PanelDB:
     def remove_ban(self, ban_id: int, removed_by: str):
         self.write("UPDATE bans SET removed_by = ?, removed_at = ? WHERE id = ? AND removed_at IS NULL",
                    removed_by, now(), ban_id)
+
+    # BattleMetrics: which panel ban is which BattleMetrics ban
+
+    def link_bm(self, ban_id, bm_id, source):
+        self.write("INSERT OR REPLACE INTO bm_bans (ban_id, bm_id, source, reason_sent)"
+                   " SELECT id, ?, ?, reason FROM bans WHERE id = ?", bm_id, source, ban_id)
+
+    def bm_ban(self, ban_id):
+        return self.one("SELECT * FROM bm_bans WHERE ban_id = ?", ban_id)
+
+    def bm_link(self, bm_id):
+        return self.one("SELECT * FROM bm_bans WHERE bm_id = ?", bm_id)
+
+    def bm_links_active(self):
+        return self.all("SELECT m.ban_id, m.bm_id, b.expires_at FROM bm_bans m JOIN bans b ON b.id = m.ban_id"
+                        " WHERE m.removed = 0 AND b.removed_at IS NULL")
+
+    def bans_not_on_bm(self):
+        return self.all("SELECT * FROM bans WHERE removed_at IS NULL AND (expires_at IS NULL OR expires_at > ?)"
+                        " AND id NOT IN (SELECT ban_id FROM bm_bans) ORDER BY id", now())
+
+    def bm_reasons_changed(self):
+        return self.all("SELECT m.ban_id, m.bm_id, b.reason FROM bm_bans m JOIN bans b ON b.id = m.ban_id"
+                        " WHERE m.removed = 0 AND b.removed_at IS NULL AND b.reason != m.reason_sent")
+
+    def mark_bm_reason_sent(self, ban_id):
+        self.write("UPDATE bm_bans SET reason_sent = (SELECT reason FROM bans WHERE id = ?) WHERE ban_id = ?",
+                   ban_id, ban_id)
+
+    def bm_unbans_to_send(self):
+        return self.all("SELECT m.ban_id, m.bm_id FROM bm_bans m JOIN bans b ON b.id = m.ban_id"
+                        " WHERE m.removed = 0 AND b.removed_at IS NOT NULL")
+
+    def mark_bm_removed(self, ban_id):
+        self.write("UPDATE bm_bans SET removed = 1 WHERE ban_id = ?", ban_id)
+
+    def bm_sources(self) -> dict[int, str]:
+        return {r["ban_id"]: r["source"] for r in self.all("SELECT ban_id, source FROM bm_bans")}
 
     def add_ip_bans(self, ban_id: int, ips):
         self.db.executemany("INSERT OR IGNORE INTO ip_bans (ban_id, ip) VALUES (?, ?)", [(ban_id, ip) for ip in ips])

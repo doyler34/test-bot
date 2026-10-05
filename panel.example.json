@@ -6,6 +6,8 @@
   "discord_webhook": "",
   "oyb_data": "data",
   "site_hosts": [],
+  "battlemetrics_token": "",
+  "battlemetrics_ban_list": "",
   "servers": [
     {
       "id": "server-1",

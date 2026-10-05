@@ -48,6 +48,8 @@ class PanelConfig:
     oyb_data: str = "data"
     suspicion: dict = field(default_factory=dict)
     site_hosts: list[str] = field(default_factory=list)
+    battlemetrics_token: str = ""
+    battlemetrics_ban_list: str = ""
     servers: list[ServerConfig] = field(default_factory=list)
 
     def server(self, server_id: str) -> ServerConfig | None:
@@ -121,5 +123,7 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
         oyb_data=str(raw.get("oyb_data") or "data"),
         suspicion=suspicion,
         site_hosts=[str(h).strip().lower() for h in raw.get("site_hosts", []) if str(h).strip()],
+        battlemetrics_token=str(raw.get("battlemetrics_token") or "").strip(),
+        battlemetrics_ban_list=str(raw.get("battlemetrics_ban_list") or "").strip(),
         servers=servers,
     )

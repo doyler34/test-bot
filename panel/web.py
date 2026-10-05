@@ -21,6 +21,7 @@ from .connections import LogReader, folder_start
 from .db import PanelDB, now
 from .oyb_stats import OybStats
 from .rcon import RconError
+from .battlemetrics import BanSync
 from .servers import POWER_RCON, POWER_SERVICE, ServerManager, clean, valid_identity
 
 log = logging.getLogger("panel.web")
@@ -63,6 +64,7 @@ THROTTLE = web.AppKey("throttle", auth.LoginThrottle)
 FLASH = web.AppKey("flash", dict)
 JINJA = web.AppKey("jinja", jinja2.Environment)
 STATS = web.AppKey("stats", OybStats)
+BM = web.AppKey("battlemetrics", object)
 USER = web.RequestKey("user", object) if hasattr(web, "RequestKey") else "user"
 CSRF = web.RequestKey("csrf", str) if hasattr(web, "RequestKey") else "csrf"
 
@@ -790,10 +792,13 @@ async def power(request):
 async def bans_page(request):
     db = request.app[DB]
     show_old = request.query.get("all") == "1"
-    rows = [dict(b, synced=db.synced(b["id"]), ips=db.ban_ips(b["id"])) for b in db.bans(include_old=show_old)]
+    on_bm = db.bm_sources()
+    rows = [dict(b, synced=db.synced(b["id"]), ips=db.ban_ips(b["id"]), bm=on_bm.get(b["id"]))
+            for b in db.bans(include_old=show_old)]
     prefill = {k: clean(request.query.get(k, ""), 64) for k in ("identity", "name")}
+    sync = request.app[BM]
     return render(request, "bans.html", bans=rows, show_old=show_old, durations=DURATIONS, ban_units=BAN_UNITS,
-                  prefill=prefill, error="")
+                  prefill=prefill, error="", bm=sync.status if sync else None)
 
 
 async def add_ban(request):
@@ -1403,6 +1408,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[THROTTLE] = auth.LoginThrottle()
     app[FLASH] = {}
     app[STATS] = OybStats(config.oyb_data)
+    app[BM] = BanSync(app[DB], config.battlemetrics_token, config.battlemetrics_ban_list) \
+        if config.battlemetrics_token else None
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
     env.filters.update(ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb)
@@ -1411,7 +1418,11 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     if start_manager:
         async def lifecycle(app):
             app[MANAGER].start()
+            if app[BM]:
+                app[BM].start()
             yield
+            if app[BM]:
+                await app[BM].stop()
             await app[MANAGER].stop()
             app[DB].close()
         app.cleanup_ctx.append(lifecycle)
