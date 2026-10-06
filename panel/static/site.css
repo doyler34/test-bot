@@ -86,6 +86,14 @@ main { padding: 0 var(--gutter) 64px; position: relative; z-index: 2; margin-top
 .join summary::-webkit-details-marker { display: none; }
 .join p { margin: 8px 0 0; max-width: 300px; color: var(--muted); font-size: .9rem; }
 
+.rules { margin-top: 48px; }
+.rules h2 { margin: 0 0 16px; font-family: var(--display); font-size: 1.15rem; letter-spacing: .1em; text-transform: uppercase; }
+.rules ol { margin: 0; padding: 10px 26px; list-style: none; counter-reset: rule; columns: 2 320px; column-gap: 48px; }
+.rules li { counter-increment: rule; display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--line);
+  break-inside: avoid; color: #cfc8b6; font-size: .95rem; }
+.rules li::before { content: counter(rule, decimal-leading-zero); font-family: var(--display); font-weight: 700;
+  color: var(--gold); min-width: 24px; }
+.rules .note { margin: 10px 0 0; color: var(--faint); font-size: .85rem; }
 .lower { display: grid; grid-template-columns: 1.4fr 1fr; gap: 56px; margin-top: 48px; align-items: start; }
 .lower h2 { margin: 0 0 16px; font-family: var(--display); font-size: 1.15rem; letter-spacing: .1em; text-transform: uppercase; }
 .story { display: grid; grid-template-columns: 42% 1fr; }

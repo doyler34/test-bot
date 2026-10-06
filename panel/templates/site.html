@@ -25,6 +25,7 @@
   <div class="links">
     <a href="#top" class="on">Home</a>
     {% if site.count %}<a href="#servers">Servers</a>{% endif %}
+    {% if rules %}<a href="#rules">Rules</a>{% endif %}
     {% if paras|length > 1 %}<a href="#about">About</a>{% endif %}
     {% if doc.discord %}<a href="{{ doc.discord }}" rel="noopener">Discord</a>{% endif %}
   </div>
@@ -68,6 +69,16 @@
     </div>
     {% endfor %}
     {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if rules %}
+  <section class="rules" id="rules">
+    <h2>Server rules</h2>
+    <ol class="card">
+      {% for line in rules %}<li>{{ line }}</li>{% endfor %}
+    </ol>
+    <p class="note">The same rules on every {{ doc.name }} server. Admins have the final say.</p>
   </section>
   {% endif %}
 

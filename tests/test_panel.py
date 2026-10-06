@@ -1905,6 +1905,21 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         page = await (await self.client.get("/server/server-1")).text()
         self.assertIn('data-tab-panel="health"', page)
 
+    async def test_site_shows_the_discord_rules(self):
+        self.config.site_hosts = ["oybgaming.com"]
+        with tempfile.TemporaryDirectory() as data:
+            self.config.oyb_data = data
+            Path(data, "panel_bridge.json").write_text(json.dumps({"updated": now(), "card": {
+                "rules": "• **No teamkilling**\n• No cheating\n\n3. Respect admins"}}))
+            html = await (await self.client.get("/", headers={"Host": "oybgaming.com"})).text()
+            self.assertIn('href="#rules"', html)
+            self.assertIn("<li>No teamkilling</li>", html)
+            self.assertIn("<li>Respect admins</li>", html)
+            self.db.publish_discord_doc("serverinfo", json.dumps({"rules": "Have fun"}), "gaz")
+            html = await (await self.client.get("/", headers={"Host": "oybgaming.com"})).text()
+            self.assertIn("<li>Have fun</li>", html)
+            self.assertNotIn("No cheating", html)
+
     async def test_live_player_search_box(self):
         await self.login("boss", "boss-password")
         page = await (await self.client.get("/server/server-1")).text()

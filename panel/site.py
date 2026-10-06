@@ -55,6 +55,16 @@ def plain(text):
     return re.sub(r"[*_`]", "", text or "").strip()
 
 
+def rules(text):
+    """The bot's rules card as plain lines for the site: no Discord markdown, no bullet marks."""
+    lines = []
+    for line in (text or "").splitlines():
+        line = re.sub(r"^\s*(?:[•\-*>]+|\d+[.)])\s*", "", plain(line))
+        if line:
+            lines.append(line)
+    return lines
+
+
 def view(doc, servers, states, bridge):
     """What the site shows, grouped by game. No player names, IPs or anything
     else from the panel: just who's online and how many are playing."""

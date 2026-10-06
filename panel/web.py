@@ -658,10 +658,18 @@ def site_view(request, doc=None):
                      bridge(request))
 
 
+def site_rules(request):
+    """The rules the bot posts in Discord: as edited on Server info & rules, else the bot's own."""
+    row = request.app[DB].discord_doc("serverinfo")
+    published = json.loads(row["published"]) if row and row["published"] else {}
+    return site.rules(published.get("rules") or (bridge(request).get("card") or {}).get("rules", ""))
+
+
 def site_page(request, preview=False):
     doc = site_doc(request)
     html = request.app[JINJA].get_template("site.html").render(
-        doc=doc, site=site_view(request, doc), preview=preview, asset_version=ASSET_VERSION, year=time.strftime("%Y"))
+        doc=doc, site=site_view(request, doc), rules=site_rules(request), preview=preview,
+        asset_version=ASSET_VERSION, year=time.strftime("%Y"))
     return web.Response(text=html, content_type="text/html")
 
 

@@ -415,6 +415,7 @@ details.controls[open] summary::after { content: " ▴"; }
 .control-list .muted { font-size: .85rem; flex-basis: 100%; }
 
 .players-table td.actions { white-space: nowrap; }
+.players-table .wide { display: none; }
 .player-search { flex: 1 1 160px; max-width: 280px; margin: 0 0 12px auto; padding: 6px 10px; }
 .srv-tags { display: grid; grid-template-columns: repeat(2, max-content); gap: 4px; }
 .srv-tags .pill { margin: 0; }
