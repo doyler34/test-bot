@@ -39,8 +39,11 @@
 <div data-tab-panel="overview">
   <div class="panes">
     <section class="card pane" data-expand>
-      <h2>Players</h2>
-      <div class="body" data-refresh="/server/{{ s.id }}/players.part">
+      <div class="row">
+        <h2>Players</h2>
+        <input type="search" class="player-search" placeholder="Search players" aria-label="Search players on this server" data-filter-rows="#live-players">
+      </div>
+      <div class="body" id="live-players" data-refresh="/server/{{ s.id }}/players.part">
       {% include "_players.html" %}
       </div>
     </section>

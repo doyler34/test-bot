@@ -13,7 +13,10 @@ async function refresh(box) {
   try {
     const response = await fetch(url, { credentials: "same-origin" });
     if (response.status === 401) return location.reload();
-    if (response.ok) box.innerHTML = await response.text();
+    if (response.ok) {
+      box.innerHTML = await response.text();
+      for (const input of document.querySelectorAll("[data-filter-rows]")) filterRows(input);
+    }
   } catch (err) {}
 }
 
@@ -144,12 +147,15 @@ for (const input of document.querySelectorAll("[data-player-search]")) {
   input.addEventListener("blur", () => { list.hidden = true; });
 }
 
+function filterRows(input) {
+  const q = input.value.trim().toLowerCase();
+  for (const row of document.querySelectorAll(input.dataset.filterRows + " tbody tr")) {
+    row.hidden = Boolean(q) && !row.textContent.toLowerCase().includes(q);
+  }
+}
+
 for (const input of document.querySelectorAll("[data-filter-rows]")) {
-  const rows = document.querySelectorAll(input.dataset.filterRows + " tbody tr");
-  input.addEventListener("input", () => {
-    const q = input.value.trim().toLowerCase();
-    for (const row of rows) row.hidden = q && !row.textContent.toLowerCase().includes(q);
-  });
+  input.addEventListener("input", () => filterRows(input));
 }
 
 for (const button of document.querySelectorAll("[data-copy]")) {

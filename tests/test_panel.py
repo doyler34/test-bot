@@ -1905,6 +1905,12 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         page = await (await self.client.get("/server/server-1")).text()
         self.assertIn('data-tab-panel="health"', page)
 
+    async def test_live_player_search_box(self):
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/server/server-1")).text()
+        self.assertIn('data-filter-rows="#live-players"', page)
+        self.assertIn('id="live-players"', page)
+
     async def test_players_are_listed_by_name(self):
         self.fake.players.append(("9", "alpha", "11111111-2222-4333-8444-555555555555"))
         await self.manager.refresh_players(self.manager.state("server-1"))
