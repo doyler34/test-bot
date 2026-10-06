@@ -43,9 +43,9 @@ class FakeBM:
                                      "expires": ban["expires_at"], "by": "OYB"}
         return str(self.next)
 
-    async def update_reason(self, bm_id, reason):
-        self.calls.append(("reason", bm_id, reason))
-        self.bans[bm_id]["reason"] = reason
+    async def update_ban(self, bm_id, reason, expires):
+        self.calls.append(("update", bm_id, reason, expires))
+        self.bans[bm_id].update(reason=reason, expires=expires)
 
     async def delete_ban(self, bm_id):
         self.calls.append(("delete", bm_id))
@@ -79,7 +79,14 @@ class BanSyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bm.calls, [("create", HAVOC, "list-1", "777")])
         self.db.set_ban_reason(ban, "Teamkilling at main")
         await self.sync.round()
-        self.assertEqual(self.bm.calls[-1], ("reason", "101", "Teamkilling at main"))
+        expires = self.db.ban(ban)["expires_at"]
+        self.assertEqual(self.bm.calls[-1], ("update", "101", "Teamkilling at main", expires))
+        self.db.set_ban_expiry(ban, None)
+        await self.sync.round()
+        self.assertEqual(self.bm.calls[-1], ("update", "101", "Teamkilling at main", None))
+        calls = len(self.bm.calls)
+        await self.sync.round()
+        self.assertEqual(len(self.bm.calls), calls)
         self.db.remove_ban(ban, "gaz")
         await self.sync.round()
         await self.sync.round()

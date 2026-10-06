@@ -44,6 +44,9 @@
 <h2>BattleMetrics</h2>
 <p>If the panel is linked to BattleMetrics, bans go both ways: a ban made on BattleMetrics shows up here within a minute (marked <b>BM</b>) and is put on every server, and a ban made here is added to the BattleMetrics ban list. Unbans and reason changes follow too. BattleMetrics bans with no Reforger ID can't be matched to a player, so they stay on BattleMetrics only.</p>
 
+<h2>Changing a ban</h2>
+<p>Press <b>Edit</b> next to a ban. Whoever made it can reword the reason.{% if can("edit_bans") %} You can change any ban: its reason, and its length from now (Keep as is, a quick pick, Permanent, or a custom length). The new length goes to every server straight away and to BattleMetrics, without the player being unbanned in between.{% else %} Owners can also change the length.{% endif %}</p>
+
 <h2>Unbanning</h2>
 <p class="tip">Only owners can unban.</p>
 <ol class="steps">

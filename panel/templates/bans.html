@@ -77,12 +77,24 @@
         {% endfor %}
       </div></td>
       <td class="actions">
-        {% if can("ban") and b.created_by == user.username and not b.removed_at %}
+        {% if not b.removed_at and (can("edit_bans") or (can("ban") and b.created_by == user.username)) %}
         <details class="edit-ban">
           <summary class="button small ghost">Edit</summary>
           <form method="post" action="/bans/{{ b.id }}/edit">
             <input type="hidden" name="csrf" value="{{ csrf }}">
-            <textarea name="reason" rows="3" maxlength="200" required>{{ b.reason }}</textarea>
+            <label>Reason <textarea name="reason" rows="3" maxlength="200" required>{{ b.reason }}</textarea></label>
+            {% if can("edit_bans") %}
+            <label>Length <span class="muted">(from now)</span>
+              <select name="duration" data-ban-length>
+                <option value="keep" selected>Keep as is ({{ b.expires_at|until if b.expires_at else "Permanent" }})</option>
+                {% for value, label in durations %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+              </select>
+            </label>
+            <div class="ban-custom" data-ban-custom hidden>
+              <label>How long <input name="amount" type="number" min="1" inputmode="numeric" placeholder="e.g. 45"></label>
+              <label>&nbsp;<select name="unit">{% for value, label in ban_units %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+            </div>
+            {% endif %}
             <button class="small">Save</button>
           </form>
         </details>

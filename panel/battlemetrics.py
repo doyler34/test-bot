@@ -145,9 +145,9 @@ class Client:
                               "banList": {"data": {"type": "banList", "id": ban_list}}}}}
         return str((await self.call("POST", "/bans", body))["data"]["id"])
 
-    async def update_reason(self, bm_id, reason):
-        await self.call("PATCH", f"/bans/{bm_id}",
-                        {"data": {"type": "ban", "id": bm_id, "attributes": {"reason": reason[:255]}}})
+    async def update_ban(self, bm_id, reason, expires_at):
+        await self.call("PATCH", f"/bans/{bm_id}", {"data": {"type": "ban", "id": bm_id, "attributes": {
+            "reason": reason[:255], "expires": iso(expires_at)}}})
 
     async def delete_ban(self, bm_id):
         await self.call("DELETE", f"/bans/{bm_id}")
@@ -266,7 +266,7 @@ class BanSync:
             self.db.link_bm(ban["id"], bm_id, "panel")
             sent += 1
         for link in self.db.bm_reasons_changed():
-            await self.client.update_reason(link["bm_id"], link["reason"])
+            await self.client.update_ban(link["bm_id"], link["reason"], link["expires_at"])
             self.db.mark_bm_reason_sent(link["ban_id"])
         for link in self.db.bm_unbans_to_send():
             try:

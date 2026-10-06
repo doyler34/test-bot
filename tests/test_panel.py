@@ -1231,6 +1231,35 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post(f"/bans/{mine}/edit", data={"csrf": token, "reason": "  "})
         self.assertEqual(self.db.ban(mine)["reason"], "Teamkilled three times after a warning")
 
+    async def test_owners_change_any_ban_without_unbanning(self):
+        ban = self.db.add_ban(BUFORD, "Buford", "tk", "someone-else", now() + 3600)
+        self.fake.commands.clear()
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/bans")).text()
+        self.assertIn(f"/bans/{ban}/edit", page)
+        self.assertIn('value="keep" selected', page)
+        token = await self.csrf("/bans")
+        await self.client.post(f"/bans/{ban}/edit", data={"csrf": token, "reason": "Mass TK", "duration": "0"})
+        row = self.db.ban(ban)
+        self.assertEqual((row["reason"], row["expires_at"], row["removed_at"]), ("Mass TK", None, None))
+        self.assertTrue(any(c.startswith("#ban remove") for c in self.fake.commands))
+        self.assertTrue(any(c.startswith(f"#ban create {BUFORD} 0 ") for c in self.fake.commands))
+        await self.client.post(f"/bans/{ban}/edit", data={"csrf": token, "reason": "Mass TK", "duration": "custom",
+                                                         "amount": "2", "unit": "86400"})
+        self.assertAlmostEqual(self.db.ban(ban)["expires_at"], now() + 2 * 86400, delta=5)
+        await self.client.post(f"/bans/{ban}/edit", data={"csrf": token, "reason": "Mass TK again", "duration": "keep"})
+        self.assertAlmostEqual(self.db.ban(ban)["expires_at"], now() + 2 * 86400, delta=5)
+        self.assertEqual(self.db.ban(ban)["reason"], "Mass TK again")
+
+    async def test_admins_only_reword_their_own_bans(self):
+        self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
+        mine = self.db.add_ban(BUFORD, "Buford", "tk", "adm", now() + 3600)
+        await self.login("adm", "adm-password")
+        token = await self.csrf("/bans")
+        await self.client.post(f"/bans/{mine}/edit", data={"csrf": token, "reason": "tk x3", "duration": "0"})
+        self.assertEqual((self.db.ban(mine)["reason"], bool(self.db.ban(mine)["expires_at"])), ("tk x3", True))
+        self.assertNotIn('value="keep"', await (await self.client.get("/bans")).text())
+
     async def test_a_blank_command_hides_its_button(self):
         await self.login("boss", "boss-password")
         self.assertIn("Shut down (RCON)", await (await self.client.get("/server/server-1")).text())

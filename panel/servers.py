@@ -487,6 +487,24 @@ class ServerManager:
         self.db.mark_synced(ban["id"], state.config.id, action)
         return "done"
 
+    async def reban(self, ban) -> dict[str, str]:
+        """Put a changed ban back on every server: lift the old one, then ban again with the new
+        length. A server that's offline gets it when it's back."""
+        async with self._ban_lock:
+            self.db.clear_synced(ban["id"])
+            results = {}
+            for state in self.states.values():
+                if not state.config.configured:
+                    continue
+                if state.online:
+                    try:
+                        await self.command(state.config.id,
+                                           state.config.commands["unban"].format(identity=ban["identity"]))
+                    except RconError:
+                        pass
+                results[state.config.id] = await self._send_ban(state, ban, "ban")
+            return results
+
     async def sync_bans(self, state: ServerState):
         async with self._ban_lock:
             for ban in self.db.pending_bans(state.config.id):

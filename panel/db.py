@@ -350,6 +350,13 @@ class PanelDB:
         return self.one("SELECT * FROM bans WHERE identity = ? AND removed_at IS NULL"
                         " AND (expires_at IS NULL OR expires_at > ?) ORDER BY id DESC", identity, now())
 
+    def set_ban_expiry(self, ban_id: int, expires_at):
+        self.write("UPDATE bans SET expires_at = ? WHERE id = ?", expires_at, ban_id)
+        self.write("UPDATE bm_bans SET reason_sent = '' WHERE ban_id = ?", ban_id)
+
+    def clear_synced(self, ban_id: int):
+        self.write("DELETE FROM ban_sync WHERE ban_id = ?", ban_id)
+
     def set_ban_reason(self, ban_id: int, reason: str):
         self.write("UPDATE bans SET reason = ? WHERE id = ?", reason, ban_id)
 
@@ -378,7 +385,7 @@ class PanelDB:
                         " AND id NOT IN (SELECT ban_id FROM bm_bans) ORDER BY id", now())
 
     def bm_reasons_changed(self):
-        return self.all("SELECT m.ban_id, m.bm_id, b.reason FROM bm_bans m JOIN bans b ON b.id = m.ban_id"
+        return self.all("SELECT m.ban_id, m.bm_id, b.reason, b.expires_at FROM bm_bans m JOIN bans b ON b.id = m.ban_id"
                         " WHERE m.removed = 0 AND b.removed_at IS NULL AND b.reason != m.reason_sent")
 
     def mark_bm_reason_sent(self, ban_id):

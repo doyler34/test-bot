@@ -900,23 +900,40 @@ async def add_ban(request):
 
 
 async def edit_ban(request):
-    """Only whoever made a ban can reword its reason, while it's still in force."""
-    require(request, "ban")
+    """Whoever made a ban can reword it; anyone who may edit bans (owners) can change
+    any ban's reason and length, without unbanning."""
     db = request.app[DB]
     ban = db.ban(int(request.match_info["ban_id"]))
     by = request[USER]["username"]
     if ban is None or ban["removed_at"] or (ban["expires_at"] and ban["expires_at"] <= now()):
         raise web.HTTPFound("/bans")
-    if ban["created_by"] != by:
-        raise web.HTTPForbidden(text="Only the admin who made this ban can change its reason.")
-    reason = clean((await request.post()).get("reason", ""))
+    any_ban = allowed(request, "edit_bans")
+    if not any_ban and not (allowed(request, "ban") and ban["created_by"] == by):
+        raise web.HTTPForbidden(text="Only the admin who made this ban, or an owner, can change it.")
+    form = await request.post()
+    reason = clean(form.get("reason", ""))
     if not reason:
         flash(request, "The reason can't be empty.", "error")
         raise web.HTTPFound("/bans")
+    who = ban["name"] or ban["identity"]
+    changes = []
     if reason != ban["reason"]:
         db.set_ban_reason(ban["id"], reason)
-        audit(request, "edit ban", target=ban["name"] or ban["identity"], detail=f"{ban['reason']} → {reason}")
-    flash(request, f"Reason for {ban['name'] or ban['identity']} updated.")
+        changes.append(f"reason: {ban['reason']} → {reason}")
+    if any_ban and form.get("duration", "keep") != "keep":
+        seconds = ban_seconds(form)
+        if seconds is None:
+            flash(request, "Pick a length (a custom one needs a number, up to 10 years).", "error")
+            raise web.HTTPFound("/bans")
+        expires = now() + seconds if seconds else None
+        db.set_ban_expiry(ban["id"], expires)
+        results = await request.app[MANAGER].reban(db.ban(ban["id"]))
+        summary = ", ".join(f"{k}: {v}" for k, v in results.items()) or "no servers set up"
+        length = length_text(seconds) if seconds else "Permanent"
+        changes.append(f"length: now {length} ({summary})")
+    if changes:
+        audit(request, "edit ban", target=who, detail="; ".join(changes))
+        flash(request, f"Ban on {who} updated.")
     raise web.HTTPFound("/bans")
 
 

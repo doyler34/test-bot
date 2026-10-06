@@ -14,6 +14,7 @@ PERMISSIONS = {
     "ban": "admin",
     # Admins kick and ban; taking a ban back, IPs and server power stay with owners.
     "unban": "owner",
+    "edit_bans": "owner",
     "ips": "owner",
     "power": "owner",
     "audit": "admin",
@@ -28,6 +29,7 @@ PERMISSIONS = {
 GRANTS = (
     ("ban", "Ban players"),
     ("unban", "Unban players"),
+    ("edit_bans", "Change any ban's reason or length"),
     ("ips", "See IPs and other accounts on the same IP"),
     ("audit", "Read the audit log"),
     ("console", "Use the raw RCON console"),
