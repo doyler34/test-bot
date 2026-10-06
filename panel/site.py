@@ -12,7 +12,7 @@ DISCORD_INVITE = re.compile(r"^https://(discord\.gg|discord\.com/invite)/[\w-]+/
 
 def default_site():
     return {"name": "OYB", "tagline": "Old Young Bastards.",
-            "about": "Old heads and young guns, same squad. We run our own servers, play hard, and don't take "
+            "about": "Old heads and young guns, same squad. We play hard, play fair, and don't take "
                      "ourselves too seriously.\n"
                      "OYB started as a group of mates who wanted servers run their way. Some of us have been gaming "
                      "since dial-up, some since they could hold a controller. Doesn't matter: turn up, play fair, "
