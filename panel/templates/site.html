@@ -29,7 +29,7 @@
     {% if paras|length > 1 %}<a href="#about">About</a>{% endif %}
     {% if doc.discord %}<a href="{{ doc.discord }}" rel="noopener">Discord</a>{% endif %}
   </div>
-  {% if doc.discord %}<a class="button ghost small join-top" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join Discord</a>{% endif %}
+  {% if doc.discord %}<a class="button ghost small join-top" href="{{ doc.discord }}" rel="noopener" aria-label="Join Discord">{{ discord_icon() }} <span>Join Discord</span></a>{% endif %}
 </nav>
 
 <header class="hero" id="top">
