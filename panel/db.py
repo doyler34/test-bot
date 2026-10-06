@@ -3,7 +3,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"), "sus": ("sus",),
+FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"), "tks": ("teamkill",), "sus": ("sus",),
               "rcon": ("rcon", "server"), "admin": ()}
 
 SCHEMA = """

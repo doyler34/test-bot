@@ -49,7 +49,7 @@
       <div class="row">
         <h2>Live feed</h2>
         <div class="filters">
-          {% for key, label in [("all", "All"), ("joins", "Joins"), ("kills", "Kills"), ("sus", "Sus"), ("admin", "Admin"), ("rcon", "RCON")] %}
+          {% for key, label in [("all", "All"), ("joins", "Joins"), ("kills", "Kills"), ("tks", "TKs"), ("sus", "Sus"), ("admin", "Admin"), ("rcon", "RCON")] %}
           <button type="button" class="chip" data-show="{{ key }}">{{ label }}</button>
           {% endfor %}
         </div>
