@@ -18,7 +18,7 @@ async function refresh() {
   const summary = document.querySelector("[data-summary]");
   if (summary) {
     const total = data.servers.length;
-    summary.textContent = `${data.playing} in game right now · ${data.online} of ${total} server${total === 1 ? "" : "s"} up`;
+    summary.textContent = `${data.playing} playing · ${data.online} of ${total} up`;
     document.querySelector("[data-live] .dot").classList.toggle("on", data.online > 0);
   }
 }

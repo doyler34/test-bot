@@ -208,7 +208,7 @@ async def security(request, handler):
 
 
 SITE_FILES = ("/static/site.css", "/static/site.js", "/static/site/oyb-logo.jpg", "/static/site/oyb-icon.png",
-              "/static/site/banner.jpg")
+              "/static/site/banner.jpg", "/brand/fonts/Display.ttf", "/brand/fonts/Body.ttf")
 
 
 @web.middleware
@@ -661,7 +661,7 @@ def site_view(request, doc=None):
 def site_page(request, preview=False):
     doc = site_doc(request)
     html = request.app[JINJA].get_template("site.html").render(
-        doc=doc, site=site_view(request, doc), preview=preview, asset_version=ASSET_VERSION)
+        doc=doc, site=site_view(request, doc), preview=preview, asset_version=ASSET_VERSION, year=time.strftime("%Y"))
     return web.Response(text=html, content_type="text/html")
 
 
