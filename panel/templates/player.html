@@ -5,6 +5,7 @@
 <div class="row">
   <h1>{{ player.name if player else (stats.name if stats and stats.name else "Unknown player") }}</h1>
   {% if active %}<span class="badge down">Banned · {{ active.expires_at|until }}</span>{% endif %}
+  {% if staff or config_staff %}<span class="badge on">Admin</span>{% endif %}
 </div>
 <p class="mono muted">{{ identity }}</p>
 
@@ -32,6 +33,18 @@
   {% endif %}
   {% if can("ban") and not active %}
   <p><a class="button danger" href="/bans?identity={{ identity }}&name={{ (player.name if player else '')|urlencode }}">Ban</a></p>
+  {% endif %}
+  {% if can("users") %}
+  {% if config_staff %}
+  <p class="muted">Listed as an admin in the server's own config, so the panel always counts them as an admin.</p>
+  {% else %}
+  <form method="post" action="/player/{{ identity }}/staff">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="on" value="{{ '0' if staff else '1' }}">
+    <button class="small ghost">{{ "Not an admin" if staff else "Mark as admin" }}</button>
+    <span class="muted">{{ "Shown as an admin on server pages when they're on." if staff else "So server pages show when they're on." }}</span>
+  </form>
+  {% endif %}
   {% endif %}
 </section>
 

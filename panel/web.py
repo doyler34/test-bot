@@ -343,6 +343,7 @@ def server_view(state):
         "check": state.check,
         "ping_ms": state.ping_ms,
         "fps": state.fps if now() - state.fps_at < 180 else None,
+        "admins": state.admins if state.online else [],
     }
 
 
@@ -1088,7 +1089,23 @@ async def player_page(request):
                   names=db.player_names(identity), notes=db.notes(identity), bans=bans,
                   incidents=db.incidents_for(identity), kills=kill_log(request, identity),
                   kill_logs=KILL_LOGS, kill_periods=KILL_PERIODS,
-                  active=db.active_ban(identity), durations=DURATIONS)
+                  active=db.active_ban(identity), durations=DURATIONS,
+                  staff=identity in db.staff_ids(), config_staff=identity in request.app[MANAGER].config_admins())
+
+
+async def set_staff(request):
+    require(request, "users")
+    identity = request.match_info["identity"].lower()
+    if not valid_identity(identity):
+        raise web.HTTPNotFound(text="No such player.")
+    on = (await request.post()).get("on") == "1"
+    db = request.app[DB]
+    db.set_staff(identity, request[USER]["username"], on)
+    name = (db.player(identity) or {"name": identity})["name"]
+    audit(request, "marked staff" if on else "unmarked staff", target=name)
+    flash(request, f"{name} {'is now marked as an admin' if on else 'is no longer marked as an admin'}. "
+                   "Server pages show it within a few seconds.")
+    raise web.HTTPFound(f"/player/{identity}")
 
 
 async def add_note(request):
@@ -1557,6 +1574,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/players/search.json", player_search)
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/notes", add_note)
+    app.router.add_post("/player/{identity}/staff", set_staff)
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/discord/posts/new", new_post)
     app.router.add_get("/discord/posts/{post}", post_page)

@@ -8,6 +8,8 @@
   </div>
   {% if c.online %}
   <p class="big">{{ c.players|length }} <small>on now</small></p>
+  {% if c.admins %}<p class="admins-on">Admin on: {{ c.admins|map(attribute="name")|join(", ") }}</p>
+  {% else %}<p class="no-admin">No admin on</p>{% endif %}
   <p class="muted">Connected {{ c.online_since|ago }} · checked {{ c.updated|ago }}</p>
   {% else %}
   <p class="muted">{{ c.error or "Connecting…" }}</p>

@@ -155,6 +155,11 @@ CREATE TABLE IF NOT EXISTS link_actions (
     by TEXT NOT NULL,
     at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS staff (
+    identity TEXT PRIMARY KEY,
+    added_by TEXT NOT NULL,
+    at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS staff_alerts (
     id INTEGER PRIMARY KEY,
     server TEXT NOT NULL,
@@ -698,6 +703,17 @@ class PanelDB:
 
     def link_actions(self, limit=30):
         return self.all("SELECT * FROM link_actions ORDER BY id DESC LIMIT ?", limit)
+
+    # staff: players who are OYB admins in game
+
+    def staff_ids(self) -> set[str]:
+        return {r["identity"] for r in self.all("SELECT identity FROM staff")}
+
+    def set_staff(self, identity, by, on=True):
+        if on:
+            self.write("INSERT OR IGNORE INTO staff (identity, added_by, at) VALUES (?, ?, ?)", identity, by, now())
+        else:
+            self.write("DELETE FROM staff WHERE identity = ?", identity)
 
     # alerts the bot posts to the staff channel
 

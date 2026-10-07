@@ -77,6 +77,7 @@ class ServerState:
     recent: dict = field(default_factory=dict)
     running: dict = field(default_factory=dict)
     tk_burst: TkBurst = field(default_factory=TkBurst)
+    admins: list = field(default_factory=list)
 
 
 class ServerManager:
@@ -94,6 +95,7 @@ class ServerManager:
         self._stopping = False
         self._ip_kicked: dict[str, int] = {}
         self._ban_lock = asyncio.Lock()
+        self._config_admins: dict[str, tuple] = {}
 
     def start(self):
         for state in self.states.values():
@@ -417,6 +419,34 @@ class ServerManager:
                 self.db.saw_player(player["identity"], player["name"], state.config.id)
                 state.recent[player["identity"]] = (player["name"], now())
         state.recent = {i: seen for i, seen in state.recent.items() if now() - seen[1] <= 600}
+        staff = self.staff_ids()
+        state.admins = [p for p in state.players if p["identity"] in staff]
+
+    def config_admins(self) -> set[str]:
+        """Admin IDs from each server's own serverconfig.json (AMP keeps it beside the
+        logs). Only Reforger IDs count; Steam IDs there can't be matched to a player."""
+        found = set()
+        for state in self.states.values():
+            if not state.config.log_dir:
+                continue
+            path = Path(state.config.log_dir).parent.parent / "Configs" / "serverconfig.json"
+            try:
+                stamp = path.stat().st_mtime
+            except OSError:
+                continue
+            cached = self._config_admins.get(str(path))
+            if not cached or cached[0] != stamp:
+                try:
+                    admins = json.loads(path.read_text(encoding="utf-8")).get("game", {}).get("admins", [])
+                except (OSError, ValueError, AttributeError):
+                    admins = []
+                cached = (stamp, {str(a).lower() for a in admins if valid_identity(str(a).lower())})
+                self._config_admins[str(path)] = cached
+            found |= cached[1]
+        return found
+
+    def staff_ids(self) -> set[str]:
+        return self.db.staff_ids() | self.config_admins()
 
     async def enforce_ip_bans(self, state: ServerState):
         """Kick banned accounts that are still connected, and ban any other

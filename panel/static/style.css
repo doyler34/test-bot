@@ -218,7 +218,7 @@ body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(
   .pane { height: 380px; }
 }
 
-.summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.summary { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .summary .stat { background: var(--panel); border-color: var(--line); }
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
 .tabs a { font-family: var(--display); text-transform: uppercase; letter-spacing: .06em; font-size: 1.05rem;
@@ -415,6 +415,8 @@ details.controls[open] summary::after { content: " ▴"; }
 .control-list .muted { font-size: .85rem; flex-basis: 100%; }
 
 .players-table td.actions { white-space: nowrap; }
+.admins-on { color: var(--khaki); margin: 6px 0; font-size: .9rem; }
+.no-admin { color: var(--red); margin: 6px 0; font-size: .9rem; }
 .players-table .wide { display: none; }
 .player-search { flex: 1 1 160px; max-width: 280px; margin: 0 0 12px auto; padding: 6px 10px; }
 .srv-tags { display: grid; grid-template-columns: repeat(2, max-content); gap: 4px; }

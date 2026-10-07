@@ -1959,6 +1959,39 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("<li>Have fun</li>", html)
             self.assertNotIn("No cheating", html)
 
+    async def test_admins_in_game(self):
+        await self.login("boss", "boss-password")
+        cards = await (await self.client.get("/cards.part")).text()
+        self.assertIn("No admin on", cards)
+        token = await self.csrf(f"/player/{HAVOC}")
+        await self.client.post(f"/player/{HAVOC}/staff", data={"csrf": token, "on": "1"})
+        self.assertEqual(self.db.staff_ids(), {HAVOC})
+        await self.manager.refresh_players(self.manager.state("server-1"))
+        cards = await (await self.client.get("/cards.part")).text()
+        self.assertIn("Admin on: Sgt Havoc", cards)
+        players = await (await self.client.get("/server/server-1/players.part")).text()
+        self.assertIn('<span class="pill on">Admin</span>', players)
+        await self.client.post(f"/player/{HAVOC}/staff", data={"csrf": token, "on": "0"})
+        self.assertEqual(self.db.staff_ids(), set())
+
+    async def test_server_config_admins_count(self):
+        with tempfile.TemporaryDirectory() as root:
+            logs = Path(root, "AReforgerMaster", "logs")
+            logs.mkdir(parents=True)
+            Path(root, "Configs").mkdir()
+            Path(root, "Configs", "serverconfig.json").write_text(json.dumps(
+                {"game": {"admins": [HAVOC.upper(), "76561198000000000"]}}))
+            self.manager.state("server-1").config.log_dir = str(logs)
+            self.assertEqual(self.manager.config_admins(), {HAVOC})
+
+    async def test_only_owners_mark_admins(self):
+        self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
+        await self.login("adm", "adm-password")
+        token = await self.csrf(f"/player/{HAVOC}")
+        response = await self.client.post(f"/player/{HAVOC}/staff", data={"csrf": token, "on": "1"},
+                                          allow_redirects=False)
+        self.assertEqual(response.status, 403)
+
     async def test_live_player_search_box(self):
         await self.login("boss", "boss-password")
         page = await (await self.client.get("/server/server-1")).text()
