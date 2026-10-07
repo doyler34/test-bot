@@ -1,0 +1,34 @@
+{% extends "discord_base.html" %}
+{% block editor %}
+{% set report = bridge.get("staff_alerts") or {} %}
+<form method="post" action="/discord/staffalerts" id="dc-editor" data-kind="staffalerts">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="doc" id="dc-doc">
+  <section class="card">
+    <h2>Mass teamkills</h2>
+    <p class="muted">When one player teamkills this many people this quickly, the bot posts it in the staff channel straight away, with who did it, on which server, and who they killed. Pick the channel under <a href="/discord/channels">Channels &amp; roles</a> (Staff alerts).</p>
+    <label class="check"><input type="checkbox" name="on" {% if doc.on %}checked{% endif %}> Post mass teamkill alerts</label>
+    <div class="grid">
+      <label>Teamkills <input name="count" type="number" min="2" max="20" value="{{ doc.count }}" inputmode="numeric"></label>
+      <label>Within (seconds) <input name="seconds" type="number" min="10" max="600" value="{{ doc.seconds }}" inputmode="numeric"></label>
+      <label class="span">Role to ping <span class="muted">(optional, e.g. Admin; blank pings nobody)</span>
+        <input name="ping_role" value="{{ doc.ping_role }}" maxlength="100" placeholder="Admin"></label>
+    </div>
+    <p class="muted">Each player is reported at most once every 5 minutes, so one rampage is one alert. It also shows as a Sus line in the live feed.</p>
+  </section>
+  {% if recent %}
+  <section class="card">
+    <h2>Recent alerts</h2>
+    <ul class="plain">
+      {% for a in recent %}<li><span class="muted">{{ a.at|ts }}</span> · <b>{{ a.title }}</b>: {{ a.text|replace("**", "") }}</li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+  <div class="dc-actions">
+    <button name="action" value="publish">Publish</button>
+    <button name="action" value="save" class="ghost">Save draft</button>
+    {% if draft %}<button name="action" value="discard" class="ghost" data-confirm="Throw away the draft and go back to what's live?">Discard draft</button>{% endif %}
+  </div>
+</form>
+<script src="/static/discord.js?v={{ asset_version }}" defer></script>
+{% endblock %}

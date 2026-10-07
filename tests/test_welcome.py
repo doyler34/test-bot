@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import tempfile
+import time
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -18,6 +19,7 @@ from panel.db import PanelDB
 class Role:
     def __init__(self, role_id, name, position, permissions=0, managed=False):
         self.id, self.name, self.position, self.managed = role_id, name, position, managed
+        self.mention = f"<@&{role_id}>"
         self.permissions = SimpleNamespace(value=permissions)
         self.colour = SimpleNamespace(value=0)
 
@@ -190,6 +192,32 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.welcome = Welcome(self.bot)
+
+    async def test_staff_alerts_are_posted_once(self):
+        staff = Channel(400, "staff")
+        self.guild.text_channels.append(staff)
+        self.panel.add_staff_alert("eu1", int(time.time()), "Mass teamkill on Server 1", "**Rook** teamkilled 3 players")
+        with patch.dict(os.environ, {"STAFF_ALERT_CHANNEL_ID": "400"}):
+            await self.welcome.staff_alerts(self.guild)
+            await self.welcome.staff_alerts(self.guild)
+        self.assertEqual(len(staff.messages), 1)
+        self.assertEqual(staff.messages[0].embeds[0].title, "🚨 Mass teamkill on Server 1")
+
+    async def test_staff_alerts_ping_the_chosen_role(self):
+        staff = Channel(400, "staff")
+        self.guild.text_channels.append(staff)
+        self.welcome.docs["staffalerts"] = ({"on": True, "count": 3, "seconds": 60, "ping_role": "Admin"}, 1)
+        self.panel.add_staff_alert("eu1", int(time.time()), "Mass teamkill on Server 1", "x")
+        with patch.dict(os.environ, {"STAFF_ALERT_CHANNEL_ID": "400"}):
+            await self.welcome.staff_alerts(self.guild)
+        self.assertEqual(len(staff.said), 1)
+        self.assertIn("11", staff.said[0])
+
+    async def test_staff_alerts_wait_for_a_channel(self):
+        self.panel.add_staff_alert("eu1", int(time.time()), "Mass teamkill", "x")
+        with patch.dict(os.environ, {"STAFF_ALERT_CHANNEL_ID": ""}):
+            await self.welcome.staff_alerts(self.guild)
+        self.assertEqual(self.welcome.state["staff_alerts"]["last"], 0)
 
     async def test_link_decisions_run_once_and_report_back(self):
         self.panel.add_link_action("approve", "a" * 32, None, "gaz")

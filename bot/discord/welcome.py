@@ -7,6 +7,7 @@ goes in a small file next to the bot's other data, which the panel reads.
 """
 import asyncio
 from contextlib import closing
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -77,6 +78,19 @@ def read_link_actions(path, after):
         with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
             return db.execute("SELECT id, kind, target, identity, by FROM link_actions"
                               " WHERE id > ? AND at > ? ORDER BY id", (after, time.time() - 86400)).fetchall()
+    except sqlite3.Error:
+        return []
+
+
+def read_staff_alerts(path, after):
+    """Alerts OYB Control queued for the staff channel since the last one posted.
+    Only recent ones: a stale alert about a teamkiller who left long ago helps nobody."""
+    if not Path(path).is_file():
+        return []
+    try:
+        with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
+            return db.execute("SELECT id, server, at, title, text FROM staff_alerts WHERE id > ? AND created > ?"
+                              " ORDER BY id", (after, time.time() - 900)).fetchall()
     except sqlite3.Error:
         return []
 
@@ -219,7 +233,8 @@ class Welcome:
         guild = self.bot.get_guild(self.bot.config.guild_id)
         if guild is None:
             return
-        for key in ("welcome", "greeting", "names", "serverinfo", "bans", "matchping", "weekly", "factions"):
+        for key in ("welcome", "greeting", "names", "serverinfo", "bans", "matchping", "weekly", "staffalerts",
+                    "factions"):
             found = await asyncio.to_thread(read_doc, self.path, key)
             if found:
                 self.docs[key] = found
@@ -241,6 +256,7 @@ class Welcome:
             if applied.get(post_id, {}).get("version") != version:
                 await self.publish_post(guild, post_id, doc, version)
         await self.link_actions(guild)
+        await self.staff_alerts(guild)
         ping = self.docs.get("matchping")
         if ping:
             from bot.discord import server_notifications
@@ -280,6 +296,32 @@ class Welcome:
             done["results"][str(action_id)] = {"ok": worked, "text": text, "at": int(time.time())}
         for old in sorted(done["results"], key=int)[:-50]:
             del done["results"][old]
+
+    async def staff_alerts(self, guild):
+        """Post what OYB Control flagged for staff, like a mass teamkill, in the staff channel."""
+        done = self.state.setdefault("staff_alerts", {"last": 0})
+        rows = await asyncio.to_thread(read_staff_alerts, self.path, done["last"])
+        if not rows:
+            return
+        channel_id = os.getenv("STAFF_ALERT_CHANNEL_ID", "").strip()
+        channel = guild.get_channel(int(channel_id)) if channel_id.isdigit() else None
+        if channel is None:
+            LOG.warning("A staff alert is waiting but no Staff alerts channel is set (Discord → Channels & roles)")
+            return
+        settings = (self.docs.get("staffalerts") or (welcome_doc.default_staffalerts(), 0))[0]
+        role = by_name(guild, settings.get("ping_role", "")) if settings.get("ping_role") else None
+        for alert_id, server, at, title, text in rows:
+            embed = discord.Embed(title=f"🚨 {title}", description=text, colour=0xD0574C)
+            embed.set_footer(text="OYB Control · staff alert")
+            embed.timestamp = datetime.fromtimestamp(at, timezone.utc)
+            try:
+                await channel.send(role.mention if role else None, embed=embed,
+                                   allowed_mentions=discord.AllowedMentions(roles=[role] if role else False,
+                                                                            everyone=False, users=False))
+            except discord.HTTPException as exc:
+                LOG.warning("Couldn't post a staff alert in #%s: %s", channel.name, exc.text or exc.status)
+                return
+            done["last"] = alert_id
 
     def _link_report(self, guild):
         links = getattr(self.bot, "account_links", None)

@@ -45,6 +45,13 @@ if (form && form.dataset.kind === "serverinfo") serverInfoEditor();
 if (form && form.dataset.kind === "bans") bansEditor();
 if (form && form.dataset.kind === "matchping") matchPingEditor();
 if (form && form.dataset.kind === "weekly") weeklyEditor();
+if (form && form.dataset.kind === "staffalerts") {
+  form.addEventListener("submit", () => {
+    const field = (name) => form.querySelector(`[name="${name}"]`);
+    document.getElementById("dc-doc").value = JSON.stringify({ on: field("on").checked, count: field("count").value,
+      seconds: field("seconds").value, ping_role: field("ping_role").value });
+  });
+}
 if (form && form.dataset.kind === "factions") factionsEditor();
 if (form && form.dataset.kind === "channels") {
   form.addEventListener("submit", () => {

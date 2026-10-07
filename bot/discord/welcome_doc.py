@@ -351,6 +351,30 @@ def check_weekly(raw):
             "outro": text("outro", 1500)}, []
 
 
+def default_staffalerts():
+    return {"on": True, "count": 3, "seconds": 60, "ping_role": ""}
+
+
+def check_staffalerts(raw):
+    if not isinstance(raw, dict):
+        return default_staffalerts(), ["That couldn't be read. Reload and try again."]
+    problems = []
+
+    def number(key, low, high, label):
+        try:
+            value = int(raw.get(key))
+        except (TypeError, ValueError):
+            value = default_staffalerts()[key]
+        if not low <= value <= high:
+            problems.append(f"{label} has to be between {low} and {high}.")
+            value = min(max(value, low), high)
+        return value
+    doc = {"on": bool(raw.get("on")), "count": number("count", 2, 20, "Teamkills"),
+           "seconds": number("seconds", 10, 600, "Seconds"),
+           "ping_role": str(raw.get("ping_role", "") or "").strip()[:100]}
+    return doc, problems
+
+
 # (setting, what it is) for the Channels & roles page, in the order shown.
 CHANNEL_SETTINGS = (
     ("ONBOARDING_CHANNEL_ID", "Start here message"),
@@ -361,6 +385,7 @@ CHANNEL_SETTINGS = (
     ("WEEKLY_WINNERS_CHANNEL_ID", "Weekly top 3 when the board resets (blank: the weekly leaderboard channel)"),
     ("FACTION_CHANNEL_ID", "Faction picker and match-notification buttons"),
     ("RANK_LOG_CHANNEL_ID", "Rank promotions"),
+    ("STAFF_ALERT_CHANNEL_ID", "Staff alerts (mass teamkills)"),
 )
 ROLE_SETTINGS = (
     ("MEMBER_ROLE_NAME", "Member role (given when someone accepts the rules; point channel permissions at this)"),

@@ -1107,7 +1107,7 @@ async def add_note(request):
 # Discord: what the bot posts, edited here and published to it
 
 DISCORD_PAGES = (("welcome", "Start here message"), ("serverinfo", "Server info & rules"), ("names", "Server names"),
-                 ("factions", "Factions"), ("matchping", "Match alerts"), ("weekly", "Weekly top 3"), ("greeting", "Join greeting"), ("bans", "Ban messages"),
+                 ("factions", "Factions"), ("matchping", "Match alerts"), ("weekly", "Weekly top 3"), ("staffalerts", "Staff alerts"), ("greeting", "Join greeting"), ("bans", "Ban messages"),
                  ("posts", "Posts"), ("links", "Link requests"), ("channels", "Channels & roles"))
 
 
@@ -1173,8 +1173,9 @@ async def discord_page(request):
     if key == "bans" and not state["live"] and not state["draft"] and report.get("ban_settings"):
         # Start from what the bot is using now (its .env), not blank.
         state["doc"] = check(report["ban_settings"])[0]
+    recent = request.app[DB].staff_alerts(10) if key == "staffalerts" else []
     return render(request, f"discord_{key}.html", bridge=report, default_doc=defaults(), problems=[], **state,
-                  **discord_context(key))
+                  recent=recent, **discord_context(key))
 
 
 async def discord_save(request):
@@ -1343,6 +1344,7 @@ DISCORD_DOCS = {"welcome": (welcome_doc.default_welcome, welcome_doc.check_welco
                 "post": (welcome_doc.default_post, welcome_doc.check_post),
                 "matchping": (welcome_doc.default_matchping, welcome_doc.check_matchping),
                 "weekly": (welcome_doc.default_weekly, welcome_doc.check_weekly),
+                "staffalerts": (welcome_doc.default_staffalerts, welcome_doc.check_staffalerts),
                 "channels": (welcome_doc.default_channels, welcome_doc.check_channels),
                 "factions": (welcome_doc.default_factions, welcome_doc.check_factions)}
 
