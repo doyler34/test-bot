@@ -1173,11 +1173,12 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         home = await (await self.client.get("/")).text()
         self.assertIn('href="/discord"', home)
         self.assertNotIn('href="/website"', home)
-        response = await self.client.get("/discord", allow_redirects=False)
-        self.assertEqual(response.headers["Location"], "/discord/welcome")
+        home = await (await self.client.get("/discord")).text()
+        self.assertIn('href="/discord/welcome"', home)
+        self.assertNotIn('href="/discord/posts"', home)
+        self.assertNotIn("Setup", home)
         welcome = await (await self.client.get("/discord/welcome")).text()
-        self.assertIn('href="/discord/welcome"', welcome)
-        self.assertNotIn('href="/discord/posts"', welcome)
+        self.assertIn('href="/discord"', welcome)
         self.assertEqual((await self.client.get("/discord/posts")).status, 403)
         self.assertEqual((await self.client.get("/discord/channels")).status, 403)
         self.assertEqual((await self.client.get("/website")).status, 403)
@@ -1587,6 +1588,15 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             "doc": json.dumps({"title": "", "text": "Get on!", "ping": True, "off": ["server-2"]})})
         doc = json.loads(self.db.discord_doc("matchping")["published"])
         self.assertEqual((doc["off"], doc["text"], doc["ping"]), (["server-2"], "Get on!", True))
+
+    async def test_discord_home_groups_every_page(self):
+        await self.login("boss", "boss-password")
+        home = await (await self.client.get("/discord")).text()
+        for key in ("welcome", "greeting", "serverinfo", "factions", "matchping", "weekly", "bans", "staffalerts",
+                    "posts", "links", "channels", "names"):
+            self.assertIn(f'href="/discord/{key}"', home)
+        self.assertIn("What new members see", home)
+        self.assertIn("Bot&#39;s default", home)
 
     async def test_staff_alert_settings_page(self):
         self.db.add_staff_alert("server-1", now(), "Mass teamkill on Server 1", "**Rook** teamkilled 3 players")

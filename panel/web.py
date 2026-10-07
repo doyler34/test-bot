@@ -1147,10 +1147,65 @@ def discord_state(request, key, defaults, check):
     return {"row": row, "doc": check(doc)[0], "draft": draft is not None, "live": published is not None}
 
 
+# The Discord home page: every page grouped by what it's for, with one line on what it does.
+DISCORD_GROUPS = (
+    ("What new members see", (
+        ("welcome", "The Start here message: rules to accept, linking their game account, picking a faction."),
+        ("greeting", "A hello when someone joins, in a channel or by DM."),
+        ("serverinfo", "The #servers card: each server's settings, and the in-game rules (also shown on the website)."),
+        ("factions", "The faction roles members pick: names, colours and emojis."),
+    )),
+    ("What the bot posts by itself", (
+        ("matchping", "\"Match started\" alerts, and who gets pinged for which server."),
+        ("weekly", "The top 3 when the weekly leaderboard resets on Monday."),
+        ("bans", "The DM a banned player gets, and the card in their ban ticket."),
+        ("staffalerts", "Alerts to staff when someone teamkills several players in a short time."),
+    )),
+    ("Posting yourself", (
+        ("posts", "Your own messages: announcements, events, FAQs, with buttons if you want."),
+    )),
+    ("Staff jobs", (
+        ("links", "Approve or refuse members linking their game account; unlink people."),
+    )),
+    ("Setup", (
+        ("channels", "Which channel each of the above goes in, and the member roles. Start here when setting up."),
+        ("names", "What each game server is called in Discord."),
+    )),
+)
+
+
+def discord_status(request, key, report):
+    """One short status for the Discord home page."""
+    db = request.app[DB]
+    if key == "posts":
+        live = [r for r in db.all("SELECT published FROM discord_docs WHERE key LIKE 'post:%' AND published IS NOT NULL")
+                if not json.loads(r["published"]).get("deleted")]
+        return ("on", f"{len(live)} up") if live else ("", "None yet")
+    if key == "links":
+        waiting = len((report.get("link_requests") or {}).get("pending", []))
+        return ("gold", f"{waiting} waiting") if waiting else ("on", "Nothing waiting")
+    row = db.discord_doc(key)
+    reported = report.get(key) or {}
+    if row and row["published"] and reported.get("version") == row["version"] and reported.get("problems"):
+        return ("down", "Problem")
+    if row and row["draft"]:
+        return ("gold", "Draft not published")
+    if row and row["published"]:
+        return ("on", "Live")
+    return ("", "Bot's default")
+
+
 async def discord_home(request):
     require(request, "discord")
-    first = next(key for key, _ in DISCORD_PAGES if allowed(request, f"discord:{key}"))
-    raise web.HTTPFound(f"/discord/{first}")
+    report = bridge(request)
+    labels = dict(DISCORD_PAGES)
+    groups = []
+    for title, pages in DISCORD_GROUPS:
+        items = [{"key": key, "label": labels[key], "about": about, "status": discord_status(request, key, report)}
+                 for key, about in pages if allowed(request, f"discord:{key}")]
+        if items:
+            groups.append({"title": title, "pages": items})
+    return render(request, "discord_home.html", groups=groups, bridge=report)
 
 
 def text_ids(value):
@@ -1165,11 +1220,15 @@ def text_ids(value):
     return value
 
 
+DISCORD_ABOUT = {key: about for _, pages in DISCORD_GROUPS for key, about in pages}
+
+
 def discord_context(key, **extra):
     base = {"types": welcome_doc.TYPES, "placeholders": welcome_doc.PLACEHOLDERS,
             "ban_placeholders": welcome_doc.BAN_PLACEHOLDERS, "dm_title": welcome_doc.DM_TITLE,
             "dm_text": welcome_doc.DM_TEXT, "ticket_title": welcome_doc.TICKET_TITLE,
             "pages": DISCORD_PAGES, "page": key, "kind": key, "action_url": f"/discord/{key}", "heading": None,
+            "about": DISCORD_ABOUT.get("posts" if key == "post" else key, ""),
             "text_ids": text_ids, "channel_settings": welcome_doc.CHANNEL_SETTINGS,
             "role_settings": welcome_doc.ROLE_SETTINGS}
     return {**base, **extra}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Discord · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker">Discord</p>
+<h1>Discord</h1>
+<p class="muted">Everything the OYB bot says and does in Discord, changed from here. Pick what you want to change. Nothing reaches Discord until you press <b>Publish</b> on that page.</p>
+{% if not bridge %}<p class="warn">The bot hasn't reported in yet, so channel and role lists will be empty. Check the bot is running and updated.</p>{% endif %}
+{% for g in groups %}
+<section class="dc-group">
+  <h2>{{ g.title }}</h2>
+  <div class="dc-list">
+    {% for i in g.pages %}
+    <a class="card dc-item" href="/discord/{{ i.key }}">
+      <div class="row"><b>{{ i.label }}</b><span class="pill {{ i.status[0] }}">{{ i.status[1] }}</span></div>
+      <p class="muted">{{ i.about }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+<p class="muted"><b>Live</b> means Discord shows your version. <b>Bot's default</b> means it still uses the bot's built-in wording; that's fine until you want to change it.</p>
+{% endblock %}

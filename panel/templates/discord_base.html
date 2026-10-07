@@ -1,17 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Discord · OYB Control{% endblock %}
 {% block body %}
-<p class="kicker">Discord</p>
+<p class="kicker"><a href="/discord">← Discord</a></p>
 <h1>{{ heading or dict(pages)[page] }}</h1>
+{% if about %}<p class="muted dc-about">{{ about }}</p>{% endif %}
 <div class="dc-shell">
-  <select class="dc-jump" data-jump aria-label="Discord page">
-    {% for key, label in pages if can("discord:" ~ key) %}<option value="/discord/{{ key }}" {% if key == page %}selected{% endif %}>{{ label }}</option>{% endfor %}
-  </select>
-  <nav class="dc-tabs">
-    {% for key, label in pages if can("discord:" ~ key) %}
-    <a href="/discord/{{ key }}" {% if key == page %}class="on"{% endif %}>{{ label }}</a>
-    {% endfor %}
-  </nav>
   <div class="dc-main">
     {% if kind not in ("posts", "links") %}
     <div class="dc-status card">

@@ -283,7 +283,15 @@ form.inline input[type=date] { display: inline-block; width: auto; margin: 0; pa
 }
 
 /* Discord editors */
-.dc-shell { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; align-items: start; }
+.dc-shell { display: block; }
+.dc-about { margin: -4px 0 16px; max-width: 760px; }
+.dc-group { margin: 22px 0 6px; }
+.dc-group h2 { font-size: 1rem; color: var(--muted); margin-bottom: 10px; }
+.dc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.dc-item { display: block; color: var(--ink); text-decoration: none; padding: 14px 16px; margin: 0; }
+.dc-item:hover { border-color: var(--gold); }
+.dc-item b { font-family: var(--display); letter-spacing: .05em; text-transform: uppercase; color: var(--gold); }
+.dc-item p { margin: 6px 0 0; font-size: .9rem; }
 .dc-tabs { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
 .dc-tabs a, .dc-tabs .soon { padding: 8px 12px; border-left: 2px solid var(--line); color: var(--muted); text-decoration: none; }
 .dc-tabs a.on, .dc-tabs a:hover { color: var(--ink); border-left-color: var(--gold); background: var(--panel); }
