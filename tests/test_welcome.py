@@ -206,9 +206,10 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
     async def test_staff_alerts_ping_the_chosen_role(self):
         staff = Channel(400, "staff")
         self.guild.text_channels.append(staff)
-        self.welcome.docs["staffalerts"] = ({"on": True, "count": 3, "seconds": 60, "ping_role": "Admin"}, 1)
+        self.welcome.docs["staffalerts"] = ({"on": True, "count": 3, "seconds": 60, "ping_role": "Admin",
+                                             "channel": "400"}, 1)
         self.panel.add_staff_alert("eu1", int(time.time()), "Mass teamkill on Server 1", "x")
-        with patch.dict(os.environ, {"STAFF_ALERT_CHANNEL_ID": "400"}):
+        with patch.dict(os.environ, {"STAFF_ALERT_CHANNEL_ID": ""}):
             await self.welcome.staff_alerts(self.guild)
         self.assertEqual(len(staff.said), 1)
         self.assertIn("11", staff.said[0])

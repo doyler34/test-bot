@@ -352,7 +352,7 @@ def check_weekly(raw):
 
 
 def default_staffalerts():
-    return {"on": True, "count": 3, "seconds": 60, "ping_role": ""}
+    return {"on": True, "count": 3, "seconds": 60, "ping_role": "", "channel": ""}
 
 
 def check_staffalerts(raw):
@@ -371,7 +371,11 @@ def check_staffalerts(raw):
         return value
     doc = {"on": bool(raw.get("on")), "count": number("count", 2, 20, "Teamkills"),
            "seconds": number("seconds", 10, 600, "Seconds"),
-           "ping_role": str(raw.get("ping_role", "") or "").strip()[:100]}
+           "ping_role": str(raw.get("ping_role", "") or "").strip()[:100], "channel": ""}
+    try:
+        doc["channel"] = str(_id(raw.get("channel")) or "")
+    except ValueError:
+        problems.append("Pick the channel from the list.")
     return doc, problems
 
 
@@ -385,7 +389,6 @@ CHANNEL_SETTINGS = (
     ("WEEKLY_WINNERS_CHANNEL_ID", "Weekly top 3 when the board resets (blank: the weekly leaderboard channel)"),
     ("FACTION_CHANNEL_ID", "Faction picker and match-notification buttons"),
     ("RANK_LOG_CHANNEL_ID", "Rank promotions"),
-    ("STAFF_ALERT_CHANNEL_ID", "Staff alerts (mass teamkills)"),
 )
 ROLE_SETTINGS = (
     ("MEMBER_ROLE_NAME", "Member role (given when someone accepts the rules; point channel permissions at this)"),

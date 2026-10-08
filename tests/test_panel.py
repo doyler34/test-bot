@@ -1606,9 +1606,11 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Rook teamkilled 3 players", page)
         token = await self.csrf("/discord/staffalerts")
         await self.client.post("/discord/staffalerts", data={"csrf": token, "action": "publish",
-            "doc": json.dumps({"on": True, "count": "4", "seconds": "90", "ping_role": "Admin"})})
+            "doc": json.dumps({"on": True, "count": "4", "seconds": "90", "ping_role": "Admin",
+                                "channel": "123456789012345678"})})
         doc = json.loads(self.db.discord_doc("staffalerts")["published"])
-        self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin"})
+        self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin",
+                               "channel": "123456789012345678"})
 
     async def test_weekly_top_three_wording(self):
         await self.login("boss", "boss-password")

@@ -303,12 +303,12 @@ class Welcome:
         rows = await asyncio.to_thread(read_staff_alerts, self.path, done["last"])
         if not rows:
             return
-        channel_id = os.getenv("STAFF_ALERT_CHANNEL_ID", "").strip()
+        settings = (self.docs.get("staffalerts") or (welcome_doc.default_staffalerts(), 0))[0]
+        channel_id = str(settings.get("channel") or os.getenv("STAFF_ALERT_CHANNEL_ID", "")).strip()
         channel = guild.get_channel(int(channel_id)) if channel_id.isdigit() else None
         if channel is None:
-            LOG.warning("A staff alert is waiting but no Staff alerts channel is set (Discord → Channels & roles)")
+            LOG.warning("A staff alert is waiting but no channel is set (Discord → Staff alerts)")
             return
-        settings = (self.docs.get("staffalerts") or (welcome_doc.default_staffalerts(), 0))[0]
         role = by_name(guild, settings.get("ping_role", "")) if settings.get("ping_role") else None
         for alert_id, server, at, title, text in rows:
             embed = discord.Embed(title=f"🚨 {title}", description=text, colour=0xD0574C)

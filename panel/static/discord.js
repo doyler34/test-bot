@@ -49,7 +49,7 @@ if (form && form.dataset.kind === "staffalerts") {
   form.addEventListener("submit", () => {
     const field = (name) => form.querySelector(`[name="${name}"]`);
     document.getElementById("dc-doc").value = JSON.stringify({ on: field("on").checked, count: field("count").value,
-      seconds: field("seconds").value, ping_role: field("ping_role").value });
+      seconds: field("seconds").value, ping_role: field("ping_role").value, channel: field("channel").value });
   });
 }
 if (form && form.dataset.kind === "factions") factionsEditor();
