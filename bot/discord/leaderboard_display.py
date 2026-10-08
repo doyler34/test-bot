@@ -174,6 +174,7 @@ class LeaderboardDisplay:
                 raise RuntimeError(f"LEADERBOARD_CHANNEL_ID {pinned} is not a text channel I can see")
             channel = await self._lock(channel, guild, set_topic=True)
             if state['channel'] != channel.id:
+                await self._take_down(guild, state)
                 state.update(channel=channel.id, message=None)
                 self.bot.store.save_leaderboard(state)
             return channel
@@ -201,9 +202,22 @@ class LeaderboardDisplay:
         else:
             channel = await self._lock(channel, guild)
         if state['channel'] != channel.id:
+            await self._take_down(guild, state)
             state.update(channel=channel.id, message=None)
             self.bot.store.save_leaderboard(state)
         return channel
+
+    async def _take_down(self, guild, state):
+        """The board moved channel: remove it from the old one."""
+        old = guild.get_channel(state['channel']) if state['channel'] else None
+        if not isinstance(old, discord.TextChannel) or not state['message']:
+            return
+        try:
+            message = await old.fetch_message(state['message'])
+            if owned(message, self.bot.user.id):
+                await message.delete()
+        except discord.HTTPException:
+            pass
 
     async def refresh(self, guild, state, rows, reconcile=False):
         channel = await self.channel(guild, state)

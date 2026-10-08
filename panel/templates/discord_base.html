@@ -6,6 +6,22 @@
 {% if about %}<p class="muted dc-about">{{ about }}</p>{% endif %}
 <div class="dc-shell">
   <div class="dc-main">
+    {% if pick %}
+    {% set now_id = (bridge.get("settings_now") or {}).get(pick.setting, "") %}
+    {% set now_name = (bridge.get("channels", [])|selectattr("id", "equalto", now_id)|map(attribute="name")|first) if now_id else "" %}
+    <form method="post" action="/discord/{{ page }}/channel" class="card dc-pick">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Channel
+        <select name="channel">
+          <option value="">{{ pick.default }}</option>
+          {% for group in bridge.get("channels", [])|groupby("category") %}
+          <optgroup label="{{ group.grouper or 'No category' }}">{% for c in group.list %}<option value="{{ c.id }}" {% if c.id == pick.picked %}selected{% endif %}>#{{ c.name }}</option>{% endfor %}</optgroup>
+          {% endfor %}
+        </select></label>
+      <button class="small">Change channel</button>
+      <p class="muted">{% if now_name %}In #{{ now_name }} now. {% endif %}A change moves it within a minute, no publishing or restart needed.</p>
+    </form>
+    {% endif %}
     {% if kind not in ("posts", "links") %}
     <div class="dc-status card">
       {% set reported = bridge.get("post") if kind == "post" else bridge.get(page) %}
@@ -14,9 +30,7 @@
         {% if not bridge %}
           <span class="warn">The bot hasn't reported in, so it can't be confirmed in Discord. Check the bot is running and the panel's <code>oyb_data</code> points at its data folder.</span>
         {% elif reported and reported.version == row.version %}
-          {% if page == "channels" %}The bot has been using these since it last started, {{ reported.at|ago }}.{% else %}The bot put it up {{ reported.at|ago }}.{% endif %}
-        {% elif page == "channels" %}
-          <span class="warn">These take effect when the bot next restarts. Restart it to use them now.</span>
+          {% if page == "channels" %}The bot picked these up {{ reported.at|ago }}.{% else %}The bot put it up {{ reported.at|ago }}.{% endif %}
         {% else %}
           Waiting for the bot to pick it up (it checks every 30 seconds).
         {% endif %}</p>

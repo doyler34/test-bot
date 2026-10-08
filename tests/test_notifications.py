@@ -207,6 +207,32 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.guild.create_text_channel.assert_not_awaited()
         self.assertIs(self.bot.announce_channel, target)
 
+    async def test_a_newly_picked_match_alert_channel_wins_over_the_last_one(self):
+        old, new = Mock(spec=discord.TextChannel), Mock(spec=discord.TextChannel)
+        old.id, new.id = 72, 88
+        self.guild.get_channel = Mock(side_effect=lambda i: {72: old, 88: new}.get(i))
+        self.bot.store.save_channel("__announce__", 72)
+        with patch.dict(os.environ, {"MATCH_ALERT_CHANNEL_ID": "88"}):
+            await self.bot.prepare_announcement_channel(self.guild)
+        self.assertIs(self.bot.announce_channel, new)
+
+    async def test_servers_card_moves_to_a_picked_channel_as_it_is(self):
+        await self.bot.prepare_servers(self.guild)
+        card = message(100, [servers_embed(self.bot)])
+        self.channel.fetch_message.return_value = card
+        picked = Mock(spec=discord.TextChannel)
+        picked.id = 77
+        picked.history = Mock(side_effect=lambda **kwargs: history([]))
+        picked.send = AsyncMock(return_value=message(101))
+        picked.edit = AsyncMock()
+        self.guild.get_channel = Mock(side_effect=lambda i: {50: self.channel, 77: picked}.get(i))
+        with patch.dict(os.environ, {"SERVERS_CHANNEL_ID": "77"}):
+            await self.bot.prepare_servers(self.guild)
+        card.delete.assert_awaited_once()
+        picked.send.assert_awaited_once()
+        picked.edit.assert_not_awaited()
+        self.assertEqual(self.bot.store.channel("servers")["channel"], 77)
+
     async def test_send_and_delete_after_30_minutes_not_before(self):
         row = self.enqueue()
         with patch("bot.discord.server_notifications.time.time", return_value=1000):

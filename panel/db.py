@@ -687,11 +687,12 @@ class PanelDB:
                    " ON CONFLICT(key) DO UPDATE SET draft = excluded.draft, draft_by = excluded.draft_by,"
                    " draft_at = excluded.draft_at", key, text, by, now())
 
-    def publish_discord_doc(self, key, text, by):
+    def publish_discord_doc(self, key, text, by, keep_draft=False):
         self.write("INSERT INTO discord_docs (key, published, published_by, published_at, version)"
                    " VALUES (?, ?, ?, ?, 1) ON CONFLICT(key) DO UPDATE SET published = excluded.published,"
                    " published_by = excluded.published_by, published_at = excluded.published_at,"
-                   " version = version + 1, draft = NULL, draft_by = NULL, draft_at = NULL",
+                   " version = version + 1"
+                   + ("" if keep_draft else ", draft = NULL, draft_by = NULL, draft_at = NULL"),
                    key, text, by, now())
 
     def discard_discord_draft(self, key):

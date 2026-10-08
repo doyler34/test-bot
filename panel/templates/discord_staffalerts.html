@@ -9,13 +9,6 @@
     <p class="muted">When one player teamkills this many people this quickly, the bot posts it in the staff channel straight away, with who did it, on which server, and who they killed.</p>
     <label class="check"><input type="checkbox" name="on" {% if doc.on %}checked{% endif %}> Post mass teamkill alerts</label>
     <div class="grid">
-      <label class="span">Channel
-        <select name="channel">
-          <option value="">Pick a channel</option>
-          {% for group in bridge.get("channels", [])|groupby("category") %}
-          <optgroup label="{{ group.grouper or 'No category' }}">{% for c in group.list %}<option value="{{ c.id }}" {% if doc.channel == c.id %}selected{% endif %}>#{{ c.name }}</option>{% endfor %}</optgroup>
-          {% endfor %}
-        </select></label>
       <label>Teamkills <input name="count" type="number" min="2" max="20" value="{{ doc.count }}" inputmode="numeric"></label>
       <label>Within (seconds) <input name="seconds" type="number" min="10" max="600" value="{{ doc.seconds }}" inputmode="numeric"></label>
       <label class="span">Role to ping <span class="muted">(optional, e.g. Admin; blank pings nobody)</span>

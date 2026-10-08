@@ -6,7 +6,16 @@
 <form method="post" action="/discord/channels" id="dc-editor" data-kind="channels">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <input type="hidden" name="doc" id="dc-doc">
-  <p class="tip">The bot sets its channels and roles up when it starts, so a change here takes effect <b>the next time the bot restarts</b>. Leave a box on "keep" to use what the bot has now.</p>
+  <p class="tip">Channels change within a minute of publishing. Role changes take effect <b>the next time the bot restarts</b>. Leave a box on "keep" to use what's in the bot's <code>.env</code>.</p>
+  <section class="card">
+    <h2>Picked on their own page</h2>
+    <ul class="plain dc-elsewhere">
+      <li><a href="/discord/welcome">Start here message</a> · <a href="/discord/greeting">Join greeting</a> · <a href="/discord/bans">Ban tickets</a> · <a href="/discord/posts">Posts</a></li>
+      {% for page, key, _ in page_channels %}{% set current = now.get(key, "") %}
+      <li><a href="/discord/{{ page }}">{{ dict(pages)[page] }}</a>: {{ "#" ~ names[current] if current in names else "not picked" }}</li>
+      {% endfor %}
+    </ul>
+  </section>
   <section class="card">
     <h2>Channels</h2>
     <div class="dc-names dc-wide">

@@ -5,6 +5,7 @@ footer), so they keep working across restarts.
 """
 from datetime import timedelta
 import logging
+import os
 
 import discord
 
@@ -344,15 +345,30 @@ async def prepare_review_channel(bot, guild):
         role = await guild.create_role(name=REVIEWER_ROLE_NAME, permissions=discord.Permissions.none(),
                                        mentionable=True, reason="OYB link-request reviewers (opt-in pings)")
 
-    channel = guild.get_channel(cfg["channel"]) if cfg["channel"] else None
-    if not isinstance(channel, discord.TextChannel) or channel.topic != REVIEW_MARKER:
-        channel = discord.utils.get(guild.text_channels, topic=REVIEW_MARKER)
-    desired = _overwrites(guild, role)
+    # A channel picked in OYB Control keeps its own permissions.
+    picked = os.getenv("LINK_REVIEW_CHANNEL_ID", "").strip()
+    channel = guild.get_channel(int(picked)) if picked.isdigit() else None
+    if picked and not isinstance(channel, discord.TextChannel):
+        LOG.warning("LINK_REVIEW_CHANNEL_ID %s is not a text channel I can see; using the bot's own", picked)
+        channel = None
     if channel is None:
-        channel = await guild.create_text_channel("oyb-link-requests", topic=REVIEW_MARKER,
-                                                  overwrites=desired, reason="OYB private link-request review")
-    elif channel.overwrites != desired:
-        await channel.edit(overwrites=desired, reason="Keep OYB link-request channel staff-only")
+        channel = guild.get_channel(cfg["channel"]) if cfg["channel"] else None
+        if not isinstance(channel, discord.TextChannel) or channel.topic != REVIEW_MARKER:
+            channel = discord.utils.get(guild.text_channels, topic=REVIEW_MARKER)
+        desired = _overwrites(guild, role)
+        if channel is None:
+            channel = await guild.create_text_channel("oyb-link-requests", topic=REVIEW_MARKER,
+                                                      overwrites=desired, reason="OYB private link-request review")
+        elif channel.overwrites != desired:
+            await channel.edit(overwrites=desired, reason="Keep OYB link-request channel staff-only")
+    if cfg["channel"] and cfg["channel"] != channel.id and cfg["control"]:
+        before = guild.get_channel(cfg["channel"])
+        if isinstance(before, discord.TextChannel):
+            try:
+                await (await before.fetch_message(cfg["control"])).delete()
+            except discord.HTTPException:
+                pass
+        cfg["control"] = None
     links.save_review_settings(guild.id, channel=channel.id, reviewer_role=role.id)
 
     control = None

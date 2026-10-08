@@ -19,7 +19,7 @@ import time
 import discord
 
 from bot.config import member_role_name, onboarding_channel_id
-from bot.discord import server_stats, welcome_doc
+from bot.discord import channel_moves, server_stats, welcome_doc
 from bot.discord import factions
 from bot.discord.factions import ensure_faction_roles
 from bot.discord.interactions import ack, say
@@ -184,14 +184,15 @@ class Welcome:
         self.posts = {}
         self.applied = {}
         self.state = self._load_state()
-        # Channels and roles chosen in OYB Control count as if they were in
-        # the .env; the bot sets its channels up at start, so they apply then.
+        # Channels and roles chosen in OYB Control count as if they were in the
+        # .env. They are applied again on every tick, so a new channel is used
+        # without a restart; picking none goes back to what the .env says.
+        self.env = {key: os.environ.get(key) for key in
+                    welcome_doc.CHANNEL_KEYS + tuple(k for k, _ in welcome_doc.ROLE_SETTINGS)}
+        self.placed = None
         found = read_doc(self.path, "channels")
         if found:
-            for key, value in {**found[0].get("channels", {}), **found[0].get("roles", {})}.items():
-                if key in dict(welcome_doc.CHANNEL_SETTINGS) or key in dict(welcome_doc.ROLE_SETTINGS):
-                    os.environ[key] = str(value)
-            self.state["channels"] = {"version": found[1], "at": int(time.time()), "problems": []}
+            self.use_channels(found)
             LOG.info("Using the channels and roles published in OYB Control (version %s)", found[1])
         # Names and wording are needed before anything is first drawn at boot.
         found = read_doc(self.path, "names")
@@ -209,6 +210,33 @@ class Welcome:
             if found:
                 target.clear()
                 target.update(found[0])
+
+    def use_channels(self, found):
+        picked = {**found[0].get("channels", {}), **found[0].get("roles", {})}
+        for key, original in self.env.items():
+            value = picked.get(key) or original
+            if value:
+                os.environ[key] = str(value)
+            else:
+                os.environ.pop(key, None)
+        self.docs["channels"] = found
+        self.state["channels"] = {"version": found[1], "at": int(time.time()), "problems": []}
+
+    async def move_channels(self, guild):
+        """Put what the bot keeps in a channel into the newly picked one."""
+        now = {key: os.environ.get(key, "") for _, key, _ in welcome_doc.PAGE_CHANNELS}
+        now["LEADERBOARD_CHANNEL_ID"] = os.environ.get("LEADERBOARD_CHANNEL_ID", "")
+        before, self.placed = self.placed, now
+        if before is None:
+            return
+        for key in now:
+            if now[key] == before.get(key):
+                continue
+            LOG.info("%s changed in OYB Control; moving to channel %s", key, now[key] or "(the default)")
+            try:
+                await channel_moves.move(self.bot, guild, key)
+            except Exception:
+                LOG.exception("Couldn't move %s to its new channel", key)
 
     def _use_names(self, found):
         self.docs["names"] = found
@@ -238,6 +266,10 @@ class Welcome:
             found = await asyncio.to_thread(read_doc, self.path, key)
             if found:
                 self.docs[key] = found
+        found = await asyncio.to_thread(read_doc, self.path, "channels")
+        if found and found != self.docs.get("channels"):
+            self.use_channels(found)
+        await self.move_channels(guild)
         names = self.docs.get("names")
         if names and self.state.get("names", {}).get("version") != names[1]:
             await self.apply_names(guild, names)
@@ -303,12 +335,12 @@ class Welcome:
         rows = await asyncio.to_thread(read_staff_alerts, self.path, done["last"])
         if not rows:
             return
-        settings = (self.docs.get("staffalerts") or (welcome_doc.default_staffalerts(), 0))[0]
-        channel_id = str(settings.get("channel") or os.getenv("STAFF_ALERT_CHANNEL_ID", "")).strip()
+        channel_id = os.getenv("STAFF_ALERT_CHANNEL_ID", "").strip()
         channel = guild.get_channel(int(channel_id)) if channel_id.isdigit() else None
         if channel is None:
-            LOG.warning("A staff alert is waiting but no channel is set (Discord → Staff alerts)")
+            LOG.warning("A staff alert is waiting but no channel is picked (Discord → Staff alerts)")
             return
+        settings = (self.docs.get("staffalerts") or (welcome_doc.default_staffalerts(), 0))[0]
         role = by_name(guild, settings.get("ping_role", "")) if settings.get("ping_role") else None
         for alert_id, server, at, title, text in rows:
             embed = discord.Embed(title=f"🚨 {title}", description=text, colour=0xD0574C)
@@ -670,16 +702,21 @@ def _ban_settings(path):
 def settings_now(bot):
     """The channels and roles the bot is using right now, as the panel shows them."""
     from bot import config
-    now = {key: os.getenv(key, "") for key, _ in welcome_doc.CHANNEL_SETTINGS}
+    now = {key: os.getenv(key, "") for key in welcome_doc.CHANNEL_KEYS}
     for key, read in (("ONBOARDING_CHANNEL_ID", config.onboarding_channel_id),
                       ("LIVE_BOARD_CHANNEL_ID", config.live_board_channel_id),
                       ("GAME_LEADERBOARD_CHANNEL_ID", config.game_leaderboard_channel_id),
                       ("LEADERBOARD_CHANNEL_ID", config.leaderboard_channel_id),
                       ("FACTION_CHANNEL_ID", config.faction_channel_id)):
         now[key] = str(read() or "")
-    alerts = getattr(bot, "announce_channel", None)
-    if alerts is not None and not now["MATCH_ALERT_CHANNEL_ID"]:
-        now["MATCH_ALERT_CHANNEL_ID"] = str(alerts.id)
+    for key, channel in (("MATCH_ALERT_CHANNEL_ID", getattr(bot, "announce_channel", None)),
+                         ("SERVERS_CHANNEL_ID", getattr(bot, "_server_channel", None))):
+        if channel is not None and not now[key]:
+            now[key] = str(channel.id)
+    links = getattr(bot, "account_links", None)
+    if hasattr(links, "review_settings") and not now["LINK_REVIEW_CHANNEL_ID"]:
+        review = links.review_settings(bot.config.guild_id)["channel"]
+        now["LINK_REVIEW_CHANNEL_ID"] = str(review or "")
     now["MEMBER_ROLE_NAME"] = config.member_role_name()
     now["UNVERIFIED_ROLE_NAME"] = config.unverified_role_name()
     return now

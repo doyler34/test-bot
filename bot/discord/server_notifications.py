@@ -364,6 +364,13 @@ class NotificationBot(TimerBot):
                         len(self.monitors))
 
     async def _servers_channel(self, guild):
+        picked = os.getenv("SERVERS_CHANNEL_ID", "").strip()
+        if picked.isdigit():
+            # A channel picked in OYB Control is used as it is: not renamed or locked.
+            channel = guild.get_channel(int(picked))
+            if isinstance(channel, discord.TextChannel):
+                return channel
+            logger.warning("SERVERS_CHANNEL_ID %s is not a text channel I can see; using #servers", picked)
         matches = [c for c in guild.text_channels if c.topic == SERVERS_MARKER]
         if len(matches) > 1:
             raise RuntimeError("Multiple managed #servers channels; resolve duplicates.")
@@ -391,6 +398,15 @@ class NotificationBot(TimerBot):
             self.channels_by_server[server.id] = channel
         record = self.store.channel("servers")
         card = None
+        if record and record["channel"] != channel.id and record["info"]:
+            before = guild.get_channel(record["channel"])
+            if isinstance(before, discord.TextChannel):
+                try:
+                    old = await before.fetch_message(record["info"])
+                    if owns_message(old, self.user.id, SERVERS_CARD_MARKER):
+                        await old.delete()
+                except discord.HTTPException:
+                    pass
         if record and record["channel"] == channel.id and record["info"]:
             try:
                 candidate = await channel.fetch_message(record["info"])
@@ -421,18 +437,19 @@ class NotificationBot(TimerBot):
                     pass
 
     async def prepare_announcement_channel(self, guild):
-        """Resolve where match-start alerts post: MATCH_ALERT_CHANNEL_ID, else the
-        announcements channel, else a created #announcements."""
+        """Resolve where match-start alerts post: MATCH_ALERT_CHANNEL_ID, else the one
+        used last time, else the announcements channel, else a created #announcements."""
+        channel = None
+        configured = os.getenv("MATCH_ALERT_CHANNEL_ID", "").strip()
+        if configured.isdigit():
+            candidate = guild.get_channel(int(configured))
+            if isinstance(candidate, discord.TextChannel):
+                channel = candidate
         record = self.store.channel("__announce__")
-        channel = guild.get_channel(record["channel"]) if record else None
-        if not isinstance(channel, discord.TextChannel):
-            channel = None
-        if channel is None:
-            configured = os.getenv("MATCH_ALERT_CHANNEL_ID", "").strip()
-            if configured.isdigit():
-                candidate = guild.get_channel(int(configured))
-                if isinstance(candidate, discord.TextChannel):
-                    channel = candidate
+        if channel is None and record:
+            candidate = guild.get_channel(record["channel"])
+            if isinstance(candidate, discord.TextChannel):
+                channel = candidate
         if channel is None:
             channel = next((c for c in guild.text_channels
                             if "announcement" in c.name.casefold()), None)

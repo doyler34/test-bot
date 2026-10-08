@@ -1168,7 +1168,7 @@ DISCORD_GROUPS = (
         ("links", "Approve or refuse members linking their game account; unlink people."),
     )),
     ("Setup", (
-        ("channels", "Which channel each of the above goes in, and the member roles. Start here when setting up."),
+        ("channels", "Channels for the boards and logs with no page of their own, and the member roles. Every other page picks its own channel at the top."),
         ("names", "What each game server is called in Discord."),
     )),
 )
@@ -1223,6 +1223,49 @@ def text_ids(value):
 DISCORD_ABOUT = {key: about for _, pages in DISCORD_GROUPS for key, about in pages}
 
 
+PAGE_CHANNELS = {page: (setting, default) for page, setting, default in welcome_doc.PAGE_CHANNELS}
+
+
+def published_channels(db):
+    row = db.discord_doc("channels")
+    return json.loads(row["published"]) if row and row["published"] else welcome_doc.default_channels()
+
+
+def page_channel(request, key):
+    """The channel picker shown at the top of a Discord page, if that page has one."""
+    if key not in PAGE_CHANNELS:
+        return None
+    setting, default = PAGE_CHANNELS[key]
+    return {"setting": setting, "default": default,
+            "picked": published_channels(request.app[DB])["channels"].get(setting, "")}
+
+
+async def set_page_channel(request):
+    """Change one page's channel straight away, apart from that page's own draft."""
+    key = request.match_info["page"]
+    require(request, f"discord:{key}")
+    if key not in PAGE_CHANNELS:
+        raise web.HTTPNotFound(text="No such page.")
+    setting = PAGE_CHANNELS[key][0]
+    form = await request.post()
+    value = form.get("channel", "").strip()
+    db = request.app[DB]
+    doc = published_channels(db)
+    if value:
+        doc["channels"][setting] = value
+    else:
+        doc["channels"].pop(setting, None)
+    doc, problems = welcome_doc.check_channels(doc)
+    if problems:
+        flash(request, problems[0])
+        raise web.HTTPFound(f"/discord/{key}")
+    db.publish_discord_doc("channels", json.dumps(doc), request[USER]["username"], keep_draft=True)
+    names = {c["id"]: c["name"] for c in bridge(request).get("channels", [])}
+    audit(request, f"set {dict(DISCORD_PAGES)[key]} channel", detail=f"#{names[value]}" if value in names else "default")
+    flash(request, "Channel changed. The bot moves it there within a minute.")
+    raise web.HTTPFound(f"/discord/{key}")
+
+
 def discord_context(key, **extra):
     base = {"types": welcome_doc.TYPES, "placeholders": welcome_doc.PLACEHOLDERS,
             "ban_placeholders": welcome_doc.BAN_PLACEHOLDERS, "dm_title": welcome_doc.DM_TITLE,
@@ -1230,6 +1273,7 @@ def discord_context(key, **extra):
             "pages": DISCORD_PAGES, "page": key, "kind": key, "action_url": f"/discord/{key}", "heading": None,
             "about": DISCORD_ABOUT.get("posts" if key == "post" else key, ""),
             "text_ids": text_ids, "channel_settings": welcome_doc.CHANNEL_SETTINGS,
+            "page_channels": welcome_doc.PAGE_CHANNELS,
             "role_settings": welcome_doc.ROLE_SETTINGS}
     return {**base, **extra}
 
@@ -1251,7 +1295,7 @@ async def discord_page(request):
         state["doc"] = check(report["ban_settings"])[0]
     recent = request.app[DB].staff_alerts(10) if key == "staffalerts" else []
     return render(request, f"discord_{key}.html", bridge=report, default_doc=defaults(), problems=[], **state,
-                  recent=recent, **discord_context(key))
+                  recent=recent, pick=page_channel(request, key), **discord_context(key))
 
 
 async def discord_save(request):
@@ -1280,6 +1324,11 @@ async def save_doc(request, key, label, template, context):
         raw = json.loads(form.get("doc", ""))
     except ValueError:
         raw = None
+    if key == "channels" and isinstance(raw, dict) and isinstance(raw.get("channels"), dict):
+        # The pages that pick their own channel keep it; this page only sends its own.
+        kept = published_channels(db)["channels"]
+        raw["channels"] = {**{k: v for k, v in kept.items() if k not in dict(welcome_doc.CHANNEL_SETTINGS)},
+                           **raw["channels"]}
     doc, problems = check(raw)
     if key == "names":
         problems += name_clashes(doc, bridge(request).get("servers", []))
@@ -1293,7 +1342,7 @@ async def save_doc(request, key, label, template, context):
     if action == "publish" or problems:
         state = discord_state(request, key, defaults, check)
         return render(request, template, bridge=bridge(request), default_doc=defaults(), problems=problems,
-                      **{**state, "doc": doc}, **context)
+                      pick=page_channel(request, key), **{**state, "doc": doc}, **context)
     audit(request, f"save {label} draft")
     flash(request, "Draft saved. Nothing changes in Discord until you publish.")
     raise web.HTTPFound(back)
@@ -1387,7 +1436,8 @@ def links_page(request):
     names = {r["discord_id"]: r["member"] for r in links.get("linked", [])}
     names.update({r["token"]: r["member"] or r["name"] for r in links.get("pending", [])})
     return render(request, "discord_links.html", bridge=report, links=links, actions=actions, busy=busy,
-                  names=names, action_labels=LINK_ACTIONS, **discord_context("links"))
+                  names=names, action_labels=LINK_ACTIONS, pick=page_channel(request, "links"),
+                  **discord_context("links"))
 
 
 async def link_action(request):
@@ -1638,6 +1688,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/discord/posts/new", new_post)
     app.router.add_get("/discord/posts/{post}", post_page)
     app.router.add_post("/discord/posts/{post}", post_save)
+    app.router.add_post("/discord/{page}/channel", set_page_channel)
     app.router.add_get("/discord/{page}", discord_page)
     app.router.add_post("/discord/{page}", discord_save)
     app.router.add_get("/console", console_page)

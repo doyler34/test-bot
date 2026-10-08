@@ -285,6 +285,11 @@ form.inline input[type=date] { display: inline-block; width: auto; margin: 0; pa
 /* Discord editors */
 .dc-shell { display: block; }
 .dc-about { margin: -4px 0 16px; max-width: 760px; }
+.dc-pick { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.dc-pick label { flex: 1 1 260px; margin: 0; }
+.dc-pick select { margin: 4px 0 0; }
+.dc-pick p { flex-basis: 100%; margin: 0; }
+.dc-elsewhere li { margin: 4px 0; }
 .dc-group { margin: 22px 0 6px; }
 .dc-group h2 { font-size: 1rem; color: var(--muted); margin-bottom: 10px; }
 .dc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }

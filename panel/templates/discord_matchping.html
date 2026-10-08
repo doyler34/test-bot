@@ -8,7 +8,7 @@
     <div class="dc-edit">
       <section class="card">
         <h2>Which servers post an alert</h2>
-        <p class="muted">When a match starts, the bot posts in the announcements channel. Players choose which servers they want pinged for with the 🔔 buttons.</p>
+        <p class="muted">When a match starts, the bot posts in the channel picked above. Players choose which servers they want pinged for with the 🔔 buttons.</p>
         {% for s in servers %}
         <label class="check"><input type="checkbox" data-server="{{ s.id }}" data-label="{{ s.label }}" {% if s.id not in doc.off %}checked{% endif %}> {{ s.label }} <span class="muted">({{ s.id }})</span></label>
         {% else %}

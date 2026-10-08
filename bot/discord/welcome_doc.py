@@ -352,7 +352,7 @@ def check_weekly(raw):
 
 
 def default_staffalerts():
-    return {"on": True, "count": 3, "seconds": 60, "ping_role": "", "channel": ""}
+    return {"on": True, "count": 3, "seconds": 60, "ping_role": ""}
 
 
 def check_staffalerts(raw):
@@ -371,25 +371,29 @@ def check_staffalerts(raw):
         return value
     doc = {"on": bool(raw.get("on")), "count": number("count", 2, 20, "Teamkills"),
            "seconds": number("seconds", 10, 600, "Seconds"),
-           "ping_role": str(raw.get("ping_role", "") or "").strip()[:100], "channel": ""}
-    try:
-        doc["channel"] = str(_id(raw.get("channel")) or "")
-    except ValueError:
-        problems.append("Pick the channel from the list.")
+           "ping_role": str(raw.get("ping_role", "") or "").strip()[:100]}
     return doc, problems
 
 
 # (setting, what it is) for the Channels & roles page, in the order shown.
 CHANNEL_SETTINGS = (
-    ("ONBOARDING_CHANNEL_ID", "Start here message"),
-    ("MATCH_ALERT_CHANNEL_ID", "Match alerts"),
     ("LIVE_BOARD_CHANNEL_ID", "Live match board"),
     ("GAME_LEADERBOARD_CHANNEL_ID", "Match results"),
     ("LEADERBOARD_CHANNEL_ID", "Weekly leaderboard"),
-    ("WEEKLY_WINNERS_CHANNEL_ID", "Weekly top 3 when the board resets (blank: the weekly leaderboard channel)"),
-    ("FACTION_CHANNEL_ID", "Faction picker and match-notification buttons"),
     ("RANK_LOG_CHANNEL_ID", "Rank promotions"),
 )
+# (page, setting, what the bot does with no channel picked) for the channel
+# picked on that page's own Discord page. Stored with the Channels & roles ones.
+PAGE_CHANNELS = (
+    ("serverinfo", "SERVERS_CHANNEL_ID", "The bot's own #servers channel"),
+    ("factions", "FACTION_CHANNEL_ID", "The bot's built-in channel"),
+    ("matchping", "MATCH_ALERT_CHANNEL_ID", "#announcements"),
+    ("weekly", "WEEKLY_WINNERS_CHANNEL_ID", "Same as the weekly leaderboard"),
+    ("staffalerts", "STAFF_ALERT_CHANNEL_ID", "None picked (alerts wait for one)"),
+    ("links", "LINK_REVIEW_CHANNEL_ID", "The bot's own #oyb-link-requests"),
+)
+# Older publishes could set the Start here channel here; the Start here page picks it now.
+CHANNEL_KEYS = tuple(k for k, _ in CHANNEL_SETTINGS) + tuple(k for _, k, _ in PAGE_CHANNELS) + ("ONBOARDING_CHANNEL_ID",)
 ROLE_SETTINGS = (
     ("MEMBER_ROLE_NAME", "Member role (given when someone accepts the rules; point channel permissions at this)"),
     ("UNVERIFIED_ROLE_NAME", "Unverified label (on people who haven't linked yet)"),
@@ -405,13 +409,13 @@ def check_channels(raw):
     if not isinstance(raw, dict):
         return default_channels(), ["That couldn't be read. Reload and try again."]
     doc, problems = default_channels(), []
-    for key, _ in CHANNEL_SETTINGS:
+    for key in CHANNEL_KEYS:
         value = (raw.get("channels") or {}).get(key) if isinstance(raw.get("channels"), dict) else None
         try:
             if _id(value):
                 doc["channels"][key] = str(_id(value))
         except ValueError:
-            problems.append(f"Pick the {dict(CHANNEL_SETTINGS)[key]} channel from the list.")
+            problems.append(f"Pick the {dict(CHANNEL_SETTINGS).get(key, 'channel')} channel from the list.")
     for key, _ in ROLE_SETTINGS:
         value = (raw.get("roles") or {}).get(key) if isinstance(raw.get("roles"), dict) else None
         value = str(value or "").strip()[:100]
