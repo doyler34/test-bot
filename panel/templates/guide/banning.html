@@ -30,11 +30,16 @@
 <p class="tip danger">People in the same house share an IP, so an IP ban hits them too. Leave it unticked unless you mean it.</p>
 
 <h2>The ban list</h2>
-<p>Under the form is every active ban: who, why, how long is left, who did it, and whether each server has it yet (green) or is still waiting (red). <b>IP</b> marks IP bans. Click <b>Show expired and removed</b> for old ones.</p>
+<p>Under the form is every active ban: who (their in-game name and ID), why, how long is left, who did it, and whether each server has it yet (green) or is still waiting (red). <b>IP</b> marks IP bans. Click <b>Show expired and removed</b> for old ones.</p>
+<ul>
+  <li><b>Search name, ID, reason or admin</b> finds a ban fast. Press <b>Clear</b> to see them all again.</li>
+  <li>With BattleMetrics linked, pick <b>Made in the panel</b> or <b>Made on BattleMetrics</b> to see only those.</li>
+  <li>The list shows 25 at a time. Use the page buttons at the bottom for the rest.</li>
+</ul>
 {{ shot("bans-list", "Active bans.") }}
 
 <h2>What the player sees</h2>
-<p>The game itself doesn't show a banned player any reason: they just can't get in. So if they've linked their Discord, the bot tells them there:</p>
+<p>Don't count on the game showing a banned player your reason. If they've linked their Discord, the bot tells them there:</p>
 <ul>
   <li>a <b>DM</b> when the ban is made, saying how long it's for, your reason, when it ends, and how to appeal;</li>
   <li>a <b>Banned · length</b> role (e.g. "Banned · 7 days"), so everyone in the Discord can see it. It's taken off when the ban ends or is lifted.</li>
@@ -42,7 +47,7 @@
 <p class="tip">Write the reason for the player as well as for other admins: they'll read it in that DM.</p>
 
 <h2>BattleMetrics</h2>
-<p>If the panel is linked to BattleMetrics, bans go both ways: a ban made on BattleMetrics shows up here within a minute (marked <b>BM</b>) and is put on every server, and a ban made here is added to the BattleMetrics ban list. Unbans and reason changes follow too. BattleMetrics bans with no Reforger ID can't be matched to a player, so they stay on BattleMetrics only.</p>
+<p>If the panel is linked to BattleMetrics, bans go both ways: a ban made on BattleMetrics shows up here within a minute (marked <b>BM</b>, with the player's name from BattleMetrics) and is put on every server, and a ban made here is added to the BattleMetrics ban list. Unbans, reason changes and length changes follow too. BattleMetrics bans with no Reforger ID can't be matched to a player, so they stay on BattleMetrics only.</p>
 
 <h2>Changing a ban</h2>
 <p>Press <b>Edit</b> next to a ban. Whoever made it can reword the reason.{% if can("edit_bans") %} You can change any ban: its reason, and its length from now (Keep as is, a quick pick, Permanent, or a custom length). The new length goes to every server straight away and to BattleMetrics, without the player being unbanned in between.{% else %} Owners can also change the length.{% endif %}</p>

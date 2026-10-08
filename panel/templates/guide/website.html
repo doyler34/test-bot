@@ -1,0 +1,20 @@
+{% extends "guide/_page.html" %}
+{% block guide %}
+<p>The public website is the page anyone can open, like oybgaming.com. It shows who we are, each server with whether it's up and how many are playing, how to join, the rules, and the Discord invite. It never shows player names, IPs or anything else from the panel, and nothing of the panel can be reached on that address.</p>
+
+<h2>Changing it</h2>
+<ol class="steps">
+  <li>Click <b>Website</b> in the top menu.</li>
+  <li>Under <b>The words</b>: the <b>Name</b>, the <b>Headline</b> (the big line at the top), <b>About us</b>, and the <b>Discord invite</b>. In About us, the first paragraph goes under the headline and the rest under "Who we are"; a new line starts a new paragraph.</li>
+  <li>Under <b>Servers</b>, untick any server to keep it off the site. For each one you can set the name shown, the game, and how to join. Servers are grouped by game, so a new game gets its own group.</li>
+  <li>Press <b>Save</b>. The site changes straight away.</li>
+</ol>
+<p>Press <b>Open the preview</b> to see the site as visitors will, before or after saving.</p>
+<p class="tip">Make the Discord invite one that never expires: in Discord, Invite People → Edit invite link → Expire after: Never. An invite that runs out leaves a dead button on the site.</p>
+
+<h2>The rules</h2>
+<p>The rules on the site are the same in-game rules the bot posts in the #servers card. Change them on <b>Discord → Server info &amp; rules</b> and publish: the site follows.</p>
+
+<h2>Live status</h2>
+<p>Whether each server is up, and how many are playing, comes from the panel and updates on its own while the page is open.</p>
+{% endblock %}

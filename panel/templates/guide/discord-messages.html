@@ -1,7 +1,17 @@
 {% extends "guide/_page.html" %}
 {% from "guide/_macros.html" import shot with context %}
 {% block guide %}
-<p>Owners can change what the bot posts in Discord from <b>Discord</b> in the top menu: the <b>Start here</b> message new members see, its buttons, and a greeting when someone joins. No code and no restart: publish, and the bot updates Discord within a minute.</p>
+<p>Owners can change what the bot posts in Discord from <b>Discord</b> in the top menu. No code and no restart: publish, and the bot updates Discord within a minute.</p>
+<p>The Discord page lists every page in groups: <b>What new members see</b>, <b>What the bot posts by itself</b>, <b>Posting yourself</b>, <b>Staff jobs</b> and <b>Setup</b>. Each has a line on what it's for and a status: <b>Live</b>, <b>Draft not published</b>, <b>Bot's default</b> (never changed), or <b>Problem</b> if the bot couldn't do it. <b>← Discord</b> at the top of any page takes you back.</p>
+
+<h2>Picking a channel</h2>
+<p>Pages for something the bot keeps in a channel have a <b>Channel</b> box at the top: Server info &amp; rules, Factions, Match alerts, Weekly top 3, Staff alerts and Link requests.</p>
+<ol class="steps">
+  <li>Pick the channel from the list. The first option is what the bot does with none picked, like its own #servers channel.</li>
+  <li>Press <b>Change channel</b>. That's all: no publishing, no restart.</li>
+  <li>Within a minute the bot takes its message down from the old channel and puts it up in the new one.</li>
+</ol>
+<p class="tip">The bot uses a picked channel as it is: it doesn't rename it or change who can see it. Make sure it can post there, and that a staff channel (staff alerts, link requests) really is staff only. Start here, Join greeting, Ban messages and Posts pick their channel inside the page, as part of what you publish.</p>
 {{ shot("discord-welcome", "The Start here editor, with the preview on the right.") }}
 
 <h2>Editing the Start here message</h2>
@@ -74,6 +84,18 @@
 <p><b>Discord → Factions</b> changes what the three factions are called in Discord, their colour and their emoji. The name and colour are the faction's role, so members who picked one change with it. The faction picker's buttons and the <b>/rank</b> card pick up the new name too.</p>
 {{ shot("discord-factions", "Renaming FIA to Resistance, with the preview on the right.") }}
 <p class="tip">It only changes Discord. Which side someone plays in game, rank names and the rank card artwork stay as they are. The bot can only rename or recolour a role that sits below its own; the page tells you if one doesn't. The Start here message's faction buttons have their own labels, set on that page.</p>
+
+<h2>Match alerts</h2>
+<p><b>Discord → Match alerts</b> sets the "match started" post: which servers post one, whether it pings the players who asked for that server with the 🔔 buttons (untick to post quietly), and the title and message. <code>{server}</code> becomes the server's name. When the match started, and when the alert disappears (30 minutes later), are always added.</p>
+
+<h2>Weekly top 3</h2>
+<p>Every Monday at midnight Eastern the weekly leaderboard starts again, and the bot posts last week's top 3 with their kills. <b>Discord → Weekly top 3</b> turns it on or off and sets the wording above and below the top 3. <code>{week}</code> becomes the date the week started. It goes in the channel picked at the top, or the weekly leaderboard channel if none is picked. Nobody is pinged.</p>
+
+<h2>Staff alerts</h2>
+<p><b>Discord → Staff alerts</b> sets when a teamkill burst is posted for staff: how many teamkills, within how many seconds, and an optional role to ping (type its name, like Admin; blank pings nobody). Pick the channel at the top first: until one is picked, alerts wait. <b>Recent alerts</b> lists the last ones sent.</p>
+
+<h2>Channels &amp; roles</h2>
+<p><b>Discord → Channels &amp; roles</b> is for the things with no page of their own: the live match board, match results, the weekly leaderboard and rank promotions, and the member roles. Channel changes there apply within a minute of publishing; role changes need the bot restarting. <b>Picked on their own page</b> at the top shows which channel each of the other pages is using, with a link to change it.</p>
 
 <h2>Join greeting</h2>
 {{ shot("discord-greeting", "The join greeting.") }}

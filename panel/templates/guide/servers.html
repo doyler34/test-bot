@@ -39,6 +39,14 @@
   <li><b>History</b>: every past game. See <a href="/guide/history">Past games</a>.</li>
 </ul>
 
+<h2>The player list</h2>
+<p>The <b>Players</b> box on the Overview tab lists everyone on the server now, A to Z, with how long they've been on.</p>
+<ul>
+  <li>Type in <b>Search players</b> at the top of the box to cut the list down as you type. It stays filtered while the list refreshes.</li>
+  <li>An <b>Admin</b> tag marks anyone the panel counts as an admin.</li>
+  <li><b>Kick</b>{% if can("ban") %} and <b>Ban</b> are{% else %} is{% endif %} on each row. See <a href="/guide/kicking">Kicking</a>{% if can("ban") %} and <a href="/guide/banning">Banning</a>{% endif %}.</li>
+</ul>
+
 <h2>Full screen</h2>
 <p>Every box has a <b>⤢</b> button in its top right corner. Press it to blow the box up to fill the screen, which is handy for reading a busy live feed. Press <b>Esc</b> or the button again to put it back.</p>
 {{ shot("fullscreen", "The live feed in full screen.") }}

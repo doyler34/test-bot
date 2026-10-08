@@ -29,6 +29,12 @@
 </ol>
 {{ shot("player-notes", "A note left after a warning.") }}
 
+{% if can("users") %}
+<h2>Marking someone as an admin</h2>
+<p>Server pages show which admins are in game. Anyone listed as an admin in the server's own config counts already. For anyone else, like an admin listed there by Steam ID, open their player page and press <b>Mark as admin</b>. <b>Not an admin</b> takes it off.</p>
+<p class="tip">The server's admin list is also what gives people Game Master. Someone there only for GM still shows as an admin.</p>
+{% endif %}
+
 {% if can("ips") %}
 <h2>Alt accounts and ban evaders</h2>
 <p>Players on PC, PlayStation and Xbox get a different ID on each, and anyone can make a second account. What ties them together is the IP address they connect from.</p>

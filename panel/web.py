@@ -371,9 +371,10 @@ GUIDE = [
     ("banning", "Banning", "Bans on every server, IP bans and unbanning.", None),
     ("history", "Past games", "Pulling up any day's games, and downloading or uploading logs.", None),
     ("health", "Health and memory", "Uptime, crashes, and when a server needs a full restart.", None),
-    ("discord", "Discord", "What gets posted to the staff channel, and linked accounts.", None),
+    ("discord", "Discord", "What gets posted for staff, teamkill alerts, and linked accounts.", None),
     ("console-audit", "Console and audit log", "Raw RCON commands, and the record of who did what.", "audit"),
-    ("discord-messages", "Discord messages", "Start here, server info and rules, names, ban messages, posts and the greeting.", "discord"),
+    ("discord-messages", "Discord messages", "Every Discord page: what the bot posts, where, and staff alerts.", "discord"),
+    ("website", "The website", "The public site: its words, servers and rules.", "website"),
     ("admins", "Admin accounts", "Making accounts, roles and password resets.", "users"),
 ]
 

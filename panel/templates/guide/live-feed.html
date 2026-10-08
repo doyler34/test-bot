@@ -11,7 +11,7 @@
     <tr><td>Join / Leave</td><td>Someone connected or left.{% if can("ips") %} Joins show the IP they came from.{% endif %}</td></tr>
     <tr><td>Side</td><td>Someone picked a faction.</td></tr>
     <tr><td>Kill</td><td>Who killed who and from how far. If it wasn't a bullet it says so, e.g. "fragmentation" or "explosive".</td></tr>
-    <tr><td>TK</td><td>A teamkill.</td></tr>
+    <tr><td>TK</td><td>A teamkill. Someone who teamkills several players in a short time is also posted to the staff alerts channel in Discord.</td></tr>
     <tr><td>Sus</td><td>Something that looks like cheating. See <a href="/guide/cheaters">Spotting cheaters</a>.</td></tr>
     <tr><td>Admin</td><td>Something an admin did in the panel: a kick, a ban, a restart.</td></tr>
     <tr><td>Server / RCON</td><td>The server going up or down, and messages the game sends the panel.</td></tr>
@@ -20,10 +20,11 @@
 
 <h2>Filtering</h2>
 <ol class="steps">
-  <li>Press a chip at the top of the feed: <b>Joins</b>, <b>Kills</b>, <b>Sus</b>, <b>Admin</b> or <b>RCON</b>.</li>
+  <li>Press a chip at the top of the feed: <b>Joins</b>, <b>Kills</b>, <b>TKs</b>, <b>Sus</b>, <b>Admin</b> or <b>RCON</b>. <b>TKs</b> is just the teamkills; <b>Kills</b> has them mixed in with everything else.</li>
   <li>Only those rows stay. The chip you picked is lit up.</li>
   <li>Press <b>All</b> to see everything again.</li>
 </ol>
 {{ shot("feed-sus", "Filtered to Sus: just the flags.") }}
+<p>Each chip looks back through the whole 7 days, so picking <b>Sus</b> or <b>TKs</b> still finds older ones on a busy server.</p>
 <p class="tip">The feed keeps the last 7 days. Sus flags are kept for 180 days. For anything older, every game is saved in full under <a href="/guide/history">History</a>.</p>
 {% endblock %}
