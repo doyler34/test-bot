@@ -26,7 +26,7 @@ def bans_for(path, identities):
     marks = ",".join("?" * len(identities))
     try:
         with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
-            rows = db.execute(f"SELECT identity, name, reason, created_at, expires_at FROM bans"
+            rows = db.execute(f"SELECT identity, name, reason, created_at, expires_at, created_by FROM bans"
                               f" WHERE identity IN ({marks}) AND removed_at IS NULL"
                               f" AND (expires_at IS NULL OR expires_at > ?)",
                               (*identities, int(time.time()))).fetchall()
@@ -39,10 +39,11 @@ def ban_card(member, bans, panel_url="", title=""):
     embed = discord.Embed(title=title or "This player is banned", colour=0x6E2F29,
                           description=f"{member.mention} opened this ticket while banned on "
                                       f"{'these accounts' if len(bans) > 1 else 'this account'}.")
-    for identity, name, reason, created, expires in bans[:10]:
+    for identity, name, reason, created, expires, by in bans[:10]:
         ends = f"<t:{int(expires)}:F> (<t:{int(expires)}:R>)" if expires else "Never"
         lines = [f"**Length:** {length_label(created, expires)}", f"**Ends:** {ends}",
-                 f"**Reason:** {SAME_IP.sub('', reason or '')[:500] or 'Not given'}", f"`{identity}`"]
+                 f"**Reason:** {SAME_IP.sub('', reason or '')[:500] or 'Not given'}",
+                 f"**Banned by:** {(by or 'Unknown')[:100]}", f"`{identity}`"]
         if panel_url:
             lines.append(f"{panel_url.rstrip('/')}/player/{identity}")
         embed.add_field(name=(name or "Unknown name")[:256], value="\n".join(lines),

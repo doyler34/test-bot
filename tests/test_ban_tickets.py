@@ -123,6 +123,7 @@ class BanTicketTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(field.name, "Havoc_PS")
         self.assertIn("**Length:** 7 days", field.value)
         self.assertIn("**Reason:** Teamkilling\n", field.value)
+        self.assertIn("**Banned by:** burd\n", field.value)
         self.assertIn(f"<t:{expires}:F>", field.value)
         self.assertIn("https://panel.example.com/player/" + HAVOC_PS, field.value)
 

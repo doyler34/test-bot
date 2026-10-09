@@ -222,7 +222,7 @@ from before the bot was running aren't messaged. Players with DMs closed just
 don't get one.
 
 When a banned player opens a ticket, the bot posts their ban into it (account,
-length, reason, when it ends, and a panel link if `PANEL_URL` is set), so staff
+length, reason, who banned them, when it ends, and a panel link if `PANEL_URL` is set), so staff
 don't have to ask. It works with Ticket King or any ticket bot that makes a
 channel or thread per ticket. Set `BAN_TICKET_CHANNEL` in the bot's `.env` to
 the channel with the ticket panel and `BAN_TICKET_CATEGORY` to every category
