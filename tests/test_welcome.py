@@ -229,6 +229,13 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(os.environ["SERVERS_CHANNEL_ID"], "500")
         self.assertEqual(move.await_count, 2)
 
+    async def test_the_channel_list_survives_a_published_channels_page(self):
+        self.panel.publish_discord_doc("channels", json.dumps({"channels": {"STAFF_ALERT_CHANNEL_ID": "300"}}), "gaz")
+        await self.welcome.tick()
+        bridge = json.loads(Path(self.tmp.name, "bridge.json").read_text())
+        self.assertEqual(bridge["channels"][0]["name"], "start-here")
+        self.assertEqual(bridge["channels_doc"]["version"], 1)
+
     async def test_staff_alerts_wait_for_a_channel(self):
         self.panel.add_staff_alert("eu1", int(time.time()), "Mass teamkill", "x")
         with patch.dict(os.environ, {"STAFF_ALERT_CHANNEL_ID": ""}):
@@ -450,7 +457,7 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         welcome = Welcome(self.bot)
         self.assertEqual(config.onboarding_channel_id(), 1548058675233423601)
         self.assertEqual(config.member_role_name(), "Members")
-        self.assertEqual(welcome.state["channels"]["version"], 1)
+        self.assertEqual(welcome.state["channels_doc"]["version"], 1)
 
     def test_names_cannot_use_the_channel_separator(self):
         doc, problems = welcome_doc.check_names({"names": {"server-3": "Classic #2 · Night"}})

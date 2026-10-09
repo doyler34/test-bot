@@ -24,7 +24,7 @@
     {% endif %}
     {% if kind not in ("posts", "links") %}
     <div class="dc-status card">
-      {% set reported = bridge.get("post") if kind == "post" else bridge.get(page) %}
+      {% set reported = bridge.get("post") if kind == "post" else bridge.get("channels_doc" if page == "channels" else page) %}
       {% if live %}
         <p><span class="pill on">Live</span> Published {{ row.published_at|ago }} by <b>{{ row.published_by }}</b>.
         {% if not bridge %}

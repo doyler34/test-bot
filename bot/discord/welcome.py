@@ -220,7 +220,8 @@ class Welcome:
             else:
                 os.environ.pop(key, None)
         self.docs["channels"] = found
-        self.state["channels"] = {"version": found[1], "at": int(time.time()), "problems": []}
+        # Not "channels": that's the list of Discord channels the panel reads.
+        self.state["channels_doc"] = {"version": found[1], "at": int(time.time()), "problems": []}
 
     async def move_channels(self, guild):
         """Put what the bot keeps in a channel into the newly picked one."""

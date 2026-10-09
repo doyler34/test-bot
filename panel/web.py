@@ -1137,6 +1137,9 @@ def bridge(request):
     except (OSError, ValueError):
         return {}
     data["age"] = now() - int(data.get("updated", 0))
+    if not isinstance(data.get("channels"), list):
+        # An older bot wrote how the Channels page went under the same name as the channel list.
+        data["channels"] = []
     return data
 
 
@@ -1187,7 +1190,8 @@ def discord_status(request, key, report):
         waiting = len((report.get("link_requests") or {}).get("pending", []))
         return ("gold", f"{waiting} waiting") if waiting else ("on", "Nothing waiting")
     row = db.discord_doc(key)
-    reported = report.get(key) or {}
+    reported = report.get("channels_doc" if key == "channels" else key)
+    reported = reported if isinstance(reported, dict) else {}
     if row and row["published"] and reported.get("version") == row["version"] and reported.get("problems"):
         return ("down", "Problem")
     if row and row["draft"]:

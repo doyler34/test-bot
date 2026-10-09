@@ -1651,6 +1651,16 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
                 "doc": json.dumps({"channels": {"LIVE_BOARD_CHANNEL_ID": "300"}, "roles": {}})})
         self.assertEqual(json.loads(self.db.discord_doc("channels")["published"])["channels"], {"LIVE_BOARD_CHANNEL_ID": "300"})
 
+    async def test_an_older_bots_bridge_does_not_break_the_discord_pages(self):
+        await self.login("boss", "boss-password")
+        self.db.publish_discord_doc("channels", json.dumps({"channels": {"STAFF_ALERT_CHANNEL_ID": "300"}}), "gaz")
+        with tempfile.TemporaryDirectory() as data:
+            self.config.oyb_data = data
+            Path(data, "panel_bridge.json").write_text(json.dumps({"updated": now(),
+                "channels": {"version": 1, "at": now(), "problems": []}}))
+            for page in ("/discord", "/discord/staffalerts", "/discord/channels"):
+                self.assertEqual((await self.client.get(page)).status, 200, page)
+
     async def test_each_page_picks_its_own_channel(self):
         await self.login("boss", "boss-password")
         with tempfile.TemporaryDirectory() as data:
