@@ -12,14 +12,14 @@
     <form method="post" action="/discord/{{ page }}/channel" class="card dc-pick">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label>Channel
-        <select name="channel">
+        <select name="channel" data-autosubmit>
           <option value="">{{ pick.default }}</option>
           {% for group in bridge.get("channels", [])|groupby("category") %}
           <optgroup label="{{ group.grouper or 'No category' }}">{% for c in group.list %}<option value="{{ c.id }}" {% if c.id == pick.picked %}selected{% endif %}>#{{ c.name }}</option>{% endfor %}</optgroup>
           {% endfor %}
         </select></label>
       <button class="small">Change channel</button>
-      <p class="muted">{% if now_name %}In #{{ now_name }} now. {% endif %}A change moves it within a minute, no publishing or restart needed.</p>
+      <p class="muted">{% if now_name %}In #{{ now_name }} now. {% endif %}Picking one saves it straight away, apart from Publish below, and the bot moves there within a minute.</p>
     </form>
     {% endif %}
     {% if kind not in ("posts", "links") %}
