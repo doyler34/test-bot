@@ -355,7 +355,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                 app_permissions=SimpleNamespace(embed_links=True),
                 response=SimpleNamespace(send_message=AsyncMock(),defer=AsyncMock()),followup=SimpleNamespace(send=AsyncMock()))
             try:
-                self.assertEqual({c.name for c in bot.rank_command.tree.get_commands(guild=discord.Object(id=1))},{'rank','stats'})
+                self.assertEqual({c.name for c in bot.rank_command.tree.get_commands(guild=discord.Object(id=1))},{'rank','stats','lifetime'})
                 await command.show(interaction)
                 self.assertIn('#join-oyb',interaction.response.send_message.await_args.args[0])
                 bot.account_links.verified_link(1,10,VICTIM,'admin:20')
@@ -363,6 +363,38 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn('No recorded data',interaction.followup.send.await_args.kwargs['embed'].fields[0].name)
                 await command.show(interaction,user=SimpleNamespace(id=30,display_name='Other'))
                 self.assertIn('does not have',interaction.response.send_message.await_args.args[0])
+            finally:
+                await bot.close()
+                bot.account_links.close()
+
+    async def test_lifetime_counts_every_week_not_just_this_one(self):
+        from datetime import timedelta
+        from bot.storage.combat_store import week_start
+        with tempfile.TemporaryDirectory() as folder:
+            bot=discord.Client(intents=discord.Intents.default())
+            bot.config=SimpleNamespace(guild_id=1)
+            bot.account_links=AccountLinks(Path(folder)/'links.db')
+            bot.rank_command=RankCommand(bot)
+            migrate(bot.account_links.db)
+            command=StatsCommand(bot)
+            try:
+                bot.account_links.verified_link(1,10,KILLER,'admin:20')
+                this_week=week_start()+timedelta(hours=1)
+                with bot.account_links.db:
+                    for n,when in enumerate((this_week,this_week-timedelta(days=30),this_week-timedelta(days=200))):
+                        bot.account_links.db.execute(
+                            "INSERT INTO combat_events (server,event_key,occurred,victim,killer,relation) VALUES ('one',?,?,?,?,'ENEMY')",
+                            (f'k{n}',stamp(when),VICTIM,KILLER))
+                interaction=SimpleNamespace(guild_id=1,user=SimpleNamespace(id=10,display_name='Killer'),
+                    app_permissions=SimpleNamespace(embed_links=True),
+                    response=SimpleNamespace(send_message=AsyncMock(),defer=AsyncMock()),followup=SimpleNamespace(send=AsyncMock()))
+                await command.show(interaction)
+                weekly=interaction.followup.send.await_args.kwargs['embed']
+                await command.show_lifetime(interaction)
+                lifetime=interaction.followup.send.await_args.kwargs['embed']
+                self.assertEqual((weekly.fields[0].value,lifetime.fields[0].value),('1','3'))
+                self.assertEqual(lifetime.title,'OYB LIFETIME STATS')
+                self.assertIn('All time',lifetime.footer.text)
             finally:
                 await bot.close()
                 bot.account_links.close()

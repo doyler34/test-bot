@@ -1,7 +1,9 @@
 # OYB /stats — vanilla combat logs
 
 `/stats` shows the invoking member's linked Reforger combat record.
-`/stats user:@Member` looks up another approved member. The existing Join OYB
+`/stats user:@Member` looks up another approved member. `/stats` covers the
+current week; `/lifetime` (and `/lifetime user:@Member`) shows the same figures
+over every game recorded. The existing Join OYB
 workflow and stable UUID are reused; display names and temporary playerID values
 are never database keys. No new player database or gameplay mod is introduced.
 

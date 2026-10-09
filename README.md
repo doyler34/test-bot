@@ -27,7 +27,7 @@ One bot handles up to three Reforger servers on the same box.
   per Discord post once your account is linked. `/rank` shows your card.
 - **Combat leaderboard** — kills/deaths from the vanilla kill log, shown in a
   pinned, read-only leaderboard channel with Previous/Next buttons. `/stats`
-  for a single player.
+  for a single player this week, `/lifetime` for all time.
 - **Match alerts** — pings when a match goes live in the announcements channel.
 - **Account linking** — `#join-oyb` lets players link their Discord to their
   in-game name; admins approve from a private staff channel.

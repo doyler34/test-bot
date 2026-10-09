@@ -1,5 +1,6 @@
 """Clean combat-only embeds using the existing approved account links."""
 import logging
+from datetime import datetime
 import discord
 from discord import app_commands
 from bot.config import linking_channel, command_auto_clear_seconds
@@ -8,6 +9,8 @@ from bot.storage.combat_store import recent_matches, week_start, window_totals
 
 LOG = logging.getLogger('reforger.stats')
 PER_GAME = 10
+# Before any OYB server was recorded, so a window from here is everything.
+EVER = datetime(2000, 1, 1)
 
 
 def kd(kills, deaths):
@@ -18,10 +21,12 @@ def metres(value):
     return f'{value:.0f} m' if value else '—'
 
 
-def stats_embed(name, data, start=None):
-    embed = discord.Embed(title='OYB PLAYER STATS',description=discord.utils.escape_markdown(name)[:256],colour=0xA9BC8C)
+def stats_embed(name, data, start=None, lifetime=False):
+    embed = discord.Embed(title='OYB LIFETIME STATS' if lifetime else 'OYB PLAYER STATS',
+                          description=discord.utils.escape_markdown(name)[:256],colour=0xA9BC8C)
     if data is None:
-        embed.add_field(name='No recorded data',value='No Reforger combat has been recorded for this player this week.',inline=False)
+        embed.add_field(name='No recorded data',value='No Reforger combat has been recorded for this player '
+                        + ('yet.' if lifetime else 'this week.'),inline=False)
     else:
         for label,value in [('Player Kills',data['player_kills']),('Deaths',data['deaths']),
                             ('K/D',kd(data['player_kills'],data['deaths'])),
@@ -30,8 +35,11 @@ def stats_embed(name, data, start=None):
             embed.add_field(name=label,value=str(value),inline=True)
         embed.add_field(name='Coverage',value='Player-vs-player only. Deaths to AI and suicides are not counted, '
             'and vanilla logs do not report AI kills. Longest kill counts gunfire only.',inline=False)
-    week = f"Week of {start:%d %b}" if start else 'This week'
-    embed.set_footer(text=f'O.Y.B • {week} • Resets Monday')
+    if lifetime:
+        embed.set_footer(text='O.Y.B • All time • Every game recorded on OYB servers')
+    else:
+        week = f"Week of {start:%d %b}" if start else 'This week'
+        embed.set_footer(text=f'O.Y.B • {week} • Resets Monday • /lifetime for all time')
     return embed
 
 
@@ -81,9 +89,15 @@ class StatsCommand:
         app_commands.checks.cooldown(1,5,key=lambda i:(i.guild_id,i.user.id))(self.command)
         self.command.error(self.error)
         bot.rank_command.tree.add_command(self.command,guild=bot.rank_command.guild)
+        self.lifetime_command = app_commands.Command(name='lifetime',
+            description='Show all-time OYB Reforger combat statistics',callback=self.show_lifetime)
+        app_commands.checks.cooldown(1,5,key=lambda i:(i.guild_id,i.user.id))(self.lifetime_command)
+        self.lifetime_command.error(self.error)
+        bot.rank_command.tree.add_command(self.lifetime_command,guild=bot.rank_command.guild)
 
     async def error(self, interaction, error):
-        text = (f'Try /stats again in {error.retry_after:.0f} seconds.' if isinstance(error,app_commands.CommandOnCooldown)
+        name = interaction.command.name if interaction.command else 'stats'
+        text = (f'Try /{name} again in {error.retry_after:.0f} seconds.' if isinstance(error,app_commands.CommandOnCooldown)
                 else 'Combat stats could not be loaded. Please try again shortly.')
         if interaction.response.is_done():
             await interaction.followup.send(text,ephemeral=True)
@@ -97,8 +111,15 @@ class StatsCommand:
         await interaction.followup.send(embed=matches_embed(name, matches), ephemeral=True)
 
     async def show(self, interaction: discord.Interaction, user: discord.Member | None = None):
+        await self.card(interaction, user, lifetime=False)
+
+    async def show_lifetime(self, interaction: discord.Interaction, user: discord.Member | None = None):
+        await self.card(interaction, user, lifetime=True)
+
+    async def card(self, interaction, user, lifetime):
         if interaction.guild_id != self.bot.config.guild_id:
-            await interaction.response.send_message('Use /stats in the OYB Discord server.',ephemeral=True)
+            await interaction.response.send_message(f"Use /{'lifetime' if lifetime else 'stats'} in the OYB Discord server.",
+                                                    ephemeral=True)
             return
         member = user or interaction.user
         identity = self.bot.account_links.identities(interaction.guild_id,member.id)
@@ -112,10 +133,10 @@ class StatsCommand:
             return
         await interaction.response.defer(thinking=True)
         try:
-            start = week_start()
+            start = EVER if lifetime else week_start()
             data = window_totals(self.bot.account_links.db,identity,start)
             view = StatsView(self,identity,member.display_name)
-            sent = await interaction.followup.send(embed=stats_embed(member.display_name,data,start),
+            sent = await interaction.followup.send(embed=stats_embed(member.display_name,data,start,lifetime),
                                                   view=view,allowed_mentions=discord.AllowedMentions.none())
             clear = command_auto_clear_seconds()
             if clear:
