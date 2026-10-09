@@ -36,16 +36,27 @@ def wait_left(member_id, now=None):
 
 
 class FeedbackForm(discord.ui.Modal, title="Give feedback"):
-    topic = discord.ui.TextInput(label="What's it about?", max_length=100,
-                                 placeholder="A server, a rule, the Discord, an admin...")
-    text = discord.ui.TextInput(label="Your feedback", style=discord.TextStyle.paragraph, max_length=1500)
+    """The topic is picked from the list set on the Feedback page, or typed when there's no list."""
 
-    def __init__(self, bot):
+    def __init__(self, bot, topics=()):
         super().__init__()
         self.bot = bot
+        if topics:
+            self.topic = discord.ui.Select(placeholder="Pick one",
+                                           options=[discord.SelectOption(label=t) for t in topics[:25]])
+        else:
+            self.topic = discord.ui.TextInput(max_length=100, placeholder="A server, a rule, the Discord, an admin...")
+        self.add_item(discord.ui.Label(text="What's it about?", component=self.topic))
+        self.text = discord.ui.TextInput(style=discord.TextStyle.paragraph, max_length=1500)
+        self.add_item(discord.ui.Label(text="Your feedback", component=self.text))
+
+    def chosen(self):
+        if isinstance(self.topic, discord.ui.Select):
+            return self.topic.values[0] if self.topic.values else ""
+        return str(self.topic)
 
     async def on_submit(self, interaction):
-        await say(interaction, await submit(interaction.guild, interaction.user, str(self.topic), str(self.text)))
+        await say(interaction, await submit(interaction.guild, interaction.user, self.chosen(), str(self.text)))
 
 
 class ReplyForm(discord.ui.Modal, title="Reply by DM"):
@@ -68,7 +79,7 @@ async def open_form(bot, interaction):
     elif wait_left(interaction.user.id):
         await say(interaction, f"You've just sent some. You can send more in {wait_left(interaction.user.id) // 60 + 1} min.")
     else:
-        await interaction.response.send_modal(FeedbackForm(bot))
+        await interaction.response.send_modal(FeedbackForm(bot, settings()["topics"]))
 
 
 def staff_view(member_id):

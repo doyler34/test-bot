@@ -56,7 +56,8 @@ if (form && form.dataset.kind === "feedback") {
   form.addEventListener("submit", () => {
     const field = (name) => form.querySelector(`[name="${name}"]`);
     document.getElementById("dc-doc").value = JSON.stringify({ on: field("on").checked, thanks: field("thanks").value,
-      done_dm: field("done_dm").value, ping_role: field("ping_role").value });
+      done_dm: field("done_dm").value, ping_role: field("ping_role").value,
+      topics: field("topics").value.split("\n").map((t) => t.trim()).filter(Boolean) });
   });
 }
 if (form && form.dataset.kind === "factions") factionsEditor();

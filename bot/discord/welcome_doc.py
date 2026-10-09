@@ -381,7 +381,7 @@ FEEDBACK_DONE = "Thanks for your feedback about **{topic}**. Staff have read it 
 
 
 def default_feedback():
-    return {"on": True, "thanks": FEEDBACK_THANKS, "done_dm": FEEDBACK_DONE, "ping_role": ""}
+    return {"on": True, "thanks": FEEDBACK_THANKS, "done_dm": FEEDBACK_DONE, "ping_role": "", "topics": []}
 
 
 def check_feedback(raw):
@@ -390,8 +390,17 @@ def check_feedback(raw):
     doc = {"on": bool(raw.get("on")),
            "thanks": str(raw.get("thanks", "") or "").strip()[:500] or FEEDBACK_THANKS,
            "done_dm": str(raw.get("done_dm", "") or "").strip()[:1500],
-           "ping_role": str(raw.get("ping_role", "") or "").strip()[:100]}
-    return doc, []
+           "ping_role": str(raw.get("ping_role", "") or "").strip()[:100], "topics": []}
+    problems = []
+    topics = raw.get("topics") or []
+    for topic in topics.splitlines() if isinstance(topics, str) else topics:
+        topic = " ".join(str(topic).split())[:100]
+        if topic and topic.casefold() not in (t.casefold() for t in doc["topics"]):
+            doc["topics"].append(topic)
+    if len(doc["topics"]) > 25:
+        problems.append("Discord allows up to 25 topics in the list.")
+        doc["topics"] = doc["topics"][:25]
+    return doc, problems
 
 
 # (setting, what it is) for the Channels & roles page, in the order shown.

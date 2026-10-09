@@ -89,8 +89,20 @@ class FeedbackTests(unittest.IsolatedAsyncioTestCase):
                                                 "buttons": [{"type": "feedback", "label": "Give feedback"}]})
         self.assertEqual(problems, [])
         self.assertEqual(doc["buttons"][0]["type"], "feedback")
-        doc, problems = welcome_doc.check_feedback({"on": False, "thanks": "", "done_dm": "", "ping_role": " Admin "})
-        self.assertEqual(doc, {"on": False, "thanks": welcome_doc.FEEDBACK_THANKS, "done_dm": "", "ping_role": "Admin"})
+        doc, problems = welcome_doc.check_feedback({"on": False, "thanks": "", "done_dm": "", "ping_role": " Admin ",
+                                                    "topics": [" Servers ", "Admins", "servers", ""]})
+        self.assertEqual(doc, {"on": False, "thanks": welcome_doc.FEEDBACK_THANKS, "done_dm": "", "ping_role": "Admin",
+                               "topics": ["Servers", "Admins"]})
+        _, problems = welcome_doc.check_feedback({"on": True, "topics": [f"T{n}" for n in range(26)]})
+        self.assertEqual(problems, ["Discord allows up to 25 topics in the list."])
+
+    async def test_topics_are_a_dropdown_when_set(self):
+        form = feedback.FeedbackForm(None, ["Servers", "Admins"])
+        self.assertEqual([o.label for o in form.topic.options], ["Servers", "Admins"])
+        form.topic._values = ["Admins"]
+        self.assertEqual(form.chosen(), "Admins")
+        typed = feedback.FeedbackForm(None, [])
+        self.assertIsInstance(typed.topic, discord.ui.TextInput)
 
 
 if __name__ == "__main__":

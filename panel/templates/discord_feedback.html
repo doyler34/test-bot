@@ -5,7 +5,9 @@
   <input type="hidden" name="doc" id="dc-doc">
   <section class="card">
     <h2>How members send it</h2>
-    <p class="muted">Add a <b>Give feedback</b> button to a post, like one in your #feedback channel: <a href="/discord/posts">Posts</a> → New post, then a button that does <b>Give feedback</b>. Pressing it opens a short form: what it's about, and their feedback. It lands in the channel picked above with their name, and they can send one every 5 minutes.</p>
+    <p class="muted">Add a <b>Give feedback</b> button to a post, like one in your #feedback channel: <a href="/discord/posts">Posts</a> → New post, then a button that does <b>Give feedback</b>. Pressing it opens a short form: what it's about (picked from your topics, or typed if you haven't set any), and their feedback. It lands in the channel picked above with their name, and they can send one every 5 minutes.</p>
+    <label>Topics they pick from <span class="muted">(one per line, up to 25, e.g. Servers, Admins, Discord, Bug, Suggestion; leave empty to let them type their own)</span>
+      <textarea name="topics" rows="5" maxlength="2600" placeholder="Servers&#10;Admins&#10;Discord&#10;Bug&#10;Suggestion">{{ doc.topics|join("\n") }}</textarea></label>
     <label class="check"><input type="checkbox" name="on" {% if doc.on %}checked{% endif %}> Take feedback (untick to close the form for now)</label>
   </section>
   <section class="card">
