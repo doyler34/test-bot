@@ -1125,7 +1125,7 @@ async def add_note(request):
 # Discord: what the bot posts, edited here and published to it
 
 DISCORD_PAGES = (("welcome", "Start here message"), ("serverinfo", "Server info & rules"), ("names", "Server names"),
-                 ("factions", "Factions"), ("matchping", "Match alerts"), ("weekly", "Weekly top 3"), ("staffalerts", "Staff alerts"), ("greeting", "Join greeting"), ("bans", "Ban messages"),
+                 ("factions", "Factions"), ("matchping", "Match alerts"), ("weekly", "Weekly top 3"), ("staffalerts", "Staff alerts"), ("feedback", "Feedback"), ("greeting", "Join greeting"), ("bans", "Ban messages"),
                  ("posts", "Posts"), ("links", "Link requests"), ("channels", "Channels & roles"))
 
 
@@ -1167,6 +1167,7 @@ DISCORD_GROUPS = (
     )),
     ("Staff jobs", (
         ("links", "Approve or refuse members linking their game account; unlink people."),
+        ("feedback", "Where members' feedback goes, the thank-you they get, and who's pinged."),
     )),
     ("Setup", (
         ("channels", "Channels for the boards and logs with no page of their own, and the member roles. Every other page picks its own channel at the top."),
@@ -1472,6 +1473,7 @@ DISCORD_DOCS = {"welcome": (welcome_doc.default_welcome, welcome_doc.check_welco
                 "matchping": (welcome_doc.default_matchping, welcome_doc.check_matchping),
                 "weekly": (welcome_doc.default_weekly, welcome_doc.check_weekly),
                 "staffalerts": (welcome_doc.default_staffalerts, welcome_doc.check_staffalerts),
+                "feedback": (welcome_doc.default_feedback, welcome_doc.check_feedback),
                 "channels": (welcome_doc.default_channels, welcome_doc.check_channels),
                 "factions": (welcome_doc.default_factions, welcome_doc.check_factions)}
 

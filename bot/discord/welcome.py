@@ -19,7 +19,7 @@ import time
 import discord
 
 from bot.config import member_role_name, onboarding_channel_id
-from bot.discord import channel_moves, server_stats, welcome_doc
+from bot.discord import channel_moves, feedback, server_stats, welcome_doc
 from bot.discord import factions
 from bot.discord.factions import ensure_faction_roles
 from bot.discord.interactions import ack, say
@@ -262,7 +262,7 @@ class Welcome:
         if guild is None:
             return
         for key in ("welcome", "greeting", "names", "serverinfo", "bans", "matchping", "weekly", "staffalerts",
-                    "factions"):
+                    "factions", "feedback"):
             found = await asyncio.to_thread(read_doc, self.path, key)
             if found:
                 self.docs[key] = found
@@ -301,6 +301,11 @@ class Welcome:
             weekly_winners.WEEKLY.clear()
             weekly_winners.WEEKLY.update(weekly[0])
             self.state["weekly"] = {"version": weekly[1], "at": int(time.time()), "problems": []}
+        found = self.docs.get("feedback")
+        if found:
+            feedback.SETTINGS.clear()
+            feedback.SETTINGS.update(found[0])
+            self.state["feedback"] = {"version": found[1], "at": int(time.time()), "problems": []}
         bans = self.docs.get("bans")
         if bans:
             # The ban DMs and ticket cards read these as they go; nothing to redraw.
@@ -530,21 +535,27 @@ class Welcome:
 
     async def handle(self, interaction):
         custom_id = (interaction.data or {}).get("custom_id", "")
-        if interaction.type != discord.InteractionType.component or not custom_id.startswith((PREFIX, "oyb:p:")):
+        if interaction.type != discord.InteractionType.component or not custom_id.startswith(
+                (PREFIX, "oyb:p:", feedback.PREFIX)):
             return False
         if interaction.guild_id != self.bot.config.guild_id:
             await say(interaction, "Use this in the OYB server.")
+            return True
+        if custom_id.startswith(feedback.PREFIX):
+            await feedback.press(self.bot, interaction)
             return True
         if custom_id.startswith("oyb:p:"):
             post_id, _, button_id = custom_id[6:].partition(":")
             found = self.posts.get(post_id)
             button = next((b for b in found[0]["buttons"] if b["id"] == button_id), None) if found else None
-            if button is None or button["type"] not in ("link", "progress", "role", "pick"):
+            if button is None or button["type"] not in ("link", "progress", "role", "pick", "feedback"):
                 await say(interaction, "That button has been changed. Scroll up to the latest message.")
                 return True
             if button["type"] == "link":
                 from bot.discord.join_oyb import LinkModal
                 await interaction.response.send_modal(LinkModal(self.bot))
+            elif button["type"] == "feedback":
+                await feedback.open_form(self.bot, interaction)
             elif button["type"] == "progress":
                 await ack(interaction)
                 await say(interaction, progress(self.bot, interaction.guild, interaction.user))
@@ -564,6 +575,8 @@ class Welcome:
         elif kind == "progress":
             await ack(interaction)
             await say(interaction, progress(self.bot, interaction.guild, interaction.user))
+        elif kind == "feedback":
+            await feedback.open_form(self.bot, interaction)
         elif kind == "faction":
             await pick_faction(self.bot, interaction, button["faction"])
         elif kind == "no_faction":
@@ -649,7 +662,7 @@ class Welcome:
     def _load_state(self):
         try:
             data = json.loads(self.bridge.read_text())
-            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts", "matchping", "weekly", "links", "factions")
+            return {k: data[k] for k in ("welcome", "greeting", "names", "serverinfo", "bans", "posts", "matchping", "weekly", "links", "factions", "feedback")
                     if isinstance(data.get(k), dict)}
         except (OSError, ValueError):
             return {}

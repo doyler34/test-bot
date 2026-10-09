@@ -5,13 +5,13 @@
 <p>The Discord page lists every page in groups: <b>What new members see</b>, <b>What the bot posts by itself</b>, <b>Posting yourself</b>, <b>Staff jobs</b> and <b>Setup</b>. Each has a line on what it's for and a status: <b>Live</b>, <b>Draft not published</b>, <b>Bot's default</b> (never changed), or <b>Problem</b> if the bot couldn't do it. <b>← Discord</b> at the top of any page takes you back.</p>
 
 <h2>Picking a channel</h2>
-<p>Pages for something the bot keeps in a channel have a <b>Channel</b> box at the top: Server info &amp; rules, Factions, Match alerts, Weekly top 3, Staff alerts and Link requests.</p>
+<p>Pages for something the bot keeps in a channel have a <b>Channel</b> box at the top: Server info &amp; rules, Factions, Match alerts, Weekly top 3, Staff alerts, Feedback and Link requests.</p>
 <ol class="steps">
   <li>Pick the channel from the list. The first option is what the bot does with none picked, like its own #servers channel.</li>
   <li>Press <b>Change channel</b>. That's all: no publishing, no restart.</li>
   <li>Within a minute the bot takes its message down from the old channel and puts it up in the new one.</li>
 </ol>
-<p class="tip">The bot uses a picked channel as it is: it doesn't rename it or change who can see it. Make sure it can post there, and that a staff channel (staff alerts, link requests) really is staff only. Start here, Join greeting, Ban messages and Posts pick their channel inside the page, as part of what you publish.</p>
+<p class="tip">The bot uses a picked channel as it is: it doesn't rename it or change who can see it. Make sure it can post there, and that a staff channel (staff alerts, feedback, link requests) really is staff only. Start here, Join greeting, Ban messages and Posts pick their channel inside the page, as part of what you publish.</p>
 {{ shot("discord-welcome", "The Start here editor, with the preview on the right.") }}
 
 <h2>Editing the Start here message</h2>
@@ -34,6 +34,7 @@
     <tr><td>Give or take a role</td><td>Gives them the role; pressing again takes it off. Good for things like event pings.</td></tr>
     <tr><td>Pick one role from a group</td><td>Buttons with the same group name work together: picking one takes away the others. Tick <b>Locked</b> and they can't change it themselves after.</td></tr>
     <tr><td>Open a web link</td><td>Opens a website, like your rules or a sign-up form.</td></tr>
+    <tr><td>Give feedback</td><td>Opens a short form for feedback, sent to staff. See <a href="#feedback">Feedback</a>.</td></tr>
   </tbody>
 </table></div>
 <p>For the role, pick one of your Discord roles from the list, or choose <b>+ Make a new role…</b> and type a name; the bot makes it when you publish. Tick <b>Only for players who've linked</b> to keep a role for linked players.</p>
@@ -93,6 +94,20 @@
 
 <h2>Staff alerts</h2>
 <p><b>Discord → Staff alerts</b> sets when a teamkill burst is posted for staff: how many teamkills, within how many seconds, and an optional role to ping (type its name, like Admin; blank pings nobody). Pick the channel at the top first: until one is picked, alerts wait. <b>Recent alerts</b> lists the last ones sent.</p>
+
+<h2 id="feedback">Feedback</h2>
+<p>Members can send feedback from a <b>Give feedback</b> button. It works like a simple ticket:</p>
+<ol class="steps">
+  <li>On <b>Discord → Feedback</b>, pick the staff channel it goes to at the top, and press <b>Change channel</b>.</li>
+  <li>Set what they're told after sending, the DM they get when it's dealt with, and a role to ping if you want. Press <b>Publish</b>.</li>
+  <li>Make a post with the button: <b>Discord → Posts → + New post</b>, pick your #feedback channel, write a line or two, and add a button that does <b>Give feedback</b>. Publish it.</li>
+</ol>
+<p>Pressing the button asks what it's about and for their feedback. It shows up in the staff channel with their name, and they can send one every 5 minutes. Each one has two buttons:</p>
+<ul>
+  <li><b>Reply by DM</b>: type a reply and the bot DMs it to them. It's noted on the feedback, or marked not delivered if their DMs are closed.</li>
+  <li><b>Done</b>: turns it green, notes who dealt with it, and sends them the thank-you DM.</li>
+</ul>
+<p class="tip">Make the staff channel one only staff can see: anyone who can see it can press the buttons. Untick <b>Take feedback</b> to close the form for a while.</p>
 
 <h2>Channels &amp; roles</h2>
 <p><b>Discord → Channels &amp; roles</b> is for the things with no page of their own: the live match board, match results, the weekly leaderboard and rank promotions, and the member roles. Channel changes there apply within a minute of publishing; role changes need the bot restarting. <b>Picked on their own page</b> at the top shows which channel each of the other pages is using, with a link to change it.</p>

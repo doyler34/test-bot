@@ -52,6 +52,13 @@ if (form && form.dataset.kind === "staffalerts") {
       seconds: field("seconds").value, ping_role: field("ping_role").value });
   });
 }
+if (form && form.dataset.kind === "feedback") {
+  form.addEventListener("submit", () => {
+    const field = (name) => form.querySelector(`[name="${name}"]`);
+    document.getElementById("dc-doc").value = JSON.stringify({ on: field("on").checked, thanks: field("thanks").value,
+      done_dm: field("done_dm").value, ping_role: field("ping_role").value });
+  });
+}
 if (form && form.dataset.kind === "factions") factionsEditor();
 if (form && form.dataset.kind === "channels") {
   form.addEventListener("submit", () => {

@@ -1593,7 +1593,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("boss", "boss-password")
         home = await (await self.client.get("/discord")).text()
         for key in ("welcome", "greeting", "serverinfo", "factions", "matchping", "weekly", "bans", "staffalerts",
-                    "posts", "links", "channels", "names"):
+                    "posts", "links", "channels", "names", "feedback"):
             self.assertIn(f'href="/discord/{key}"', home)
         self.assertIn("What new members see", home)
         self.assertIn("Bot&#39;s default", home)
@@ -1609,6 +1609,17 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             "doc": json.dumps({"on": True, "count": "4", "seconds": "90", "ping_role": "Admin"})})
         doc = json.loads(self.db.discord_doc("staffalerts")["published"])
         self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin"})
+
+    async def test_feedback_settings_page(self):
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/discord/feedback")).text()
+        self.assertIn('data-kind="feedback"', page)
+        self.assertIn('action="/discord/feedback/channel"', page)
+        token = await self.csrf("/discord/feedback")
+        await self.client.post("/discord/feedback", data={"csrf": token, "action": "publish",
+            "doc": json.dumps({"on": True, "thanks": "Cheers!", "done_dm": "Sorted {topic}", "ping_role": ""})})
+        doc = json.loads(self.db.discord_doc("feedback")["published"])
+        self.assertEqual(doc, {"on": True, "thanks": "Cheers!", "done_dm": "Sorted {topic}", "ping_role": ""})
 
     async def test_weekly_top_three_wording(self):
         await self.login("boss", "boss-password")

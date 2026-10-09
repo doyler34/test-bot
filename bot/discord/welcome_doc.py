@@ -18,6 +18,7 @@ TYPES = {
     "role": "Give or take a role",
     "pick": "Pick one role from a group",
     "url": "Open a web link",
+    "feedback": "Give feedback",
 }
 FACTION_NAMES = ("US", "USSR", "FIA")
 MAX_BUTTONS = 25
@@ -302,7 +303,7 @@ def check_bans(raw):
     return doc, problems
 
 
-POST_TYPES = {key: TYPES[key] for key in ("link", "progress", "role", "pick", "url")}
+POST_TYPES = {key: TYPES[key] for key in ("link", "progress", "role", "pick", "url", "feedback")}
 
 
 def default_post():
@@ -375,6 +376,24 @@ def check_staffalerts(raw):
     return doc, problems
 
 
+FEEDBACK_THANKS = "Thanks! Staff will read it."
+FEEDBACK_DONE = "Thanks for your feedback about **{topic}**. Staff have read it and dealt with it."
+
+
+def default_feedback():
+    return {"on": True, "thanks": FEEDBACK_THANKS, "done_dm": FEEDBACK_DONE, "ping_role": ""}
+
+
+def check_feedback(raw):
+    if not isinstance(raw, dict):
+        return default_feedback(), ["That couldn't be read. Reload and try again."]
+    doc = {"on": bool(raw.get("on")),
+           "thanks": str(raw.get("thanks", "") or "").strip()[:500] or FEEDBACK_THANKS,
+           "done_dm": str(raw.get("done_dm", "") or "").strip()[:1500],
+           "ping_role": str(raw.get("ping_role", "") or "").strip()[:100]}
+    return doc, []
+
+
 # (setting, what it is) for the Channels & roles page, in the order shown.
 CHANNEL_SETTINGS = (
     ("LIVE_BOARD_CHANNEL_ID", "Live match board"),
@@ -390,6 +409,7 @@ PAGE_CHANNELS = (
     ("matchping", "MATCH_ALERT_CHANNEL_ID", "#announcements"),
     ("weekly", "WEEKLY_WINNERS_CHANNEL_ID", "Same as the weekly leaderboard"),
     ("staffalerts", "STAFF_ALERT_CHANNEL_ID", "None picked (alerts wait for one)"),
+    ("feedback", "FEEDBACK_CHANNEL_ID", "None picked (the form says it isn't set up)"),
     ("links", "LINK_REVIEW_CHANNEL_ID", "The bot's own #oyb-link-requests"),
 )
 # Older publishes could set the Start here channel here; the Start here page picks it now.
