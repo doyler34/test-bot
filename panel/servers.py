@@ -179,10 +179,19 @@ class ServerManager:
         if moved:
             self.db.add_connections(state.config.id, events, moved)
             self.db.add_kills(state.config.id, archive.kill_rows(events))
+        self.check(state, events)
+        self.mass_teamkills(state, events)
+
+    def check(self, state: ServerState, events):
+        """Runs the cheating checks over new log lines; AP mine spam also goes to the staff channel."""
+        settings = self.staff_alert_settings()
+        state.detector.s["mine_kills"] = settings["mines"]
         flags = [f for event in events for f in state.detector.feed(event)]
         for flag in flags + state.detector.flush(now()):
             self.suspicious(state, flag)
-        self.mass_teamkills(state, events)
+            if flag.get("mines") and flag.get("first") and settings["on"] and now() - flag["at"] < 900:
+                self.db.add_staff_alert(state.config.id, flag["at"], f"AP mine spam on {state.config.name}",
+                                        flag["text"].replace(flag["name"], f"**{flag['name']}**", 1))
 
     def staff_alert_settings(self) -> dict:
         row = self.db.discord_doc("staffalerts")

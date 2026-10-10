@@ -23,6 +23,8 @@ import math
 from collections import Counter, defaultdict, deque
 
 EXPLOSIVE = {"EXPLOSIVE", "FRAGMENTATION", "INCENDIARY"}
+# An AP mine goes off under someone, so the game puts the hit in a foot.
+FEET = {"LFoot", "RFoot"}
 
 DEFAULTS = {
     "ai_explosions": 5,           # explosive deaths credited to AI ...
@@ -45,6 +47,7 @@ DEFAULTS = {
     "spread_window": 2,           # ... dying within this many seconds of each other
     "cooldown": 600,              # seconds before the same flag fires again
     "settle": 120,                # seconds a burst waits, so killers nearby just after count too
+    "mine_kills": 5,              # explosive kills to the feet by one player in one game (0 turns it off)
 }
 
 
@@ -68,13 +71,16 @@ class Detector:
         self.pending: list[dict] = []
         self.spots: dict[str, tuple] = {}
         self.teamkills: dict[str, dict] = {}
+        self.mines: dict[str, dict] = {}
+        self.names: dict[str, str] = {}
         self.game = None
 
     def feed(self, event: dict) -> list[dict]:
         if event.get("game") and event["game"] != self.game:
-            # Teamkill tallies are per game.
+            # Teamkill and mine tallies are per game.
             self.game = event["game"]
             self.teamkills.clear()
+            self.mines.clear()
         return self.flush(event["at"]) + self._feed(event)
 
     def flush(self, at: int) -> list[dict]:
@@ -91,6 +97,7 @@ class Detector:
             if identity not in self.seen or at - self.seen[identity] > 3600:
                 self.joins.append((at, event["name"], identity, event.get("ip", "")))
             self.seen[identity] = at
+            self.names[event["name"]] = identity
             self.spots.pop(identity, None)
             if len(self.seen) > 5000:
                 self.seen = {k: v for k, v in self.seen.items() if at - v < 3600}
@@ -104,6 +111,37 @@ class Detector:
         return []
 
     def _kill(self, e):
+        # Mines are counted before the distance filter: their owner is often kilometres away.
+        return self._mine(e) + self._kill_checks(e)
+
+    def _mine(self, e):
+        """Explosive kills to the feet by one player, all game: most likely AP mines.
+        Once it flags, one running line keeps the count and who they killed."""
+        limit, owner = self.s["mine_kills"], e.get("killer_label")
+        if not limit or e.get("zone") not in FEET or e.get("damage") not in EXPLOSIVE:
+            return []
+        if not owner or e.get("by_ai") or owner == e.get("victim_name"):
+            return []
+        key = e.get("killer") or self.names.get(owner) or f"name:{owner}"
+        tally = self.mines.setdefault(key, {"victims": Counter(), "tk": 0, "enemy": 0, "after": 0, "flagged": False})
+        tally["victims"][e.get("victim_name") or "someone"] += 1
+        side = {"TK": "tk", "ENEMY": "enemy"}.get(e.get("relation"), "after")
+        tally[side] += 1
+        count = sum(tally["victims"].values())
+        if not tally["flagged"] and count < limit:
+            return []
+        first = not tally["flagged"]
+        tally["flagged"] = True
+        split = [plural(tally["tk"], "teammate"), plural(tally["enemy"], "enemy", "enemies")]
+        if tally["after"]:
+            split.append(f"{tally['after']} after they'd left or switched side")
+        names = ", ".join(name if n == 1 else f"{name} ({n}x)" for name, n in tally["victims"].most_common())
+        text = (f"{owner} has killed {plural(count, 'player')} this game with explosions to the feet, most likely "
+                f"AP mines ({', '.join(split)}). Killed: {names}")
+        return [{"at": e["at"], "identity": "" if key.startswith("name:") else key, "incident": False,
+                 "key": ("mines", key), "count": count, "first": first, "mines": True, "name": owner, "text": text}]
+
+    def _kill_checks(self, e):
         at, s = e["at"], self.s
         # Dying lets a player respawn anywhere, so their next kill starts afresh.
         self.spots.pop(e["victim"], None)

@@ -693,6 +693,50 @@ class SuspicionTests(unittest.TestCase):
         self.assertEqual(len(self.flags(log, same_second=2)), 1)
 
 
+def mine(clock, relation, victim, owner, owner_id="", foot="RFoot", away=2408.2):
+    """A kill line as the game writes it for an AP mine: explosion to the foot, credited to whoever placed it."""
+    by = (f"{owner} (playerID = 76 | UUID = {owner_id}) from FIA faction who was at that time at <10, 5, 10> "
+          f"[{away}m away from the corpse]." if owner_id else f"{owner} (playerID = 76 | UUID = )")
+    return (f"{clock}   SCRIPT       : INFO: KILL {relation}: {victim} (playerID = 9 | UUID = {person(abs(hash(victim)) % 80)})"
+            f" from US faction at <7411.86, 9.74, 6795.28> was killed by {by} With last inflicted damage type "
+            f"EXPLOSIVE to the '{foot}' hit zone\n")
+
+
+class MineTests(unittest.TestCase):
+    def flags(self, text, **settings):
+        root = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(root, ignore_errors=True))
+        write_log(root, "logs_2026-10-10_12-38-31", text)
+        events, _ = LogReader(root).scan({})
+        detector = Detector(settings)
+        return [f for e in events for f in detector.feed(e)]
+
+    def test_mines_counted_all_game_including_after_they_leave(self):
+        owner = person(70)
+        log = (arrive("13:00:00.000", "Zeedog", owner, "10.0.0.7")
+               + mine("13:32:16.206", "ENEMY", "DrinkableLeaf15", "Zeedog", owner, away=54.8)
+               + mine("14:20:45.000", "TK", "Teammate1", "Zeedog", owner, foot="LFoot", away=174.5)
+               + mine("15:26:12.000", "ENEMY", "Far1", "Zeedog", owner, away=5878.1)
+               + mine("16:53:10.000", "TK", "Teammate2", "Zeedog", owner)
+               + mine("18:21:11.432", "KILLED_BY_NEUTRAL_OR_FACTIONLESS", "sheaffer_1", "Zeedog")
+               + mine("18:34:07.562", "KILLED_BY_NEUTRAL_OR_FACTIONLESS", "cjhendrxx", "Zeedog"))
+        flags = self.flags(log)
+        self.assertEqual([f["count"] for f in flags], [5, 6])
+        self.assertTrue(flags[0]["first"] and not flags[1]["first"])
+        self.assertEqual(flags[0]["identity"], owner)
+        self.assertEqual(flags[1]["key"], ("mines", owner))
+        self.assertIn("Zeedog has killed 6 players this game with explosions to the feet, most likely AP mines "
+                      "(2 teammates, 2 enemies, 2 after they'd left or switched side)", flags[1]["text"])
+
+    def test_other_explosions_and_their_own_mine_do_not_count(self):
+        owner = person(70)
+        log = "".join(mine(f"13:0{n}:00.000", "ENEMY", f"V{n}", "Zeedog", owner, foot="Chest") for n in range(6))
+        log += mine("13:09:00.000", "ENEMY", "Zeedog", "Zeedog", owner)
+        self.assertEqual(self.flags(log), [])
+        self.assertEqual(self.flags("".join(mine(f"13:0{n}:00.000", "ENEMY", f"V{n}", "Zeedog", owner)
+                                            for n in range(6)), mine_kills=0), [])
+
+
 class MassTeamkillTests(unittest.TestCase):
     def setUp(self):
         self.db = PanelDB(":memory:")
@@ -710,6 +754,20 @@ class MassTeamkillTests(unittest.TestCase):
         self.assertEqual(alert["title"], "Mass teamkill on Server 1")
         self.assertIn("**Buford** teamkilled 3 players in 2 seconds: A, B, C.", alert["text"])
         self.assertEqual(self.db.feed("one")[0]["kind"], "sus")
+
+    def test_mine_spam_goes_to_the_staff_channel_once(self):
+        at = now()
+        events = [{"kind": "kill", "at": at + n, "relation": "ENEMY", "killer": BUFORD, "killer_name": "Buford",
+                   "killer_label": "Buford", "victim": person(n), "victim_name": f"V{n}", "damage": "EXPLOSIVE",
+                   "zone": "LFoot", "distance": 2400.0} for n in range(7)]
+        self.manager.check(self.manager.states["one"], events)
+        alerts = self.db.staff_alerts()
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0]["title"], "AP mine spam on Server 1")
+        self.assertTrue(alerts[0]["text"].startswith("**Buford** has killed 5 players"))
+        sus = [r for r in self.db.feed("one") if r["kind"] == "sus"]
+        self.assertEqual(len(sus), 1)
+        self.assertIn("7 players", sus[0]["text"])
 
     def test_owners_settings_apply(self):
         self.db.publish_discord_doc("staffalerts", json.dumps({"on": True, "count": 4, "seconds": 60}), "gaz")
@@ -1606,9 +1664,9 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Rook teamkilled 3 players", page)
         token = await self.csrf("/discord/staffalerts")
         await self.client.post("/discord/staffalerts", data={"csrf": token, "action": "publish",
-            "doc": json.dumps({"on": True, "count": "4", "seconds": "90", "ping_role": "Admin"})})
+            "doc": json.dumps({"on": True, "count": "4", "seconds": "90", "ping_role": "Admin", "mines": "8"})})
         doc = json.loads(self.db.discord_doc("staffalerts")["published"])
-        self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin"})
+        self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin", "mines": 8})
 
     async def test_feedback_settings_page(self):
         await self.login("boss", "boss-password")

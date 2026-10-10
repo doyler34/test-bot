@@ -154,6 +154,8 @@ def kill_event(relation, body, at):
     killer = PERSON.match(parts[1])
     event["by_ai"] = not killer and re.match(r"AI(\s|$)", parts[1]) is not None
     name = killer[1] if killer else ("AI" if event["by_ai"] else parts[1].split(" (playerID")[0].split(" from ")[0])
+    # Kept even when the line has no UUID for the killer (they'd left), so mines still name their owner.
+    event["killer_label"] = name
     kind = "teamkill" if relation == "TK" else "kill"
     text = f"{name} {'teamkilled' if relation == 'TK' else 'killed'} {victim[1]}"
     if metres:

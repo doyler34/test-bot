@@ -16,6 +16,14 @@
     </div>
     <p class="muted">Each player is reported at most once every 5 minutes, so one rampage is one alert. It also shows as a Sus line in the live feed.</p>
   </section>
+  <section class="card">
+    <h2>AP mine spam</h2>
+    <p class="muted">An AP mine kill shows in the log as an explosion to the foot, credited to whoever placed it, even from kilometres away or after they've left. When one player reaches this many in a match (enemies, teammates and after they've left all count), the bot posts it here once, with who they killed. The Sus line in the live feed keeps counting for the rest of the match.</p>
+    <div class="grid">
+      <label>Mine kills in one match <input name="mines" type="number" min="0" max="50" value="{{ doc.mines if doc.mines is defined else 5 }}" inputmode="numeric"></label>
+    </div>
+    <p class="muted">0 turns it off. Uses the same channel and role to ping as mass teamkills, and is off when <b>Post mass teamkill alerts</b> is unticked.</p>
+  </section>
   {% if recent %}
   <section class="card">
     <h2>Recent alerts</h2>
