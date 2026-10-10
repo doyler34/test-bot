@@ -374,6 +374,7 @@ GUIDE = [
     ("discord", "Discord", "What gets posted for staff, teamkill alerts, and linked accounts.", None),
     ("console-audit", "Console and audit log", "Raw RCON commands, and the record of who did what.", "audit"),
     ("discord-messages", "Discord messages", "Every Discord page: what the bot posts, where, and staff alerts.", "discord"),
+    ("discord-tutorial", "Discord tutorial", "Every Discord page step by step, with pictures. Also as a PDF.", "discord"),
     ("website", "The website", "The public site: its words, servers and rules.", "website"),
     ("admins", "Admin accounts", "Making accounts, roles and password resets.", "users"),
 ]

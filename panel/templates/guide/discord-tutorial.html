@@ -1,0 +1,294 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p><a class="button small" href="/static/guide/tutorial/oyb-discord-tutorial.pdf?v={{ asset_version }}" download>Download as PDF</a></p>
+{{ shot("tutorial/01-discord-home", '🛠️ OYB Control: the Discord section') }}
+<p>Everything the OYB bot says and does in our Discord is changed from the panel. No code, no restarts.</p>
+<p><b>Where:</b> log in at <b>panel.oybgaming.com</b> and press <b>DISCORD</b> in the top menu.</p>
+<p>The Discord page lists every part in groups:</p>
+<ul>
+<li><b>What new members see</b>: Start here, Join greeting, Server info &amp; rules, Factions</li>
+<li><b>What the bot posts by itself</b>: Match alerts, Weekly top 3, Ban messages, Staff alerts</li>
+<li><b>Posting yourself</b>: Posts</li>
+<li><b>Staff jobs</b>: Link requests, Feedback</li>
+<li><b>Setup</b>: Channels &amp; roles, Server names</li>
+</ul>
+<p>Each one has a status in the corner:</p>
+<p>🟢 <b>Live</b>: Discord shows your version</p>
+<p>🟡 <b>Draft not published</b>: someone saved changes but hasn't pushed them out</p>
+<p>⬜ <b>Bot's default</b>: never changed, the bot's built-in wording (that's fine)</p>
+<p>🔴 <b>Problem</b>: the bot couldn't do it; open the page to see why</p>
+<p><b>Who can use it:</b> owners, plus anyone an owner gives Discord access to under <b>Admins → Edit access</b> (all Discord pages, or just some).</p>
+
+<h2>📍 Picking a channel</h2>
+{{ shot("tutorial/02-channel-box", '📍 Picking a channel') }}
+<p>Pages for something the bot keeps in a channel have a <b>Channel</b> box at the very top: Server info &amp; rules, Factions, Match alerts, Weekly top 3, Staff alerts, Feedback and Link requests.</p>
+<ol class="steps">
+<li>Pick the channel from the list.</li>
+<li>That's it. <b>It saves the moment you pick it</b> and you'll see "Channel changed".</li>
+<li>Within a minute the bot takes its message down from the old channel and puts it up in the new one.</li>
+</ol>
+<p><b>Good to know</b></p>
+<ul>
+<li>The channel box is separate from <b>Publish</b>. Publishing a page never changes its channel, and changing the channel never needs a publish.</li>
+<li>The first option in the list is what the bot does with nothing picked, e.g. "The bot's own #servers channel".</li>
+<li>The bot uses the channel as it is: it won't rename it or change who can see it. So make sure the bot can post there, and that staff channels (staff alerts, feedback inbox, link requests) really are staff only.</li>
+<li>Start here, Join greeting, Ban messages and Posts pick their channel inside the page instead.</li>
+</ul>
+
+<h2>💾 Draft, then publish</h2>
+{{ shot("tutorial/03-draft-publish", '💾 Draft, then publish') }}
+<p>Every page works the same way:</p>
+<ul>
+<li><b>Save draft</b>: keeps your changes without touching Discord. Other owners see the draft too, so you can leave it for someone to check.</li>
+<li><b>Publish</b>: sends it to the bot. Discord updates <b>within a minute</b>.</li>
+<li><b>Discard draft</b>: throws your changes away and goes back to what's live.</li>
+</ul>
+<p>The box near the top always tells you where you are:</p>
+<ul>
+<li><b>Not published</b>: Discord still shows the bot's default.</li>
+<li><b>Live</b>: when it was published and by who, and whether the bot has picked it up yet.</li>
+<li><b>Draft</b>: there are unsaved changes nobody has published.</li>
+</ul>
+<p>If something's wrong (a missing channel, a role the bot can't give out), <b>Publish stops and lists what to fix</b>, and your work is kept as a draft so nothing is lost.</p>
+<p>Most pages have a <b>Preview</b> on the right. It's roughly how it'll look in Discord, and it updates as you type.</p>
+
+<h2>👋 Start here message</h2>
+{{ shot("tutorial/04-start-here", '👋 Start here message') }}
+<p><b>Discord → Start here message</b> is the first thing new members see: the rules, the button to link their game account, and the faction picker.</p>
+<p><b>Where and how it looks</b></p>
+<ul>
+<li><b>Channel</b>: where it's posted (our 👋｜welcome).</li>
+<li><b>Title</b> and <b>Stripe colour</b>: the coloured bar down the side.</li>
+</ul>
+<p><b>Text</b></p>
+<p>It's split into sections, each with an optional heading.</p>
+<ul>
+<li><code><b>bold</b></code>, <code>*italic*</code> and new lines work just like in Discord.</li>
+<li>↑ ↓ move a section, ✕ removes it, <b>+ Add section</b> adds one.</li>
+</ul>
+<p>Watch the <b>Preview</b> on the right as you type. When you're happy, <b>Publish</b>. The bot edits the existing message; it doesn't post a new one.</p>
+<p><b>Start again from the original</b> at the bottom puts it back to the bot's built-in version if you ever want to start over.</p>
+
+<h2>🔘 Buttons (Start here and Posts)</h2>
+{{ shot("tutorial/05-button-editor", '🔘 Buttons (Start here and Posts)') }}
+<p>Each button shows as one line. Tap it to open it, tap the header again to close it. <b>+ Add button</b> makes a new one. Up to 5 buttons fit on each of 5 lines.</p>
+<p><b>What it does</b> — pick one:</p>
+<ul>
+<li><b>Link Reforger account</b>: opens the box to link their game account</li>
+<li><b>My progress</b>: shows them what they've done and what's left</li>
+<li><b>Pick a faction / No faction</b>: the US, USSR and FIA roles (Start here only)</li>
+<li><b>Give or take a role</b>: press to get it, press again to remove it (e.g. Event pings)</li>
+<li><b>Pick one role from a group</b>: buttons with the same group name work together; picking one removes the others. Tick <b>Locked</b> so they can't change it after.</li>
+<li><b>Open a web link</b>: opens a website</li>
+<li><b>Give feedback</b>: opens the feedback form (see Feedback)</li>
+</ul>
+<p>Then set the <b>Label</b>, an <b>Emoji</b>, which <b>Line</b> it sits on, and the <b>Colour</b>.</p>
+<p>For role buttons, pick a role from the list or choose <b>+ Make a new role…</b> and type a name; the bot creates it when you publish. Tick <b>Only for players who've linked</b> to keep it for linked players.</p>
+<p>⚠️ A button can <b>never</b> hand out a role with permissions (admin, kick, manage anything). Those are greyed out. The bot's own role also has to sit above any role it gives out; the page tells you if it doesn't.</p>
+
+<h2>🎮 Server info &amp; rules</h2>
+{{ shot("tutorial/06-server-info", '🎮 Server info & rules') }}
+<p><b>Discord → Server info &amp; rules</b> edits the card in our 🎮｜servers channel.</p>
+<ul>
+<li><b>The #servers card</b>: the title and intro at the top.</li>
+<li><b>Each server's settings</b>: the line under each server's live status, e.g. map, player slots, anything players should know.</li>
+<li><b>The in-game rules</b>: the rules card under it.</li>
+</ul>
+<p>The live status (match running, waiting, offline) fills itself in; you only write the words around it.</p>
+<p>⭐ <b>The rules here are also the rules on our website</b>, so change them once and both update.</p>
+<p>A box you leave as it is keeps following the bot's own wording. Check the Preview, then <b>Publish</b>.</p>
+
+<h2>🏷️ Server names</h2>
+{{ shot("tutorial/07-server-names", '🏷️ Server names') }}
+<p><b>Discord → Server names</b> changes what each server is called <b>everywhere</b> the bot names it: the SERVER STATUS channels, the #servers card, match alerts and results, and the 🔔 match-notification buttons.</p>
+<ol class="steps">
+<li>Type the new name in that server's box. An empty box keeps the default shown underneath.</li>
+<li>Check the Preview on the right.</li>
+<li>Press <b>Publish</b>.</li>
+</ol>
+<p><b>Good to know</b></p>
+<ul>
+<li>Two servers can't have the same name.</li>
+<li>A name can't contain <b>·</b> (the bot uses it in the channel names).</li>
+<li>Discord only lets a bot rename a channel about <b>every 5 minutes</b>, so a SERVER STATUS channel can take that long. Everything else changes within a minute.</li>
+</ul>
+
+<h2>🚩 Factions</h2>
+{{ shot("tutorial/08-factions", '🚩 Factions') }}
+<p><b>Discord → Factions</b> changes how the three factions look <b>in Discord</b>: their <b>name</b>, <b>colour</b> and <b>emoji</b>.</p>
+<ul>
+<li>The name and colour are the faction's role, so everyone who picked it changes with it.</li>
+<li>The faction picker's buttons and the <b>/rank</b> card use the new name too.</li>
+<li>The <b>Channel</b> box at the top is where the faction picker and the 🔔 match-ping buttons live (our 🏷️｜choose-roles).</li>
+</ul>
+<p><b>Good to know</b></p>
+<ul>
+<li>It only changes Discord. Which side someone plays in game, rank names and the rank card artwork stay as they are.</li>
+<li>The bot can only rename or recolour a role that sits <b>below its own</b>; the page tells you if one doesn't.</li>
+<li>The Start here message's faction buttons have their own labels, set on the Start here page.</li>
+</ul>
+
+<h2>🙌 Join greeting</h2>
+{{ shot("tutorial/09-join-greeting", '🙌 Join greeting') }}
+<p><b>Discord → Join greeting</b> is a hello when someone joins the Discord.</p>
+<ol class="steps">
+<li>Tick <b>Greet them</b>.</li>
+<li>Choose <b>Post in a channel</b> (everyone sees them arrive) or <b>Send it to them privately</b> (players with DMs off won't get it).</li>
+<li>If it's a channel, pick it.</li>
+<li>Write the message. Tap these to drop them in:</li>
+</ol>
+<ul>
+<li><code>{user}</code>: mentions them</li>
+<li><code>{name}</code>: their name</li>
+<li><code>{server}</code>: the Discord's name</li>
+<li><code>{members}</code>: how many members there are</li>
+<li><code>{start}</code>: a link to the Start here channel</li>
+</ul>
+<ol class="steps">
+<li><b>Publish</b>.</li>
+</ol>
+<p>ℹ️ The bot only hears about people joining if <b>Server Members Intent</b> is turned on for it in Discord's developer portal. The page warns you if it isn't.</p>
+
+<h2>🟢 Match alerts</h2>
+{{ shot("tutorial/10-match-alerts", '🟢 Match alerts') }}
+<p>When a new match starts on a server, the bot posts a "match started" alert. <b>Discord → Match alerts</b> controls it.</p>
+<ul>
+<li><b>Channel</b> (top): where alerts go (our 📢｜announcements).</li>
+<li><b>Which servers post an alert</b>: untick a server to stop its alerts.</li>
+<li><b>Ping the players who asked for that server's alerts</b>: players choose which servers ping them with the 🔔 buttons. Untick to post quietly with no ping.</li>
+<li><b>Wording</b>: the title and message. <code>{server}</code> becomes the server's name.</li>
+</ul>
+<p>When the match started, and when the alert disappears (30 minutes later), are always added underneath. Check the Preview, then <b>Publish</b>.</p>
+
+<h2>🏆 Weekly top 3</h2>
+{{ shot("tutorial/11-weekly-top3", '🏆 Weekly top 3') }}
+<p>Every <b>Monday at midnight Eastern</b> the weekly leaderboard resets, and the bot posts last week's top 3 with their kills.</p>
+<p><b>Discord → Weekly top 3</b></p>
+<ul>
+<li><b>Channel</b> (top): where it's posted. With none picked, it goes in the weekly leaderboard channel.</li>
+<li><b>Post the top 3 each week</b>: untick to turn it off.</li>
+<li><b>Wording</b>: the title, the text above the top 3 and the text below. <code>{week}</code> becomes the date the week started, like 28 Sep. <code><b>bold</b></code> and new lines work.</li>
+</ul>
+<p>The top 3 and their kills always go in the middle. Nobody gets pinged. The Preview uses made-up players.</p>
+
+<h2>🔨 Ban messages</h2>
+{{ shot("tutorial/12-ban-messages", '🔨 Ban messages') }}
+<p><b>Discord → Ban messages</b> sets what a banned player is told, and what staff see in their ticket.</p>
+<p><b>The DM a banned player gets</b> (only players who've linked their Discord)</p>
+<ul>
+<li><b>Send it</b>: on or off.</li>
+<li><b>Title</b> and <b>Message</b>: tap <code>{server}</code>, <code>{account}</code> or <code>{length}</code> to drop those in.</li>
+<li><b>How to appeal</b>: use <b>Link a channel in the appeal line</b> to add a clickable channel, like 🎫｜open-support-ticket.</li>
+<li>The reason and when the ban ends are always added underneath.</li>
+</ul>
+<p><b>Ban card in tickets</b></p>
+<p>When a banned player opens a ticket, the bot posts their ban into it: account, length, reason, <b>who banned them</b>, and when it ends. Staff know straight away what it's about.</p>
+<ul>
+<li><b>Post it</b>: on or off.</li>
+<li><b>Channel with the ticket panel</b>, plus tick any other categories tickets are made in.</li>
+<li><b>Panel address</b> (optional) adds a link to the player's page on the card.</li>
+</ul>
+<p>Both are previewed on the right. <b>Publish</b> when done.</p>
+
+<h2>🚨 Staff alerts</h2>
+{{ shot("tutorial/13-staff-alerts", '🚨 Staff alerts') }}
+<p>When one player teamkills several people in a short time, the bot posts it in the staff alerts channel <b>straight away</b>: who did it, on which server, and who they killed.</p>
+<p><b>Discord → Staff alerts</b></p>
+<ol class="steps">
+<li><b>Channel</b> (top): pick a staff-only channel, e.g. 🚨｜staff-alerts. <b>Until one is picked, alerts wait.</b></li>
+<li><b>Teamkills</b> and <b>Within (seconds)</b>: how many, how fast. Default is 3 in 60 seconds.</li>
+<li><b>Role to ping</b>: type a role name like <code>Admin</code>, or leave blank to ping nobody.</li>
+<li><b>Publish</b>.</li>
+</ol>
+<p><b>Good to know</b></p>
+<ul>
+<li>Each player is reported at most once every 5 minutes, so one rampage is one alert.</li>
+<li>It also shows as a <b>Sus</b> line in the panel's live feed.</li>
+<li><b>Recent alerts</b> at the bottom lists the last ones sent.</li>
+</ul>
+
+<h2>💌 Feedback (settings)</h2>
+{{ shot("tutorial/14-feedback", '💌 Feedback (settings)') }}
+<p>Members send feedback with a <b>Give feedback</b> button. It works like a simple ticket: it lands in a staff channel, and staff can reply or mark it done.</p>
+<p><b>Discord → Feedback</b></p>
+<ol class="steps">
+<li><b>Channel</b> (top): where feedback <b>lands</b>. This must be a <b>staff-only</b> channel like 📥｜feedback-inbox, NOT the public 💌｜feedback channel, or everyone can read it.</li>
+<li><b>Topics they pick from</b>: one per line (e.g. Servers &amp; settings, Rules, Events, Discord, Suggestion, Other). They pick from a dropdown. Leave it empty to let them type their own.</li>
+<li><b>Take feedback</b>: untick to close the form for a while.</li>
+<li><b>After they send it</b>: the private thank-you only they see.</li>
+<li><b>DM when staff press Done</b>: <code>{topic}</code> becomes what it was about. Blank sends nothing.</li>
+<li><b>Role to ping</b> (optional).</li>
+<li><b>Publish</b>.</li>
+</ol>
+<p><b>When feedback comes in</b>, each one has two buttons:</p>
+<p>✉️ <b>Reply by DM</b>: type a reply and the bot DMs it to them. It's noted on the feedback.</p>
+<p>✅ <b>Done</b>: turns it green, notes who dealt with it, and DMs them the thank-you.</p>
+<p>Members can send one every 5 minutes.</p>
+
+<h2>📝 Posts</h2>
+{{ shot("tutorial/15-post-editor", '📝 Posts') }}
+<p><b>Discord → Posts</b> is for anything else you want the bot to post and keep up to date: announcements, events, sign-ups, FAQs, extra rules, and the 💌｜feedback message.</p>
+<ol class="steps">
+<li>Press <b>+ New post</b>.</li>
+<li>Pick the <b>Channel</b>, then write it like the Start here message: <b>Title</b>, <b>Stripe colour</b>, sections of <b>Text</b>.</li>
+<li>Add buttons if you want (see the Buttons part): give a role (e.g. "I'm in" for an event), pick one from a group, a web link, Link Reforger account, My progress, or <b>Give feedback</b>.</li>
+<li><b>Publish</b>.</li>
+</ol>
+<p>The picture shows our feedback post: a short message and one <b>Give feedback</b> button.</p>
+
+<h2>📋 Changing or removing a post</h2>
+{{ shot("tutorial/16-posts", '📋 Changing or removing a post') }}
+<p>The Posts page lists every post: its channel, whether it's <b>Live</b>, and who changed it last.</p>
+<ul>
+<li><b>To change one</b>: press <b>Edit</b>, change it, and <b>Publish</b> again. The bot edits the <b>same message</b> in Discord; it doesn't post a new one, so links and pins keep working.</li>
+<li><b>To take one down</b>: open it and press <b>Delete post</b>. It's removed from Discord.</li>
+<li><b>Back to posts</b> goes back to the list without changing anything.</li>
+</ul>
+<p>Only you and other owners see a post until it's published.</p>
+
+<h2>🔗 Link requests</h2>
+{{ shot("tutorial/17-link-requests", '🔗 Link requests') }}
+<p>Members link their Discord to their in-game account from the Start here message. <b>Discord → Link requests</b> is the same queue as the 🔗｜oyb-link-requests channel. Deciding in either place does the same thing.</p>
+<p><b>Waiting for review</b></p>
+<ul>
+<li><b>Approve</b>: links them and gives them the member role. <b>Make sure it's really them first</b>; a matching name alone isn't proof.</li>
+<li><b>Reject</b>: turns it down and tells them.</li>
+<li>If it says <b>No game account matched that name</b>, start typing their in-game name, pick them from the list and press <b>Link</b>.</li>
+</ul>
+<p><b>Linked accounts</b></p>
+<p>Everyone already linked. <b>Unlink</b> takes their rank roles away. Their playtime and XP stay with the game account, so they keep it if they link again.</p>
+<p>The bot carries out each decision within a minute.</p>
+
+<h2>⚙️ Channels &amp; roles</h2>
+{{ shot("tutorial/18-channels-roles", '⚙️ Channels & roles') }}
+<p><b>Discord → Channels &amp; roles</b> is for the few things with no page of their own:</p>
+<p><b>Channels</b></p>
+<ul>
+<li><b>Live match board</b>: the self-updating board while a match runs</li>
+<li><b>Match results</b>: each finished match's results</li>
+<li><b>Weekly leaderboard</b>: the pinned weekly board</li>
+<li><b>Rank promotions</b>: rank-up posts</li>
+</ul>
+<p>Pick a channel, or leave <b>Keep as it is</b>, then <b>Publish</b>. Channels change within a minute.</p>
+<p><b>Roles</b></p>
+<ul>
+<li><b>Member role</b>: given when someone accepts the rules. Point channel permissions at this role.</li>
+<li><b>Unverified label</b>: on people who haven't linked yet.</li>
+</ul>
+<p>Role changes need the bot restarting.</p>
+<p><b>Picked on their own page</b> at the top shows which channel every other page is using, with a link to change it. <b>Handy for checking everything is where it should be.</b></p>
+
+<h2>❓ Quick fixes</h2>
+<p><b>"I published but nothing changed in Discord"</b></p>
+<p>Wait a minute. The bot checks every 30 seconds. Check the page's status box: if it says <b>Problem</b>, it lists why.</p>
+<p><b>"It's posting in the wrong channel"</b></p>
+<p>Check the <b>Channel</b> box at the top of that page. Remember it saves by itself and is separate from Publish.</p>
+<p><b>"A button says the role can't be given out"</b></p>
+<p>The role has permissions, or it sits above the bot's role. In Discord → Server Settings → Roles, drag the bot's role above it.</p>
+<p><b>"Staff alerts / feedback aren't showing up"</b></p>
+<p>A channel must be picked at the top of that page, and the bot must be able to see and post in it.</p>
+<p><b>"I made a mess"</b></p>
+<p><b>Discard draft</b> goes back to what's live. On Start here, <b>Start again from the original</b> goes back to the bot's built-in version.</p>
+<p>Any other questions, ask in 🗨️｜admin-chat.</p>
+{% endblock %}
