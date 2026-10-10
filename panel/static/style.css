@@ -290,6 +290,7 @@ form.inline input[type=date] { display: inline-block; width: auto; margin: 0; pa
 .dc-pick select { margin: 4px 0 0; }
 .dc-pick p { flex-basis: 100%; margin: 0; }
 .dc-elsewhere li { margin: 4px 0; }
+.dc-thread { margin: 0 0 8px; padding: 4px 8px; border-left: 2px solid #80848e; color: #b5bac1; font-size: .85rem; }
 .dc-group { margin: 22px 0 6px; }
 .dc-group h2 { font-size: 1rem; color: var(--muted); margin-bottom: 10px; }
 .dc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }

@@ -67,6 +67,9 @@ class BanTickets:
         self.categories = set(settings["ticket_categories"])
         self.panel_url = settings["panel_url"]
         self.title = settings["ticket_title"]
+        # A private thread only that role is added to, so the player never sees the card.
+        self.private = bool(settings.get("ticket_private"))
+        self.role = settings.get("ticket_role") or ""
 
     @property
     def enabled(self):
@@ -129,12 +132,47 @@ class BanTickets:
                     continue
             if member.bot:
                 continue
+            card = ban_card(member, bans, self.panel_url, self.title)
+            if self.private:
+                await self._private(where, member, card)
+                continue
             try:
-                await where.send(embed=ban_card(member, bans, self.panel_url, self.title),
-                                 allowed_mentions=discord.AllowedMentions.none())
+                await where.send(embed=card, allowed_mentions=discord.AllowedMentions.none())
                 LOG.info("Posted the ban for %s into ticket %s", member_id, where.id)
             except discord.HTTPException:
                 LOG.warning("Couldn't post into ticket %s; give the bot access to the ticket channels", where.id)
+
+    async def _private(self, where, member, card):
+        """Post the card in a private thread off the ticket and add the role's members to it.
+        If that can't be done the card isn't posted at all, rather than shown to the player."""
+        if not isinstance(where, discord.TextChannel):
+            LOG.warning("Ticket %s is itself a thread, so no private thread can go in it; ban card not posted", where.id)
+            return
+        from bot.discord.onboarding import by_name
+        role = by_name(where.guild, self.role)
+        if role is None:
+            LOG.warning("No role called %r for the private ban card; ban card not posted", self.role)
+            return
+        try:
+            thread = await where.create_thread(name="🔒 Ban info", type=discord.ChannelType.private_thread,
+                                               invitable=False, auto_archive_duration=10080,
+                                               reason="Ban card for staff only")
+            await thread.send(embed=card, allowed_mentions=discord.AllowedMentions.none())
+        except discord.HTTPException as exc:
+            LOG.warning("Couldn't make the private ban thread in ticket %s (%s); the bot needs Create Private "
+                        "Threads there. Ban card not posted", where.id, exc.text or exc.status)
+            return
+        added = 0
+        for staff in role.members:
+            if staff.id == member.id or staff.bot:
+                continue
+            try:
+                await thread.add_user(staff)
+                added += 1
+            except discord.HTTPException:
+                pass
+        LOG.info("Posted the ban for %s in a private thread in ticket %s for %d %s", member.id, where.id,
+                 added, role.name)
 
 
 def _id(value):

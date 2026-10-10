@@ -271,7 +271,7 @@ def default_bans():
     """Blank text means the built-in wording; the settings the bot's .env used to hold live here now."""
     return {"dm_enabled": True, "dm_title": "", "dm_text": "", "appeal": "",
             "tickets_enabled": True, "ticket_channel": None, "ticket_categories": [], "ticket_title": "",
-            "panel_url": ""}
+            "panel_url": "", "ticket_private": False, "ticket_role": ""}
 
 
 def check_bans(raw):
@@ -282,7 +282,8 @@ def check_bans(raw):
     doc = {"dm_enabled": bool(raw.get("dm_enabled")), "dm_title": text("dm_title", TITLE_MAX),
            "dm_text": text("dm_text", 2000), "appeal": text("appeal", 1000),
            "tickets_enabled": bool(raw.get("tickets_enabled")), "ticket_title": text("ticket_title", TITLE_MAX),
-           "panel_url": text("panel_url", 200).rstrip("/")}
+           "panel_url": text("panel_url", 200).rstrip("/"),
+           "ticket_private": bool(raw.get("ticket_private")), "ticket_role": text("ticket_role", 100)}
     try:
         doc["ticket_channel"] = _id(raw.get("ticket_channel"))
     except ValueError:
@@ -300,6 +301,8 @@ def check_bans(raw):
         problems.append("The panel address should start with https://.")
     if doc["tickets_enabled"] and not doc["ticket_channel"] and not doc["ticket_categories"]:
         problems.append("Pick the ticket panel channel or a ticket category, or turn ban cards in tickets off.")
+    if doc["tickets_enabled"] and doc["ticket_private"] and not doc["ticket_role"]:
+        problems.append("Pick the role that should see the ban card in its private thread.")
     return doc, problems
 
 

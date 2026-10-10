@@ -30,6 +30,13 @@
         <h2>Ban card in tickets</h2>
         <p class="muted">When a banned player opens a ticket (Ticket King or any ticket bot), the bot posts their ban into it so staff can see what it's about.</p>
         <label class="check"><input type="checkbox" name="tickets_enabled" {% if doc.tickets_enabled %}checked{% endif %}> Post it</label>
+        <label class="check"><input type="radio" name="ticket_private" value="" {% if not doc.ticket_private %}checked{% endif %}> In the ticket itself (the player sees it too)</label>
+        <label class="check"><input type="radio" name="ticket_private" value="1" {% if doc.ticket_private %}checked{% endif %}> In a private thread in the ticket, only for one role</label>
+        <label class="dc-private-role">Role that sees it
+          <select name="ticket_role"><option value="">Choose a role…</option>
+            {% for r in bridge.get("roles", []) %}<option value="{{ r.name }}" {% if r.name == doc.ticket_role %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
+          </select></label>
+        <p class="muted dc-private-role">The bot opens a private thread called 🔒 Ban info in the ticket, posts the card there and adds everyone with that role. The player isn't added and can't see it. The bot needs <b>Create Private Threads</b> in the ticket channels, and only works for tickets made as channels. If it can't make the thread, the card isn't posted at all.</p>
         <label>Channel with the ticket panel
           <select name="ticket_channel"><option value="">None</option>
             {% for group in bridge.get("channels", [])|groupby("category") %}

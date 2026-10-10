@@ -143,6 +143,7 @@ function bansEditor() {
     return text.split("{server}").join(bridge.guild || "OYB").split("{account}").join("Your account **Buford**")
       .split("{length}").join("for **7 days**");
   }
+  const privateThread = () => form.querySelector('[name="ticket_private"]:checked')?.value === "1";
   function draw() {
     const dm = document.getElementById("dc-preview");
     if (!field("dm_enabled").checked) dm.replaceChildren(h("p", { class: "muted" }, "Off: banned players get no DM."));
@@ -159,9 +160,13 @@ function bansEditor() {
       const lines = ["**Length:** 7 days", "**Ends:** Tuesday 7 October 2026 21:40 (in 7 days)",
         "**Reason:** Spawning explosions", "**Banned by:** Gazlagom", "`4bd39e3d-a6e3-4090-a338-00e1dc08ca69`"];
       if (url) lines.push(`${url}/player/4bd39e3d-…`);
-      ticket.replaceChildren(author(), embed(field("ticket_title").value || field("ticket_title").dataset.default,
-        "@Buford opened this ticket while banned on this account.", [["Buford", lines.join("\n")]]));
+      const card = embed(field("ticket_title").value || field("ticket_title").dataset.default,
+        "@Buford opened this ticket while banned on this account.", [["Buford", lines.join("\n")]]);
+      const role = form.querySelector('[name="ticket_role"]').value;
+      if (privateThread()) ticket.replaceChildren(h("p", { class: "dc-thread" }, "🔒 Ban info · private thread · ", role ? `only ${role}` : "pick a role"), author(), card);
+      else ticket.replaceChildren(author(), card);
     }
+    for (const el of form.querySelectorAll(".dc-private-role")) el.hidden = !privateThread();
   }
   document.getElementById("dc-appeal-channel").addEventListener("change", (event) => {
     if (!event.target.value) return;
@@ -188,7 +193,8 @@ function bansEditor() {
       appeal: field("appeal").value.trim(), tickets_enabled: field("tickets_enabled").checked,
       ticket_channel: field("ticket_channel").value || null,
       ticket_categories: [...form.querySelectorAll('[name="ticket_categories"]:checked')].map((c) => c.value),
-      ticket_title: own("ticket_title"), panel_url: field("panel_url").value.trim() });
+      ticket_title: own("ticket_title"), panel_url: field("panel_url").value.trim(),
+      ticket_private: privateThread(), ticket_role: form.querySelector('[name="ticket_role"]').value });
   });
   draw();
 }

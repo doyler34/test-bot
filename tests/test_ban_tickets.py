@@ -78,6 +78,10 @@ class Thread:
         self.sent.append(embed)
 
 
+async def _note(into, value):
+    into.append(value)
+
+
 class Links:
     def __init__(self, links):
         self.links = links
@@ -126,6 +130,46 @@ class BanTicketTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("**Banned by:** burd\n", field.value)
         self.assertIn(f"<t:{expires}:F>", field.value)
         self.assertIn("https://panel.example.com/player/" + HAVOC_PS, field.value)
+
+    async def test_private_thread_only_for_the_role(self):
+        import json
+        self.panel.add_ban(HAVOC, "Havoc", "Cheating", "burd")
+        from bot.discord.welcome_doc import check_bans
+        doc, problems = check_bans({"tickets_enabled": True, "ticket_channel": PANEL,
+                                    "ticket_private": True, "ticket_role": "Ticket Manager"})
+        self.assertEqual(problems, [])
+        self.panel.publish_discord_doc("bans", json.dumps(doc), "gaz")
+        managers = [Member(30), Member(31), Member(10)]
+        self.guild.roles = [SimpleNamespace(name="Ticket Manager", members=managers)]
+        ticket = self.channel(Member(10))
+        thread = SimpleNamespace(sent=[], added=[])
+        thread.send = lambda embed=None, allowed_mentions=None: _note(thread.sent, embed)
+        thread.add_user = lambda member: _note(thread.added, member.id)
+        made = {}
+
+        async def create_thread(**kwargs):
+            made.update(kwargs)
+            return thread
+        ticket.create_thread = create_thread
+        await self.tickets.channel_created(ticket)
+        self.assertEqual(ticket.sent, [])
+        self.assertEqual(made["type"], discord.ChannelType.private_thread)
+        self.assertFalse(made["invitable"])
+        self.assertEqual(thread.sent[0].title, "This player is banned")
+        self.assertEqual(thread.added, [30, 31])
+
+    async def test_private_card_is_never_posted_openly(self):
+        import json
+        self.panel.add_ban(HAVOC, "Havoc", "Cheating", "burd")
+        from bot.discord.welcome_doc import check_bans
+        doc, problems = check_bans({"tickets_enabled": True, "ticket_channel": PANEL,
+                                    "ticket_private": True, "ticket_role": "Ticket Manager"})
+        self.assertEqual(problems, [])
+        self.panel.publish_discord_doc("bans", json.dumps(doc), "gaz")
+        self.guild.roles = []
+        ticket = self.channel(Member(10))
+        await self.tickets.channel_created(ticket)
+        self.assertEqual(ticket.sent, [])
 
     async def test_uncached_opener_still_found(self):
         self.panel.add_ban(HAVOC, "Havoc", "Cheating", "burd")
