@@ -769,6 +769,15 @@ class MassTeamkillTests(unittest.TestCase):
         self.assertEqual(len(sus), 1)
         self.assertIn("7 players", sus[0]["text"])
 
+    def test_mine_alerts_have_their_own_switch(self):
+        self.db.publish_discord_doc("staffalerts", json.dumps({"on": True, "mines_on": False, "mines": 3}), "gaz")
+        events = [{"kind": "kill", "at": now() + n, "relation": "TK", "killer": BUFORD, "killer_name": "Buford",
+                   "killer_label": "Buford", "victim": person(n), "victim_name": f"V{n}", "damage": "EXPLOSIVE",
+                   "zone": "RFoot", "distance": 50.0} for n in range(3)]
+        self.manager.check(self.manager.states["one"], events)
+        self.assertEqual(self.db.staff_alerts(), [])
+        self.assertIn("3 players", self.db.feed("one")[0]["text"])
+
     def test_owners_settings_apply(self):
         self.db.publish_discord_doc("staffalerts", json.dumps({"on": True, "count": 4, "seconds": 60}), "gaz")
         self.manager.mass_teamkills(self.manager.states["one"], self.teamkills("A", "B", "C"))
@@ -1664,9 +1673,11 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Rook teamkilled 3 players", page)
         token = await self.csrf("/discord/staffalerts")
         await self.client.post("/discord/staffalerts", data={"csrf": token, "action": "publish",
-            "doc": json.dumps({"on": True, "count": "4", "seconds": "90", "ping_role": "Admin", "mines": "8"})})
+            "doc": json.dumps({"on": True, "count": "4", "seconds": "90", "ping_role": "Admin", "mines_on": False, "mines": "8",
+                               "mines_ping_role": "Ticket Manager"})})
         doc = json.loads(self.db.discord_doc("staffalerts")["published"])
-        self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin", "mines": 8})
+        self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin", "mines_on": False,
+                               "mines": 8, "mines_ping_role": "Ticket Manager"})
 
     async def test_feedback_settings_page(self):
         await self.login("boss", "boss-password")

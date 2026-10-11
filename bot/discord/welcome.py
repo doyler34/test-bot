@@ -347,8 +347,10 @@ class Welcome:
             LOG.warning("A staff alert is waiting but no channel is picked (Discord → Staff alerts)")
             return
         settings = (self.docs.get("staffalerts") or (welcome_doc.default_staffalerts(), 0))[0]
-        role = by_name(guild, settings.get("ping_role", "")) if settings.get("ping_role") else None
         for alert_id, server, at, title, text in rows:
+            # AP mine alerts can ping a different role from mass teamkills.
+            wanted = settings.get("mines_ping_role" if title.startswith("AP mine spam") else "ping_role", "")
+            role = by_name(guild, wanted) if wanted else None
             embed = discord.Embed(title=f"🚨 {title}", description=text, colour=0xD0574C)
             embed.set_footer(text="OYB Control · staff alert")
             embed.timestamp = datetime.fromtimestamp(at, timezone.utc)

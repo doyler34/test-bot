@@ -236,6 +236,19 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bridge["channels"][0]["name"], "start-here")
         self.assertEqual(bridge["channels_doc"]["version"], 1)
 
+    async def test_mine_alerts_ping_their_own_role(self):
+        staff = Channel(400, "staff")
+        self.guild.text_channels.append(staff)
+        self.welcome.docs["staffalerts"] = ({"on": True, "count": 3, "seconds": 60, "ping_role": "",
+                                             "mines_on": True, "mines": 5, "mines_ping_role": "Admin"}, 1)
+        self.panel.add_staff_alert("eu1", int(time.time()), "Mass teamkill on Server 1", "x")
+        self.panel.add_staff_alert("eu1", int(time.time()), "AP mine spam on Server 1", "y")
+        with patch.dict(os.environ, {"STAFF_ALERT_CHANNEL_ID": "400"}):
+            await self.welcome.staff_alerts(self.guild)
+        self.assertEqual(len(staff.messages), 1)
+        self.assertEqual(len(staff.said), 1)
+        self.assertIn("11", staff.said[0])
+
     async def test_staff_alerts_wait_for_a_channel(self):
         self.panel.add_staff_alert("eu1", int(time.time()), "Mass teamkill", "x")
         with patch.dict(os.environ, {"STAFF_ALERT_CHANNEL_ID": ""}):

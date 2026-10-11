@@ -189,7 +189,7 @@ class ServerManager:
         flags = [f for event in events for f in state.detector.feed(event)]
         for flag in flags + state.detector.flush(now()):
             self.suspicious(state, flag)
-            if flag.get("mines") and flag.get("first") and settings["on"] and now() - flag["at"] < 900:
+            if flag.get("mines") and flag.get("first") and settings["mines_on"] and now() - flag["at"] < 900:
                 self.db.add_staff_alert(state.config.id, flag["at"], f"AP mine spam on {state.config.name}",
                                         flag["text"].replace(flag["name"], f"**{flag['name']}**", 1))
 

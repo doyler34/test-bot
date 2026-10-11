@@ -356,7 +356,7 @@ def check_weekly(raw):
 
 
 def default_staffalerts():
-    return {"on": True, "count": 3, "seconds": 60, "ping_role": "", "mines": 5}
+    return {"on": True, "count": 3, "seconds": 60, "ping_role": "", "mines_on": True, "mines": 5, "mines_ping_role": ""}
 
 
 def check_staffalerts(raw):
@@ -376,7 +376,9 @@ def check_staffalerts(raw):
     doc = {"on": bool(raw.get("on")), "count": number("count", 2, 20, "Teamkills"),
            "seconds": number("seconds", 10, 600, "Seconds"),
            "ping_role": str(raw.get("ping_role", "") or "").strip()[:100]}
-    doc["mines"] = number("mines", 0, 50, "AP mine kills") if raw.get("mines") not in (None, "") else 5
+    # Pages published before AP mines had their own part leave them on.
+    doc.update(mines_on=bool(raw.get("mines_on", True)), mines=number("mines", 2, 50, "AP mine kills"),
+               mines_ping_role=str(raw.get("mines_ping_role", "") or "").strip()[:100])
     return doc, problems
 
 
