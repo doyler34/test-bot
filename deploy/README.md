@@ -61,3 +61,19 @@ oyb setup
 
 Rerun `oyb setup` to enable Server 2/3 and choose distinct local log directories.
 Updating/restarting the bot never resets XP or starts a new game.
+
+## Automatic updates
+
+To have the box pick up new commits by itself, run this once from either checkout:
+
+```bash
+bash deploy/auto_update_setup.sh
+```
+
+Every 10 minutes `oyb-update.timer` fetches from GitHub for the panel's and the
+bot's checkouts (found from their services). With nothing new it does nothing.
+With something new it fast-forwards, installs new requirements if they changed,
+and restarts only the service whose code changed. If a service won't start on
+the new version, the old one is put back and restarted. A checkout with its own
+local commits is left alone. Everything is logged to `/var/log/oyb-update.log`.
+Turn it off with `systemctl disable --now oyb-update.timer`.
