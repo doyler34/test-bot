@@ -1,0 +1,23 @@
+{% extends "guide/_page.html" %}
+{% block guide %}
+<p>Owners can make players admin in game from <b>In-game admins</b> in the top menu. The panel changes each server's <b>Admins</b> setting in AMP for you, so nobody needs to log in to AMP.</p>
+
+<h2>Making someone admin</h2>
+<ol class="steps">
+  <li>Under <b>Make someone admin</b>, start typing their in-game name and pick them from the list, or paste their identity ID.</li>
+  <li>Tick the servers they should be admin on.</li>
+  <li>Press <b>Add to the admin list</b>.</li>
+</ol>
+<p>Anyone on the list is admin and GM in game, and doesn't need the admin password. Reforger allows up to 20 per server.</p>
+
+<h2>Taking someone off</h2>
+<p>Press <b>Remove</b> next to them on that server's card. Do it on each server they're on.</p>
+
+<h2>When it applies</h2>
+<p>The server only reads its admin list when it starts. Until then its card says <b>Restart to apply</b>. Press <b>Restart now to apply</b> (it kicks everyone and takes a couple of minutes), or let the next scheduled restart do it. Once the server is using the new list, the card says <b>Live</b>.</p>
+
+<h2>A new server</h2>
+<p>A new server, like a modded one, shows up here once it's added to the panel. If its card says the panel doesn't know which AMP instance it is, the server isn't set up in the panel yet.</p>
+
+<p class="tip">Every change goes in the audit log and is posted to Discord like kicks and bans, so you can always see who made someone admin.</p>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}In-game admins · OYB Control{% endblock %}
+{% block body %}
+<h1>In-game admins</h1>
+<p class="muted">Who's admin in game on each server. Changes are saved in AMP and apply the next time that server restarts. Anyone on the list is admin and GM in game, and doesn't need the admin password. Up to {{ max_admins }} per server.</p>
+
+{% if setup %}
+<div class="card">
+  <h2>Not connected to AMP yet</h2>
+  <p>The panel needs an AMP login to read and change the admin lists. On the box, run this and type the AMP username and password when it asks:</p>
+  <p class="mono">cd /root/oyb-panel && bash deploy/amp_login.sh</p>
+  <p class="muted">Best to make an AMP user just for the panel, with access to the Arma servers' settings and restarts.</p>
+</div>
+{% elif error %}
+<p class="warn">Couldn't talk to AMP: {{ error }}</p>
+{% else %}
+
+<form class="card" method="post" action="/game-admins">
+  <h2>Make someone admin</h2>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="picker">
+    <label>Player <input name="player" placeholder="Start typing their in-game name, or paste an identity ID"
+      autocomplete="off" required data-player-search></label>
+    <input type="hidden" name="identity" value="">
+    <p class="muted mono chosen"></p>
+    <ul class="suggest" hidden></ul>
+  </div>
+  <p class="muted">On these servers:</p>
+  {% for row in rows if row.instance %}
+  <label class="check"><input type="checkbox" name="server" value="{{ row.state.config.id }}"> {{ row.state.config.name }}</label>
+  {% endfor %}
+  <button>Add to the admin list</button>
+</form>
+
+{% for row in rows %}
+<section class="card">
+  <div class="row">
+    <h2>{{ row.state.config.name }} {% if not row.error %}<span class="muted">{{ row.ids|length }}/{{ max_admins }}</span>{% endif %}</h2>
+    {% if row.waiting %}<span class="badge off">Restart to apply</span>{% elif row.waiting == false %}<span class="badge on">Live</span>{% endif %}
+  </div>
+  {% if row.error %}
+  <p class="warn">{{ row.error }}</p>
+  {% else %}
+  {% if row.waiting %}<p class="muted">The list below isn't what the server is using yet. It changes over when the server restarts.</p>{% endif %}
+  {% if row.ids %}
+  <div class="scroll"><table class="stack">
+    <thead><tr><th>Player</th><th>ID</th><th></th></tr></thead>
+    <tbody>
+    {% for a in row.ids %}
+    <tr>
+      <td>{% if a.steam %}<span class="muted">Steam ID</span>{% elif a.name %}<a href="/player/{{ a.id }}">{{ a.name }}</a>{% else %}<span class="muted">Not seen by the panel yet</span>{% endif %}</td>
+      <td class="mono" data-label="ID">{{ a.id }}</td>
+      <td class="actions">
+        <form method="post" action="/game-admins/{{ row.state.config.id }}/remove" data-confirm="Take {{ a.name or a.id }} off the admin list for {{ row.state.config.name }}?">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="identity" value="{{ a.id }}">
+          <button class="small danger">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">Nobody's on the list.</p>
+  {% endif %}
+  {% if can("power") %}
+  <form class="apply" method="post" action="/game-admins/{{ row.state.config.id }}/restart" data-confirm="Restart {{ row.state.config.name }} now? Everyone on it gets kicked and it's down for a couple of minutes.">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="small{{ '' if row.waiting else ' ghost' }}">Restart now{{ ' to apply' if row.waiting else '' }}</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

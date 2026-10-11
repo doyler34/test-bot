@@ -15,6 +15,7 @@ from bot.discord import welcome_doc
 from bot.discord.ban_roles import length_text
 
 from . import archive, auth, memory, outliers, site
+from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
 from .connections import LogReader, folder_start
@@ -65,6 +66,7 @@ FLASH = web.AppKey("flash", dict)
 JINJA = web.AppKey("jinja", jinja2.Environment)
 STATS = web.AppKey("stats", OybStats)
 BM = web.AppKey("battlemetrics", object)
+AMP = web.AppKey("amp", object)
 USER = web.RequestKey("user", object) if hasattr(web, "RequestKey") else "user"
 CSRF = web.RequestKey("csrf", str) if hasattr(web, "RequestKey") else "csrf"
 GRANTS = web.RequestKey("grants", set) if hasattr(web, "RequestKey") else "grants"
@@ -376,6 +378,7 @@ GUIDE = [
     ("discord-messages", "Discord messages", "Every Discord page: what the bot posts, where, and staff alerts.", "discord"),
     ("discord-tutorial", "Discord tutorial", "Every Discord page step by step, with pictures. Also as a PDF.", "discord"),
     ("website", "The website", "The public site: its words, servers and rules.", "website"),
+    ("game-admins", "In-game admins", "Making players admin in game on each server, through AMP.", "game_admins"),
     ("admins", "Admin accounts", "Making accounts, roles and password resets.", "users"),
 ]
 
@@ -1125,6 +1128,128 @@ async def add_note(request):
 
 # Discord: what the bot posts, edited here and published to it
 
+async def amp_servers(request):
+    """Each server with its AMP admin list, or why it couldn't be read."""
+    amp = request.app[AMP]
+    states = list(request.app[MANAGER].states.values())
+    try:
+        instances = await amp.instances()
+    except AmpError as exc:
+        return [], str(exc)
+
+    async def one(state):
+        name = state.config.amp_instance or amp_instance_name(state.config.log_dir)
+        row = {"state": state, "instance": instances.get(name), "ids": [], "error": "", "waiting": False}
+        if not row["instance"]:
+            row["error"] = f"No AMP instance called {name}." if name else "The panel doesn't know which AMP instance this is."
+            return row
+        try:
+            ids = await amp.admins(row["instance"])
+        except AmpError as exc:
+            row["error"] = str(exc)
+            return row
+        live = request.app[MANAGER].server_config_admins(state)
+        db = request.app[DB]
+        row["ids"] = [{"id": i, "name": (db.player(i) or {"name": ""})["name"] if valid_identity(i) else "",
+                       "steam": not valid_identity(i)} for i in ids]
+        row["waiting"] = None if live is None else set(ids) != live
+        return row
+    return await asyncio.gather(*(one(s) for s in states)), ""
+
+
+async def game_admins_page(request):
+    require(request, "game_admins")
+    if not request.app[AMP]:
+        return render(request, "game_admins.html", rows=[], error="", setup=True, max_admins=MAX_ADMINS)
+    rows, error = await amp_servers(request)
+    return render(request, "game_admins.html", rows=rows, error=error, setup=False, max_admins=MAX_ADMINS)
+
+
+async def amp_instance_for(request, server_id):
+    state = server_or_404(request, server_id)
+    name = state.config.amp_instance or amp_instance_name(state.config.log_dir)
+    instance = (await request.app[AMP].instances()).get(name)
+    if not instance:
+        raise AmpError(f"AMP has no instance called {name or '(unknown)'} for {state.config.name}.")
+    return state, instance
+
+
+async def add_game_admin(request):
+    require(request, "game_admins")
+    if not request.app[AMP]:
+        raise web.HTTPFound("/game-admins")
+    form = await request.post()
+    db = request.app[DB]
+    typed = clean(form.get("player", ""), 64)
+    identity = form.get("identity", "").strip().lower()
+    if valid_identity(typed.lower()):
+        identity = typed.lower()
+    elif not valid_identity(identity):
+        found = db.by_name(typed) if typed else []
+        if len(found) != 1:
+            flash(request, "Pick the player from the list as you type, or paste their identity ID." if not found else
+                  f"{len(found)} players have gone by {typed}. Pick the right one from the list.", "error")
+            raise web.HTTPFound("/game-admins")
+        identity = found[0]["identity"]
+    chosen = [s for s in form.getall("server", []) if request.app[CONFIG].server(s)]
+    if not chosen:
+        flash(request, "Tick at least one server.", "error")
+        raise web.HTTPFound("/game-admins")
+    name = (db.player(identity) or {"name": identity})["name"]
+    done = []
+    for server_id in chosen:
+        try:
+            state, instance = await amp_instance_for(request, server_id)
+            await request.app[AMP].change_admins(instance, add=[identity])
+        except AmpError as exc:
+            audit(request, "made game admin", server_id, name, str(exc), ok=False)
+            flash(request, f"{request.app[CONFIG].server(server_id).name}: {exc}", "error")
+            continue
+        audit(request, "made game admin", server_id, name, identity)
+        done.append(state.config.name)
+    if done:
+        alert(request, f"In-game admin added: {name}", f"On {', '.join(done)}. Applies when the server restarts.")
+        flash(request, f"{name} is on the admin list for {', '.join(done)}. It applies when the server restarts.")
+    raise web.HTTPFound("/game-admins")
+
+
+async def remove_game_admin(request):
+    require(request, "game_admins")
+    if not request.app[AMP]:
+        raise web.HTTPFound("/game-admins")
+    identity = clean((await request.post()).get("identity", ""), 64).lower()
+    name = (request.app[DB].player(identity) or {"name": identity})["name"]
+    try:
+        state, instance = await amp_instance_for(request, request.match_info["id"])
+        await request.app[AMP].change_admins(instance, remove=[identity])
+    except AmpError as exc:
+        audit(request, "removed game admin", request.match_info["id"], name, str(exc), ok=False)
+        flash(request, str(exc), "error")
+        raise web.HTTPFound("/game-admins")
+    audit(request, "removed game admin", state.config.id, name, identity)
+    alert(request, f"In-game admin removed: {name}", f"From {state.config.name}. Applies when the server restarts.",
+          colour=RED)
+    flash(request, f"{name} is off the admin list for {state.config.name}. It applies when the server restarts.")
+    raise web.HTTPFound("/game-admins")
+
+
+async def restart_through_amp(request):
+    require(request, "power")
+    if not request.app[AMP]:
+        raise web.HTTPFound("/game-admins")
+    try:
+        state, instance = await amp_instance_for(request, request.match_info["id"])
+        await request.app[AMP].restart(instance)
+    except AmpError as exc:
+        audit(request, "restart through AMP", request.match_info["id"], detail=str(exc), ok=False)
+        flash(request, f"Restart failed: {exc}", "error")
+        raise web.HTTPFound("/game-admins")
+    audit(request, "restart through AMP", state.config.id)
+    alert(request, f"Restart: {state.config.name}", "Through AMP, to apply the admin list.")
+    flash(request, f"{state.config.name} is restarting. It's back in a couple of minutes.")
+    raise web.HTTPFound("/game-admins")
+
+
 DISCORD_PAGES = (("welcome", "Start here message"), ("serverinfo", "Server info & rules"), ("names", "Server names"),
                  ("factions", "Factions"), ("matchping", "Match alerts"), ("weekly", "Weekly top 3"), ("staffalerts", "Staff alerts"), ("feedback", "Feedback"), ("greeting", "Join greeting"), ("bans", "Ban messages"),
                  ("posts", "Posts"), ("links", "Link requests"), ("channels", "Channels & roles"))
@@ -1637,6 +1762,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[STATS] = OybStats(config.oyb_data)
     app[BM] = BanSync(app[DB], config.battlemetrics_token, config.battlemetrics_ban_list) \
         if config.battlemetrics_token else None
+    app[AMP] = Amp(**config.amp) if config.amp else None
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
     env.filters.update(ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb)
@@ -1692,6 +1818,10 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/notes", add_note)
     app.router.add_post("/player/{identity}/staff", set_staff)
+    app.router.add_get("/game-admins", game_admins_page)
+    app.router.add_post("/game-admins", add_game_admin)
+    app.router.add_post("/game-admins/{id}/remove", remove_game_admin)
+    app.router.add_post("/game-admins/{id}/restart", restart_through_amp)
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/discord/posts/new", new_post)
     app.router.add_get("/discord/posts/{post}", post_page)

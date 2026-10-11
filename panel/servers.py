@@ -436,23 +436,27 @@ class ServerManager:
         logs). Only Reforger IDs count; Steam IDs there can't be matched to a player."""
         found = set()
         for state in self.states.values():
-            if not state.config.log_dir:
-                continue
-            path = Path(state.config.log_dir).parent.parent / "Configs" / "serverconfig.json"
-            try:
-                stamp = path.stat().st_mtime
-            except OSError:
-                continue
-            cached = self._config_admins.get(str(path))
-            if not cached or cached[0] != stamp:
-                try:
-                    admins = json.loads(path.read_text(encoding="utf-8")).get("game", {}).get("admins", [])
-                except (OSError, ValueError, AttributeError):
-                    admins = []
-                cached = (stamp, {str(a).lower() for a in admins if valid_identity(str(a).lower())})
-                self._config_admins[str(path)] = cached
-            found |= cached[1]
+            found |= {a for a in self.server_config_admins(state) or () if valid_identity(a)}
         return found
+
+    def server_config_admins(self, state) -> set[str] | None:
+        """Every ID in one server's serverconfig.json as it is now, or None if there's no file."""
+        if not state.config.log_dir:
+            return None
+        path = Path(state.config.log_dir).parent.parent / "Configs" / "serverconfig.json"
+        try:
+            stamp = path.stat().st_mtime
+        except OSError:
+            return None
+        cached = self._config_admins.get(str(path))
+        if not cached or cached[0] != stamp:
+            try:
+                admins = json.loads(path.read_text(encoding="utf-8")).get("game", {}).get("admins", [])
+            except (OSError, ValueError, AttributeError):
+                admins = []
+            cached = (stamp, {str(a).strip().lower() for a in admins if str(a).strip()})
+            self._config_admins[str(path)] = cached
+        return cached[1]
 
     def staff_ids(self) -> set[str]:
         return self.db.staff_ids() | self.config_admins()

@@ -30,6 +30,7 @@ class ServerConfig:
     rcon_password: str = ""
     service: str = ""
     log_dir: str = ""
+    amp_instance: str = ""
     commands: dict = field(default_factory=lambda: dict(COMMANDS))
 
     @property
@@ -50,6 +51,7 @@ class PanelConfig:
     site_hosts: list[str] = field(default_factory=list)
     battlemetrics_token: str = ""
     battlemetrics_ban_list: str = ""
+    amp: dict = field(default_factory=dict)
     servers: list[ServerConfig] = field(default_factory=list)
 
     def server(self, server_id: str) -> ServerConfig | None:
@@ -111,8 +113,12 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
             rcon_password=str(entry.get("rcon_password") or ""),
             service=service,
             log_dir=str(entry.get("log_dir") or from_bot.get(server_id, "")),
+            amp_instance=str(entry.get("amp_instance") or "").strip(),
             commands={**COMMANDS, **entry.get("commands", {})},
         ))
+    amp = raw.get("amp") or {}
+    if not isinstance(amp, dict) or not all(isinstance(amp.get(k, ""), str) for k in ("url", "username", "password")):
+        raise PanelConfigError('amp must look like {"url": "http://127.0.0.1:8080", "username": "...", "password": "..."}')
     return PanelConfig(
         listen=str(raw.get("listen", "127.0.0.1")),
         port=int(raw.get("port", 8080)),
@@ -125,5 +131,7 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
         site_hosts=[str(h).strip().lower() for h in raw.get("site_hosts", []) if str(h).strip()],
         battlemetrics_token=str(raw.get("battlemetrics_token") or "").strip(),
         battlemetrics_ban_list=str(raw.get("battlemetrics_ban_list") or "").strip(),
+        amp={"url": amp.get("url", "").strip() or "http://127.0.0.1:8080", "username": amp["username"].strip(),
+             "password": amp.get("password", "")} if amp.get("username") else {},
         servers=servers,
     )
