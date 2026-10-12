@@ -508,7 +508,7 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
   .tile b { font-size: 1.45rem; }
   main { padding-bottom: 90px; }
   .dock { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
-    background: rgba(20, 18, 11, .97); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+    background: rgb(20, 18, 11); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
   .dock > a, .dock summary { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 9px;
     color: var(--muted); font-family: var(--display); text-transform: uppercase; letter-spacing: .06em; font-size: .78rem;
     border: 0; border-top: 2px solid transparent; }
