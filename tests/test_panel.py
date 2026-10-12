@@ -33,7 +33,7 @@ from panel.config import PanelConfig, PanelConfigError, ServerConfig, load_confi
 from panel.db import PanelDB, now
 from panel.rcon import RconClient, RconError, packet, parse
 from panel.servers import ServerManager, ServerState, parse_players
-from panel.suspicion import Detector
+from panel.suspicion import LIMITS as SUS_LIMITS, Detector
 from panel.web import STATS as STATS_KEY, create_app
 
 HAVOC = SAMPLE_PLAYERS[0][2]
@@ -627,10 +627,12 @@ class SuspicionTests(unittest.TestCase):
         rapid = "".join(shot(f"07:00:{i * 4:02d}.000", "Spray", person(70), i, 0, 0, zone="Chest") for i in range(6))
         heads = "".join(shot(f"08:{i:02d}:00.000", "Aimer", person(71), i, 0, 0) for i in range(10))
         tks = "".join(shot(f"09:0{i}:00.000", "Rogue", person(72), i, 0, 0).replace("KILL ENEMY", "KILL TK")
-                      for i in range(3))
+                      for i in range(5))
         texts = [f["text"] for f in self.flags(rapid + heads + tks)]
         self.assertEqual(texts, ["Spray got 6 kills in 30 seconds", "Aimer got 10 kills in 15 minutes and 10 of them were headshots",
-                                 "Rogue has teamkilled 3 times this game. Killed: Victim0, Victim1, Victim2"])
+                                 "Rogue has teamkilled 5 times this game. Killed: Victim0, Victim1, Victim2, Victim3, Victim4"])
+        # Four isn't enough any more: grenades and mortars make that much by accident.
+        self.assertEqual(self.flags(tks.replace("09:04:00", "09:24:00")), [])
 
     def test_a_teamkiller_gets_one_running_line(self):
         tks = "".join(shot(f"09:{i:02d}:00.000", "Rogue", person(72), i % 4, 0, 0).replace("KILL ENEMY", "KILL TK")
@@ -753,7 +755,7 @@ class MassTeamkillTests(unittest.TestCase):
         alert = self.db.staff_alerts()[0]
         self.assertEqual(alert["title"], "Mass teamkill on Server 1")
         self.assertIn("**Buford** teamkilled 3 players in 2 seconds: A, B, C.", alert["text"])
-        self.assertEqual(self.db.feed("one")[0]["kind"], "sus")
+        self.assertEqual([r for r in self.db.feed("one") if r["kind"] == "sus"], [])
 
     def test_mine_spam_goes_to_the_staff_channel_once(self):
         at = now()
@@ -1737,6 +1739,33 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(f'href="/discord/{key}"', home)
         self.assertIn("What new members see", home)
         self.assertIn("Bot&#39;s default", home)
+
+    async def test_sus_settings_page(self):
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/sus-settings")).text()
+        self.assertIn('name="teamkills" type="number" inputmode="numeric" value="5"', page)
+        self.assertIn('name="headshot_share" type="number" inputmode="numeric" value="75"', page)
+        token = await self.csrf("/sus-settings")
+        form = {k: str(round(v * 100) if k == "headshot_share" else v) for k, v in self.manager.sus_settings().items()
+                if k in SUS_LIMITS}
+        await self.client.post("/sus-settings", data={**form, "csrf": token, "teamkills": "8", "headshot_share": "80"})
+        self.assertEqual(json.loads(self.db.discord_doc("sus")["published"]), {"teamkills": 8, "headshot_share": 0.8})
+        self.assertEqual(self.manager.sus_settings()["teamkills"], 8)
+        page = await (await self.client.get("/sus-settings")).text()
+        self.assertIn("Default 5", page)
+        bad = await (await self.client.post("/sus-settings", data={**form, "csrf": token, "teamkills": "1"})).text()
+        self.assertIn("teamkills has to be between 2 and 50.", bad)
+        self.assertEqual(self.manager.sus_settings()["teamkills"], 8)
+        await self.client.post("/sus-settings", data={"csrf": token, "action": "reset"})
+        self.assertEqual(self.manager.sus_settings()["teamkills"], 5)
+        self.assertEqual(self.db.audit()[0]["action"], "changed Sus settings")
+        state = self.manager.states["server-1"]
+        self.db.publish_discord_doc("sus", json.dumps({"rapid_kills": 9}), "boss")
+        self.manager.check(state, [])
+        self.assertEqual(state.detector.s["rapid_kills"], 9)
+        await self.client.post("/logout", data={"csrf": token})
+        await self.login("mod", "mod-password")
+        self.assertEqual((await self.client.get("/sus-settings")).status, 403)
 
     async def test_staff_alert_settings_page(self):
         self.db.add_staff_alert("server-1", now(), "Mass teamkill on Server 1", "**Rook** teamkilled 3 players")

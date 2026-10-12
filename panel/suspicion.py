@@ -34,7 +34,7 @@ DEFAULTS = {
     "rapid_window": 30,           # ... within this many seconds
     "headshot_kills": 10,         # at least this many rifle kills in 15 minutes ...
     "headshot_share": 0.75,       # ... with this share of them to the head
-    "teamkills": 3,               # teamkills by one player in 10 minutes
+    "teamkills": 5,               # teamkills by one player in 10 minutes
     "script_errors": 20,          # different seconds with script errors in 5 minutes
     "max_distance": 2000,         # kills credited from further than this are ignored
     "nearby": 150,                # metres: a named killer this close to the explosions is named
@@ -49,6 +49,36 @@ DEFAULTS = {
     "settle": 120,                # seconds a burst waits, so killers nearby just after count too
     "mine_kills": 5,              # explosive kills to the feet by one player in one game (0 turns it off)
 }
+
+
+# What owners can change on the Sus settings page: (low, high). Shares are 0-1.
+LIMITS = {
+    "teamkills": (2, 50), "rapid_kills": (2, 50), "rapid_window": (5, 300),
+    "headshot_kills": (3, 100), "headshot_share": (0.5, 1.0),
+    "long_shot": (200, 3000), "long_shots": (1, 20),
+    "teleport_distance": (200, 5000), "teleport_speed": (50, 1000),
+    "spread": (100, 5000), "spread_window": (0, 30),
+    "ai_explosions": (2, 50), "ai_explosions_window": (60, 1800), "same_second": (2, 20),
+    "script_errors": (5, 300), "cooldown": (60, 7200), "max_distance": (500, 10000),
+}
+
+
+def check_settings(raw) -> tuple[dict, list[str]]:
+    """The saved settings that are in range; anything else is left at its default."""
+    found, problems = {}, []
+    for key, (low, high) in LIMITS.items():
+        if not isinstance(raw, dict) or raw.get(key) in (None, ""):
+            continue
+        try:
+            value = float(raw[key])
+        except (TypeError, ValueError):
+            problems.append(f"{key} has to be a number.")
+            continue
+        if not low <= value <= high:
+            problems.append(f"{key} has to be between {low:g} and {high:g}.")
+            continue
+        found[key] = value if isinstance(DEFAULTS[key], float) else int(value)
+    return found, problems
 
 
 def metres(a, b):

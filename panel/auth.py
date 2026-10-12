@@ -23,6 +23,7 @@ PERMISSIONS = {
     "discord": "owner",
     "website": "owner",
     "game_admins": "owner",
+    "sus": "owner",
 }
 
 # What an owner can hand to one person on top of their role. "discord" is every
@@ -37,6 +38,7 @@ GRANTS = (
     ("power", "Start, stop and restart servers"),
     ("website", "Edit the public website"),
     ("game_admins", "Make players admin in game (through AMP)"),
+    ("sus", "Change the Sus check settings"),
     ("discord", "Every Discord page"),
 )
 

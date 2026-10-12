@@ -16,7 +16,7 @@ from .db import PanelDB, now
 from .rcon import RconClient, RconError
 from bot.discord import welcome_doc
 from bot.discord.ban_roles import length_text
-from .suspicion import Detector
+from .suspicion import DEFAULTS, Detector, check_settings
 from .tk_burst import TkBurst
 
 PLAYER_ROW = re.compile(r"\d+\s*;\s*[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}\s*;")
@@ -191,7 +191,7 @@ class ServerManager:
         """Runs the cheating checks over new log lines; AP mine spam also goes to the staff channel.
         Returns who's reached an automatic kick or ban."""
         settings = self.staff_alert_settings()
-        state.detector.s["mine_kills"] = settings["mines"]
+        state.detector.s.update(self.sus_settings(), mine_kills=settings["mines"])
         flags = [f for event in events for f in state.detector.feed(event)]
         actions = []
         for flag in flags + state.detector.flush(now()):
@@ -204,6 +204,15 @@ class ServerManager:
             if flag["identity"] and now() - flag["at"] < AUTO_FRESH:
                 actions.append(("mines", flag["identity"], flag["name"], flag["count"], settings))
         return actions
+
+    def sus_settings(self) -> dict:
+        """The Sus checks' settings: the defaults, then panel.local.json, then the Sus settings page."""
+        row = self.db.discord_doc("sus")
+        try:
+            saved = json.loads(row["published"]) if row and row["published"] else {}
+        except ValueError:
+            saved = {}
+        return {**DEFAULTS, **self.config.suspicion, **check_settings(saved)[0]}
 
     def staff_alert_settings(self) -> dict:
         row = self.db.discord_doc("staffalerts")
@@ -230,7 +239,6 @@ class ServerManager:
                 text = (f"**{burst['name']}** teamkilled {burst['count']} players in {burst['seconds']} seconds: "
                         f"{victims}.")
                 self.db.add_staff_alert(state.config.id, burst["at"], f"Mass teamkill on {state.config.name}", text)
-                self.db.add_feed(state.config.id, "sus", text.replace("**", ""), at=burst["at"])
             killer = event.get("killer")
             if acting and event["kind"] == "teamkill" and killer and now() - event["at"] < AUTO_FRESH:
                 actions.append(("tk", killer, event.get("killer_name") or killer, state.tk_burst.in_window(killer),

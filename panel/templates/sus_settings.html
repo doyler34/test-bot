@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Sus settings · OYB Control{% endblock %}
+{% block body %}
+<h1>Sus settings</h1>
+<p class="muted">When each Sus check fires. A flag shows in the live feed and counts toward Sus flags on the home page. Higher numbers mean fewer flags. Changes apply straight away to every server. AP mine spam is set on <a href="/discord/staffalerts">Discord → Staff alerts</a>.</p>
+{% for p in problems %}<div class="flash error">{{ p }}</div>{% endfor %}
+<form method="post" action="/sus-settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for title, about, fields in groups %}
+  <section class="card">
+    <h2>{{ title }}</h2>
+    <p class="muted">{{ about }}</p>
+    <div class="grid">
+      {% for key, label, unit in fields %}
+      {% set low, high = limits[key] %}
+      <label>{{ label }}{% if unit %} <span class="muted">({{ unit }})</span>{% endif %}
+        <input name="{{ key }}" type="number" inputmode="numeric" value="{{ values[key] }}"
+          min="{{ (low * 100)|round|int if key == 'headshot_share' else low }}" max="{{ (high * 100)|round|int if key == 'headshot_share' else high }}" required>
+        {% if values[key] != defaults[key] %}<small class="muted">Default {{ defaults[key] }}</small>{% endif %}
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <div class="dc-actions">
+    <button>Save</button>
+    <button name="action" value="reset" class="ghost" formnovalidate data-confirm="Put every Sus setting back to its default?">Reset to defaults</button>
+  </div>
+</form>
+{% endblock %}

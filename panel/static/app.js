@@ -1,5 +1,5 @@
 document.addEventListener("submit", (event) => {
-  const message = event.target.dataset.confirm;
+  const message = (event.submitter && event.submitter.dataset.confirm) || event.target.dataset.confirm;
   if (message && !confirm(message)) event.preventDefault();
 });
 

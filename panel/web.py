@@ -23,6 +23,7 @@ from .db import PanelDB, now
 from .oyb_stats import OybStats
 from .rcon import RconError
 from .battlemetrics import BanSync
+from .suspicion import DEFAULTS as SUS_DEFAULTS, LIMITS as SUS_LIMITS, check_settings as check_sus
 from .servers import POWER_RCON, POWER_SERVICE, ServerManager, clean, valid_identity
 
 log = logging.getLogger("panel.web")
@@ -1252,6 +1253,69 @@ async def restart_through_amp(request):
     raise web.HTTPFound("/game-admins")
 
 
+SUS_GROUPS = (
+    ("Teamkills", "One player teamkilling this many times within 10 minutes starts a line that keeps counting their "
+     "teamkills for the rest of the game. Crashing into teammates doesn't count.",
+     (("teamkills", "Teamkills", ""),)),
+    ("Headshots", "Lots of rifle kills in 15 minutes with most of them to the head.",
+     (("headshot_kills", "Kills at least", ""), ("headshot_share", "Headshots at least", "%"))),
+    ("Rapid kills", "Many rifle kills in a very short time.",
+     (("rapid_kills", "Kills", ""), ("rapid_window", "Within", "seconds"))),
+    ("Long shots", "Several bullet kills from very far away in 15 minutes.",
+     (("long_shot", "Further than", "metres"), ("long_shots", "How many", ""))),
+    ("Teleporting", "A kill far from the same player's last kill, sooner than anything in the game could carry them, "
+     "without dying in between. A helicopter does about 80 m/s.",
+     (("teleport_distance", "Moved at least", "metres"), ("teleport_speed", "Faster than", "m/s"))),
+    ("Victims far apart", "Two of one player's victims dying far apart from each other at almost the same moment.",
+     (("spread", "Apart by at least", "metres"), ("spread_window", "Within", "seconds"))),
+    ("Explosions credited to AI", "The pattern from the old cheater: players blown up with the kill credited to AI, "
+     "so it never shows in the kill feed.",
+     (("ai_explosions", "Deaths", ""), ("ai_explosions_window", "Within", "seconds"),
+      ("same_second", "Or in the same second", "deaths"))),
+    ("Script errors", "The server hitting script errors in this many separate seconds within 5 minutes.",
+     (("script_errors", "Seconds with errors", ""),)),
+    ("Everything", "How long before the same flag can fire again, and kills credited from further than this are "
+     "ignored (they're the game mixing up who did it).",
+     (("cooldown", "Same flag again after", "seconds"), ("max_distance", "Ignore kills from further than", "metres"))),
+)
+
+
+def sus_view(request, values, problems=()):
+    shown = {k: round(v * 100) if k == "headshot_share" else v for k, v in values.items()}
+    return render(request, "sus_settings.html", groups=SUS_GROUPS, values=shown, limits=SUS_LIMITS,
+                  defaults={k: round(v * 100) if k == "headshot_share" else v for k, v in SUS_DEFAULTS.items()},
+                  problems=problems)
+
+
+async def sus_page(request):
+    require(request, "sus")
+    return sus_view(request, request.app[MANAGER].sus_settings())
+
+
+async def sus_save(request):
+    require(request, "sus")
+    form = await request.post()
+    if form.get("action") == "reset":
+        raw = {}
+    else:
+        raw = {k: form.get(k, "") for k in SUS_LIMITS}
+        if raw["headshot_share"] not in ("", None):
+            try:
+                raw["headshot_share"] = float(raw["headshot_share"]) / 100
+            except ValueError:
+                pass
+    values, problems = check_sus(raw)
+    if problems:
+        return sus_view(request, {**request.app[MANAGER].sus_settings(), **values}, problems)
+    # Only what differs from the defaults is kept, so a later change to a default still reaches it.
+    base = {**SUS_DEFAULTS, **request.app[CONFIG].suspicion}
+    changed = {k: v for k, v in values.items() if v != base[k]}
+    request.app[DB].publish_discord_doc("sus", json.dumps(changed), request[USER]["username"])
+    audit(request, "changed Sus settings", detail=", ".join(f"{k}={v}" for k, v in changed.items()) or "all defaults")
+    flash(request, "Saved. The checks use the new settings from now on." if raw else "Back to the default settings.")
+    raise web.HTTPFound("/sus-settings")
+
+
 DISCORD_PAGES = (("welcome", "Start here message"), ("serverinfo", "Server info & rules"), ("names", "Server names"),
                  ("factions", "Factions"), ("matchping", "Match alerts"), ("weekly", "Weekly top 3"), ("staffalerts", "Staff alerts"), ("feedback", "Feedback"), ("greeting", "Join greeting"), ("bans", "Ban messages"),
                  ("posts", "Posts"), ("links", "Link requests"), ("channels", "Channels & roles"))
@@ -1821,6 +1885,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/notes", add_note)
     app.router.add_post("/player/{identity}/staff", set_staff)
+    app.router.add_get("/sus-settings", sus_page)
+    app.router.add_post("/sus-settings", sus_save)
     app.router.add_get("/game-admins", game_admins_page)
     app.router.add_post("/game-admins", add_game_admin)
     app.router.add_post("/game-admins/{id}/remove", remove_game_admin)
