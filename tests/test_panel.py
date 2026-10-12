@@ -787,6 +787,79 @@ class MassTeamkillTests(unittest.TestCase):
         self.assertEqual(self.db.staff_alerts(), [])
 
 
+class AutoPunishTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.db = PanelDB(":memory:")
+        self.addCleanup(self.db.close)
+        self.alerts = FakeAlerts()
+        self.manager = ServerManager(PanelConfig(servers=[ServerConfig("one", "Server 1")]), self.db, alerts=self.alerts)
+        self.state = self.manager.states["one"]
+        self.state.players = [{"id": "7", "identity": BUFORD, "name": "Buford"}]
+        self.kicked = []
+
+        async def kick(server_id, player_id):
+            self.kicked.append(player_id)
+            return "ok"
+        self.manager.kick = kick
+        self.manager.push_ban = unittest.mock.AsyncMock(return_value={})
+
+    def settings(self, **extra):
+        self.db.publish_discord_doc("staffalerts", json.dumps({"on": True, "count": 3, "seconds": 60, **extra}), "gaz")
+
+    async def teamkill(self, n):
+        event = {"kind": "teamkill", "at": now(), "killer": BUFORD, "killer_name": "Buford", "victim_name": f"V{n}"}
+        for action in self.manager.mass_teamkills(self.state, [event]):
+            await self.manager.auto_punish(self.state, *action)
+
+    async def test_kick_then_ban_for_teamkills(self):
+        self.settings(tk_kick=3, tk_ban=5, tk_ban_length=3600)
+        for n in range(4):
+            await self.teamkill(n)
+        self.assertEqual(self.kicked, ["7"])
+        self.assertIsNone(self.db.active_ban(BUFORD))
+        await self.teamkill(5)
+        ban = self.db.active_ban(BUFORD)
+        self.assertEqual((ban["created_by"], ban["reason"]), ("Automatic", "Mass teamkilling (automatic ban)"))
+        self.assertAlmostEqual(ban["expires_at"], now() + 3600, delta=5)
+        self.manager.push_ban.assert_awaited_once()
+        titles = [a["title"] for a in self.db.staff_alerts()]
+        self.assertEqual(titles[:2], ["Auto-banned on Server 1", "Auto-kicked on Server 1"])
+        self.assertIn("**Buford** was banned for 1 hour for teamkilling 5 players in 60 seconds.",
+                      self.db.staff_alerts()[0]["text"])
+        self.assertEqual(self.db.audit()[0]["username"], "Automatic")
+        await self.teamkill(6)
+        self.manager.push_ban.assert_awaited_once()
+
+    async def test_works_with_the_alert_off_and_never_touches_admins(self):
+        self.settings(on=False, tk_kick=2)
+        self.db.set_staff(BUFORD, "gaz", True)
+        for n in range(3):
+            await self.teamkill(n)
+        self.assertEqual(self.kicked, [])
+        self.db.set_staff(BUFORD, "gaz", False)
+        await self.teamkill(4)
+        self.assertEqual(self.kicked, ["7"])
+        self.assertEqual([a["title"] for a in self.db.staff_alerts()], ["Auto-kicked on Server 1"])
+
+    async def test_old_log_lines_never_punish(self):
+        self.settings(tk_kick=2)
+        events = [{"kind": "teamkill", "at": now() - 3600 + n, "killer": BUFORD, "killer_name": "Buford",
+                   "victim_name": f"V{n}"} for n in range(5)]
+        self.assertEqual(self.manager.mass_teamkills(self.state, events), [])
+
+    async def test_mines_ban_even_after_they_left(self):
+        self.settings(mines=3, mines_ban=4, mines_ban_length=0)
+        self.state.players = []
+        events = [{"kind": "kill", "at": now() + n, "relation": "TK", "killer": BUFORD, "killer_name": "Buford",
+                   "killer_label": "Buford", "victim": person(n), "victim_name": f"V{n}", "damage": "EXPLOSIVE",
+                   "zone": "LFoot", "distance": 900.0} for n in range(4)]
+        for action in self.manager.check(self.state, events):
+            await self.manager.auto_punish(self.state, *action)
+        ban = self.db.active_ban(BUFORD)
+        self.assertEqual((ban["reason"], ban["expires_at"]), ("AP mine spam (automatic ban)", None))
+        self.assertIn("banned permanently for killing 4 players with AP mines", self.db.staff_alerts()[0]["text"])
+
+
 class IncidentTests(unittest.TestCase):
     def setUp(self):
         self.db = PanelDB(":memory:")
@@ -1674,10 +1747,20 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         token = await self.csrf("/discord/staffalerts")
         await self.client.post("/discord/staffalerts", data={"csrf": token, "action": "publish",
             "doc": json.dumps({"on": True, "count": "4", "seconds": "90", "ping_role": "Admin", "mines_on": False, "mines": "8",
-                               "mines_ping_role": "Ticket Manager"})})
+                               "mines_ping_role": "Ticket Manager", "tk_kick": "5", "tk_ban": "8", "tk_ban_length": "0",
+                               "mines_kick": "", "mines_ban": "10", "mines_ban_length": "604800"})})
         doc = json.loads(self.db.discord_doc("staffalerts")["published"])
         self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin", "mines_on": False,
-                               "mines": 8, "mines_ping_role": "Ticket Manager"})
+                               "mines": 8, "mines_ping_role": "Ticket Manager", "tk_kick": 5, "tk_ban": 8,
+                               "tk_ban_length": 0, "mines_kick": 0, "mines_ban": 10, "mines_ban_length": 604800})
+        page = await (await self.client.get("/discord/staffalerts")).text()
+        self.assertIn('name="tk_kick" type="number" min="0" max="100" value="5"', page)
+        self.assertIn('<option value="0" selected>Permanent</option>', page)
+        await self.client.post("/discord/staffalerts", data={"csrf": token, "action": "publish",
+            "doc": json.dumps({"on": True, "count": "3", "seconds": "60", "mines": "5", "tk_kick": "6", "tk_ban": "4",
+                               "mines_kick": "3"})})
+        page = await (await self.client.get("/discord/staffalerts")).text()
+        self.assertEqual(json.loads(self.db.discord_doc("staffalerts")["published"])["tk_ban"], 8)
 
     async def test_feedback_settings_page(self):
         await self.login("boss", "boss-password")

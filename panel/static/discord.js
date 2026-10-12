@@ -50,7 +50,10 @@ if (form && form.dataset.kind === "staffalerts") {
     const field = (name) => form.querySelector(`[name="${name}"]`);
     document.getElementById("dc-doc").value = JSON.stringify({ on: field("on").checked, count: field("count").value,
       seconds: field("seconds").value, ping_role: field("ping_role").value,
-      mines_on: field("mines_on").checked, mines: field("mines").value, mines_ping_role: field("mines_ping_role").value });
+      mines_on: field("mines_on").checked, mines: field("mines").value, mines_ping_role: field("mines_ping_role").value,
+      tk_kick: field("tk_kick").value, tk_ban: field("tk_ban").value, tk_ban_length: field("tk_ban_length").value,
+      mines_kick: field("mines_kick").value, mines_ban: field("mines_ban").value,
+      mines_ban_length: field("mines_ban_length").value });
   });
 }
 if (form && form.dataset.kind === "feedback") {

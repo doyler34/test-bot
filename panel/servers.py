@@ -15,6 +15,7 @@ from .connections import LogReader
 from .db import PanelDB, now
 from .rcon import RconClient, RconError
 from bot.discord import welcome_doc
+from bot.discord.ban_roles import length_text
 from .suspicion import Detector
 from .tk_burst import TkBurst
 
@@ -25,6 +26,9 @@ log = logging.getLogger("panel.servers")
 UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 POWER_RCON = ("restart_mission", "shutdown")
 POWER_SERVICE = ("start", "stop", "restart")
+# Only act on what happened just now, never on old log lines read back after a restart.
+AUTO_FRESH = 300
+AUTO_KICK_GAP = 600
 
 
 def valid_identity(text: str) -> bool:
@@ -77,6 +81,7 @@ class ServerState:
     recent: dict = field(default_factory=dict)
     running: dict = field(default_factory=dict)
     tk_burst: TkBurst = field(default_factory=TkBurst)
+    punished: dict = field(default_factory=dict)
     admins: list = field(default_factory=list)
 
 
@@ -179,19 +184,26 @@ class ServerManager:
         if moved:
             self.db.add_connections(state.config.id, events, moved)
             self.db.add_kills(state.config.id, archive.kill_rows(events))
-        self.check(state, events)
-        self.mass_teamkills(state, events)
+        for action in self.check(state, events) + self.mass_teamkills(state, events):
+            await self.auto_punish(state, *action)
 
-    def check(self, state: ServerState, events):
-        """Runs the cheating checks over new log lines; AP mine spam also goes to the staff channel."""
+    def check(self, state: ServerState, events) -> list:
+        """Runs the cheating checks over new log lines; AP mine spam also goes to the staff channel.
+        Returns who's reached an automatic kick or ban."""
         settings = self.staff_alert_settings()
         state.detector.s["mine_kills"] = settings["mines"]
         flags = [f for event in events for f in state.detector.feed(event)]
+        actions = []
         for flag in flags + state.detector.flush(now()):
             self.suspicious(state, flag)
-            if flag.get("mines") and flag.get("first") and settings["mines_on"] and now() - flag["at"] < 900:
+            if not flag.get("mines") or now() - flag["at"] >= 900:
+                continue
+            if flag.get("first") and settings["mines_on"]:
                 self.db.add_staff_alert(state.config.id, flag["at"], f"AP mine spam on {state.config.name}",
                                         flag["text"].replace(flag["name"], f"**{flag['name']}**", 1))
+            if flag["identity"] and now() - flag["at"] < AUTO_FRESH:
+                actions.append(("mines", flag["identity"], flag["name"], flag["count"], settings))
+        return actions
 
     def staff_alert_settings(self) -> dict:
         row = self.db.discord_doc("staffalerts")
@@ -201,21 +213,68 @@ class ServerManager:
             raw = welcome_doc.default_staffalerts()
         return welcome_doc.check_staffalerts(raw)[0]
 
-    def mass_teamkills(self, state: ServerState, events):
-        """Several teamkills by one player in a short time: queue it for the bot's staff channel."""
+    def mass_teamkills(self, state: ServerState, events) -> list:
+        """Several teamkills by one player in a short time: queue it for the bot's staff channel.
+        Returns who's reached an automatic kick or ban."""
         if not any(e["kind"] == "teamkill" for e in events):
-            return
+            return []
         settings = self.staff_alert_settings()
-        if not settings["on"]:
-            return
+        acting = settings["tk_kick"] or settings["tk_ban"]
+        if not settings["on"] and not acting:
+            return []
+        actions = []
         for event in events:
-            burst = state.tk_burst.feed(event, settings["count"], settings["seconds"], now())
+            burst = state.tk_burst.feed(event, settings["count"] if settings["on"] else 0, settings["seconds"], now())
             if burst:
                 victims = ", ".join(burst["victims"])
                 text = (f"**{burst['name']}** teamkilled {burst['count']} players in {burst['seconds']} seconds: "
                         f"{victims}.")
                 self.db.add_staff_alert(state.config.id, burst["at"], f"Mass teamkill on {state.config.name}", text)
                 self.db.add_feed(state.config.id, "sus", text.replace("**", ""), at=burst["at"])
+            killer = event.get("killer")
+            if acting and event["kind"] == "teamkill" and killer and now() - event["at"] < AUTO_FRESH:
+                actions.append(("tk", killer, event.get("killer_name") or killer, state.tk_burst.in_window(killer),
+                                settings))
+        return actions
+
+    async def auto_punish(self, state: ServerState, kind, identity, name, count, settings):
+        """Kicks or bans someone who's reached the count set on the Staff alerts page. Never an admin."""
+        ban_at, kick_at = settings[f"{kind}_ban"], settings[f"{kind}_kick"]
+        action = "ban" if ban_at and count >= ban_at else "kick" if kick_at and count >= kick_at else ""
+        if not action or identity in self.staff_ids() or self.db.active_ban(identity):
+            return
+        done = state.punished.get((kind, identity))
+        if done and (done[0] == "ban" or (action == "kick" and now() - done[1] < AUTO_KICK_GAP)):
+            return
+        state.punished[(kind, identity)] = (action, now())
+        what = (f"teamkilling {count} players in {settings['seconds']} seconds" if kind == "tk"
+                else f"killing {count} players with AP mines this game")
+        if action == "ban":
+            seconds = settings[f"{kind}_ban_length"]
+            reason = "Mass teamkilling (automatic ban)" if kind == "tk" else "AP mine spam (automatic ban)"
+            ban = self.db.ban(self.db.add_ban(identity, name, reason, "Automatic", now() + seconds if seconds else None))
+            await self.push_ban(ban)
+            await self.kick_everywhere(identity)
+            length = length_text(seconds) if seconds else "permanently"
+            title = f"Auto-banned on {state.config.name}"
+            text = f"**{name}** was banned {'for ' + length if seconds else length} for {what}."
+        else:
+            player = next((p for p in state.players if p["identity"] == identity), None)
+            if player is None:
+                state.punished.pop((kind, identity))
+                return
+            try:
+                await self.kick(state.config.id, player["id"])
+            except RconError as exc:
+                log.warning("Automatic kick failed on %s: %s", state.config.id, exc)
+                state.punished.pop((kind, identity))
+                return
+            title = f"Auto-kicked on {state.config.name}"
+            text = f"**{name}** was kicked for {what}."
+        self.db.log("Automatic", f"auto {action}", state.config.id, name, text.replace("**", ""))
+        self.db.add_staff_alert(state.config.id, now(), title, text)
+        self.db.add_feed(state.config.id, "sus", text.replace("**", ""))
+        self.alerts.send(title, text, alert_colours.RED, [("Identity", identity)])
 
     @property
     def archive_root(self) -> Path:

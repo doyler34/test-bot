@@ -355,8 +355,12 @@ def check_weekly(raw):
             "outro": text("outro", 1500)}, []
 
 
+AUTO_BAN_LENGTHS = (1800, 3600, 21600, 86400, 259200, 604800, 1209600, 2592000, 0)
+
+
 def default_staffalerts():
-    return {"on": True, "count": 3, "seconds": 60, "ping_role": "", "mines_on": True, "mines": 5, "mines_ping_role": ""}
+    return {"on": True, "count": 3, "seconds": 60, "ping_role": "", "mines_on": True, "mines": 5, "mines_ping_role": "",
+            "tk_kick": 0, "tk_ban": 0, "tk_ban_length": 86400, "mines_kick": 0, "mines_ban": 0, "mines_ban_length": 86400}
 
 
 def check_staffalerts(raw):
@@ -379,6 +383,28 @@ def check_staffalerts(raw):
     # Pages published before AP mines had their own part leave them on.
     doc.update(mines_on=bool(raw.get("mines_on", True)), mines=number("mines", 2, 50, "AP mine kills"),
                mines_ping_role=str(raw.get("mines_ping_role", "") or "").strip()[:100])
+
+    def action(key, low, label):
+        """Blank or 0 is off."""
+        text = str(raw.get(key, "") or "").strip()
+        if text in ("", "0"):
+            return 0
+        if not text.isdigit() or not low <= int(text) <= 100:
+            problems.append(f"{label} has to be blank (off) or between {low} and 100.")
+            return 0
+        return int(text)
+
+    def length(key):
+        try:
+            value = int(raw.get(key, 86400))
+        except (TypeError, ValueError):
+            value = 86400
+        return value if value in AUTO_BAN_LENGTHS else 86400
+    for kind, low, what in (("tk", 2, "teamkills"), ("mines", doc["mines"], "AP mine kills")):
+        kick, ban = action(f"{kind}_kick", low, f"Kick at ({what})"), action(f"{kind}_ban", low, f"Ban at ({what})")
+        if kick and ban and ban <= kick:
+            problems.append(f"The ban for {what} has to be at more than the kick, or there'd be no kick first.")
+        doc.update({f"{kind}_kick": kick, f"{kind}_ban": ban, f"{kind}_ban_length": length(f"{kind}_ban_length")})
     return doc, problems
 
 

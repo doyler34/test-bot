@@ -1406,7 +1406,8 @@ def discord_context(key, **extra):
             "about": DISCORD_ABOUT.get("posts" if key == "post" else key, ""),
             "text_ids": text_ids, "channel_settings": welcome_doc.CHANNEL_SETTINGS,
             "page_channels": welcome_doc.PAGE_CHANNELS,
-            "role_settings": welcome_doc.ROLE_SETTINGS}
+            "role_settings": welcome_doc.ROLE_SETTINGS,
+            "auto_lengths": [(s, length_text(s) if s else "Permanent") for s in welcome_doc.AUTO_BAN_LENGTHS]}
     return {**base, **extra}
 
 

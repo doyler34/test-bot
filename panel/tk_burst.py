@@ -11,8 +11,12 @@ class TkBurst:
         self.recent = defaultdict(deque)
         self.alerted = {}
 
+    def in_window(self, killer):
+        return len(self.recent.get(killer, ()))
+
     def feed(self, event, count, seconds, now):
-        """An alert for this teamkill if it makes `count` within `seconds`, else None."""
+        """An alert for this teamkill if it makes `count` within `seconds`, else None.
+        A count of 0 only keeps track, for the automatic kick and ban."""
         if event.get("kind") != "teamkill" or not event.get("killer") or now - event["at"] > FRESH:
             return None
         killer, at = event["killer"], event["at"]
@@ -20,7 +24,7 @@ class TkBurst:
         kills.append((at, event.get("victim_name") or "someone"))
         while kills and at - kills[0][0] > seconds:
             kills.popleft()
-        if len(kills) < count or at - self.alerted.get(killer, -COOLDOWN) < COOLDOWN:
+        if not count or len(kills) < count or at - self.alerted.get(killer, -COOLDOWN) < COOLDOWN:
             return None
         self.alerted[killer] = at
         took = max(1, kills[-1][0] - kills[0][0])
