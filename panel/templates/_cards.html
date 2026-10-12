@@ -1,20 +1,28 @@
 {% for c in cards %}
-<a class="card server" href="/server/{{ c.id }}">
+<section class="card server">
   <div class="row">
-    <h2>{{ c.name }}</h2>
+    <h2><a href="/server/{{ c.id }}">{{ c.name }}</a></h2>
     {% if not c.configured %}<span class="badge off">Not set up</span>
     {% elif c.online %}<span class="badge on">Online</span>
     {% else %}<span class="badge down">Offline</span>{% endif %}
   </div>
   {% if c.online %}
-  <p class="big">{{ c.players|length }} <small>on now</small></p>
+  <div class="mini">
+    <div><b>{{ c.players|length }}</b><span>Players</span></div>
+    <div>{% if c.fps is not none %}<b class="{{ 'warn' if c.fps < 20 }}">{{ "%.0f"|format(c.fps) }}</b>{% else %}<b class="na">No data</b>{% endif %}<span>FPS</span></div>
+    <div>{% if c.pid %}<b>{{ c.memory|gb }}</b>{% else %}<b class="na">No data</b>{% endif %}<span>Memory</span></div>
+    <div>{% if c.up_for is not none %}<b>{{ c.up_for|span }}</b>{% else %}<b class="na">No data</b>{% endif %}<span>Up for</span></div>
+  </div>
   {% if c.admins %}<p class="admins-on">Admin on: {{ c.admins|map(attribute="name")|join(", ") }}</p>
   {% else %}<p class="no-admin">No admin on</p>{% endif %}
-  <p class="muted">Connected {{ c.online_since|ago }} · checked {{ c.updated|ago }}</p>
   {% else %}
   <p class="muted">{{ c.error or "Connecting…" }}</p>
   {% endif %}
-  {% if c.pid %}<p class="muted">Memory {{ c.memory|gb }}{% if c.fresh %} · fresh start {{ c.fresh|gb }}{% endif %}</p>{% endif %}
   {% if c.check and c.check.status == "leak" %}<p class="warn">Memory didn't clear after the last mission restart</p>{% endif %}
-</a>
+  <div class="quick">
+    <a class="button small" href="/server/{{ c.id }}">Players &amp; feed</a>
+    <a class="button small ghost" href="/server/{{ c.id }}#health">Health</a>
+    <a class="button small ghost" href="/server/{{ c.id }}#history">History</a>
+  </div>
+</section>
 {% endfor %}

@@ -1536,8 +1536,8 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
     async def test_welcome_and_guide(self):
         await self.login("mod", "mod-password")
         html = await (await self.client.get("/")).text()
-        self.assertIn("Welcome, mod", html)
-        self.assertIn("You're signed in as a <b>moderator</b>", html)
+        self.assertIn(", mod</h1>", html)
+        self.assertIn("Signed in as a <b>moderator</b>", html)
         self.assertIn('href="/guide"', html)
         guide = await (await self.client.get("/guide")).text()
         self.assertIn("Welcome to OYB Control", guide)
@@ -1556,7 +1556,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_owner_guide_pages(self):
         await self.login("boss", "boss-password")
-        self.assertIn("You're signed in as an <b>owner</b>", await (await self.client.get("/")).text())
+        self.assertIn("Signed in as an <b>owner</b>", await (await self.client.get("/")).text())
         for slug in ("console-audit", "discord-messages", "admins"):
             self.assertEqual((await self.client.get(f"/guide/{slug}")).status, 200)
         banning = await (await self.client.get("/guide/banning")).text()

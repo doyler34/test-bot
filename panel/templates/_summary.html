@@ -2,8 +2,8 @@
   <div class="stat"><b>{{ s.players|length if s.online else "—" }}</b><span>Players on</span></div>
   <div class="stat" title="{{ s.admins|map(attribute='name')|join(', ') }}"><b class="{{ '' if s.admins or not s.online else 'warn' }}">{{ s.admins|length if s.online else "—" }}</b><span>Admins on</span></div>
   <div class="stat minor"><b class="{{ 'warn' if s.ping_ms > 250 }}">{{ s.ping_ms ~ " ms" if s.online else "—" }}</b><span>Ping (RCON)</span></div>
-  <div class="stat"><b class="{{ 'warn' if s.fps is not none and s.fps < 20 }}">{{ "%.0f"|format(s.fps) if s.fps is not none else "—" }}</b><span>Server FPS</span></div>
-  <div class="stat"><b>{{ s.memory|gb if s.pid else "—" }}</b><span>Memory</span></div>
+  <div class="stat">{% if s.fps is not none %}<b class="{{ 'warn' if s.fps < 20 }}">{{ "%.0f"|format(s.fps) }}</b>{% else %}<b class="na">{{ "No data" if s.online else "—" }}</b>{% endif %}<span>Server FPS</span></div>
+  <div class="stat">{% if s.pid %}<b>{{ s.memory|gb }}</b>{% else %}<b class="na">{{ "No data" if s.online else "—" }}</b>{% endif %}<span>Memory</span></div>
   <div class="stat minor"><b>{{ "%.1f"|format(health.day * 100) ~ "%" if health.day is not none else "—" }}</b><span>Up, last 24h</span></div>
   <div class="stat minor"><b>{{ s.process_age|span if s.pid else "—" }}</b><span>Running for</span></div>
 </div>

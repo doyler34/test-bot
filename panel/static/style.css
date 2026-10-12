@@ -479,3 +479,45 @@ details.edit-ban .ban-custom[hidden] { display: none; }
 }
 .ban-custom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 form.apply { margin-top: 14px; }
+
+/* phones: the main links sit in a bar along the bottom, within thumb reach */
+.dock { display: none; }
+.overview { margin-bottom: 18px; }
+.hello h1 { margin: 0 0 2px; }
+.hello p { margin: 0 0 12px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.tile { display: block; background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; color: var(--ink); }
+a.tile:hover { border-color: var(--gold-dim); text-decoration: none; }
+.tile b { display: block; font-family: var(--display); font-size: 1.7rem; line-height: 1.1; }
+.tile span { font-size: .74rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.tile.bad { border-color: #6e2f29; }
+.tile.bad b { color: var(--red); }
+h2.section { margin: 0 0 12px; }
+.card.server h2 a { color: var(--ink); }
+.mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 12px 0 8px; }
+.mini > div { background: var(--bg); border: 1px solid var(--line-soft); padding: 6px 8px; min-width: 0; }
+.mini b { display: block; font-family: var(--display); font-size: 1.25rem; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini span { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-weight: 400; line-height: 1.9; }
+.summary b.na { font-size: .85rem; }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+@media (max-width: 720px) {
+  .top nav { display: none; }
+  .top { justify-content: space-between; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tile b { font-size: 1.45rem; }
+  main { padding-bottom: 90px; }
+  .dock { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
+    background: rgba(20, 18, 11, .97); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  .dock > a, .dock summary { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 9px;
+    color: var(--muted); font-family: var(--display); text-transform: uppercase; letter-spacing: .06em; font-size: .78rem;
+    border: 0; border-top: 2px solid transparent; }
+  .dock > a:hover { text-decoration: none; }
+  .dock > a.on { color: var(--ink); border-top-color: var(--gold); }
+  .dock svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .dock .menu { display: block; margin: 0; position: static; }
+  .dock .menu summary::after { content: none; }
+  .dock .menu[open] summary { color: var(--gold); }
+  .dock .menu-list { top: auto; bottom: calc(100% + 6px); right: 8px; }
+  .dc-actions { bottom: 62px; }
+}

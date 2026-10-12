@@ -346,6 +346,8 @@ def server_view(state):
         "ping_ms": state.ping_ms,
         "fps": state.fps if now() - state.fps_at < 180 else None,
         "admins": state.admins if state.online else [],
+        "up_for": state.process_age if state.pid else
+                  (now() - state.online_since if state.online and state.online_since else None),
     }
 
 
