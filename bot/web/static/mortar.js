@@ -108,21 +108,27 @@ function labelGrid() {
   const west = Math.max(topLeft.east, 0), east = Math.min(bottomRight.east, width);
   const top = Math.min(topLeft.north, height), bottom = Math.max(bottomRight.north, 0);
   const along = top - (top - bottom) * 0.03, across = west + (east - west) * 0.03;
-  const label = (latlng, text) => L.marker(latlng, { interactive: false, icon: L.divIcon({
+  /* The left column of labels skips the row the top labels sit on. */
+  const topRow = map.latLngToContainerPoint(toLatLng(west, along)).y;
+  const label = (latlng, text, side) => {
+    if (side && Math.abs(map.latLngToContainerPoint(latlng).y - topRow) < 20) return;
+    place(latlng, text);
+  };
+  const place = (latlng, text) => L.marker(latlng, { interactive: false, icon: L.divIcon({
     className: '', iconSize: null, html: `<span class="grid-label">${text}</span>` }) }).addTo(gridLabels);
   /* Close in, every 100 m square gets the same 3-digit number the solution
    * panel shows; further out, every kilometre gets two. A square only part on
    * screen is labelled in the middle of the part that is. */
   const fine = map.hasLayer(gridMinor), step = fine ? 100 : 1000;
   const name = (m) => String(Math.round(m / step)).padStart(fine ? 3 : 2, '0');
-  const squares = (low, high, limit, place) => {
+  const squares = (low, high, limit, put) => {
     for (let m = Math.floor(low / step) * step; m < Math.min(high, limit); m += step) {
       const from = Math.max(m, low), to = Math.min(m + step, high);
-      if (to - from >= step * 0.35) place((from + to) / 2, name(m));
+      if (to - from >= step * 0.35) put((from + to) / 2, name(m));
     }
   };
   squares(west, east, width, (x, text) => label(toLatLng(x, along), text));
-  squares(bottom, top, height, (y, text) => label(toLatLng(across, y), text));
+  squares(bottom, top, height, (y, text) => label(toLatLng(across, y), text, true));
 }
 
 /* --- markers -------------------------------------------------------- */
@@ -358,6 +364,7 @@ function wire() {
     [...el('compass').children].forEach((button) => {
       button.classList.toggle('on', Number(button.dataset.deg) === WIND.from && WIND.speed > 0);
     });
+    el('windSummary').textContent = WIND.speed ? `${WIND.speed} m/s from ${WIND.from}°` : 'none';
     drawArrow();
     solve();
   }
