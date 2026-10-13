@@ -1516,6 +1516,24 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 403)
         self.assertNotIn("#kick 0", self.fake.commands)
 
+    async def test_mortar_page_is_for_owners_and_uses_the_command_engine(self):
+        from bot.mortar.solution import profiles, solution
+        await self.login("mod", "mod-password")
+        self.assertEqual((await self.client.get("/mortar")).status, 403)
+        self.assertNotIn('href="/mortar"', await (await self.client.get("/")).text())
+        await self.client.post("/logout", data={"csrf": await self.csrf()})
+        await self.login("boss", "boss-password")
+        self.assertIn('href="/mortar"', await (await self.client.get("/")).text())
+        tube = next(k for k in profiles() if k.startswith("m252:"))
+        page = await (await self.client.get("/mortar", params={"tube": tube, "gun": "0428 1183", "target": "0548 1183"})).text()
+        best, _ = solution(profiles()[tube], 1200)
+        self.assertIn("<b>1600</b><span>Azimuth, mils", page)
+        self.assertIn(f"<b>{round(best.elevation)}</b><span>Elevation, mils", page)
+        far = await (await self.client.get("/mortar", params={"tube": tube, "gun": "0000 0000", "target": "0990 0990"})).text()
+        self.assertIn("OUT OF RANGE", far)
+        bad = await (await self.client.get("/mortar", params={"tube": tube, "gun": "12", "target": "0440 1183"})).text()
+        self.assertIn("A grid is 4, 6, 8 or 10 digits", bad)
+
     async def test_kick_is_audited(self):
         await self.login("mod", "mod-password")
         token = await self.csrf()

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Mortar · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker">Being tested</p>
+<h1>Mortar</h1>
+<p class="muted">Only owners can see this page. It's the same calculator as /mortar in Discord, which stays off until the numbers are checked in game. Nothing you enter here is saved or shown to anyone.</p>
+{% if not weapon %}
+<p class="warn card">No mortar tables found. See <code>assets/mortar/README.md</code>.</p>
+{% else %}
+<form method="get" action="/mortar" class="card">
+  <div class="grid">
+    <label>Mortar and round
+      <select name="tube">{% for key, p in loaded.items() %}<option value="{{ key }}" {% if p.key == weapon.key %}selected{% endif %}>{{ p.label }} · {{ p.shell }}</option>{% endfor %}</select>
+    </label>
+    <label>Mortar grid <input name="gun" value="{{ form.gun }}" placeholder="e.g. 0428 1183" inputmode="numeric" required></label>
+    <label>Target grid <input name="target" value="{{ form.target }}" placeholder="e.g. 0452 1171" inputmode="numeric" required></label>
+    <label>Mortar height <span class="muted">(m, optional)</span> <input name="gun_alt" value="{{ form.gun_alt }}" inputmode="decimal"></label>
+    <label>Target height <span class="muted">(m, optional)</span> <input name="target_alt" value="{{ form.target_alt }}" inputmode="decimal"></label>
+    <label>Wind speed <span class="muted">(m/s, optional)</span> <input name="wind" value="{{ form.wind }}" inputmode="decimal"></label>
+    <label>Wind from <span class="muted">(degrees, optional)</span> <input name="wind_from" value="{{ form.wind_from }}" inputmode="decimal" placeholder="e.g. 245"></label>
+  </div>
+  <p class="muted">Grids are 4, 6, 8 or 10 digits, half easting and half northing. Use 8 digits (10 m) or 10 (1 m) for accuracy; 6 digits is only to the nearest 100 m.</p>
+  <button>Work it out</button>
+</form>
+
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+{% if result %}
+{% set f = result.fired %}
+<section class="card">
+  <h2>Firing solution</h2>
+  {% if not f.final %}
+  <p class="warn"><b>{{ out_of_range }}</b>: no ring reaches {{ result.distance|round|int }} m with {{ weapon.shell }}. This round covers {{ weapon.span[0]|round|int }}–{{ weapon.span[1]|round|int }} m.</p>
+  {% else %}
+  <div class="stats">
+    <div class="stat"><b>{{ result.azimuth|round|int }}</b><span>Azimuth, mils · {{ "%.1f"|format(result.degrees) }}°</span></div>
+    <div class="stat"><b>{{ f.final.elevation|round|int }}</b><span>Elevation, mils</span></div>
+    <div class="stat"><b>{{ f.final.ring }}</b><span>Ring</span></div>
+    <div class="stat"><b>{{ result.distance|round|int }} m</b><span>Range</span></div>
+    <div class="stat"><b>{{ f.final.flight|round|int }} s</b><span>Flight time</span></div>
+    <div class="stat"><b>{{ f.final.dispersion|round|int }} m</b><span>Spread</span></div>
+  </div>
+  {% if result.climb %}<p class="muted">Target is {{ "%+.0f"|format(result.climb) }} m from the mortar, which moves the elevation {{ "%+.0f"|format(f.final.correction) }} mils.</p>{% endif %}
+  {% if not result.wind.calm %}
+    {% if f.applied %}
+    <p class="muted">Wind {{ "%.0f"|format(result.wind.speed) }} m/s from {{ "%.0f"|format(result.wind.bearing) }}°: azimuth {{ "%+.0f"|format(f.azimuth_mils) }} mils (was {{ result.base_azimuth|round|int }}), and it carries the round {{ "%+.0f"|format(f.range_m) }} m, so aim for {{ f.effective_range|round|int }} m.</p>
+    {% elif not f.has_data %}
+    <p class="muted">No wind figures for this round, so the wind isn't in this solution.</p>
+    {% else %}
+    <p class="muted">This range is outside the game's wind figures for ring {{ f.base.ring }}, so the wind isn't in this solution.</p>
+    {% endif %}
+  {% endif %}
+  {% if result.others %}
+  <h3>Other rings that reach</h3>
+  <table>
+    <thead><tr><th>Ring</th><th class="num">Elevation</th><th class="num">Flight</th><th class="num">Spread</th></tr></thead>
+    <tbody>{% for r in result.others %}<tr><td>{{ r.ring }}</td><td class="num">{{ r.elevation|round|int }} mils</td><td class="num">{{ r.flight|round|int }} s</td><td class="num">{{ r.dispersion|round|int }} m</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+  {% endif %}
+  <p class="muted">Mortar {{ "%05d %05d"|format(*result.gun) }} → target {{ "%05d %05d"|format(*result.target) }} · {{ weapon.label }}, {{ weapon.mils }} mil sight.</p>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

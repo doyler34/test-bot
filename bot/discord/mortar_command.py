@@ -12,7 +12,7 @@ import logging
 import discord
 from discord import app_commands
 
-from bot.config import mortar_map_config, mortar_session_ttl, mortar_web_base_url
+from bot.config import mortar_command_enabled, mortar_map_config, mortar_session_ttl, mortar_web_base_url
 from bot.mortar.plot import render
 from bot.mortar.solution import (OUT_OF_RANGE, bearing, parse_grid, profile, profiles,
                                  solution, swap, weapons)
@@ -223,7 +223,8 @@ class MortarCommand:
             callback=self.show)
         app_commands.checks.cooldown(1, 5, key=lambda i: (i.guild_id, i.user.id))(self.command)
         self.command.error(self.error)
-        bot.rank_command.tree.add_command(self.command, guild=bot.rank_command.guild)
+        if mortar_command_enabled():
+            bot.rank_command.tree.add_command(self.command, guild=bot.rank_command.guild)
 
     async def error(self, interaction, error):
         text = (f'Try /mortar again in {error.retry_after:.0f} seconds.'

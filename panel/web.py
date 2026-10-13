@@ -13,6 +13,8 @@ from aiohttp import web
 
 from bot.discord import welcome_doc
 from bot.discord.ban_roles import length_text
+from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
+from bot.mortar.wind import Wind
 
 from . import archive, auth, memory, outliers, site
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
@@ -1211,6 +1213,47 @@ async def restart_through_amp(request):
     raise web.HTTPFound("/game-admins")
 
 
+def mortar_number(text, name, low=None, high=None):
+    raw = (text or "").strip().replace(",", ".")
+    if not raw:
+        return 0.0
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"{name} has to be a number.")
+    if value != value or (low is not None and value < low) or (high is not None and value > high):
+        raise ValueError(f"{name} is out of range.")
+    return value
+
+
+async def mortar_page(request):
+    """The mortar calculator, for owners to try before /mortar goes out in Discord.
+    Same engine and tables as the command; nothing here is saved."""
+    require(request, "mortar")
+    loaded = profiles()
+    q = request.query
+    form = {k: clean(q.get(k, ""), 20) for k in ("tube", "gun", "target", "gun_alt", "target_alt", "wind", "wind_from")}
+    weapon = loaded.get(form["tube"]) or next(iter(loaded.values()), None)
+    result, error = None, ""
+    if weapon and form["gun"] and form["target"]:
+        try:
+            gun, target = parse_grid(form["gun"]), parse_grid(form["target"])
+            climb = (mortar_number(form["target_alt"], "Target height", -500, 1000)
+                     - mortar_number(form["gun_alt"], "Mortar height", -500, 1000))
+            wind = Wind(speed=mortar_number(form["wind"], "Wind speed", 0, 40),
+                        bearing=mortar_number(form["wind_from"], "Wind direction", 0, 360) % 360)
+            mils, distance = bearing(gun, target, weapon.mils)
+            fired = apply_wind(weapon, distance, mils * 360 / weapon.mils, wind, climb)
+            result = {"gun": gun, "target": target, "distance": distance, "climb": climb, "wind": wind,
+                      "azimuth": (mils + fired.azimuth_mils) % weapon.mils, "base_azimuth": mils,
+                      "degrees": ((mils + fired.azimuth_mils) % weapon.mils) * 360 / weapon.mils, "fired": fired,
+                      "others": [r for r in fired.every if fired.final and r.ring != fired.final.ring]}
+        except ValueError as exc:
+            error = str(exc)
+    return render(request, "mortar.html", loaded=loaded, weapon=weapon, form=form, result=result, error=error,
+                  out_of_range=OUT_OF_RANGE)
+
+
 SUS_GROUPS = (
     ("Teamkills", "One player teamkilling this many times within 10 minutes starts a line that keeps counting their "
      "teamkills for the rest of the game. Crashing into teammates doesn't count.",
@@ -1846,6 +1889,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/sus-settings", sus_page)
     app.router.add_post("/sus-settings", sus_save)
     app.router.add_get("/game-admins", game_admins_page)
+    app.router.add_get("/mortar", mortar_page)
     app.router.add_post("/game-admins", add_game_admin)
     app.router.add_post("/game-admins/{id}/remove", remove_game_admin)
     app.router.add_post("/game-admins/{id}/restart", restart_through_amp)

@@ -23,6 +23,7 @@
     {% if can("discord") %}<a href="/discord" class="extra{{ ' on' if path.startswith('/discord') }}">Discord</a>{% endif %}
     {% if can("website") %}<a href="/website" class="extra{{ ' on' if path.startswith('/website') }}">Website</a>{% endif %}
     {% if can("sus") %}<a href="/sus-settings" class="extra{{ ' on' if path == '/sus-settings' }}">Sus settings</a>{% endif %}
+    {% if can("mortar") %}<a href="/mortar" class="extra{{ ' on' if path == '/mortar' }}">Mortar</a>{% endif %}
     {% if can("game_admins") %}<a href="/game-admins" class="extra{{ ' on' if path == '/game-admins' }}">In-game admins</a>{% endif %}
     {% if can("users") %}<a href="/users" class="extra{{ ' on' if path == '/users' }}">Admins</a>{% endif %}
     <a href="/guide" class="extra{{ ' on' if path.startswith('/guide') }}">Guide</a>

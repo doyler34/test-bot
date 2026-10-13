@@ -295,3 +295,13 @@ class PlotTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CommandSwitchTests(unittest.TestCase):
+    def test_discord_command_is_off_unless_turned_on(self):
+        from unittest import mock
+        from bot.config import mortar_command_enabled
+        with mock.patch.dict('os.environ', {'MORTAR_COMMAND_ENABLED': ''}):
+            self.assertFalse(mortar_command_enabled())
+        with mock.patch.dict('os.environ', {'MORTAR_COMMAND_ENABLED': 'true'}):
+            self.assertTrue(mortar_command_enabled())

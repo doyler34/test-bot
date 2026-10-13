@@ -95,6 +95,12 @@ def live_board_channel_id() -> int | None:
     return _channel_id("LIVE_BOARD_CHANNEL_ID", None)
 
 
+def mortar_command_enabled() -> bool:
+    """Offer /mortar in Discord. Off by default while the tables are being checked;
+    owners can try it in the panel meanwhile."""
+    return os.getenv("MORTAR_COMMAND_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def mortar_web_enabled() -> bool:
     """Serve the /mortar map page. Off unless a base URL is set as well."""
     return os.getenv("MORTAR_WEB_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")

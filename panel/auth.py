@@ -24,6 +24,7 @@ PERMISSIONS = {
     "website": "owner",
     "game_admins": "owner",
     "sus": "owner",
+    "mortar": "owner",
 }
 
 # What an owner can hand to one person on top of their role. "discord" is every
@@ -39,6 +40,7 @@ GRANTS = (
     ("website", "Edit the public website"),
     ("game_admins", "Make players admin in game (through AMP)"),
     ("sus", "Change the Sus check settings"),
+    ("mortar", "Use the mortar calculator (being tested)"),
     ("discord", "Every Discord page"),
 )
 
