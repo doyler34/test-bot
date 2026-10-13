@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Investigate {{ accounts[0].label }} · OYB Control{% endblock %}
+{% macro kill(r) %}{{ r.at|clock }} · <a href="/player/{{ r.victim }}">{{ r.victim_name }}</a>{% if r.distance %} at {{ r.distance|round|int }} m{% endif %}{% if r.zone %}, {{ r.zone|part }}{% endif %}{% endmacro %}
+{% block body %}
+<p class="kicker"><a href="/player/{{ identity }}">← {{ accounts[0].label }}</a></p>
+<h1>Investigation</h1>
+<form method="get" class="row inv-period">
+  <select name="days">{% for value, label in periods %}<option value="{{ value }}" {% if value == period %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <button class="small ghost">Run again</button>
+  <span class="muted">{{ accounts|length }} account{{ "s" if accounts|length != 1 }} checked: this player{% if accounts|length > 1 %} and every account that has shared an IP with them{% endif %}.</span>
+</form>
+
+<section class="card verdict {{ level }}">
+  <p class="kicker">Verdict</p>
+  <h2>{{ title }}</h2>
+  <p>{{ about }}</p>
+  <p class="muted">This reads the kills the panel has stored. It's evidence to look at, not a ruling: strong means something a person can't do; moderate means something a very good player might.</p>
+</section>
+
+<section class="card">
+  <h2>Findings</h2>
+  {% if not found %}<p class="muted">Nothing found.</p>{% endif %}
+  {% for f in found %}
+  <div class="finding">
+    <p><span class="pill {{ 'down' if f.level == 'strong' else ('gold' if f.level == 'moderate' else '') }}">{{ f.level }}</span>
+      {% if f.account %}<b>{{ f.account }}</b>: {% endif %}{{ f.title }}</p>
+    <p class="muted">{{ f.why }}</p>
+    {% if f.pairs %}
+    <details><summary>The {{ f.pairs|length }} pair{{ "s" if f.pairs|length != 1 }}</summary>
+      <ul class="evidence">{% for a, b in f.pairs %}<li>{{ kill(a) }}<br>then {{ kill(b) }} <span class="muted">({{ b.at - a.at }} s later)</span></li>{% endfor %}</ul>
+    </details>
+    {% elif f.rows %}
+    <details><summary>The kills</summary>
+      <ul class="evidence">{% for r in f.rows %}<li>{{ kill(r) }}</li>{% endfor %}</ul>
+    </details>
+    {% elif f.compare %}
+    <details><summary>Their numbers against everyone's</summary>
+      <ul class="evidence">{% for key, label in metrics %}{% if f.compare[key] is not none %}
+        <li>{{ label }}: <b>{{ (100 * f.compare[key])|round|int ~ "%" if key in ("head_share", "long_share") else "%.1f"|format(f.compare[key]) }}</b>
+          <span class="muted">· typical {{ ((100 * typical[key])|round|int ~ "%" if key in ("head_share", "long_share") else "%.1f"|format(typical[key])) if typical[key] is not none else "—" }}</span>{% if key in f.compare.high %} <span class="pill down">top 5%</span>{% endif %}</li>
+      {% endif %}{% endfor %}</ul>
+    </details>
+    {% elif f.lines %}
+    <details><summary>The alerts</summary>
+      <ul class="evidence">{% for l in f.lines %}<li>{{ l.at|ts }} · {{ servers.get(l.server, l.server) }}<br>{{ l.text }}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<h2 class="section">Accounts</h2>
+{% for a in accounts %}
+{% set s = a.stats %}
+<section class="card">
+  <div class="row">
+    <h2><a href="/player/{{ a.identity }}">{{ a.label }}</a></h2>
+    {% if loop.first %}<span class="pill">this player</span>{% else %}<span class="pill alt">shares an IP</span>{% endif %}
+    {% if a.banned %}<span class="pill down">Banned</span>{% endif %}
+  </div>
+  <p class="muted mono">{{ a.identity }}</p>
+  {% if a.relation %}
+  <p><b>{{ a.relation.reading }}</b><br><span class="muted">Shared IP{{ "s" if a.relation.shared|length != 1 }}: {{ a.relation.shared|join(", ") }}</span></p>
+  {% endif %}
+  {% if a.names|length > 1 %}<p>Names used: {{ a.names|join(", ") }}</p>{% endif %}
+  <div class="stats">
+    <div class="stat"><b>{{ s.kills }}</b><span>Kills</span></div>
+    <div class="stat"><b>{{ s.deaths }}</b><span>Deaths</span></div>
+    <div class="stat"><b>{{ "%.1f"|format(s.kd) }}</b><span>K/D</span></div>
+    <div class="stat"><b>{{ (100 * s.head_share)|round|int }}%</b><span>Headshots (bullets)</span></div>
+    <div class="stat"><b>{{ s.long }}</b><span>Bullet kills ≥ 500 m</span></div>
+    <div class="stat"><b>{{ s.longest|round|int }} m</b><span>Longest bullet kill</span></div>
+    <div class="stat"><b>{{ s.burst }}</b><span>Most kills in 10 s</span></div>
+    <div class="stat"><b>{{ s.teamkills }}</b><span>Teamkills</span></div>
+  </div>
+  {% if s.first %}<p class="muted">Kills and deaths from {{ s.first|ts }} to {{ s.last|ts }}. <a href="/player/{{ a.identity }}?period=30&log=all#kills">Full kill log</a></p>{% else %}<p class="muted">No kills or deaths in this period.</p>{% endif %}
+  <details><summary>{{ a.ips|length }} IP address{{ "es" if a.ips|length != 1 }}</summary>
+    <ul class="evidence">{% for c in a.ips %}<li class="mono">{{ c.ip }} <span class="muted">· {{ c.times }}× · {{ c.first_seen|ts }} to {{ c.last_seen|ts }}</span></li>{% endfor %}</ul>
+  </details>
+  {% if a.bans %}
+  <details><summary>{{ a.bans|length }} ban{{ "s" if a.bans|length != 1 }}</summary>
+    <ul class="evidence">{% for b in a.bans %}<li>{{ b.created_at|ts }} by {{ b.created_by }}: {{ b.reason }}{% if b.removed_at %} <span class="muted">(removed)</span>{% endif %}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+</section>
+{% endfor %}
+
+{% if incidents %}
+<section class="card">
+  <h2>Suspicious incidents they were on for</h2>
+  <ul class="evidence">{% for i in incidents %}<li>{{ i.at|ts }} · {{ servers.get(i.server, i.server) }} · <b>{{ i.who }}</b><br>{{ i.text }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<details class="copy-box card">
+  <summary>Copy the report as text</summary>
+  <textarea readonly rows="10" class="mono" id="inv-text">{{ text }}</textarea>
+  <button type="button" class="small" data-copy="#inv-text">Copy</button>
+</details>
+{% endblock %}

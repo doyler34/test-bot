@@ -20,7 +20,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, auth, maptiles, memory, outliers, site
+from . import archive, auth, investigate, maptiles, memory, outliers, site
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -1067,6 +1067,52 @@ def kill_log_groups(identity, lines):
     return groups
 
 
+INVESTIGATE_PERIODS = (("30", "Last 30 days"), ("90", "Last 90 days"), ("all", "Everything kept"))
+
+
+async def investigate_page(request):
+    """Investigate: the player and every account that has shared an IP with them."""
+    require(request, "ips")
+    identity = request.match_info["identity"].lower()
+    if not valid_identity(identity):
+        raise web.HTTPNotFound(text="No such player.")
+    period = request.query.get("days", "30")
+    period = period if period in dict(INVESTIGATE_PERIODS) else "30"
+    since = 0 if period == "all" else now() - int(period) * 86400
+    db = request.app[DB]
+    subject = db.player(identity)
+    linked = db.alts(identity)
+    ids = [identity] + [a["identity"] for a in linked]
+    rows = {i: [dict(r) for r in db.kill_log(i, "all", since, limit=20000)] for i in ids}
+    banned = {i: db.active_ban(i) is not None for i in ids}
+    shared = {a["identity"]: (a["shared"] or "").split(",") for a in linked}
+    accounts = []
+    for i in ids:
+        player = db.player(i)
+        stats = investigate.kill_stats(i, rows[i])
+        label = (player["name"] if player else "") or (stats["names"][0] if stats["names"] else i[:8])
+        accounts.append({"identity": i, "label": label, "stats": stats, "banned": banned[i],
+                         "names": list(dict.fromkeys(stats["names"] + [n["name"] for n in db.player_names(i)])),
+                         "ips": db.ips(i), "bans": db.all("SELECT * FROM bans WHERE identity = ? ORDER BY id DESC", i),
+                         "relation": None if i == identity else investigate.relationship(identity, i, rows, shared[i])})
+    everyone, typical = outliers.unusual(db.player_totals(since), db.incident_counts(since))
+    labels = dict(outliers.METRICS)
+    unusual = {p["identity"]: {**p, "labels": [labels[k] for k in p["high"]]} for p in everyone if p["identity"] in ids}
+    names = {n for a in accounts for n in a["names"] + a["stats"]["names"] if n and n != "?"}
+    sus = [r for r in db.all("SELECT * FROM feed WHERE kind = 'sus' AND at >= ? ORDER BY at DESC LIMIT 2000", since)
+           if any(re.search(rf"(?<!\w){re.escape(n)}(?!\w)", r["text"]) for n in names)]
+    incidents = [dict(r, who=a["label"]) for a in accounts for r in db.incidents_for(a["identity"]) if r["at"] >= since]
+    found = investigate.findings(identity, accounts, unusual, sus, incidents)
+    level, title, about = investigate.verdict(found)
+    servers = {s.id: s.name for s in request.app[CONFIG].servers}
+    audit(request, "investigate", target=accounts[0]["label"], detail=f"{len(ids)} account{'s' if len(ids) != 1 else ''}, {title}")
+    return render(request, "investigate.html", identity=identity, subject=subject, accounts=accounts,
+                  found=found, level=level, title=title, about=about, unusual=unusual, typical=typical,
+                  metrics=outliers.METRICS, sus=sus, incidents=incidents, servers=servers,
+                  periods=INVESTIGATE_PERIODS, period=period,
+                  text=investigate.report_text(accounts[0]["label"], title, found, accounts))
+
+
 async def player_page(request):
     identity = request.match_info["identity"].lower()
     if not valid_identity(identity):
@@ -1962,7 +2008,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[AMP] = Amp(**config.amp) if config.amp else None
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
-    env.filters.update(ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb)
+    env.filters.update(ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb,
+                       part=lambda zone: body_part(zone) if zone else "")
     env.globals.update(ban_reasons=reason_options(BAN_REASONS), kick_reasons=reason_options(KICK_REASONS))
     app[JINJA] = env
 
@@ -2019,6 +2066,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/sus-settings", sus_save)
     app.router.add_get("/game-admins", game_admins_page)
     app.router.add_get("/mortar", mortar_page)
+    app.router.add_get("/player/{identity}/investigate", investigate_page)
     app.router.add_post("/mortar/download", mortar_download)
     app.router.add_get("/mortar/map", mortar_map_page)
     app.router.add_get("/mortar/panel/static/{name}", mortar_asset)

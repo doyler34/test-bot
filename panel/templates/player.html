@@ -8,6 +8,7 @@
   {% if staff or config_staff %}<span class="badge on">Admin</span>{% endif %}
 </div>
 <p class="mono muted">{{ identity }}</p>
+{% if can("ips") %}<p><a class="button" href="/player/{{ identity }}/investigate">Investigate</a> <span class="muted">A full report on their kills, and every account that has shared an IP with them.</span></p>{% endif %}
 
 <nav class="tabs">
   <a href="#overview" data-tab="overview">Overview</a>
