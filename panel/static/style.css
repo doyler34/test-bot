@@ -169,12 +169,7 @@ label.check { display: flex; gap: 8px; align-items: flex-start; text-transform: 
 label.check input { width: auto; margin: 3px 0 0; }
 
 /* server page */
-.controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 18px; padding: 10px 12px;
-  background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--gold); }
-.controls form { margin: 0; }
-.controls .muted { font-size: .85rem; margin-left: 6px; }
 .panes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-
 .panes .card { margin: 0; min-width: 0; }
 .panes .wide { grid-column: 1 / -1; }
 .pane { display: flex; flex-direction: column; height: 460px; padding-top: 14px; }
@@ -416,17 +411,6 @@ textarea.survey { width: 100%; min-height: 70vh; font-size: .8rem; white-space: 
   font-family: var(--display); text-transform: uppercase; letter-spacing: .05em; font-size: 1rem; }
 .menu-list a.on { color: var(--gold); }
 .menu-list form { margin: 0; border-top: 1px solid var(--line-soft); }
-
-/* server actions behind one button */
-details.controls { padding: 0; }
-details.controls summary { list-style: none; cursor: pointer; padding: 9px 12px; font-family: var(--display);
-  text-transform: uppercase; letter-spacing: .06em; color: var(--gold); }
-details.controls summary::-webkit-details-marker { display: none; }
-details.controls summary::after { content: " ▾"; }
-details.controls[open] summary::after { content: " ▴"; }
-.control-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 12px 12px; }
-.control-list form { margin: 0; }
-.control-list .muted { font-size: .85rem; flex-basis: 100%; }
 
 .players-table td.actions { white-space: nowrap; }
 .admins-on { color: var(--khaki); margin: 6px 0; font-size: .9rem; }

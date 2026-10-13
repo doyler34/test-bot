@@ -24,7 +24,7 @@ from .oyb_stats import OybStats
 from .rcon import RconError
 from .battlemetrics import BanSync
 from .suspicion import DEFAULTS as SUS_DEFAULTS, LIMITS as SUS_LIMITS, check_settings as check_sus
-from .servers import POWER_RCON, POWER_SERVICE, ServerManager, clean, valid_identity
+from .servers import ServerManager, clean, valid_identity
 
 log = logging.getLogger("panel.web")
 
@@ -51,13 +51,6 @@ def ban_seconds(form):
             return None
         return int(amount) * int(unit)
     return int(duration) if duration in dict(DURATIONS) else None
-POWER_LABELS = {
-    "restart_mission": "Restart mission",
-    "shutdown": "Shut down (RCON)",
-    "start": "Start server",
-    "stop": "Stop server",
-    "restart": "Restart server",
-}
 
 CONFIG = web.AppKey("config", PanelConfig)
 DB = web.AppKey("db", PanelDB)
@@ -413,13 +406,9 @@ async def dashboard_part(request):
 
 async def server_page(request):
     state = server_or_404(request, request.match_info["id"])
-    # A blank command (e.g. shutdown on a box where AMP runs the servers) hides its button.
-    actions = [a for a in POWER_RCON if state.config.commands.get(a)] + \
-        (list(POWER_SERVICE) if state.config.service else [])
     db = request.app[DB]
     recent = db.audit(server=state.config.id, limit=15)
-    return render(request, "server.html", s=server_view(state), actions=actions, labels=POWER_LABELS,
-                  recent=recent, health=health_data(db, state), alts=alt_flags(request, state),
+    return render(request, "server.html", s=server_view(state), recent=recent, health=health_data(db, state), alts=alt_flags(request, state),
                   played=played(request, [p["identity"] for p in state.players]),
                   feed=db.feed(state.config.id), **history(request, state))
 
@@ -791,33 +780,6 @@ async def kick(request):
         audit(request, "kick", state.config.id, name or player)
         alert(request, f"Kick on {state.config.name}", f"**{name or player}** was kicked.")
         flash(request, f"Kicked {name or player}.")
-    raise web.HTTPFound(f"/server/{state.config.id}")
-
-
-async def power(request):
-    require(request, "power")
-    state = server_or_404(request, request.match_info["id"])
-    form = await request.post()
-    action = form.get("action", "")
-    if action not in POWER_LABELS:
-        raise web.HTTPBadRequest(text="Unknown action.")
-    manager = request.app[MANAGER]
-    if action == "restart_mission":
-        await manager.start_mission_check(state.config.id, request[USER]["username"])
-    try:
-        result = await manager.power(state.config.id, action)
-    except RconError as exc:
-        state.check = None
-        audit(request, POWER_LABELS[action].lower(), state.config.id, detail=str(exc), ok=False)
-        flash(request, f"{POWER_LABELS[action]} failed: {exc}", "error")
-    else:
-        audit(request, POWER_LABELS[action].lower(), state.config.id, detail=clean(result, 300))
-        alert(request, f"{POWER_LABELS[action]}: {state.config.name}",
-              colour=RED if action in ("stop", "shutdown") else GOLD)
-        note = ""
-        if action == "restart_mission" and state.check:
-            note = f" Memory check in {manager.settle // 60} minutes."
-        flash(request, f"{POWER_LABELS[action]}: sent.{note}")
     raise web.HTTPFound(f"/server/{state.config.id}")
 
 
@@ -1874,7 +1836,6 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/website", website_save)
     app.router.add_get("/website/preview", website_preview)
     app.router.add_post("/server/{id}/kick", kick)
-    app.router.add_post("/server/{id}/power", power)
     app.router.add_get("/bans", bans_page)
     app.router.add_post("/bans", add_ban)
     app.router.add_post("/bans/{ban_id:\\d+}/remove", remove_ban)
