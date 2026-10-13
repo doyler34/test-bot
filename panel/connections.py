@@ -16,6 +16,12 @@ STAMP = re.compile(r"^(\d{2}):(\d{2}):(\d{2})")
 FOLDER = re.compile(r"logs_(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})$")
 CONNECT = re.compile(r"BattlEye Server: 'Player #\d+ (.+) \((.+):\d+\) connected'")
 LEAVE = re.compile(r"BattlEye Server: 'Player #\d+ (.+) disconnected'")
+# "Authenticated player: rplIdentity=0x00000025 identityId=5dd8...": which account a connection is.
+AUTH = re.compile(r"Authenticated player: rplIdentity=(0x[0-9a-fA-F]+) identityId=([0-9a-fA-F-]{36})")
+# "Setting GUID for player identity=0x00000025, GUID=76561199889955833": a Steam ID for a PC
+# player on Steam; console players get "[u8; 64]" instead.
+PLATFORM = re.compile(r"BattlEye Server: Setting GUID for player identity=(0x[0-9a-fA-F]+), GUID=(\S+)")
+STEAM_ID = re.compile(r"7656119\d{10}")
 GUID = re.compile(r"BattlEye Server: 'Player #\d+ (.+) - BE GUID: ([0-9a-fA-F]{32})'")
 IDENTITY = re.compile(r"### Updating player: PlayerId=\d+, Name=(.*?), rplIdentity=0x[0-9a-fA-F]+, "
                       r"IdentityId=([0-9a-fA-F-]{36})")
@@ -38,7 +44,7 @@ def folder_start(folder: Path) -> float | None:
 
 
 def new_state(base: float) -> dict:
-    return {"base": base, "clock": None, "day": 0, "pending": {}}
+    return {"base": base, "clock": None, "day": 0, "pending": {}, "rpl": {}}
 
 
 def read_lines(lines, started: float) -> list[dict]:
@@ -108,7 +114,17 @@ class LogReader:
         state["clock"] = clock
         at = int(state["base"] - state["start_clock"] + clock + state["day"] * 86400)
         pending = state["pending"]
-        if match := CONNECT.search(line):
+        if match := AUTH.search(line):
+            state.setdefault("rpl", {})[match[1].lower()] = match[2].lower()
+            return None
+        elif match := PLATFORM.search(line):
+            identity = state.setdefault("rpl", {}).get(match[1].lower())
+            if not identity:
+                return None
+            steam = match[2] if STEAM_ID.fullmatch(match[2]) else ""
+            return {"kind": "platform", "at": at, "identity": identity, "steam": steam,
+                    "platform": "steam" if steam else "console"}
+        elif match := CONNECT.search(line):
             ip = match[2].strip("[]")
             pending[match[1]] = {"ip": ip, "guid": "", "at": at}
             return {"kind": "join", "at": at, "text": f"{match[1]} connected", "ip": ip}

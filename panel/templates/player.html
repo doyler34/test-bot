@@ -8,6 +8,11 @@
   {% if staff or config_staff %}<span class="badge on">Admin</span>{% endif %}
 </div>
 <p class="mono muted">{{ identity }}</p>
+{% if platform %}
+<p>{% if platform.platform == "steam" %}<span class="pill">PC · Steam</span>{% if can("ips") %} <span class="mono">{{ platform.steam_id }}</span> · <a href="https://steamcommunity.com/profiles/{{ platform.steam_id }}" rel="noopener noreferrer" target="_blank">Steam profile</a>{% endif %}
+  {% else %}<span class="pill">Console · Xbox or PlayStation</span>{% endif %}</p>
+{% if same_steam %}<p class="warn">Same Steam account as {% for o in same_steam %}<a href="/player/{{ o.identity }}">{{ o.name }}</a>{{ ", " if not loop.last }}{% endfor %}: one person, more than one Reforger account.</p>{% endif %}
+{% endif %}
 {% if can("ips") %}<p><a class="button" href="/player/{{ identity }}/investigate">Investigate</a> <span class="muted">A full report on their kills, and every account that has shared an IP with them.</span></p>{% endif %}
 
 <nav class="tabs">

@@ -321,6 +321,16 @@ class ServerManager:
                 log.warning("Couldn't read %s for the kill log: %s", row["path"], exc)
                 game = {"kill_rows": []}
             self.db.add_kills(state.config.id, game["kill_rows"], row["folder"])
+        # And who was on PC or console, with Steam IDs, in games saved before that was read.
+        for row in self.db.unread_platform_games(state.config.id):
+            try:
+                info = Path(row["path"]).stat()
+                game = await asyncio.to_thread(archive.read_game, row["path"], row["folder"], info.st_size,
+                                               info.st_mtime, ())
+            except (OSError, tarfile.TarError, EOFError) as exc:
+                log.warning("Couldn't read %s for platforms: %s", row["path"], exc)
+                game = {"platforms": []}
+            self.db.add_platforms(game["platforms"], state.config.id, row["folder"])
 
     def suspicious(self, state: ServerState, flag: dict):
         """Puts a flag in the live feed; a fresh one also goes to Discord, and a

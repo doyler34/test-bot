@@ -111,6 +111,7 @@ def read_game(path: str, folder: str, size: int, mtime: float, settings: tuple) 
     ended = max((e["at"] for e in events), default=started)
     return {"started": started, "ended": ended, "players": sorted(players.values(), key=lambda p: p["first"]),
             "feed": feed, "flags": flags, "kill_rows": kill_rows(events, started),
+            "platforms": [e for e in events if e["kind"] == "platform"],
             "kills": sum(e["kind"] == "kill" and bool(e.get("victim")) and e.get("killer") != e["victim"]
                          for e in events),
             "teamkills": sum(e["kind"] == "teamkill" for e in events)}

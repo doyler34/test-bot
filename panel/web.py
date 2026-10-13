@@ -991,6 +991,11 @@ async def players_page(request):
     if q and re.fullmatch(r"[0-9a-fA-F.:]{3,}", q) and allowed(request, "ips"):
         seen = {r["identity"] for r in rows}
         rows += [dict(r) for r in request.app[DB].search_ip(q) if r["identity"] not in seen]
+    if re.fullmatch(r"7656119\d{10}", q) and allowed(request, "ips"):
+        seen = {r["identity"] for r in rows}
+        rows += [dict(r) for r in request.app[DB].all(
+            "SELECT p.* FROM players p JOIN platforms f ON f.identity = p.identity WHERE f.steam_id = ?", q)
+            if r["identity"] not in seen]
     if q:
         seen = {r["identity"] for r in rows}
         rows += [dict(r, last_seen=0, last_server="") for r in request.app[STATS].search(q) if r["identity"] not in seen]
@@ -1082,7 +1087,12 @@ async def investigate_page(request):
     db = request.app[DB]
     subject = db.player(identity)
     linked = db.alts(identity)
-    ids = [identity] + [a["identity"] for a in linked]
+    platforms = {}
+    mine = db.platform(identity)
+    same = db.same_steam(mine["steam_id"], identity) if mine else []
+    ids = list(dict.fromkeys([identity] + [a["identity"] for a in linked] + [o["identity"] for o in same]))
+    for i in ids:
+        platforms[i] = db.platform(i)
     rows = {i: [dict(r) for r in db.kill_log(i, "all", since, limit=20000)] for i in ids}
     banned = {i: db.active_ban(i) is not None for i in ids}
     shared = {a["identity"]: (a["shared"] or "").split(",") for a in linked}
@@ -1094,7 +1104,9 @@ async def investigate_page(request):
         accounts.append({"identity": i, "label": label, "stats": stats, "banned": banned[i],
                          "names": list(dict.fromkeys(stats["names"] + [n["name"] for n in db.player_names(i)])),
                          "ips": db.ips(i), "bans": db.all("SELECT * FROM bans WHERE identity = ? ORDER BY id DESC", i),
-                         "relation": None if i == identity else investigate.relationship(identity, i, rows, shared[i])})
+                         "platform": platforms[i],
+                         "relation": None if i == identity else investigate.relationship(
+                             identity, i, rows, shared.get(i, []), platforms[identity], platforms[i])})
     everyone, typical = outliers.unusual(db.player_totals(since), db.incident_counts(since))
     labels = dict(outliers.METRICS)
     unusual = {p["identity"]: {**p, "labels": [labels[k] for k in p["high"]]} for p in everyone if p["identity"] in ids}
@@ -1133,6 +1145,9 @@ async def player_page(request):
                   banned_ips=db.banned_ips() if allowed(request, "ips") else set(),
                   alts=db.alts(identity) if allowed(request, "ips") else [],
                   names=db.player_names(identity), notes=db.notes(identity), bans=bans,
+                  platform=db.platform(identity),
+                  same_steam=db.same_steam((db.platform(identity) or {"steam_id": ""})["steam_id"], identity)
+                  if allowed(request, "ips") else [],
                   incidents=db.incidents_for(identity), kills=kill_log(request, identity),
                   kill_logs=KILL_LOGS, kill_periods=KILL_PERIODS,
                   active=db.active_ban(identity), durations=DURATIONS,

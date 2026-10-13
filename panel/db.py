@@ -234,6 +234,18 @@ CREATE TABLE IF NOT EXISTS kills (
 );
 CREATE INDEX IF NOT EXISTS kills_killer ON kills(killer, at);
 CREATE INDEX IF NOT EXISTS kills_victim ON kills(victim, at);
+CREATE TABLE IF NOT EXISTS platforms (
+    identity TEXT PRIMARY KEY,
+    platform TEXT NOT NULL,
+    steam_id TEXT NOT NULL DEFAULT '',
+    last_seen INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS platforms_steam ON platforms(steam_id);
+CREATE TABLE IF NOT EXISTS platforms_read (
+    server TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    PRIMARY KEY (server, folder)
+);
 CREATE TABLE IF NOT EXISTS kills_read (
     server TEXT NOT NULL,
     folder TEXT NOT NULL,
@@ -579,6 +591,7 @@ class PanelDB:
     # connections
 
     def add_connections(self, server, events, positions):
+        self.add_platforms([e for e in events if e.get("kind") == "platform"], commit=False)
         for e in events:
             if e.get("kind", "identity") != "identity":
                 if e.get("text") and e["kind"] != "fps":
@@ -767,6 +780,35 @@ class PanelDB:
                                 [(server, *row) for row in rows])
             if folder:
                 self.db.execute("INSERT OR IGNORE INTO kills_read VALUES (?, ?)", (server, folder))
+
+    def add_platforms(self, events, server=None, folder=None, commit=True):
+        """PC on Steam (with the Steam ID) or console, per account, as the log said
+        when they last joined."""
+        self.db.executemany(
+            "INSERT INTO platforms (identity, platform, steam_id, last_seen) VALUES (?, ?, ?, ?)"
+            " ON CONFLICT(identity) DO UPDATE SET platform = excluded.platform, steam_id = excluded.steam_id,"
+            " last_seen = excluded.last_seen WHERE excluded.last_seen >= last_seen",
+            [(e["identity"], e["platform"], e["steam"], e["at"]) for e in events])
+        if folder:
+            self.db.execute("INSERT OR IGNORE INTO platforms_read VALUES (?, ?)", (server, folder))
+        if commit:
+            self.db.commit()
+
+    def platform(self, identity):
+        return self.one("SELECT * FROM platforms WHERE identity = ?", identity)
+
+    def same_steam(self, steam_id, identity=""):
+        """Every other account that joined from this Steam account."""
+        if not steam_id:
+            return []
+        return self.all("SELECT p.identity, COALESCE(pl.name, p.identity) AS name, p.last_seen FROM platforms p"
+                        " LEFT JOIN players pl ON pl.identity = p.identity"
+                        " WHERE p.steam_id = ? AND p.identity != ? ORDER BY p.last_seen DESC", steam_id, identity)
+
+    def unread_platform_games(self, server, limit=20):
+        return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM platforms_read r"
+                        " WHERE r.server = a.server AND r.folder = a.folder) ORDER BY started DESC LIMIT ?",
+                        server, limit)
 
     def unread_kill_games(self, server, limit=20):
         return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM kills_read r"

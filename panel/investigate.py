@@ -106,6 +106,9 @@ def findings(subject, accounts, unusual, sus_lines, incidents):
             out.append({"level": MODERATE, "account": who,
                         "title": f"{s['long_heads']} headshot kills from {LONG} m or more",
                         "why": "Possible with a scope and patience; a lot of them alongside close-range sprees is not usual."})
+        if (acct.get("relation") or {}).get("steam"):
+            out.append({"level": MODERATE, "account": who, "title": "Same Steam account as this player",
+                        "why": "Proof it's the same person on two Reforger accounts, not just someone in the same house."})
         if acct["banned"] and acct["identity"] != subject:
             out.append({"level": MODERATE, "account": who, "title": "This linked account is banned",
                         "why": "If they're the same person, playing on this account is ban evasion."})
@@ -134,18 +137,22 @@ def verdict(found):
     return NOTE, "Nothing stands out", "Nothing in these kills is beyond a good player."
 
 
-def relationship(subject, other, rows, shared):
+def relationship(subject, other, rows, shared, mine=None, theirs=None):
     """How a linked account relates to the subject: what they share and whether
     they were ever on together."""
     overlap = together(rows[subject], rows[other], subject, other)
-    if overlap:
+    steam = mine and theirs and mine["steam_id"] and mine["steam_id"] == theirs["steam_id"]
+    if steam:
+        reading = (f"Same Steam account ({mine['steam_id']}): the same person, on more than one "
+                   "Reforger account.")
+    elif overlap:
         reading = (f"Active at the same time on {len(overlap)} occasion{'s' if len(overlap) != 1 else ''}: "
                    "two people, likely the same house.")
     elif rows[other] and rows[subject]:
         reading = "Never active at the same time: fits one person swapping accounts."
     else:
         reading = "Not enough kills on one side to tell whether they're ever on together."
-    return {"shared": shared, "overlap": overlap, "reading": reading}
+    return {"shared": shared, "overlap": overlap, "reading": reading, "steam": bool(steam)}
 
 
 def report_text(subject_name, level_title, found, accounts):

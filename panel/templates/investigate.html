@@ -55,12 +55,13 @@
 <section class="card">
   <div class="row">
     <h2><a href="/player/{{ a.identity }}">{{ a.label }}</a></h2>
-    {% if loop.first %}<span class="pill">this player</span>{% else %}<span class="pill alt">shares an IP</span>{% endif %}
+    {% if loop.first %}<span class="pill">this player</span>{% elif a.relation and a.relation.steam %}<span class="pill down">same Steam account</span>{% else %}<span class="pill alt">shares an IP</span>{% endif %}
     {% if a.banned %}<span class="pill down">Banned</span>{% endif %}
   </div>
   <p class="muted mono">{{ a.identity }}</p>
+  {% if a.platform %}<p>{% if a.platform.platform == "steam" %}<span class="pill">PC · Steam</span> <span class="mono">{{ a.platform.steam_id }}</span> · <a href="https://steamcommunity.com/profiles/{{ a.platform.steam_id }}" rel="noopener noreferrer" target="_blank">Steam profile</a>{% else %}<span class="pill">Console · Xbox or PlayStation</span>{% endif %}</p>{% endif %}
   {% if a.relation %}
-  <p><b>{{ a.relation.reading }}</b><br><span class="muted">Shared IP{{ "s" if a.relation.shared|length != 1 }}: {{ a.relation.shared|join(", ") }}</span></p>
+  <p><b>{{ a.relation.reading }}</b>{% if a.relation.shared %}<br><span class="muted">Shared IP{{ "s" if a.relation.shared|length != 1 }}: {{ a.relation.shared|join(", ") }}</span>{% endif %}</p>
   {% endif %}
   {% if a.names|length > 1 %}<p>Names used: {{ a.names|join(", ") }}</p>{% endif %}
   <div class="stats">

@@ -75,3 +75,23 @@ class InvestigatePageTests(unittest.IsolatedAsyncioTestCase):
         page = await (await self.client.get(f'/player/{self.who}/investigate?days=all')).text()
         self.assertIn('Nothing stands out', page)
         self.assertEqual(self.db.audit()[0]['action'], 'investigate')
+
+    async def test_steam_shows_and_links_accounts(self):
+        alt = 'aaaa7237-58a0-42a7-9379-fa2acfbee349'
+        self.db.saw_player(alt, 'Steak Eggs', 'server-1')
+        self.db.add_platforms([{'identity': self.who, 'platform': 'steam', 'steam': '76561199889955833', 'at': 100},
+                               {'identity': alt, 'platform': 'steam', 'steam': '76561199889955833', 'at': 50}])
+        await self.client.post('/login', data={'username': 'adm', 'password': 'adm-password'})
+        page = await (await self.client.get(f'/player/{self.who}')).text()
+        self.assertIn('PC · Steam', page)
+        self.assertNotIn('76561199889955833', page)
+        self.client.session.cookie_jar.clear()
+        await self.client.post('/login', data={'username': 'boss', 'password': 'boss-password'})
+        page = await (await self.client.get(f'/player/{self.who}')).text()
+        self.assertIn('steamcommunity.com/profiles/76561199889955833', page)
+        self.assertIn('Same Steam account as', page)
+        report = await (await self.client.get(f'/player/{self.who}/investigate?days=all')).text()
+        self.assertIn('Steak Eggs', report)
+        self.assertIn('same Steam account', report)
+        found = await (await self.client.get('/players?q=76561199889955833')).text()
+        self.assertIn('Steak Eggs', found)
