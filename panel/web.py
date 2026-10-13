@@ -1032,12 +1032,39 @@ def kill_log(request, identity):
         lines.append({"row": r, "stamp": stamp, "server": names.get(r["server"], r["server"]), "what": what,
                       "killer": killer, "extra": extra, "revenge": note,
                       "game": time.strftime("logs_%Y-%m-%d_%H-%M-%S", time.localtime(r["game"])) if r["game"] else ""})
-    text = "\n".join(f"{l['stamp']} [{l['server']}] {l['killer']} {l['what']}"
+    groups = kill_log_groups(identity, lines)
+    text = "\n".join(
+        f"--- As {g['name']} · {g['first']} to {g['last']} · {g['kills']} kills, {g['deaths']} deaths ---\n"
+        + "\n".join(f"{l['stamp']} [{l['server']}] {l['killer']} {l['what']}"
                      + ("" if l["row"]["killer"] == l["row"]["victim"] else f" {l['row']['victim_name']}")
                      + (f" ({l['extra']})" if l["extra"] else "") + (f" - {l['revenge']}" if l["revenge"] else "")
-                     for l in lines)
+                     for l in g["lines"])
+        for g in groups)
     return {"mode": mode, "title": dict(KILL_LOGS)[mode], "period": period, "day": day, "label": label,
-            "lines": lines, "text": text, "full": len(rows) >= 500}
+            "lines": lines, "groups": groups, "names": len({g["name"] for g in groups}), "text": text,
+            "full": len(rows) >= 500}
+
+
+def kill_log_groups(identity, lines):
+    """The log split wherever the player was going by a different name, newest
+    first, so a rename stands out instead of hiding in the rows."""
+    groups = []
+    for l in lines:
+        r = l["row"]
+        own = r["killer_name"] if r["killer"] == identity else r["victim_name"] if r["victim"] == identity else ""
+        name = own if own and own != "?" else "a name the log didn't record"
+        if not groups or groups[-1]["name"] != name:
+            groups.append({"name": name, "lines": [], "kills": 0, "deaths": 0})
+        group = groups[-1]
+        group["lines"].append(l)
+        if r["killer"] != r["victim"]:
+            group["kills"] += r["killer"] == identity
+            group["deaths"] += r["victim"] == identity
+    for group in groups:
+        group["first"], group["last"] = group["lines"][0]["stamp"][:6], group["lines"][-1]["stamp"][:6]
+        group["lines"].reverse()
+    groups.reverse()
+    return groups
 
 
 async def player_page(request):

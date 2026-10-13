@@ -512,3 +512,6 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .kick-pick form { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(300px, 80vw); display: grid; gap: 8px;
   padding: 10px; background: var(--panel-2); border: 1px solid var(--gold); white-space: normal; text-align: left; }
 .kick-pick label { margin: 0; }
+.kill-log tr.name-break td { background: var(--panel-2); border-top: 2px solid var(--gold); padding: 10px; font-size: .95rem;
+  white-space: normal; overflow: visible; max-width: none; }
+.kill-log tr.name-break b { color: var(--gold); }

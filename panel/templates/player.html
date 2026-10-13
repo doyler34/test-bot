@@ -113,11 +113,17 @@
   </form>
   {% if kills %}
   <h3>{{ kills.title }} · {{ kills.label }} ({{ kills.lines|length }}{{ "+" if kills.full }})</h3>
+  <p class="muted">Newest first.{% if kills.names > 1 %} This account went by {{ kills.names }} names in this time; each one starts a new section. The account ID is the same throughout, so it's one player renaming, not different people.{% endif %}</p>
   {% if kills.lines %}
   <div class="scroll"><table class="kill-log">
     <thead><tr><th>When</th><th>Server</th><th>What happened</th><th>How</th><th></th></tr></thead>
     <tbody>
-    {% for l in kills.lines %}
+    {% for g in kills.groups %}
+    <tr class="name-break"><td colspan="5">
+      {% if kills.names > 1 %}Playing as {% endif %}<b>{{ g.name }}</b>
+      <span class="muted">· {{ g.first }}{% if g.last != g.first %} to {{ g.last }}{% endif %} · {{ g.kills }} kill{{ "s" if g.kills != 1 }}, {{ g.deaths }} death{{ "s" if g.deaths != 1 }}</span>
+    </td></tr>
+    {% for l in g.lines %}
     <tr {% if l.revenge %}class="revenge"{% endif %}>
       <td class="mono nowrap">{{ l.stamp }}</td>
       <td>{{ l.server }}</td>
@@ -130,6 +136,7 @@
       <td class="muted">{{ l.extra }}</td>
       <td>{% if l.game %}<a href="/server/{{ l.row.server }}/game/{{ l.game }}">Game</a>{% endif %}</td>
     </tr>
+    {% endfor %}
     {% endfor %}
     </tbody>
   </table></div>

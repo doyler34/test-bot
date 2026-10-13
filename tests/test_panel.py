@@ -2341,6 +2341,24 @@ class SusWordingTests(unittest.TestCase):
         self.assertEqual(how({"damage": "KINETIC", "zone": "Head", "distance": 1049}), "bullet to the head from 1,049 m")
 
 
+class KillLogGroupTests(unittest.TestCase):
+    def test_renames_start_new_sections_newest_first(self):
+        from panel.web import kill_log_groups
+        me = "5dd87237-58a0-42a7-9379-fa2acfbee349"
+
+        def line(day, killer, killer_name, victim, victim_name):
+            return {"stamp": f"{day:02d} Oct 2026 · 10:00:00",
+                    "row": {"killer": killer, "killer_name": killer_name, "victim": victim, "victim_name": victim_name}}
+        lines = [line(6, me, "?", "a", "TIpToE"), line(9, me, "Lt. Rogers", "b", "Oracle"),
+                 line(10, "c", "Michael", me, "Lt. Rogers"), line(13, me, "John Wick", "d", "DonLuis"),
+                 line(13, me, "John Wick", "e", "Soap")]
+        groups = kill_log_groups(me, lines)
+        self.assertEqual([g["name"] for g in groups], ["John Wick", "Lt. Rogers", "a name the log didn't record"])
+        self.assertEqual([(g["kills"], g["deaths"]) for g in groups], [(2, 0), (1, 1), (1, 0)])
+        self.assertEqual((groups[1]["first"], groups[1]["last"]), ("09 Oct", "10 Oct"))
+        self.assertEqual(groups[0]["lines"][0]["row"]["victim_name"], "Soap")
+
+
 class ReasonTests(unittest.TestCase):
     def test_every_template_and_typed_reason_carries_the_appeal(self):
         from panel.reasons import BAN_REASONS, KICK_REASONS, options, with_appeal

@@ -28,7 +28,9 @@ EXPLOSIVE = {"EXPLOSIVE", "FRAGMENTATION", "INCENDIARY"}
 FEET = {"LFoot", "RFoot"}
 
 DAMAGE = {"KINETIC": "bullet", "EXPLOSIVE": "explosion", "FRAGMENTATION": "grenade or shrapnel", "INCENDIARY": "fire",
-          "FIRE": "fire", "BLEEDING": "bled out", "COLLISION": "vehicle", "MELEE": "melee"}
+          "FIRE": "fire", "BLEEDING": "bled out", "COLLISION": "vehicle", "MELEE": "melee",
+          # Some kill lines carry the word TRUE where the damage type should be.
+          "TRUE": "type not logged"}
 
 
 def body_part(zone):
