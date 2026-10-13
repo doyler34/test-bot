@@ -29,4 +29,8 @@ async function refresh() {
 
 if (!document.querySelector(".preview")) setInterval(refresh, 30000);
 
-document.querySelectorAll(".menu nav a").forEach(a => a.addEventListener("click", () => a.closest("details").open = false));
+const menu = document.querySelector(".menu");
+if (menu) {
+  menu.querySelectorAll("nav a").forEach(a => a.addEventListener("click", () => menu.open = false));
+  document.addEventListener("click", e => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+}

@@ -135,15 +135,16 @@ footer p { margin: 0; }
 @media (max-width: 980px) {
   .links { display: none; }
   .join-top { margin-left: auto; }
-  .menu { display: block; position: relative; }
+  .menu { display: block; margin-left: auto; }
+  .join-top + .menu { margin-left: 0; }
   .menu summary { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--line); cursor: pointer; list-style: none; }
   .menu summary::-webkit-details-marker { display: none; }
   .menu summary svg { width: 22px; height: 22px; }
   .menu[open] summary { border-color: var(--red); }
-  .menu nav { position: absolute; right: 0; top: calc(100% + 11px); min-width: 220px; display: flex; flex-direction: column;
-    padding: 6px 16px; background: var(--raise); border: 1px solid var(--line); font-family: var(--display);
-    text-transform: uppercase; letter-spacing: .08em; }
-  .menu nav a { padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
+  .menu nav { position: absolute; left: 0; right: 0; top: 100%; display: flex; flex-direction: column;
+    padding: 4px var(--gutter) 10px; background: var(--raise); border-bottom: 1px solid var(--line);
+    font-family: var(--display); text-transform: uppercase; letter-spacing: .08em; font-size: 1.05rem; }
+  .menu nav a { padding: 13px 0; border-bottom: 1px solid var(--line-soft); }
   .menu nav a:last-child { border-bottom: 0; }
   .top-grid { grid-template-columns: 1fr; }
   .cards { grid-template-columns: 1fr 1fr; }
