@@ -665,7 +665,14 @@ class SuspicionTests(unittest.TestCase):
                          ["Eagle shot and killed 3 players from over 800 m away in 15 minutes. The longest was 1,100 m and 1 was a headshot."])
         apart = (shot("07:00:00.000", "Split", person(77), 1, 0, 0, metres=100)
                  + shot("07:00:01.000", "Split", person(77), 2, 0, 900, metres=100).replace("<60, 30, 920>", "<0, 30, 0>"))
-        self.assertEqual([f["text"] for f in self.flags(apart)], ["Split killed two players who were 900 m apart from each other within 1 second"])
+        self.assertEqual([f["text"] for f in self.flags(apart)], [
+            "Split killed two players who were 900 m apart from each other within 1 second. "
+            "Victim1: bullet to the head from 100 m. Victim2: bullet to the head from 100 m."])
+        mines = "".join(shot(f"07:10:0{i}.000", "Sapper", person(78), 3 + i, 0, i * 1000, zone="RFoot", metres=0)
+                        .replace("KINETIC", "EXPLOSIVE").replace(f"<60, 30, {i * 1000 + 20}>", "<0, 30, 0>") for i in range(2))
+        self.assertIn("Victim3: explosion to the right foot. Victim4: explosion to the right foot. "
+                      "Both explosions to the feet, most likely AP mines left earlier.",
+                      " ".join(f["text"] for f in self.flags(mines)))
 
     def test_script_error_spike(self):
         def error(clock, where):

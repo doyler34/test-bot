@@ -24,7 +24,7 @@ from .oyb_stats import OybStats
 from .reasons import BAN_REASONS, KICK_REASONS, options as reason_options, with_appeal
 from .rcon import RconError
 from .battlemetrics import BanSync
-from .suspicion import DEFAULTS as SUS_DEFAULTS, LIMITS as SUS_LIMITS, check_settings as check_sus
+from .suspicion import DAMAGE, DEFAULTS as SUS_DEFAULTS, LIMITS as SUS_LIMITS, body_part, check_settings as check_sus
 from .servers import ServerManager, clean, valid_identity
 
 log = logging.getLogger("panel.web")
@@ -992,17 +992,6 @@ async def players_page(request):
 
 KILL_LOGS = (("tk_by", "Teamkills they did"), ("tk_on", "Who teamkilled them"), ("all", "All their kills and deaths"))
 KILL_PERIODS = (("last", "Their last game"), ("1", "Last 24 hours"), ("7", "Last 7 days"), ("30", "Last 30 days"))
-DAMAGE = {"KINETIC": "bullet", "EXPLOSIVE": "explosion", "FRAGMENTATION": "grenade or shrapnel", "INCENDIARY": "fire",
-          "FIRE": "fire", "BLEEDING": "bled out", "COLLISION": "vehicle", "MELEE": "melee"}
-
-
-def body_part(zone):
-    """The log's hit zones (RArm, LThigh, Head) as plain words."""
-    side = {"L": "left ", "R": "right "}.get(zone[:1], "") if zone[1:2].isupper() else ""
-    rest = zone[len(side) and 1:]
-    return side + re.sub(r"(?<!^)(?=[A-Z])", " ", rest).lower()
-
-
 def kill_log(request, identity):
     """The kill log asked for on a player's page, or None if none was."""
     mode = request.query.get("log", "")

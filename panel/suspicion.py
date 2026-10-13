@@ -20,11 +20,33 @@ other in the same moment is the same thing seen from the other side.
 """
 
 import math
+import re
 from collections import Counter, defaultdict, deque
 
 EXPLOSIVE = {"EXPLOSIVE", "FRAGMENTATION", "INCENDIARY"}
 # An AP mine goes off under someone, so the game puts the hit in a foot.
 FEET = {"LFoot", "RFoot"}
+
+DAMAGE = {"KINETIC": "bullet", "EXPLOSIVE": "explosion", "FRAGMENTATION": "grenade or shrapnel", "INCENDIARY": "fire",
+          "FIRE": "fire", "BLEEDING": "bled out", "COLLISION": "vehicle", "MELEE": "melee"}
+
+
+def body_part(zone):
+    """The log's hit zones (RArm, LThigh, Head) as plain words."""
+    side = {"L": "left ", "R": "right "}.get(zone[:1], "") if zone[1:2].isupper() else ""
+    rest = zone[len(side) and 1:]
+    return side + re.sub(r"(?<!^)(?=[A-Z])", " ", rest).lower()
+
+
+def how(e):
+    """One kill in plain words: "bullet to the chest from 412 m"."""
+    damage = e.get("damage")
+    text = DAMAGE.get(damage, (damage or "unknown").lower())
+    if e.get("zone"):
+        text += f" to the {body_part(e['zone'])}"
+    if e.get("distance") and damage == "KINETIC":
+        text += f" from {e['distance']:,.0f} m"
+    return text
 
 DEFAULTS = {
     "ai_explosions": 5,           # explosive deaths credited to AI ...
@@ -251,10 +273,14 @@ class Detector:
                 continue
             apart = metres(k["victim_at"], e["victim_at"])
             if apart >= self.s["spread"]:
+                mines = all(x.get("zone") in FEET and x.get("damage") in EXPLOSIVE for x in (k, e))
                 return self._flag(("spread", e["killer"]), e["at"],
                                   f"{who} killed two players who were {apart:,.0f} m apart from each other "
                                   + ("in the same second" if e["at"] == k["at"]
-                                     else f"within {plural(e['at'] - k['at'], 'second')}"),
+                                     else f"within {plural(e['at'] - k['at'], 'second')}")
+                                  + f". {k.get('victim_name') or 'Someone'}: {how(k)}. "
+                                  + f"{e.get('victim_name') or 'Someone'}: {how(e)}."
+                                  + (" Both explosions to the feet, most likely AP mines left earlier." if mines else ""),
                                   identity=e["killer"])
         return []
 
