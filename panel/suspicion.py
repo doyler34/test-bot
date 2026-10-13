@@ -38,6 +38,16 @@ def body_part(zone):
     return side + re.sub(r"(?<!^)(?=[A-Z])", " ", rest).lower()
 
 
+def feet(blasts):
+    """How many explosive deaths hit the feet, which is how an AP mine shows up."""
+    count = sum(b.get("zone") in FEET for b in blasts)
+    if not count:
+        return ""
+    if count == len(blasts):
+        return ". All to the feet, most likely AP mines"
+    return f". {count} of them to the feet, most likely AP mines"
+
+
 def how(e):
     """One kill in plain words: "bullet to the chest from 412 m"."""
     damage = e.get("damage")
@@ -209,7 +219,7 @@ class Detector:
             if len(same) >= s["same_second"]:
                 flags += self._flag(("same_second",), at,
                                     f"{len(same)} players were blown up in the same second by explosions the game "
-                                    "credits to AI, so they don't show in the kill feed", self.ai_blasts)
+                                    "credits to AI, so they don't show in the kill feed" + feet(same), self.ai_blasts)
             if len(self.ai_blasts) >= s["ai_explosions"]:
                 window = s["ai_explosions_window"] // 60
                 flags += self._flag(("ai_explosions",), at,
@@ -231,8 +241,10 @@ class Detector:
         rifle = [k for k in mine if k["kind"] == "kill" and k.get("damage") == "KINETIC"]
         rapid = [k for k in rifle if k["at"] >= at - s["rapid_window"]]
         if len(rapid) >= s["rapid_kills"]:
+            heads = sum(k.get("zone") == "Head" for k in rapid)
             flags += self._flag(("rapid", e["killer"]), at,
-                                f"{who} got {len(rapid)} kills in {s['rapid_window']} seconds", identity=e["killer"])
+                                f"{who} got {len(rapid)} bullet kills in {s['rapid_window']} seconds"
+                                + (f", {plural(heads, 'headshot')}" if heads else ""), identity=e["killer"])
         longs = [k for k in rifle if (k.get("distance") or 0) >= s["long_shot"]]
         if len(longs) >= s["long_shots"]:
             far = max(k["distance"] for k in longs)
@@ -261,7 +273,7 @@ class Detector:
         return self._flag(("teleport", e["killer"]), e["at"],
                           f"{who} got a kill {gap:,.0f} m away from their last one only "
                           f"{plural(seconds, 'second')} later, without dying in between. Nothing in the game "
-                          "moves that fast",
+                          f"moves that fast. That kill: {how(e)}",
                           identity=e["killer"])
 
     def _spread(self, e, mine, who):

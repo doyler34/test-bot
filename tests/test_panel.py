@@ -629,7 +629,7 @@ class SuspicionTests(unittest.TestCase):
         tks = "".join(shot(f"09:0{i}:00.000", "Rogue", person(72), i, 0, 0).replace("KILL ENEMY", "KILL TK")
                       for i in range(5))
         texts = [f["text"] for f in self.flags(rapid + heads + tks)]
-        self.assertEqual(texts, ["Spray got 6 kills in 30 seconds", "Aimer got 10 kills in 15 minutes and 10 of them were headshots",
+        self.assertEqual(texts, ["Spray got 6 bullet kills in 30 seconds", "Aimer got 10 kills in 15 minutes and 10 of them were headshots",
                                  "Rogue has teamkilled 5 times this game. Killed: Victim0, Victim1, Victim2, Victim3, Victim4"])
         # Four isn't enough any more: grenades and mortars make that much by accident.
         self.assertEqual(self.flags(tks.replace("09:04:00", "09:24:00")), [])
@@ -649,7 +649,7 @@ class SuspicionTests(unittest.TestCase):
     def test_teleporting_between_kills(self):
         jump = shot("07:00:00.000", "Blink", person(73), 1, 1000, 1000) + shot("07:00:05.000", "Blink", person(73), 2, 4000, 1000)
         flags = self.flags(jump)
-        self.assertEqual([f["text"] for f in flags], ["Blink got a kill 3,000 m away from their last one only 5 seconds later, without dying in between. Nothing in the game moves that fast"])
+        self.assertEqual([f["text"] for f in flags], ["Blink got a kill 3,000 m away from their last one only 5 seconds later, without dying in between. Nothing in the game moves that fast. That kill: bullet to the head from 40 m"])
         self.assertEqual(flags[0]["identity"], person(73))
         died = (shot("07:00:00.000", "Blink", person(73), 1, 1000, 1000)
                 + shot("07:00:02.000", "Someone", person(74), 73, 1000, 1000).replace("Victim73", "Blink")
@@ -2310,6 +2310,16 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get("/server/server-1")).text()
         self.assertNotIn("<script>alert", html)
         self.assertIn("&lt;script&gt;", html)
+
+
+class SusWordingTests(unittest.TestCase):
+    def test_feet_and_how(self):
+        from panel.suspicion import feet, how
+        self.assertEqual(feet([{"zone": "LFoot"}, {"zone": "RFoot"}]), ". All to the feet, most likely AP mines")
+        self.assertEqual(feet([{"zone": "LFoot"}, {"zone": "Head"}]), ". 1 of them to the feet, most likely AP mines")
+        self.assertEqual(feet([{"zone": "Chest"}]), "")
+        self.assertEqual(how({"damage": "EXPLOSIVE", "zone": "RFoot"}), "explosion to the right foot")
+        self.assertEqual(how({"damage": "KINETIC", "zone": "Head", "distance": 1049}), "bullet to the head from 1,049 m")
 
 
 class ReasonTests(unittest.TestCase):
