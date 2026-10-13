@@ -20,6 +20,17 @@ async function refresh() {
     row.querySelector("[data-players]").textContent = s.players;
     row.querySelector("[data-state]").textContent = s.online ? "Online" : "Offline";
   }
+  const list = document.querySelector(".servers");
+  if (list) {
+    const rows = [...list.children];
+    const busy = row => [Number(row.dataset.game), row.classList.contains("is-on") ? 0 : 1,
+                         -Number(row.querySelector("[data-players]").textContent)];
+    rows.sort((a, b) => {
+      const [x, y] = [busy(a), busy(b)];
+      return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+    });
+    list.append(...rows);
+  }
   const summary = document.querySelector("[data-summary]");
   if (summary) {
     summary.textContent = `${data.playing} playing · ${data.online} of ${data.servers.length} up`;

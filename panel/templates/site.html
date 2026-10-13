@@ -61,8 +61,9 @@
       {% if site.count %}
       <ul class="servers">
         {% for game, list in site.games.items() %}
+        {% set game_at = loop.index0 %}
         {% for s in list %}
-        <li class="server {{ 'is-on' if s.online else 'is-off' }}" data-server="{{ s.id }}">
+        <li class="server {{ 'is-on' if s.online else 'is-off' }}" data-server="{{ s.id }}" data-game="{{ game_at }}">
           <img class="badge-img" src="/static/site/oyb-icon.png" alt="" width="40" height="40" loading="lazy">
           <div class="name">
             <b>{{ s.name }}</b>
@@ -75,7 +76,12 @@
           <span class="state" data-state>{{ "Online" if s.online else "Offline" }}</span>
           <details class="join">
             <summary>How to join</summary>
-            <p>{{ s.join }}</p>
+            {% if s.join %}<p>{{ s.join }}</p>
+            {% else %}<ol>
+              <li>Open Arma Reforger and go to <b>Multiplayer</b>.</li>
+              <li>Type <b>{{ doc.name }}</b> in the server browser search.</li>
+              <li>Pick <b>{{ s.name }}</b> and join.</li>
+            </ol>{% endif %}
           </details>
         </li>
         {% endfor %}

@@ -98,6 +98,9 @@ main { padding: 28px var(--gutter) 56px; display: grid; gap: 20px; }
 .join summary::after { content: " ›"; }
 .join[open] summary::after { content: " ⌄"; }
 .join p { margin: 4px 0 0; font-size: .88rem; color: var(--muted); }
+.join ol { margin: 6px 0 0; padding-left: 20px; font-size: .88rem; color: var(--muted); }
+.join ol b { color: var(--ink); font-weight: 600; }
+.join li { margin: 2px 0; }
 .stale, .empty { margin: 12px 0 0; color: var(--muted); font-size: .88rem; }
 .stale { color: #e0a24a; }
 

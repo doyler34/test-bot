@@ -1441,6 +1441,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('href="#leaderboards"', html)
         self.assertIn("data-stale hidden", html)
         self.assertNotIn("No servers are listed", html)
+        self.assertIn("Type <b>OYB</b> in the server browser search", html)
         font = await self.client.get("/brand/fonts/Display.ttf", headers={"Host": "oybgaming.com"})
         self.assertEqual(font.status, 200)
         self.assertNotIn("Log in", html)
@@ -2295,6 +2296,21 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get("/server/server-1")).text()
         self.assertNotIn("<script>alert", html)
         self.assertIn("&lt;script&gt;", html)
+
+
+class SiteOrderTests(unittest.TestCase):
+    def test_busiest_server_first_and_offline_last(self):
+        from types import SimpleNamespace
+        from panel import site
+        configs = [SimpleNamespace(id=i, name=i) for i in ("everon", "classic", "plus", "down")]
+        states = {"everon": SimpleNamespace(online=True, players=[1] * 40),
+                  "classic": SimpleNamespace(online=True, players=[1] * 112),
+                  "plus": SimpleNamespace(online=True, players=[1] * 5),
+                  "down": SimpleNamespace(online=False, players=[])}
+        doc = site.check_site({}, [c.id for c in configs])[0]
+        shown = site.view(doc, configs, states, {})["games"]["Arma Reforger"]
+        self.assertEqual([s["id"] for s in shown], ["classic", "everon", "plus", "down"])
+        self.assertEqual(shown[0]["join"], "")
 
 
 if __name__ == "__main__":

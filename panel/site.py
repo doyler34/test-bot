@@ -66,8 +66,9 @@ def rules(text):
 
 
 def view(doc, servers, states, bridge):
-    """What the site shows, grouped by game. No player names, IPs or anything
-    else from the panel: just who's online and how many are playing."""
+    """What the site shows, grouped by game with the busiest server first. No
+    player names, IPs or anything else from the panel: just who's online and
+    how many are playing."""
     reported = {s.get("id"): s for s in bridge.get("servers", [])}
     games, online, playing = {}, 0, 0
     for config in servers:
@@ -83,7 +84,9 @@ def view(doc, servers, states, bridge):
         games.setdefault(look["game"], []).append({
             "id": config.id, "name": name, "online": up, "players": count,
             "settings": plain((reported.get(config.id) or {}).get("settings", "")),
-            "join": look["join"] or f"Search for “{name}” in the server browser."})
+            "join": look["join"]})
+    for group in games.values():
+        group.sort(key=lambda s: (not s["online"], -s["players"]))
     return {"games": games, "online": online, "playing": playing,
             "count": sum(len(s) for s in games.values())}
 
