@@ -60,6 +60,21 @@ class DownloadTests(unittest.TestCase):
             self.assertFalse((box.root / 'everon_sat').exists())
 
 
+class FetchTests(unittest.TestCase):
+    def test_asks_like_a_browser_and_says_who_refused(self):
+        import urllib.error
+        seen = []
+
+        def refuse(request, timeout):
+            seen.append(request.get_header('User-agent'))
+            raise urllib.error.HTTPError(request.full_url, 403, 'Forbidden', {}, None)
+
+        with mock.patch('urllib.request.urlopen', side_effect=refuse):
+            with self.assertRaisesRegex(RuntimeError, r'pub-x\.r2\.dev refused the download \(HTTP 403\)'):
+                maptiles.fetch('https://pub-x.r2.dev/everon_sat_z6_full.png', 5)
+        self.assertNotIn('Python-urllib', seen[0])
+
+
 class PanelMapTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         config = PanelConfig(database=':memory:', cookie_secure=False, servers=[])

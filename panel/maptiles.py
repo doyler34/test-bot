@@ -18,6 +18,8 @@ import re
 import shutil
 import sys
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -31,6 +33,8 @@ MAPS = "https://raw.githubusercontent.com/GeNeFRAG/ArmaReforger/main/maps_core/a
 TILE = 256
 ZOOM = 6
 RUNNING = ("starting", "downloading", "cutting")
+# The picture sits behind Cloudflare, which turns away Python's default User-Agent.
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; OYB-Control map download)"}
 
 
 def write_status(**fields):
@@ -56,8 +60,17 @@ def read_status():
     return status
 
 
+def fetch(url, timeout):
+    try:
+        return urllib.request.urlopen(urllib.request.Request(url, headers=HEADERS), timeout=timeout)
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"{urllib.parse.urlsplit(url).netloc} refused the download (HTTP {exc.code}).") from None
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Couldn't reach {urllib.parse.urlsplit(url).netloc}: {exc.reason}.") from None
+
+
 def source_url(zoom):
-    with urllib.request.urlopen(MAPS, timeout=60) as reply:
+    with fetch(MAPS, 60) as reply:
         maps = json.load(reply)
     entry = next((m for m in maps if m.get("namespace") == "everon"), None)
     image = ((entry or {}).get("resources") or {}).get("map_image", "")
@@ -67,7 +80,7 @@ def source_url(zoom):
 
 
 def download(url, dest):
-    with urllib.request.urlopen(url, timeout=120) as reply, open(dest, "wb") as out:
+    with fetch(url, 120) as reply, open(dest, "wb") as out:
         total = int(reply.headers.get("Content-Length") or 0)
         done, shown = 0, 0.0
         while chunk := reply.read(1 << 20):
