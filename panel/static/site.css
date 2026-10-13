@@ -115,6 +115,16 @@ main { padding: 28px var(--gutter) 56px; display: grid; gap: 20px; }
 .rules li::before { content: counter(rule, decimal-leading-zero); font-family: var(--display); font-weight: 700;
   color: var(--red-ink); min-width: 22px; }
 .panel p.note { color: var(--faint); font-size: .84rem; margin: 0; }
+.panel p.board-meta { color: var(--muted); font-size: .84rem; margin: -6px 0 8px; }
+.board { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: .92rem; font-variant-numeric: tabular-nums; }
+.board th { text-align: left; color: var(--muted); font-family: var(--display); font-weight: 700; letter-spacing: .1em;
+  font-size: .78rem; padding: 0 6px 6px; border-bottom: 1px solid var(--line); }
+.board td { padding: 7px 6px; border-bottom: 1px solid var(--line-soft); color: var(--text); }
+.board td:nth-child(2) { color: var(--ink); max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board th:nth-child(n+3), .board td:nth-child(n+3) { text-align: right; }
+.board td:first-child { font-family: var(--display); font-weight: 700; color: var(--faint); }
+.board tr.top td:first-child { color: var(--red-ink); }
+.panel .board + p.note { margin-bottom: 12px; }
 .panel .button { margin-top: 6px; }
 
 .strip { display: flex; align-items: center; gap: 18px; padding: 16px 22px; }

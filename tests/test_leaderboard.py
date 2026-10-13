@@ -80,3 +80,32 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('‮',embed.description)
         self.assertIn('Éowyn 玩家',embed.description)
         self.assertEqual(len(embed.description.splitlines()),5)
+
+
+class WebsiteBoardTests(unittest.IsolatedAsyncioTestCase):
+    add=LeaderboardTests.add
+    events=LeaderboardTests.events
+
+    async def asyncSetUp(self):
+        self.tmp=tempfile.TemporaryDirectory()
+        self.links=AccountLinks(Path(self.tmp.name)/'account_links.sqlite3')
+        migrate(self.links.db)
+        self.seq=0
+
+    async def asyncTearDown(self):
+        self.links.close()
+        self.tmp.cleanup()
+
+    async def test_the_site_shows_the_same_weekly_board(self):
+        from panel.oyb_stats import OybStats
+        self.assertIsNone(OybStats(self.tmp.name+'/missing').weekly_board())
+        stats=OybStats(self.tmp.name)
+        self.assertEqual(stats.weekly_board()['rows'],[])
+        for member,kills,deaths,name in [(12,3,5,'Rook'),(13,9,1,'Havoc'),(14,3,2,'Fennel')]:
+            self.add(member,kills,deaths,name=name)
+        self.add(15,50,guild=2,name='Elsewhere')
+        before=list(self.links.db.iterdump())
+        board=OybStats(self.tmp.name).weekly_board(limit=2)
+        self.assertEqual(board['rows'],[{'name':'Havoc','kills':9,'deaths':1},{'name':'Fennel','kills':3,'deaths':2}])
+        self.assertEqual(board['players'],3)
+        self.assertEqual(before,list(self.links.db.iterdump()))

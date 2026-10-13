@@ -666,7 +666,8 @@ def site_rules(request):
 def site_page(request, preview=False):
     doc = site_doc(request)
     html = request.app[JINJA].get_template("site.html").render(
-        doc=doc, site=site_view(request, doc), rules=site_rules(request), preview=preview,
+        doc=doc, site=site_view(request, doc), rules=site_rules(request), board=request.app[STATS].weekly_board(),
+        preview=preview,
         asset_version=ASSET_VERSION, year=time.strftime("%Y"))
     return web.Response(text=html, content_type="text/html")
 

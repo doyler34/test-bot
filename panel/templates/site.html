@@ -126,9 +126,23 @@
 
     <section class="panel" id="leaderboards" aria-labelledby="leaderboards-title">
       <h2 id="leaderboards-title">{{ icon("trophy") }} Leaderboards</h2>
-      <p>Kills, deaths and the rest, tracked on every {{ doc.name }} server. The leaderboards live in our Discord: a live one for the game you're in, one for past games, and a weekly top three.</p>
-      <p>Link your game account in the Discord and you're on them.</p>
-      {% if doc.discord %}<a class="button outline small" href="{{ doc.discord }}" rel="noopener">{{ icon("trophy") }} View in Discord</a>{% endif %}
+      {% if board and board.rows %}
+      <p class="board-meta">This week · since Monday {{ board.week }} · {{ board.players }} player{{ "s" if board.players != 1 }}</p>
+      <table class="board">
+        <thead><tr><th scope="col">#</th><th scope="col">Player</th><th scope="col" title="Kills">K</th><th scope="col" title="Deaths">D</th></tr></thead>
+        <tbody>
+          {% for r in board.rows %}<tr{% if loop.index <= 3 %} class="top"{% endif %}><td>{{ loop.index }}</td><td>{{ r.name }}</td><td>{{ r.kills }}</td><td>{{ r.deaths }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="note">Linked players only, kills first. Resets every Monday.</p>
+      {% elif board %}
+      <p>No kills recorded this week yet. The board resets every Monday.</p>
+      {% else %}
+      <p>Kills, deaths and the rest, tracked on every {{ doc.name }} server, with live, past-game and weekly boards in our Discord.</p>
+      {% endif %}
+      <p>Link your game account in the Discord to get on the board.</p>
+      {% if doc.discord %}<a class="button outline small" href="{{ doc.discord }}" rel="noopener">{{ icon("trophy") }} Full board in Discord</a>{% endif %}
     </section>
   </div>
 
