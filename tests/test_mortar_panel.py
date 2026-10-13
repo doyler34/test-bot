@@ -146,5 +146,21 @@ class PanelMapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.audit()[0]['action'], 'download mortar map')
 
 
+    async def test_the_sharper_map_waits_for_enough_memory(self):
+        token = await self.login('boss', 'boss-password')
+        with mock.patch('panel.web.mortar_map', return_value=self.mapped):
+            with mock.patch('panel.maptiles.free_memory', return_value=2 * 1024 ** 3):
+                page = await (await self.client.get('/mortar')).text()
+                self.assertNotIn('Get the sharper map', page)
+                self.assertIn('this box has 2.0 GB free', page)
+                with mock.patch('asyncio.create_subprocess_exec', new=mock.AsyncMock()) as start:
+                    await self.client.post('/mortar/download', data={'csrf': token, 'zoom': '7'})
+                start.assert_not_called()
+            with mock.patch('panel.maptiles.free_memory', return_value=8 * 1024 ** 3):
+                self.assertIn('Get the sharper map', await (await self.client.get('/mortar')).text())
+                with mock.patch('asyncio.create_subprocess_exec', new=mock.AsyncMock()) as start:
+                    await self.client.post('/mortar/download', data={'csrf': token, 'zoom': '7'})
+                self.assertEqual(start.call_args.args[1:5], ('-m', 'panel.maptiles', '--zoom', '7'))
+
 if __name__ == '__main__':
     unittest.main()

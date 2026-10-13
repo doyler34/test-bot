@@ -32,9 +32,23 @@ STATUS = OUT / "everon.status.json"
 MAPS = "https://raw.githubusercontent.com/GeNeFRAG/ArmaReforger/main/maps_core/all_arma_maps.json"
 TILE = 256
 ZOOM = 6
+SHARP = 7
+# Cutting the zoom-7 picture holds about 3.2 GB of pixels at once, plus the next level down.
+SHARP_MEMORY = 4.5 * 1024 ** 3
 RUNNING = ("starting", "downloading", "cutting")
 # The picture sits behind Cloudflare, which turns away Python's default User-Agent.
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; OYB-Control map download)"}
+
+
+def free_memory():
+    """Bytes the box can hand out right now, or None where it can't say."""
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
 
 
 def write_status(**fields):

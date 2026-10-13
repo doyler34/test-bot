@@ -1,23 +1,38 @@
 {% extends "base.html" %}
 {% block title %}Mortar · OYB Control{% endblock %}
-{% block head %}{% if not mapped and job.state in ("starting", "downloading", "cutting") %}<meta http-equiv="refresh" content="10">{% endif %}{% endblock %}
+{% set working = job.state in ("starting", "downloading", "cutting") %}
+{% block head %}{% if working %}<meta http-equiv="refresh" content="10">{% endif %}{% endblock %}
 {% block body %}
 <p class="kicker">Being tested</p>
 <h1>Mortar</h1>
 <p class="muted">Only owners can see this page. It's the same calculator as /mortar in Discord, which stays off until the numbers are checked in game. Nothing you enter here is saved or shown to anyone.</p>
 <section class="card">
   <h2>Map</h2>
-  {% if mapped %}
-  <p>Tap your mortar, tap the target, and read off the solution. Drag either marker to adjust.</p>
-  <a class="button" href="/mortar/map">Open the map</a>
-  {% elif job.state in ("starting", "downloading", "cutting") %}
+  {% if working %}
   <p><b>Preparing the map…</b>
     {% if job.state == "downloading" and job.total %}Downloading: {{ (job.done / 1048576)|round|int }} of {{ (job.total / 1048576)|round|int }} MB.
     {% elif job.state == "downloading" %}Downloading: {{ (job.done / 1048576)|round|int }} MB so far.
     {% elif job.state == "cutting" and job.total %}Cutting it into tiles: {{ (100 * job.done / job.total)|round|int }}%.
     {% else %}Starting…{% endif %}</p>
-  <p class="muted">This page updates by itself. It takes about 10 to 15 minutes, once.</p>
+  <p class="muted">This page updates by itself. It takes about 10 to 15 minutes{% if mapped %}; the map you have keeps working until the new one is ready{% endif %}.</p>
+  {% endif %}
+  {% if mapped %}
+  <p>Tap your mortar, tap the target, and read off the solution. Drag either marker to adjust.</p>
+  <a class="button" href="/mortar/map">Open the map</a>
+  {% if mapped.max_zoom < sharp and not working %}
+  {% if job.state == "failed" %}<p class="warn">The last try didn't finish: {{ job.error }}</p>{% endif %}
+  {% if free is not none and free >= sharp_memory %}
+  <form method="post" action="/mortar/download" class="sharper">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="zoom" value="{{ sharp }}">
+    <p class="muted">Zoomed right in, the map is enlarged and goes soft. The sharper picture has twice the detail; this box has the memory to prepare it.</p>
+    <button class="ghost">Get the sharper map</button>
+  </form>
   {% else %}
+  <p class="muted">A sharper map (twice the detail) needs about {{ (sharp_memory / 1073741824)|round(1) }} GB of free memory to prepare{% if free is not none %}; this box has {{ (free / 1073741824)|round(1) }} GB free right now{% endif %}.</p>
+  {% endif %}
+  {% endif %}
+  {% elif not working %}
   {% if job.state == "failed" %}<p class="warn">The last try didn't finish: {{ job.error }}</p>{% endif %}
   <p class="muted">The map picture isn't on this box yet. Press the button once: it downloads the Everon map (a few hundred MB) and gets it ready, in the background, in about 10 to 15 minutes. After that the map is just here.</p>
   <form method="post" action="/mortar/download">

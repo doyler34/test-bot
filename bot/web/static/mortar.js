@@ -19,6 +19,7 @@ let MAP = null;          // the calibration the server handed us
 let TUBES = [];
 let map, layer, gun = null, target = null, line = null, ring = null, label = null;
 let arrow = null;
+let gridMinor = null, gridLabels = null;
 let pending = 0;
 /* The wind as the spotter reports it: the bearing it blows FROM. Everything
  * else about wind - components, corrections, signs - is the backend's work. */
@@ -69,6 +70,59 @@ function tileCRS() {
   return L.extend({}, L.CRS.Simple, {
     transformation: new L.Transformation(1, 0, 1, 0),
   });
+}
+
+/* --- grid -----------------------------------------------------------
+ * The game's own: a line every kilometre, and every 100 m once they are far
+ * enough apart to be read. The kilometre numbers ride along the top and left
+ * of whatever part of the map is on screen.
+ */
+function gridLine(a, b, weight, opacity) {
+  return L.polyline([a, b], { color: '#fff', weight, opacity, interactive: false });
+}
+
+function drawGrid() {
+  const [width, height] = MAP.size;
+  const major = L.layerGroup().addTo(map);
+  gridMinor = L.layerGroup();
+  for (let m = 0; m <= Math.max(width, height); m += 100) {
+    const layer = m % 1000 === 0 ? major : gridMinor;
+    const weight = m % 1000 === 0 ? 1.2 : 0.6, opacity = m % 1000 === 0 ? 0.55 : 0.3;
+    if (m <= width) gridLine(toLatLng(m, 0), toLatLng(m, height), weight, opacity).addTo(layer);
+    if (m <= height) gridLine(toLatLng(0, m), toLatLng(width, m), weight, opacity).addTo(layer);
+  }
+  gridLabels = L.layerGroup().addTo(map);
+  map.on('zoomend moveend', labelGrid);
+  labelGrid();
+}
+
+function labelGrid() {
+  /* 100 m lines only once they are at least ~18px apart. */
+  const apart = map.latLngToContainerPoint(toLatLng(100, 0)).x - map.latLngToContainerPoint(toLatLng(0, 0)).x;
+  if (Math.abs(apart) >= 18) gridMinor.addTo(map); else gridMinor.remove();
+  gridLabels.clearLayers();
+  /* Screen corners, not Leaflet's north/south: this map's y runs downwards. */
+  const size = map.getSize(), [width, height] = MAP.size;
+  const topLeft = toWorld(map.containerPointToLatLng([0, 0]));
+  const bottomRight = toWorld(map.containerPointToLatLng([size.x, size.y]));
+  const west = Math.max(topLeft.east, 0), east = Math.min(bottomRight.east, width);
+  const top = Math.min(topLeft.north, height), bottom = Math.max(bottomRight.north, 0);
+  const along = top - (top - bottom) * 0.03, across = west + (east - west) * 0.03;
+  const label = (latlng, text) => L.marker(latlng, { interactive: false, icon: L.divIcon({
+    className: '', iconSize: null, html: `<span class="grid-label">${text}</span>` }) }).addTo(gridLabels);
+  /* Close in, every 100 m square gets the same 3-digit number the solution
+   * panel shows; further out, every kilometre gets two. A square only part on
+   * screen is labelled in the middle of the part that is. */
+  const fine = map.hasLayer(gridMinor), step = fine ? 100 : 1000;
+  const name = (m) => String(Math.round(m / step)).padStart(fine ? 3 : 2, '0');
+  const squares = (low, high, limit, place) => {
+    for (let m = Math.floor(low / step) * step; m < Math.min(high, limit); m += step) {
+      const from = Math.max(m, low), to = Math.min(m + step, high);
+      if (to - from >= step * 0.35) place((from + to) / 2, name(m));
+    }
+  };
+  squares(west, east, width, (x, text) => label(toLatLng(x, along), text));
+  squares(bottom, top, height, (y, text) => label(toLatLng(across, y), text));
 }
 
 /* --- markers -------------------------------------------------------- */
@@ -371,6 +425,7 @@ async function start() {
 
   map.fitBounds(bounds);
   map.setMaxBounds(bounds.pad(0.2));
+  drawGrid();
   map.on('click', (event) => {
     if (!bounds.contains(event.latlng)) return;
     const where = toWorld(event.latlng);

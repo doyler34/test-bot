@@ -1283,7 +1283,8 @@ async def mortar_page(request):
         except ValueError as exc:
             error = str(exc)
     return render(request, "mortar.html", loaded=loaded, weapon=weapon, form=form, result=result, error=error,
-                  out_of_range=OUT_OF_RANGE, mapped=mortar_map() is not None, job=maptiles.read_status())
+                  out_of_range=OUT_OF_RANGE, mapped=mortar_map(), job=maptiles.read_status(),
+                  sharp=maptiles.SHARP, free=maptiles.free_memory(), sharp_memory=maptiles.SHARP_MEMORY)
 
 
 MORTAR_STATIC = HERE.parent / "bot" / "web" / "static"
@@ -1308,10 +1309,15 @@ async def mortar_download(request):
     if maptiles.read_status().get("state") in maptiles.RUNNING:
         flash(request, "The map is already being prepared.")
         raise web.HTTPFound("/mortar")
+    form = await request.post()
+    zoom = maptiles.SHARP if form.get("zoom") == str(maptiles.SHARP) else maptiles.ZOOM
+    if zoom == maptiles.SHARP and (maptiles.free_memory() or 0) < maptiles.SHARP_MEMORY:
+        flash(request, "This box doesn't have enough free memory for the sharper map right now.", "error")
+        raise web.HTTPFound("/mortar")
     maptiles.OUT.mkdir(parents=True, exist_ok=True)
     with open(maptiles.OUT / "everon.log", "ab") as log_file:
         await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "panel.maptiles", cwd=str(HERE.parent), stdout=log_file,
+            sys.executable, "-m", "panel.maptiles", "--zoom", str(zoom), cwd=str(HERE.parent), stdout=log_file,
             stderr=asyncio.subprocess.STDOUT, start_new_session=True, preexec_fn=lambda: os.nice(10))
     audit(request, "download mortar map")
     flash(request, "Preparing the map. It takes about 10 to 15 minutes; this page shows how far it's got.")

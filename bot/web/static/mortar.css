@@ -124,7 +124,8 @@ select {
 #copy { border-color: var(--accent); color: var(--accent); }
 #panel.empty .figures, #panel.empty .grids, #panel.empty .buttons { opacity: .45; }
 .marker {
-  display: grid; place-items: center; width: 34px; height: 34px; margin: -17px 0 0 -17px;
+  /* Leaflet already centres the 34px icon on its point; no margin on top of that. */
+  display: grid; place-items: center; width: 34px; height: 34px; box-sizing: border-box;
   font-size: 20px; border-radius: 50%; background: rgba(13,18,16,.75);
   border: 2px solid var(--accent);
 }
@@ -147,4 +148,8 @@ code { color: var(--accent); }
   #map { grid-column: 1; grid-row: 2; }
   #panel { grid-column: 2; grid-row: 2; max-height: none; border-top: 0; border-left: 1px solid var(--line); }
   .buttons button { flex: 1 1 45%; }
+}
+.grid-label {
+  font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 3px #000, 0 0 2px #000;
+  font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none;
 }
