@@ -415,10 +415,10 @@ async def server_page(request):
     state = server_or_404(request, request.match_info["id"])
     # A blank command (e.g. shutdown on a box where AMP runs the servers) hides its button.
     actions = [a for a in POWER_RCON if state.config.commands.get(a)] + \
-        (list(POWER_SERVICE) if state.config.service or request.app[AMP] else [])
+        (list(POWER_SERVICE) if state.config.service else [])
     db = request.app[DB]
     recent = db.audit(server=state.config.id, limit=15)
-    return render(request, "server.html", s=server_view(state), actions=actions, labels=POWER_LABELS, amp=bool(request.app[AMP]),
+    return render(request, "server.html", s=server_view(state), actions=actions, labels=POWER_LABELS,
                   recent=recent, health=health_data(db, state), alts=alt_flags(request, state),
                   played=played(request, [p["identity"] for p in state.players]),
                   feed=db.feed(state.config.id), **history(request, state))
@@ -805,14 +805,8 @@ async def power(request):
     if action == "restart_mission":
         await manager.start_mission_check(state.config.id, request[USER]["username"])
     try:
-        if action in POWER_SERVICE and not state.config.service and request.app[AMP]:
-            manager.expect_restart(state.config.id)
-            _, instance = await amp_instance_for(request, state.config.id)
-            await request.app[AMP].power(instance, action)
-            result = "through AMP"
-        else:
-            result = await manager.power(state.config.id, action)
-    except (RconError, AmpError) as exc:
+        result = await manager.power(state.config.id, action)
+    except RconError as exc:
         state.check = None
         audit(request, POWER_LABELS[action].lower(), state.config.id, detail=str(exc), ok=False)
         flash(request, f"{POWER_LABELS[action]} failed: {exc}", "error")

@@ -153,13 +153,9 @@ class Amp:
                 raise AmpError("AMP took the change but reads back something different. Check the Admins setting in AMP.")
             return saved
 
-    async def power(self, inst, action: str):
-        endpoint = {"start": "Core/Start", "stop": "Core/Stop", "restart": "Core/Restart"}[action]
+    async def restart(self, inst):
         async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
             base, session = await self._instance(http, inst)
-            result = await self._call(http, base, session, endpoint)
+            result = await self._call(http, base, session, "Core/Restart")
         if isinstance(result, dict) and result.get("Status") is False:
-            raise AmpError(f"AMP didn't {action} it: {result.get('Reason') or 'no reason given'}")
-
-    async def restart(self, inst):
-        await self.power(inst, "restart")
+            raise AmpError(f"AMP didn't restart it: {result.get('Reason') or 'no reason given'}")
