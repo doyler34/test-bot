@@ -133,6 +133,7 @@ class GameAdminPageTests(unittest.IsolatedAsyncioTestCase):
         self.db = PanelDB(":memory:")
         self.db.add_user("boss", auth.hash_password("boss-password"), "owner")
         self.db.add_user("mod", auth.hash_password("mod-password"), "moderator")
+        self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
         self.db.saw_player(BOB, "Bob", "everon")
         self.client = TestClient(TestServer(create_app(config, self.db, ServerManager(config, self.db), start_manager=False)))
         await self.client.start_server()
@@ -174,6 +175,18 @@ class GameAdminPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.fake.power, [("inst-everon", "Core/Stop"), ("inst-everon", "Core/Start")])
         self.assertEqual(self.fake.restarts, ["inst-everon"])
         self.assertEqual([row["action"] for row in self.db.audit()][:3], ["restart server", "start server", "stop server"])
+
+    async def test_admins_cant_start_stop_or_restart(self):
+        await self.client.post("/login", data={"username": "adm", "password": "adm-password"})
+        page = await (await self.client.get("/server/everon")).text()
+        self.assertNotIn("Server actions", page)
+        self.assertNotIn("Restart server", page)
+        token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+        for action in ("stop", "start", "restart", "restart_mission"):
+            response = await self.client.post("/server/everon/power", data={"csrf": token, "action": action})
+            self.assertEqual(response.status, 403)
+        self.assertEqual((await self.client.post("/game-admins/everon/restart", data={"csrf": token})).status, 403)
+        self.assertEqual((self.fake.power, self.fake.restarts), ([], []))
 
     async def test_moderators_cant_see_it(self):
         await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
