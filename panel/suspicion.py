@@ -362,9 +362,8 @@ class Detector:
                 continue
             if self.left.get(name, 0) >= at and self.left[name] <= start:
                 continue
-            label = f"{name} ({ip})" if ip else name
-            if label not in found:
-                found.append(label)
+            if name not in found:
+                found.append(name)
         return found[-5:]
 
     def _nearby(self, blasts):

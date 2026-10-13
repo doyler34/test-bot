@@ -603,7 +603,8 @@ class SuspicionTests(unittest.TestCase):
         self.assertTrue(flags[0]["incident"])
         self.assertIn("3 players were blown up in the same second by explosions the game credits to AI", text)
         self.assertIn("2 of the 3 were hit in the head.", text)
-        self.assertIn("Joined shortly before: Buford (146.70.168.126).", text)
+        self.assertIn("Joined shortly before: Buford.", text)
+        self.assertNotIn("146.70.168.126", text)
         self.assertIn("Getting kills close by at the time: Buford.", text)
         for innocent in ("pook4lyfe", "Gone", "Regular"):
             self.assertNotIn(innocent, text)

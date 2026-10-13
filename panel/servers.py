@@ -554,7 +554,7 @@ class ServerManager:
             ban = self.ip_ban_account(identity, player["name"], reason, "panel", hit["expires_at"])
             await self.push_ban(ban)
             await self.kick_everywhere(identity)
-            detail = f"joined from {hit['hit_ip']}, which is IP banned with {source} ({hit['reason']})"
+            detail = f"joined from an IP that is banned with {source} ({hit['reason']})"
             self.db.log("panel", "IP ban", state.config.id, player["name"], detail)
             self.alerts.send(f"Banned {player['name']} on {state.config.name}", detail.capitalize(),
                              alert_colours.RED, [("Identity", identity), ("Same IP as", source)])
