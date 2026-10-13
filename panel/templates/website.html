@@ -19,8 +19,8 @@
   <section class="card">
     <h2>The words</h2>
     <label>Name <input name="name" value="{{ doc.name }}" maxlength="40" required></label>
-    <label>Headline <span class="muted">(the big line at the top)</span> <input name="tagline" value="{{ doc.tagline }}" maxlength="200"></label>
-    <label>About us <span class="muted">(the first paragraph goes under the headline, the rest under "Who we are"; new lines start new paragraphs)</span> <textarea name="about" rows="6" maxlength="2000">{{ doc.about }}</textarea></label>
+    <label>Headline <span class="muted">(the small red line above the name at the top)</span> <input name="tagline" value="{{ doc.tagline }}" maxlength="200"></label>
+    <label>About us <span class="muted">(the first two paragraphs show under "About"; new lines start new paragraphs)</span> <textarea name="about" rows="6" maxlength="2000">{{ doc.about }}</textarea></label>
     <label>Discord invite <span class="muted">(make one that never expires in Discord: Invite People → Edit invite link)</span>
       <input name="discord" value="{{ doc.discord }}" placeholder="https://discord.gg/abc123" maxlength="200"></label>
   </section>
