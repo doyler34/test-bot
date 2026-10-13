@@ -213,6 +213,8 @@ CREATE TABLE IF NOT EXISTS game_players (
     PRIMARY KEY (server, folder, identity)
 );
 CREATE INDEX IF NOT EXISTS game_players_started ON game_players(started);
+-- Each player's latest name for the Unusual and Investigate comparisons.
+CREATE INDEX IF NOT EXISTS game_players_identity ON game_players(identity, started);
 CREATE TABLE IF NOT EXISTS scored_games (
     server TEXT NOT NULL,
     folder TEXT NOT NULL,

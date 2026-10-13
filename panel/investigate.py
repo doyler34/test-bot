@@ -41,11 +41,13 @@ def kill_stats(identity, rows):
                 and abs(first["distance"] - second["distance"]) >= SWITCH_METRES):
             switches.append((first, second))
 
-    burst, burst_rows = 0, []
-    for i, row in enumerate(ordered):
-        window = [r for r in ordered[i:] if r["at"] - row["at"] <= BURST_SECONDS]
-        if len(window) > burst:
-            burst, burst_rows = len(window), window
+    burst, burst_rows, end = 0, [], 0
+    for start, row in enumerate(ordered):
+        end = max(end, start)
+        while end + 1 < len(ordered) and ordered[end + 1]["at"] - row["at"] <= BURST_SECONDS:
+            end += 1
+        if end - start + 1 > burst:
+            burst, burst_rows = end - start + 1, ordered[start:end + 1]
 
     names = Counter(own_name(r, identity) for r in rows if own_name(r, identity) not in ("", "?"))
     return {

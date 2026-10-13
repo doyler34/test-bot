@@ -527,3 +527,5 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .finding p { margin: 0 0 4px; }
 .evidence { margin: 6px 0 0; padding-left: 18px; font-size: .92rem; }
 .evidence li { margin-bottom: 6px; }
+.busy { opacity: .75; pointer-events: none; cursor: progress; }
+.busy::after { content: " …"; }

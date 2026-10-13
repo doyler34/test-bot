@@ -6,7 +6,7 @@
 <h1>Investigation</h1>
 <form method="get" class="row inv-period">
   <select name="days">{% for value, label in periods %}<option value="{{ value }}" {% if value == period %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-  <button class="small ghost">Run again</button>
+  <button class="small ghost" data-loading="Running">Run again</button>
   <span class="muted">{{ accounts|length }} account{{ "s" if accounts|length != 1 }} checked: this player{% if accounts|length > 1 %} and every account that has shared an IP with them{% endif %}.</span>
 </form>
 

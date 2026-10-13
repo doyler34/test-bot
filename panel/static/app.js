@@ -185,3 +185,21 @@ for (const select of document.querySelectorAll("[data-ban-length]")) {
   select.addEventListener("change", show);
   show();
 }
+
+// Links and buttons that start something slow say so straight away.
+for (const el of document.querySelectorAll("[data-loading]")) {
+  el.dataset.label = el.textContent;
+  const start = () => {
+    el.classList.add("busy");
+    el.textContent = el.dataset.loading;
+  };
+  if (el.tagName === "A") el.addEventListener("click", start);
+  else if (el.form) el.form.addEventListener("submit", start);
+}
+window.addEventListener("pageshow", (event) => {
+  if (!event.persisted) return;
+  for (const el of document.querySelectorAll(".busy")) {
+    el.classList.remove("busy");
+    el.textContent = el.dataset.label;
+  }
+});
