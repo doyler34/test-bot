@@ -25,6 +25,7 @@ class FakeAmp:
     def __init__(self):
         self.admins = {"inst-everon": f'"{ALICE}"', "inst-modded": ""}
         self.restarts = []
+        self.power = []
         self.proxy = True
         self.app = web.Application()
         self.app.router.add_post("/API/{endpoint:.+}", self.handle)
@@ -61,6 +62,9 @@ class FakeAmp:
             return web.json_response({"Status": True, "Reason": ""})
         if method == "Core/Restart":
             self.restarts.append(inst)
+            return web.json_response({"Status": True})
+        if method in ("Core/Start", "Core/Stop"):
+            self.power.append((inst, method))
             return web.json_response({"Status": True})
         raise web.HTTPNotFound()
 
@@ -157,6 +161,19 @@ class GameAdminPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.fake.admins["inst-modded"], "")
         actions = [row["action"] for row in self.db.audit()]
         self.assertEqual(actions[:4], ["removed game admin", "restart through AMP", "made game admin", "made game admin"])
+
+    async def test_server_page_starts_and_stops_through_amp(self):
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+        page = await (await self.client.get("/server/everon")).text()
+        self.assertIn("Stop server", page)
+        self.assertNotIn("done outside the panel", page)
+        token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+        await self.client.post("/server/everon/power", data={"csrf": token, "action": "stop"})
+        await self.client.post("/server/everon/power", data={"csrf": token, "action": "start"})
+        await self.client.post("/server/everon/power", data={"csrf": token, "action": "restart"})
+        self.assertEqual(self.fake.power, [("inst-everon", "Core/Stop"), ("inst-everon", "Core/Start")])
+        self.assertEqual(self.fake.restarts, ["inst-everon"])
+        self.assertEqual([row["action"] for row in self.db.audit()][:3], ["restart server", "start server", "stop server"])
 
     async def test_moderators_cant_see_it(self):
         await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
