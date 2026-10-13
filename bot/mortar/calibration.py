@@ -244,6 +244,14 @@ def read(entry, root=None):
         if not settled(path, root).is_file():
             raise NotCalibrated(f'No map image found at {path}.')
         picture = Picture(path=str(settled(path, root)))
+    if tiles is not None:
+        # The pyramid on disk may stop short of the config's max_zoom (zoom 6 is
+        # the sensible size to cut on a small box); never ask for tiles that
+        # were not made.
+        made = [int(d.name) for d in Path(tiles.directory).iterdir() if d.is_dir() and d.name.isdigit()]
+        if not made:
+            raise NotCalibrated(f'The tile directory {tiles.directory} has no zoom levels in it.')
+        max_zoom = min(max_zoom, max(made))
     if tiles is None and picture is None:
         raise NotCalibrated('The map has no imagery yet: generate tiles with '
                             'generate_tiles.py, or point "image" at a picture.')

@@ -8,6 +8,11 @@
 'use strict';
 
 const TOKEN = document.body.dataset.token;
+// Inside the panel the login is the key, and its forms need the panel's token.
+const CSRF = document.body.dataset.csrf || '';
+// The imagery stops at its own deepest zoom; past that Leaflet enlarges those
+// tiles so a marker can still be put down to the metre.
+const EXTRA_ZOOM = 3;
 const el = (id) => document.getElementById(id);
 
 let MAP = null;          // the calibration the server handed us
@@ -241,18 +246,20 @@ async function solve() {
   };
   try {
     const reply = await fetch('/api/mortar/calculate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: CSRF ? { 'Content-Type': 'application/json', 'X-CSRF': CSRF }
+                    : { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const answer = await reply.json();
     if (mine !== pending) return;            // a later drag already won
-    if (reply.status === 403) {
+    if (reply.status === 401 || reply.status === 403) {
       show({ valid: false, reason: 'expired', tubeName: '', roundName: '',
              range_m: 0, azimuth_mils: 0 });
-      el('problem').innerHTML = '<b>LINK EXPIRED</b>Run /mortar in Discord for a new map link.';
+      el('problem').innerHTML = CSRF ? '<b>LOGGED OUT</b>Log in to the panel again.'
+                                     : '<b>LINK EXPIRED</b>Run /mortar in Discord for a new map link.';
       return;
     }
-    show(answer);
+    show(await reply.json());
   } catch (err) {
     /* Offline or a dropped connection: leave the last good figures alone. */
   }
@@ -348,13 +355,14 @@ async function start() {
   map = L.map('map', {
     crs: tileCRS(),
     minZoom: MAP.tiles ? MAP.tiles.minZoom : 0,
-    maxZoom: MAP.maxZoom,
+    maxZoom: MAP.maxZoom + EXTRA_ZOOM,
     zoomSnap: .25, attributionControl: false, tap: true,
   });
 
   if (MAP.tiles) {
     layer = L.tileLayer(`/mortar/${TOKEN}/tiles/{z}/{x}/{y}`, {
-      tileSize: MAP.tiles.tileSize, minZoom: MAP.tiles.minZoom, maxZoom: MAP.maxZoom,
+      tileSize: MAP.tiles.tileSize, minZoom: MAP.tiles.minZoom,
+      maxNativeZoom: MAP.maxZoom, maxZoom: MAP.maxZoom + EXTRA_ZOOM,
       bounds, noWrap: true,
     }).addTo(map);
   } else {

@@ -2,9 +2,11 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
 import secrets
 import shutil
+import sys
 import time
 from pathlib import Path
 
@@ -13,10 +15,12 @@ from aiohttp import web
 
 from bot.discord import welcome_doc
 from bot.discord.ban_roles import length_text
+from bot.mortar.calibration import calibration, image_path, tile_path
+from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, auth, memory, outliers, site
+from . import archive, auth, maptiles, memory, outliers, site
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -202,7 +206,8 @@ async def security(request, handler):
         took = time.monotonic() - started
         if took > 1:
             log.warning("slow page: %s took %.1fs", request.path, took)
-    response.headers.update(SECURITY_HEADERS)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
     return response
 
 
@@ -1251,7 +1256,98 @@ async def mortar_page(request):
         except ValueError as exc:
             error = str(exc)
     return render(request, "mortar.html", loaded=loaded, weapon=weapon, form=form, result=result, error=error,
-                  out_of_range=OUT_OF_RANGE)
+                  out_of_range=OUT_OF_RANGE, mapped=mortar_map() is not None, job=maptiles.read_status())
+
+
+MORTAR_STATIC = HERE.parent / "bot" / "web" / "static"
+MORTAR_FILES = {"mortar.css": "text/css", "mortar.js": "application/javascript",
+                "leaflet.css": "text/css", "leaflet.js": "application/javascript"}
+# Leaflet positions everything with inline styles and the markers carry their own.
+MAP_CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+           "frame-ancestors 'none'; form-action 'self'")
+
+
+def mortar_map():
+    """The calibrated map, picking up tiles the download has only just finished."""
+    mapped = calibration()
+    if mapped is None:
+        calibration.cache_clear()
+        mapped = calibration()
+    return mapped
+
+
+async def mortar_download(request):
+    require(request, "mortar")
+    if maptiles.read_status().get("state") in maptiles.RUNNING:
+        flash(request, "The map is already being prepared.")
+        raise web.HTTPFound("/mortar")
+    maptiles.OUT.mkdir(parents=True, exist_ok=True)
+    with open(maptiles.OUT / "everon.log", "ab") as log_file:
+        await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "panel.maptiles", cwd=str(HERE.parent), stdout=log_file,
+            stderr=asyncio.subprocess.STDOUT, start_new_session=True, preexec_fn=lambda: os.nice(10))
+    audit(request, "download mortar map")
+    flash(request, "Preparing the map. It takes about 10 to 15 minutes; this page shows how far it's got.")
+    raise web.HTTPFound("/mortar")
+
+
+async def mortar_map_page(request):
+    require(request, "mortar")
+    if mortar_map() is None:
+        raise web.HTTPFound("/mortar")
+    page = (MORTAR_STATIC / "mortar.html").read_text(encoding="utf-8")
+    page = page.replace('data-token="__TOKEN__"', f'data-token="panel" data-csrf="{request[CSRF]}"')
+    page = page.replace('href="/static/', 'href="/mortar/panel/static/').replace('src="/static/', 'src="/mortar/panel/static/')
+    return web.Response(text=page, content_type="text/html", headers={"Content-Security-Policy": MAP_CSP})
+
+
+async def mortar_asset(request):
+    require(request, "mortar")
+    name = request.match_info["name"]
+    if name not in MORTAR_FILES:
+        raise web.HTTPNotFound()
+    return web.FileResponse(MORTAR_STATIC / name, headers={"Content-Type": MORTAR_FILES[name]})
+
+
+async def mortar_loadouts(request):
+    require(request, "mortar")
+    mapped = mortar_map()
+    if mapped is None:
+        raise web.HTTPNotFound()
+    return web.json_response({"map": mapped.describe(), "tubes": mortar_server.catalogue()})
+
+
+async def mortar_tile(request):
+    require(request, "mortar")
+    mapped = mortar_map()
+    path = mapped and tile_path(mapped, request.match_info["z"], request.match_info["x"], request.match_info["y"])
+    if not path:
+        raise web.HTTPNotFound()
+    return web.FileResponse(path, headers={"Cache-Control": "private, max-age=604800"})
+
+
+async def mortar_picture(request):
+    require(request, "mortar")
+    mapped = mortar_map()
+    path = mapped and image_path(mapped)
+    if not path:
+        raise web.HTTPNotFound()
+    return web.FileResponse(path, headers={"Cache-Control": "private, max-age=86400"})
+
+
+async def mortar_calculate(request):
+    require(request, "mortar")
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response({"valid": False, "reason": "bad_request"}, status=400)
+    try:
+        return web.json_response(mortar_server.calculate(body, mortar_map()))
+    except Exception:
+        log.exception("Mortar solution failed")
+        return web.json_response({"valid": False, "reason": "failed"}, status=500)
 
 
 SUS_GROUPS = (
@@ -1890,6 +1986,13 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/sus-settings", sus_save)
     app.router.add_get("/game-admins", game_admins_page)
     app.router.add_get("/mortar", mortar_page)
+    app.router.add_post("/mortar/download", mortar_download)
+    app.router.add_get("/mortar/map", mortar_map_page)
+    app.router.add_get("/mortar/panel/static/{name}", mortar_asset)
+    app.router.add_get("/mortar/panel/loadouts", mortar_loadouts)
+    app.router.add_get("/mortar/panel/tiles/{z}/{x}/{y}", mortar_tile)
+    app.router.add_get("/mortar/panel/map", mortar_picture)
+    app.router.add_post("/api/mortar/calculate", mortar_calculate)
     app.router.add_post("/game-admins", add_game_admin)
     app.router.add_post("/game-admins/{id}/remove", remove_game_admin)
     app.router.add_post("/game-admins/{id}/restart", restart_through_amp)
