@@ -64,6 +64,7 @@
   <p><b>{{ a.relation.reading }}</b>{% if a.relation.shared %}<br><span class="muted">Shared IP{{ "s" if a.relation.shared|length != 1 }}: {{ a.relation.shared|join(", ") }}</span>{% endif %}</p>
   {% endif %}
   {% if a.names|length > 1 %}<p>Names used: {{ a.names|join(", ") }}</p>{% endif %}
+  {% if s.mix %}<p>How they kill: {% for label, count, share in s.mix %}<b>{{ (100 * share)|round|int }}%</b> {{ label }}{% if label == "explosions" %} <span class="muted">(rockets, mortars, grenades)</span>{% endif %}{{ " · " if not loop.last }}{% endfor %}</p>{% endif %}
   <div class="stats">
     <div class="stat"><b>{{ s.kills }}</b><span>Kills</span></div>
     <div class="stat"><b>{{ s.deaths }}</b><span>Deaths</span></div>

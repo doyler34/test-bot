@@ -102,3 +102,22 @@ class InvestigatePageTests(unittest.IsolatedAsyncioTestCase):
         reply = await self.client.get(f'/player/{self.who}/investigate?days=all')
         self.assertEqual(reply.status, 200)
         self.assertIn('John Wick got 6 bullet kills in 30 seconds', await reply.text())
+
+
+class RoleTests(unittest.TestCase):
+    def test_a_pilots_kill_rate_is_a_note_not_a_flag(self):
+        rows = [row(i * 60, ME, f"v{i}", 300, damage="EXPLOSIVE") for i in range(14)]
+        rows += [row(10000 + i * 60, ME, f"b{i}", 80) for i in range(4)] + [row(20000, ME, "c", 40, damage="COLLISION")]
+        stats = investigate.kill_stats(ME, rows)
+        self.assertEqual(stats["mix"][0][:2], ("explosions", 14))
+        self.assertGreater(stats["role_share"], 0.5)
+        pilot = [{"identity": ME, "label": "THE_Mann97", "banned": False, "stats": stats}]
+        high = {ME: {"high": ["per_hour", "kd"], "labels": ["Kills per hour", "K/D"]}}
+        found = investigate.findings(ME, pilot, high, [], [])
+        self.assertEqual([f["level"] for f in found], ["note"])
+        self.assertIn("pilot", found[0]["why"])
+        self.assertEqual(investigate.verdict(found)[1], "Nothing stands out")
+        aimer = [{"identity": ME, "label": "Aimer", "banned": False,
+                  "stats": investigate.kill_stats(ME, [row(i * 60, ME, f"v{i}", 80, "Head") for i in range(18)])}]
+        found = investigate.findings(ME, aimer, high, [], [])
+        self.assertEqual(found[0]["level"], "moderate")

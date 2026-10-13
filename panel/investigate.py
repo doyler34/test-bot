@@ -18,6 +18,13 @@ BURST_SECONDS = 10
 BURST_KILLS = 5
 LONG = 500
 TOGETHER_SECONDS = 300
+# How a kill was made, in the words the report uses. Rockets, mortars and
+# grenades all come through the log as explosions or fragmentation.
+HOW = (("bullets", ("KINETIC",)), ("explosions", ("EXPLOSIVE", "FRAGMENTATION", "INCENDIARY")),
+       ("vehicles", ("COLLISION",)), ("fire", ("FIRE",)), ("melee", ("MELEE",)))
+# Above this share of kills by explosion or vehicle, a high kill rate is the
+# role (pilot, vehicle gunner, mortar, AT), not the aim.
+ROLE_SHARE = 0.5
 
 
 def own_name(row, identity):
@@ -50,6 +57,10 @@ def kill_stats(identity, rows):
             burst, burst_rows = end - start + 1, ordered[start:end + 1]
 
     names = Counter(own_name(r, identity) for r in rows if own_name(r, identity) not in ("", "?"))
+    made = Counter(next((label for label, kinds in HOW if r["damage"] in kinds), "other") for r in kills)
+    mix = [(label, made[label], made[label] / len(kills)) for label, _ in HOW + (("other", ()),) if made[label]]
+    mix.sort(key=lambda m: -m[1])
+    role = (made["explosions"] + made["vehicles"]) / len(kills) if kills else 0.0
     return {
         "kills": len(kills), "deaths": len(deaths),
         "teamkills": sum(r["kind"] == "teamkill" for r in kills),
@@ -61,6 +72,7 @@ def kill_stats(identity, rows):
         "long_heads": sum((r["distance"] or 0) >= LONG and r["zone"] == "Head" for r in measured),
         "switches": switches, "burst": burst, "burst_rows": burst_rows,
         "names": [n for n, _ in names.most_common()],
+        "mix": mix, "role_share": role,
         "first": min((r["at"] for r in rows), default=None), "last": max((r["at"] for r in rows), default=None),
     }
 
@@ -99,11 +111,21 @@ def findings(subject, accounts, unusual, sus_lines, incidents):
         high = unusual.get(acct["identity"])
         if high and high["high"]:
             labels = ", ".join(high["labels"])
-            out.append({"level": MODERATE if len(high["high"]) >= 2 else NOTE, "account": who,
-                        "title": f"Top 5% of all players for {labels}",
-                        "why": "Compared with everyone with enough kills on these servers in this period. Good "
-                               "players land here too; several at once is what stands out.",
-                        "compare": high})
+            aim = [k for k in high["high"] if k in ("head_share", "long_share")]
+            if not aim and s["role_share"] >= ROLE_SHARE:
+                out.append({"level": NOTE, "account": who,
+                            "title": f"Top 5% for {labels}, but {round(100 * s['role_share'])}% of their kills are "
+                                     "explosions or vehicles",
+                            "why": "That's the pattern of a pilot, vehicle gunner, mortar or AT player: those roles "
+                                   "run a high kill rate and K/D. Their headshots and long shots, which only count "
+                                   "bullets, are normal, so nothing here points at aim cheats.",
+                            "compare": high})
+            else:
+                out.append({"level": MODERATE if len(high["high"]) >= 2 else NOTE, "account": who,
+                            "title": f"Top 5% of all players for {labels}",
+                            "why": "Compared with everyone with enough kills on these servers in this period. Good "
+                                   "players land here too; several at once is what stands out.",
+                            "compare": high})
         if s["long_heads"] >= 3:
             out.append({"level": MODERATE, "account": who,
                         "title": f"{s['long_heads']} headshot kills from {LONG} m or more",
@@ -164,8 +186,9 @@ def report_text(subject_name, level_title, found, accounts):
     lines.append("")
     for a in accounts:
         s = a["stats"]
+        how = "".join(f"{round(100 * share)}% {label}, " for label, _, share in s["mix"])
         lines.append(f"{a['label']} ({a['identity']}): {plural(s['kills'], 'kill')}, {plural(s['deaths'], 'death')}, "
-                     f"{round(100 * s['head_share'])}% headshots, longest {s['longest']:.0f} m"
+                     f"{how}{round(100 * s['head_share'])}% bullet headshots, longest {s['longest']:.0f} m"
                      + (f", names: {', '.join(s['names'])}" if s["names"] else ""))
     return "\n".join(lines)
 
