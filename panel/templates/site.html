@@ -45,8 +45,8 @@
     <h1>{{ wordmark("big") }}<span class="headline">One community. Countless battles.</span></h1>
     <p class="lead">Join the fight. Find your squad. Play your way.</p>
     <div class="actions">
-      {% if doc.discord %}<a class="button primary" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join Discord</a>{% endif %}
-      {% if site.count %}<a class="button outline" href="#servers">{{ icon("servers") }} View servers</a>{% endif %}
+      {% if doc.discord %}<a class="button primary" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join Discord</a>
+      {% elif site.count %}<a class="button outline" href="#servers">{{ icon("servers") }} View servers</a>{% endif %}
     </div>
   </div>
 </section>
