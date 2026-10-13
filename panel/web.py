@@ -1120,7 +1120,7 @@ async def investigate_page(request):
     audit(request, "investigate", target=accounts[0]["label"], detail=f"{len(ids)} account{'s' if len(ids) != 1 else ''}, {title}")
     return render(request, "investigate.html", identity=identity, subject=subject, accounts=accounts,
                   found=found, level=level, title=title, about=about, unusual=unusual, typical=typical,
-                  metrics=outliers.METRICS, sus=sus, incidents=incidents, servers=servers,
+                  metrics=outliers.METRICS, sus=sus, incidents=incidents, server_names=servers,
                   periods=INVESTIGATE_PERIODS, period=period,
                   text=investigate.report_text(accounts[0]["label"], title, found, accounts))
 

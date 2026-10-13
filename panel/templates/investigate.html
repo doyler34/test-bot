@@ -42,7 +42,7 @@
     </details>
     {% elif f.lines %}
     <details><summary>The alerts</summary>
-      <ul class="evidence">{% for l in f.lines %}<li>{{ l.at|ts }} · {{ servers.get(l.server, l.server) }}<br>{{ l.text }}</li>{% endfor %}</ul>
+      <ul class="evidence">{% for l in f.lines %}<li>{{ l.at|ts }} · {{ server_names.get(l.server, l.server) }}<br>{{ l.text }}</li>{% endfor %}</ul>
     </details>
     {% endif %}
   </div>
@@ -89,7 +89,7 @@
 {% if incidents %}
 <section class="card">
   <h2>Suspicious incidents they were on for</h2>
-  <ul class="evidence">{% for i in incidents %}<li>{{ i.at|ts }} · {{ servers.get(i.server, i.server) }} · <b>{{ i.who }}</b><br>{{ i.text }}</li>{% endfor %}</ul>
+  <ul class="evidence">{% for i in incidents %}<li>{{ i.at|ts }} · {{ server_names.get(i.server, i.server) }} · <b>{{ i.who }}</b><br>{{ i.text }}</li>{% endfor %}</ul>
 </section>
 {% endif %}
 

@@ -95,3 +95,10 @@ class InvestigatePageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('same Steam account', report)
         found = await (await self.client.get('/players?q=76561199889955833')).text()
         self.assertIn('Steak Eggs', found)
+
+    async def test_report_with_sus_alerts_and_incidents(self):
+        self.db.add_feed('server-1', 'sus', 'John Wick got 6 bullet kills in 30 seconds')
+        await self.client.post('/login', data={'username': 'boss', 'password': 'boss-password'})
+        reply = await self.client.get(f'/player/{self.who}/investigate?days=all')
+        self.assertEqual(reply.status, 200)
+        self.assertIn('John Wick got 6 bullet kills in 30 seconds', await reply.text())
