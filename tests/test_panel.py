@@ -1442,6 +1442,8 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("data-stale hidden", html)
         self.assertNotIn("No servers are listed", html)
         self.assertIn("Type <b>OYB</b> in the server browser search", html)
+        self.assertIn('class="button primary" href="https://discord.gg/oyb"', html)
+        self.assertNotIn("View servers", html)
         font = await self.client.get("/brand/fonts/Display.ttf", headers={"Host": "oybgaming.com"})
         self.assertEqual(font.status, 200)
         self.assertNotIn("Log in", html)

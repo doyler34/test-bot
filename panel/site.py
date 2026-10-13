@@ -8,6 +8,7 @@ messages; which servers show, and what game each is, too.
 import re
 
 DISCORD_INVITE = re.compile(r"^https://(discord\.gg|discord\.com/invite)/[\w-]+/?$")
+OYB_DISCORD = "https://discord.gg/oyb"
 
 
 def default_site():
@@ -22,7 +23,7 @@ def default_site():
                      "games, and a weekly one to settle who's actually the best.\n"
                      "Our admins actually watch the servers. Cheaters get caught and banned from every OYB server "
                      "at once, so the games stay worth playing.",
-            "discord": "", "servers": {}}
+            "discord": OYB_DISCORD, "servers": {}}
 
 
 def check_site(raw, server_ids):
@@ -30,7 +31,7 @@ def check_site(raw, server_ids):
         return default_site(), ["That couldn't be read. Try again."]
     text = lambda key, limit: str(raw.get(key, "") or "").replace("\r\n", "\n").strip()[:limit]
     doc = {"name": text("name", 40) or "OYB", "tagline": text("tagline", 200), "about": text("about", 2000),
-           "discord": text("discord", 200), "servers": {}}
+           "discord": text("discord", 200) or OYB_DISCORD, "servers": {}}
     problems = []
     if doc["discord"] and not DISCORD_INVITE.match(doc["discord"]):
         problems.append("The Discord invite should look like https://discord.gg/abc123.")
