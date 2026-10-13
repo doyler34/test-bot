@@ -23,7 +23,7 @@ async function refresh(box) {
 for (const box of document.querySelectorAll("[data-refresh]")) {
   const every = Number(box.dataset.every) || 10000;
   setInterval(() => {
-    if (document.hidden || box.contains(document.activeElement)) return;
+    if (document.hidden || box.contains(document.activeElement) || box.querySelector(".kick-pick[open]")) return;
     refresh(box);
   }, every);
 }
@@ -170,6 +170,10 @@ for (const button of document.querySelectorAll("[data-copy]")) {
 
 for (const select of document.querySelectorAll("[data-jump]")) {
   select.addEventListener("change", () => { location.href = select.value; });
+}
+
+for (const select of document.querySelectorAll("[data-reason-pick]")) {
+  select.addEventListener("change", () => { if (select.value) select.form.elements.reason.value = select.value; });
 }
 
 for (const select of document.querySelectorAll("[data-ban-length]")) {

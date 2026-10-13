@@ -1392,14 +1392,14 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(f"/bans/{theirs}/edit", bans)
         token = await self.csrf("/bans")
         await self.client.post(f"/bans/{mine}/edit", data={"csrf": token, "reason": "Teamkilled three times after a warning"})
-        self.assertEqual(self.db.ban(mine)["reason"], "Teamkilled three times after a warning")
+        self.assertEqual(self.db.ban(mine)["reason"], "Teamkilled three times after a warning. Appeal: discord.gg/oyb")
         self.assertEqual(self.db.audit()[0]["action"], "edit ban")
         response = await self.client.post(f"/bans/{theirs}/edit", data={"csrf": token, "reason": "x"},
                                           allow_redirects=False)
         self.assertEqual(response.status, 403)
         self.assertEqual(self.db.ban(theirs)["reason"], "cheating")
         await self.client.post(f"/bans/{mine}/edit", data={"csrf": token, "reason": "  "})
-        self.assertEqual(self.db.ban(mine)["reason"], "Teamkilled three times after a warning")
+        self.assertEqual(self.db.ban(mine)["reason"], "Teamkilled three times after a warning. Appeal: discord.gg/oyb")
 
     async def test_owners_change_any_ban_without_unbanning(self):
         ban = self.db.add_ban(BUFORD, "Buford", "tk", "someone-else", now() + 3600)
@@ -1411,7 +1411,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         token = await self.csrf("/bans")
         await self.client.post(f"/bans/{ban}/edit", data={"csrf": token, "reason": "Mass TK", "duration": "0"})
         row = self.db.ban(ban)
-        self.assertEqual((row["reason"], row["expires_at"], row["removed_at"]), ("Mass TK", None, None))
+        self.assertEqual((row["reason"], row["expires_at"], row["removed_at"]), ("Mass TK. Appeal: discord.gg/oyb", None, None))
         self.assertTrue(any(c.startswith("#ban remove") for c in self.fake.commands))
         self.assertTrue(any(c.startswith(f"#ban create {BUFORD} 0 ") for c in self.fake.commands))
         await self.client.post(f"/bans/{ban}/edit", data={"csrf": token, "reason": "Mass TK", "duration": "custom",
@@ -1419,7 +1419,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(self.db.ban(ban)["expires_at"], now() + 2 * 86400, delta=5)
         await self.client.post(f"/bans/{ban}/edit", data={"csrf": token, "reason": "Mass TK again", "duration": "keep"})
         self.assertAlmostEqual(self.db.ban(ban)["expires_at"], now() + 2 * 86400, delta=5)
-        self.assertEqual(self.db.ban(ban)["reason"], "Mass TK again")
+        self.assertEqual(self.db.ban(ban)["reason"], "Mass TK again. Appeal: discord.gg/oyb")
 
     async def test_admins_only_reword_their_own_bans(self):
         self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
@@ -1427,7 +1427,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("adm", "adm-password")
         token = await self.csrf("/bans")
         await self.client.post(f"/bans/{mine}/edit", data={"csrf": token, "reason": "tk x3", "duration": "0"})
-        self.assertEqual((self.db.ban(mine)["reason"], bool(self.db.ban(mine)["expires_at"])), ("tk x3", True))
+        self.assertEqual((self.db.ban(mine)["reason"], bool(self.db.ban(mine)["expires_at"])), ("tk x3. Appeal: discord.gg/oyb", True))
         self.assertNotIn('value="keep"', await (await self.client.get("/bans")).text())
 
     async def test_public_site_on_its_own_domain(self):
@@ -1515,6 +1515,11 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("#kick 0", self.fake.commands)
         entry = self.db.audit()[0]
         self.assertEqual((entry["username"], entry["action"], entry["target"]), ("mod", "kick", "Sgt Havoc"))
+        await self.client.post("/server/server-1/kick", data={"csrf": token, "player": "0", "name": "Sgt Havoc",
+                                                              "reason": "Teamkilling: warning"})
+        self.assertEqual(self.db.audit()[0]["detail"], "Teamkilling: warning. Appeal: discord.gg/oyb")
+        page = await (await self.client.get("/server/server-1")).text()
+        self.assertIn("<option>Toxic chat or VON: warning. Appeal: discord.gg/oyb</option>", page)
 
     async def test_moderator_cannot_ban_or_use_console(self):
         await self.login("mod", "mod-password")
@@ -1530,7 +1535,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.post("/bans", data={
             "csrf": token, "identity": HAVOC.upper(), "name": "Sgt Havoc", "reason": "team killing", "duration": "86400"})).text()
         self.assertIn("Banned 1 account: Sgt Havoc (server-1: done", html)
-        self.assertEqual(self.fake.bans[HAVOC], "team killing")
+        self.assertEqual(self.fake.bans[HAVOC], "team killing. Appeal: discord.gg/oyb")
         self.assertEqual(sum(c.startswith("#ban create") for c in self.fake.commands), 1)
         ban = self.db.active_ban(HAVOC)
         await self.client.post(f"/bans/{ban['id']}/remove", data={"csrf": token})
@@ -2077,7 +2082,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "name": "Sgt Havoc",
                                               "reason": "team killing", "duration": "3600"})
         title, _, fields = self.manager.alerts.sent[0]
-        self.assertEqual((title, fields["By"], fields["Reason"]), ("Banned Sgt Havoc", "boss", "team killing"))
+        self.assertEqual((title, fields["By"], fields["Reason"]), ("Banned Sgt Havoc", "boss", "team killing. Appeal: discord.gg/oyb"))
 
     async def test_connections_are_for_admins(self):
         with tempfile.TemporaryDirectory() as root:
@@ -2298,6 +2303,19 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get("/server/server-1")).text()
         self.assertNotIn("<script>alert", html)
         self.assertIn("&lt;script&gt;", html)
+
+
+class ReasonTests(unittest.TestCase):
+    def test_every_template_and_typed_reason_carries_the_appeal(self):
+        from panel.reasons import BAN_REASONS, KICK_REASONS, options, with_appeal
+        for reason in options(BAN_REASONS) + options(KICK_REASONS):
+            self.assertTrue(reason.endswith("Appeal: discord.gg/oyb"), reason)
+            self.assertLessEqual(len(reason), 200)
+        self.assertEqual(with_appeal("Cheating. Appeal at discord.gg/OYB"), "Cheating. Appeal at discord.gg/OYB")
+        self.assertEqual(with_appeal("Cheating."), "Cheating. Appeal: discord.gg/oyb")
+        long = with_appeal("x" * 300)
+        self.assertEqual(len(long), 200)
+        self.assertTrue(long.endswith("Appeal: discord.gg/oyb"))
 
 
 class SiteOrderTests(unittest.TestCase):

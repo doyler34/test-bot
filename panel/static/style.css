@@ -505,3 +505,10 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
   .dock .menu-list { top: auto; bottom: calc(100% + 6px); right: 8px; }
   .dc-actions { bottom: 62px; }
 }
+
+.kick-pick { display: inline-block; position: relative; }
+.kick-pick summary { list-style: none; }
+.kick-pick summary::-webkit-details-marker { display: none; }
+.kick-pick form { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(300px, 80vw); display: grid; gap: 8px;
+  padding: 10px; background: var(--panel-2); border: 1px solid var(--gold); white-space: normal; text-align: left; }
+.kick-pick label { margin: 0; }

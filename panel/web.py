@@ -21,6 +21,7 @@ from .config import PanelConfig
 from .connections import LogReader, folder_start
 from .db import PanelDB, now
 from .oyb_stats import OybStats
+from .reasons import BAN_REASONS, KICK_REASONS, options as reason_options, with_appeal
 from .rcon import RconError
 from .battlemetrics import BanSync
 from .suspicion import DEFAULTS as SUS_DEFAULTS, LIMITS as SUS_LIMITS, check_settings as check_sus
@@ -772,14 +773,17 @@ async def kick(request):
     state = server_or_404(request, request.match_info["id"])
     form = await request.post()
     player, name = form.get("player", ""), clean(form.get("name", ""), 64)
+    reason = clean(form.get("reason", ""))
+    reason = with_appeal(reason) if reason else ""
     try:
         await request.app[MANAGER].kick(state.config.id, player)
     except RconError as exc:
         audit(request, "kick", state.config.id, name or player, str(exc), ok=False)
         flash(request, f"Kick failed: {exc}", "error")
     else:
-        audit(request, "kick", state.config.id, name or player)
-        alert(request, f"Kick on {state.config.name}", f"**{name or player}** was kicked.")
+        audit(request, "kick", state.config.id, name or player, reason)
+        alert(request, f"Kick on {state.config.name}",
+              f"**{name or player}** was kicked." + (f"\nReason: {reason}" if reason else ""))
         flash(request, f"Kicked {name or player}.")
     raise web.HTTPFound(f"/server/{state.config.id}")
 
@@ -841,6 +845,7 @@ async def add_ban(request):
     if seconds is None or not reason:
         flash(request, "Pick a length (a custom one needs a number, up to 10 years) and give a reason.", "error")
         raise web.HTTPFound("/bans")
+    reason = with_appeal(reason)
     if db.active_ban(identity):
         flash(request, "That player is already banned. Unban them first to change the ban.", "error")
         raise web.HTTPFound("/bans")
@@ -895,6 +900,7 @@ async def edit_ban(request):
     if not reason:
         flash(request, "The reason can't be empty.", "error")
         raise web.HTTPFound("/bans")
+    reason = with_appeal(reason)
     who = ban["name"] or ban["identity"]
     changes = []
     if reason != ban["reason"]:
@@ -1796,6 +1802,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
     env.filters.update(ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb)
+    env.globals.update(ban_reasons=reason_options(BAN_REASONS), kick_reasons=reason_options(KICK_REASONS))
     app[JINJA] = env
 
     if start_manager:

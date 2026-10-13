@@ -29,7 +29,10 @@
       <label>How long <input name="amount" type="number" min="1" inputmode="numeric" placeholder="e.g. 45"></label>
       <label>&nbsp;<select name="unit">{% for value, label in ban_units %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
     </div>
-    <label>Reason <input name="reason" maxlength="200" required></label>
+    <label>Reason template
+      <select data-reason-pick><option value="">Pick one, or type your own below</option>{% for r in ban_reasons %}<option>{{ r }}</option>{% endfor %}</select>
+    </label>
+    <label>Reason <span class="muted">(the appeal link is added if it's missing)</span> <input name="reason" maxlength="200" required></label>
   </div>
   {% if can("ips") %}
   <label class="check"><input type="checkbox" name="ip" value="1"> IP ban: also ban every other account seen on their IPs (PC, PlayStation, Xbox, alts), and any new account that joins from them. People in the same house share an IP.</label>

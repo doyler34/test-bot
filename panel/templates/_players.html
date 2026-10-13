@@ -15,12 +15,16 @@
     <td class="wide mono">{{ p.identity or "—" }}</td>
     <td class="actions">
       {% if can("kick") %}
-      <form method="post" action="/server/{{ s.id }}/kick" data-confirm="Kick {{ p.name }}?">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <input type="hidden" name="player" value="{{ p.id }}">
-        <input type="hidden" name="name" value="{{ p.name }}">
-        <button class="small ghost">Kick</button>
-      </form>
+      <details class="kick-pick">
+        <summary class="button small ghost">Kick</summary>
+        <form method="post" action="/server/{{ s.id }}/kick" data-confirm="Kick {{ p.name }}?">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="player" value="{{ p.id }}">
+          <input type="hidden" name="name" value="{{ p.name }}">
+          <label>Reason <select name="reason"><option value="">No reason</option>{% for r in kick_reasons %}<option>{{ r }}</option>{% endfor %}</select></label>
+          <button class="small">Kick {{ p.name }}</button>
+        </form>
+      </details>
       {% endif %}
       {% if can("ban") and p.identity %}<a class="button small danger" href="/bans?identity={{ p.identity }}&name={{ p.name|urlencode }}">Ban</a>{% endif %}
     </td>
