@@ -121,3 +121,14 @@ class RoleTests(unittest.TestCase):
                   "stats": investigate.kill_stats(ME, [row(i * 60, ME, f"v{i}", 80, "Head") for i in range(18)])}]
         found = investigate.findings(ME, aimer, high, [], [])
         self.assertEqual(found[0]["level"], "moderate")
+
+
+class FarTests(unittest.TestCase):
+    def test_one_bullet_kill_past_any_rifle_sight_is_flagged(self):
+        rows = [row(i * 60, ME, f"v{i}", 80) for i in range(5)] + [row(9000, ME, "far", 3116)]
+        stats = investigate.kill_stats(ME, rows)
+        acct = [{"identity": ME, "label": "Vixon", "banned": False, "stats": stats}]
+        found = investigate.findings(ME, acct, {}, [], [])
+        self.assertEqual(found[0]["level"], "moderate")
+        self.assertIn("3116 m", found[0]["title"])
+        self.assertEqual([r["victim"] for r in found[0]["rows"]], ["far"])

@@ -17,6 +17,8 @@ SWITCH_METRES = 400
 BURST_SECONDS = 10
 BURST_KILLS = 5
 LONG = 500
+# Rifle sights stop at about 1,000 m; a bullet kill well past that needs a look.
+FAR = 1500
 TOGETHER_SECONDS = 300
 # How a kill was made, in the words the report uses. Rockets, mortars and
 # grenades all come through the log as explosions or fragmentation.
@@ -69,6 +71,7 @@ def kill_stats(identity, rows):
         "head_share": heads / len(bullets) if bullets else 0.0,
         "long": sum((r["distance"] or 0) >= LONG for r in measured),
         "longest": max((r["distance"] for r in measured), default=0),
+        "far": sorted((r for r in measured if r["distance"] >= FAR), key=lambda r: -r["distance"]),
         "long_heads": sum((r["distance"] or 0) >= LONG and r["zone"] == "Head" for r in measured),
         "switches": switches, "burst": burst, "burst_rows": burst_rows,
         "names": [n for n, _ in names.most_common()],
@@ -126,6 +129,15 @@ def findings(subject, accounts, unusual, sus_lines, incidents):
                             "why": "Compared with everyone with enough kills on these servers in this period. Good "
                                    "players land here too; several at once is what stands out.",
                             "compare": high})
+        if s["far"]:
+            out.append({"level": MODERATE, "account": who,
+                        "title": f"{plural(len(s['far']), 'bullet kill')} from {FAR} m or more "
+                                 f"(furthest {s['far'][0]['distance']:.0f} m)",
+                        "why": "Rifle sights only go to about 1,000 m, so this is beyond a normal shot. The log "
+                               "measures from where the killer stood when the victim died, so a player knocked down "
+                               "earlier who dies after the killer has driven or flown off reads long too. Check the "
+                               "kill: if they weren't in a vehicle or heli, it points at a cheat.",
+                        "rows": s["far"]})
         if s["long_heads"] >= 3:
             out.append({"level": MODERATE, "account": who,
                         "title": f"{s['long_heads']} headshot kills from {LONG} m or more",
