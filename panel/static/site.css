@@ -169,13 +169,13 @@ footer p { margin: 0; }
   .actions .button:only-child { grid-column: 1 / -1; }
   main { padding: 16px 16px 40px; gap: 16px; }
   .panel { padding: 16px; }
-  .server { grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: "img name count" "img state join";
+  .server { grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: "img name count" "img name state" ". join join";
     row-gap: 6px; column-gap: 12px; padding: 12px 0; }
   .badge-img { width: 36px; height: 36px; align-self: start; }
   .server .name b { font-size: 1.08rem; }
   .server .name small { white-space: normal; }
-  .state { justify-self: start; font-size: .72rem; padding: 2px 8px; }
-  .join { margin: 0; justify-self: end; text-align: right; }
+  .state { justify-self: end; align-self: start; font-size: .72rem; padding: 2px 8px; }
+  .join { margin: 0; min-width: 0; }
   .cards { grid-template-columns: 1fr; gap: 16px; }
   .cards > :first-child { grid-row: auto; }
   .strip { flex-wrap: wrap; padding: 16px; }
