@@ -133,9 +133,11 @@ function labelGrid() {
 
 /* --- markers -------------------------------------------------------- */
 function marker(east, north, kind) {
+  const name = kind === 'gun' ? 'Mortar' : 'Target';
   const icon = L.divIcon({
     className: '', iconSize: [34, 34],
-    html: `<div class="marker ${kind}">${kind === 'gun' ? '📍' : '🎯'}</div>`,
+    html: `<div class="marker ${kind}"><svg class="icon"><use href="#${kind === 'gun' ? 'i-tube' : 'i-aim'}"/></svg>`
+      + `<span class="tag"><small>${name}</small><b></b></span></div>`,
   });
   const pin = L.marker(toLatLng(east, north), { icon, draggable: true, autoPan: true })
     .addTo(map);
@@ -144,10 +146,26 @@ function marker(east, north, kind) {
   return pin;
 }
 
+/* The tag beside each marker: the 100 m square it sits in. */
+function tagMarkers() {
+  [gun, target].forEach((pin) => {
+    const tag = pin && pin.getElement() && pin.getElement().querySelector('.tag b');
+    if (!tag) return;
+    const where = toWorld(pin.getLatLng());
+    tag.textContent = squareText(where.east, where.north);
+  });
+}
+
+function squareText(east, north) {
+  const part = (v) => String(Math.floor(v / 100)).padStart(3, '0');
+  return `${part(east)} ${part(north)}`;
+}
+
 function place(east, north) {
   if (!gun) {
     gun = marker(east, north, 'gun');
-    el('hint').textContent = 'Now tap the target';
+    hint('Now tap the target');
+    status('Place target');
   } else if (!target) {
     target = marker(east, north, 'target');
     el('hint').hidden = true;
@@ -164,9 +182,10 @@ function draw() {
   if (label) { label.remove(); label = null; }
   drawRing();
   drawArrow();
+  tagMarkers();
   if (!gun || !target) return;
   const a = gun.getLatLng(), b = target.getLatLng();
-  line = L.polyline([a, b], { color: '#d9a441', weight: 2 }).addTo(map);
+  line = L.polyline([a, b], { color: '#f2efe6', weight: 2, opacity: .9 }).addTo(map);
   /* A rough label while dragging; the figure on the panel is the engine's. */
   const from = toWorld(a), to = toWorld(b);
   const metres = Math.hypot(to.east - from.east, to.north - from.north);
@@ -227,6 +246,21 @@ function fillRounds(keep) {
 }
 
 /* --- the solution --------------------------------------------------- */
+function hint(text) {
+  el('hint').hidden = !text;
+  if (text) el('hintText').textContent = text;
+}
+
+function status(text, kind) {
+  const pill = el('status');
+  pill.className = `status ${kind || ''}`;
+  pill.innerHTML = kind === 'ready' ? `${text} <svg class="icon"><use href="#i-check"/></svg>` : text;
+}
+
+/* The engine answers in this sight's mils; the degrees under them are the same
+ * angle for anyone who reads degrees. */
+const degrees = (mils, circle) => `${(mils * 360 / circle).toFixed(1)}°`;
+
 function show(answer) {
   const panel = el('panel');
   panel.classList.remove('empty');
@@ -238,16 +272,21 @@ function show(answer) {
   const problem = el('problem');
   if (answer.valid) {
     problem.hidden = true;
-    el('azimuth').textContent = `${answer.azimuth_mils} mils`;
+    el('azimuth').textContent = answer.azimuth_mils;
+    el('azimuthDeg').textContent = degrees(answer.azimuth_mils, answer.mils);
     el('ring').textContent = answer.ring;
-    el('elevation').textContent = `${answer.elevation_mils} mils`;
-    el('tof').textContent = `${answer.tof_seconds} sec`;
+    el('elevation').textContent = answer.elevation_mils;
+    el('elevationDeg').textContent = degrees(answer.elevation_mils, answer.mils);
+    el('tof').textContent = `${answer.tof_seconds} s`;
     el('dispersion').textContent = `${answer.dispersion_m} m`;
+    status('Solution ready', 'ready');
     return;
   }
   ['azimuth', 'ring', 'elevation', 'tof', 'dispersion'].forEach((id) => {
     el(id).textContent = '—';
   });
+  el('azimuthDeg').innerHTML = el('elevationDeg').innerHTML = '&nbsp;';
+  status(answer.reason === 'out_of_range' ? 'Out of range' : 'No solution', 'bad');
   problem.hidden = false;
   if (answer.reason === 'bad_wind') {
     problem.innerHTML = `<b>WIND NOT USABLE</b>${answer.detail || 'Check the wind figures.'}`;
@@ -332,8 +371,8 @@ function wire() {
 
   el('resetTarget').addEventListener('click', () => {
     if (target) { target.remove(); target = null; }
-    el('hint').hidden = false;
-    el('hint').textContent = 'Tap a new target';
+    hint('Tap a new target');
+    status(gun ? 'Place target' : 'Place mortar');
     draw();
   });
 
@@ -342,8 +381,8 @@ function wire() {
     gun = target = null;
     draw();
     el('panel').classList.add('empty');
-    el('hint').hidden = false;
-    el('hint').textContent = 'Tap the map to place your mortar';
+    hint('Tap the map to place your mortar');
+    status('Place mortar');
   });
 
   el('swap').addEventListener('click', () => {
@@ -365,7 +404,10 @@ function wire() {
     [...el('compass').children].forEach((button) => {
       button.classList.toggle('on', Number(button.dataset.deg) === WIND.from && WIND.speed > 0);
     });
-    el('windSummary').textContent = WIND.speed ? `${WIND.speed} m/s from ${WIND.from}°` : 'none';
+    const point = POINTS.find(([, deg]) => deg === Math.round(WIND.from / 45) * 45 % 360)[0];
+    el('windSummary').textContent = WIND.speed ? `${WIND.speed} m/s from ${WIND.from}° (${point})` : 'None';
+    el('needle').style.transform = `rotate(${WIND.from}deg)`;
+    el('needle').hidden = !WIND.speed;
     drawArrow();
     solve();
   }
@@ -379,6 +421,12 @@ function wire() {
     if (!WIND.speed) speed.value = 1;
     windChanged();
   });
+  el('setWind').addEventListener('click', () => {
+    const box = el('windBox');
+    box.hidden = !box.hidden;
+    el('setWind').textContent = box.hidden ? 'Set wind' : 'Done';
+    if (!box.hidden) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
   el('windUp').addEventListener('click', () => { speed.value = (Number(speed.value) || 0) + 0.1; windChanged(); });
   el('windDown').addEventListener('click', () => { speed.value = (Number(speed.value) || 0) - 0.1; windChanged(); });
   speed.addEventListener('change', windChanged);
@@ -390,13 +438,14 @@ function wire() {
       `Mortar ${el('gunGrid').textContent} → Target ${el('targetGrid').textContent}`,
       `Range ${el('range').textContent}`,
       WIND.speed ? `Wind from ${WIND.from}° at ${WIND.speed} m/s` : 'No wind',
-      `Azimuth ${el('azimuth').textContent} · Elevation ${el('elevation').textContent}`,
+      `Azimuth ${el('azimuth').textContent} mils · Elevation ${el('elevation').textContent} mils`,
       `Ring ${el('ring').textContent} · Flight ${el('tof').textContent}`,
     ].join('\n');
     try {
       await navigator.clipboard.writeText(text);
-      el('copy').textContent = 'Copied';
-      setTimeout(() => { el('copy').textContent = 'Copy solution'; }, 1500);
+      const words = el('copy').querySelector('span');
+      words.textContent = 'Copied';
+      setTimeout(() => { words.textContent = 'Copy solution'; }, 1500);
     } catch (err) {
       window.prompt('Copy this', text);
     }
@@ -418,8 +467,9 @@ async function start() {
     crs: tileCRS(),
     minZoom: MAP.tiles ? MAP.tiles.minZoom : 0,
     maxZoom: MAP.maxZoom + EXTRA_ZOOM,
-    zoomSnap: .25, attributionControl: false, tap: true,
+    zoomSnap: .25, attributionControl: false, zoomControl: false, tap: true,
   });
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
 
   if (MAP.tiles) {
     layer = L.tileLayer(`/mortar/${TOKEN}/tiles/{z}/{x}/{y}`, {
