@@ -425,6 +425,9 @@ class ApiTests(AioHTTPTestCase):
         self.assertEqual(data['map']['transform']['lat'], {'cof': -50.0, 'offset': -256.0})
         self.assertTrue(data['map']['earthCorrection'])
         self.assertEqual({t['key'] for t in data['tubes']}, {'m252', '2b14'})
+        he = next(r for t in data['tubes'] if t['key'] == 'm252' for r in t['rounds'] if r['key'] == 'he')
+        self.assertEqual(he['rings'][0], {'ring': '0', 'min': 50, 'max': 400})
+        self.assertEqual(max(r['max'] for r in he['rings']), he['maxRange'])
         self.assertEqual((await self.client.get('/mortar/nope/loadouts')).status, 404)
 
     async def test_the_page_scripts_are_served(self):

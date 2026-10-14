@@ -19,6 +19,8 @@ let MAP = null;          // the calibration the server handed us
 let TUBES = [];
 let map, layer, gun = null, target = null, line = null, ring = null, label = null;
 let arrow = null;
+// The ring the last solution used, so the map can pick it out.
+let CHOSEN = null;
 let gridMinor = null, gridLabels = null;
 let pending = 0;
 /* The wind as the spotter reports it: the bearing it blows FROM. Everything
@@ -210,15 +212,41 @@ function drawArrow() {
   }).addTo(map);
 }
 
+/* What the round can reach from the gun: a faint circle at each ring's
+ * furthest range, the outermost dashed, and the middle it can't reach shaded.
+ * Once there's a solution its ring is picked out and the shading is that
+ * ring's own minimum. */
 function drawRing() {
   if (ring) { ring.remove(); ring = null; }
   const shell = currentRound();
   if (!gun || !shell) return;
-  ring = L.circle(gun.getLatLng(), {
-    radius: shell.maxRange / MAP.metresPerUnit,    // the circle is drawn in map units
-    color: '#d9a441', weight: 1, opacity: .5, fill: false, dashArray: '6 6',
-    interactive: false,
-  }).addTo(map);
+  const centre = gun.getLatLng(), at = toWorld(centre);
+  const units = (metres) => metres / MAP.metresPerUnit;    // circles are drawn in map units
+  const chosen = (shell.rings || []).find((r) => r.ring === CHOSEN);
+  ring = L.layerGroup().addTo(map);
+  L.circle(centre, {
+    radius: units(chosen ? chosen.min : shell.minRange), interactive: false,
+    color: '#6f9ad3', weight: 2, dashArray: '8 6', fillColor: '#6f9ad3', fillOpacity: .22,
+  }).addTo(ring);
+  /* Zoomed out the rings bunch up; a label only goes on where it has room. */
+  const pixels = (metres) => map.latLngToContainerPoint(centre).y
+    - map.latLngToContainerPoint(toLatLng(at.east, at.north + metres)).y;
+  const shown = chosen ? [pixels(chosen.max)] : [];
+  (shell.rings || []).forEach((r) => {
+    const picked = chosen && r.ring === chosen.ring;
+    L.circle(centre, {
+      radius: units(r.max), interactive: false, fill: false,
+      color: picked ? '#d9a441' : '#f2efe6', weight: picked ? 2 : 1, opacity: picked ? .9 : .35,
+      dashArray: r.max === shell.maxRange && !picked ? '6 6' : null,
+    }).addTo(ring);
+    const room = pixels(r.max);
+    if (!picked && (room < 30 || shown.some((px) => Math.abs(px - room) < 26))) return;
+    if (!picked) shown.push(room);
+    L.marker(toLatLng(at.east, at.north + r.max), { interactive: false, icon: L.divIcon({
+      className: '', iconSize: null,
+      html: `<span class="ring-label${picked ? ' on' : ''}">R${r.ring} · ${(r.max / 1000).toFixed(1)} km</span>`,
+    }) }).addTo(ring);
+  });
 }
 
 /* --- loadout pickers ------------------------------------------------ */
@@ -264,6 +292,9 @@ const degrees = (mils, circle) => `${(mils * 360 / circle).toFixed(1)}°`;
 function show(answer) {
   const panel = el('panel');
   panel.classList.remove('empty');
+  const ringWas = CHOSEN;
+  CHOSEN = answer.valid ? String(answer.ring) : null;
+  if (CHOSEN !== ringWas) drawRing();
   el('loadout').textContent = `${answer.tubeName} — ${answer.roundName}`;
   el('gunGrid').textContent = answer.mortar_grid || '—';
   el('targetGrid').textContent = answer.target_grid || '—';
@@ -371,6 +402,7 @@ function wire() {
 
   el('resetTarget').addEventListener('click', () => {
     if (target) { target.remove(); target = null; }
+    CHOSEN = null;
     hint('Tap a new target');
     status(gun ? 'Place target' : 'Place mortar');
     draw();
@@ -379,6 +411,7 @@ function wire() {
   el('resetAll').addEventListener('click', () => {
     [gun, target].forEach((m) => m && m.remove());
     gun = target = null;
+    CHOSEN = null;
     draw();
     el('panel').classList.add('empty');
     hint('Tap the map to place your mortar');
@@ -484,6 +517,7 @@ async function start() {
   map.fitBounds(bounds);
   map.setMaxBounds(bounds.pad(0.2));
   drawGrid();
+  map.on('zoomend', drawRing);
   map.on('click', (event) => {
     if (!bounds.contains(event.latlng)) return;
     const where = toWorld(event.latlng);

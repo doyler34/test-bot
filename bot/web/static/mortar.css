@@ -105,6 +105,12 @@ select option { background: var(--card); }
   color: var(--accent); background: rgba(11,15,13,.85); border: 1px solid var(--line);
   border-radius: 5px; white-space: nowrap;
 }
+.ring-label {
+  position: absolute; transform: translate(-50%, -50%); padding: 1px 5px;
+  font-size: 11px; white-space: nowrap; color: #f2efe6; background: rgba(11,15,13,.7); border-radius: 4px;
+  pointer-events: none;
+}
+.ring-label.on { color: #17140c; background: var(--accent); font-weight: 700; }
 .wind-arrow { font-size: 26px; line-height: 1; filter: drop-shadow(0 0 3px #000); }
 
 /* --- solution ------------------------------------------------------- */

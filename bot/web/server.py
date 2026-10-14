@@ -73,7 +73,9 @@ def catalogue():
             'key': key, 'name': first.name, 'faction': first.faction,
             'label': first.label, 'mils': first.mils,
             'rounds': [{'key': shell.round_key, 'name': shell.shell,
-                        'minRange': shell.span[0], 'maxRange': shell.span[1]}
+                        'minRange': shell.span[0], 'maxRange': shell.span[1],
+                        'rings': [{'ring': ring, 'min': rows[0][0], 'max': rows[-1][0]}
+                                  for ring, _, rows in shell.rings]}
                        for shell in rounds]})
     return listing
 
