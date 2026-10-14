@@ -4,6 +4,13 @@
 <p class="kicker">Discord</p>
 <h1>Discord</h1>
 <p class="muted">Everything the OYB bot says and does in Discord, changed from here. Pick what you want to change. Nothing reaches Discord until you press <b>Publish</b> on that page.</p>
+{% if can("power") %}
+<form method="post" action="/bot/restart" class="card row">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <span>{% if bridge %}The bot last checked in {{ bridge.updated|ago }}.{% else %}The bot hasn't checked in.{% endif %}</span>
+  <button class="ghost" data-confirm="Restart the bot? It drops out of Discord for about 30 seconds." data-loading="Restarting">Restart the bot</button>
+</form>
+{% endif %}
 {% if not bridge %}<p class="warn">The bot hasn't reported in yet, so channel and role lists will be empty. Check the bot is running and updated.</p>{% endif %}
 {% for g in groups %}
 <section class="dc-group">

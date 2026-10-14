@@ -31,7 +31,7 @@ from .reasons import BAN_REASONS, KICK_REASONS, options as reason_options, with_
 from .rcon import RconError
 from .battlemetrics import BanSync
 from .suspicion import DAMAGE, DEFAULTS as SUS_DEFAULTS, LIMITS as SUS_LIMITS, body_part, check_settings as check_sus
-from .servers import ServerManager, clean, valid_identity
+from .servers import RconError, ServerManager, clean, systemctl, valid_identity
 
 log = logging.getLogger("panel.web")
 
@@ -1600,6 +1600,22 @@ async def discord_home(request):
     return render(request, "discord_home.html", groups=groups, bridge=report)
 
 
+BOT_UNIT = "reforger-timer.service"
+
+
+async def restart_bot(request):
+    require(request, "power")
+    try:
+        await systemctl("restart", BOT_UNIT)
+    except (RconError, OSError) as exc:
+        audit(request, "restart bot", detail=str(exc), ok=False)
+        flash(request, f"The bot didn't restart: {exc}", "error")
+        raise web.HTTPFound("/discord")
+    audit(request, "restart bot")
+    flash(request, "The bot is restarting. It's back in Discord in about 30 seconds.")
+    raise web.HTTPFound("/discord")
+
+
 def text_ids(value):
     """Discord ids are longer than a browser's numbers can hold exactly, so
     the editors get them as text; the checks turn them back into numbers."""
@@ -2096,6 +2112,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/game-admins/{id}/remove", remove_game_admin)
     app.router.add_post("/game-admins/{id}/restart", restart_through_amp)
     app.router.add_get("/discord", discord_home)
+    app.router.add_post("/bot/restart", restart_bot)
     app.router.add_post("/discord/posts/new", new_post)
     app.router.add_get("/discord/posts/{post}", post_page)
     app.router.add_post("/discord/posts/{post}", post_save)

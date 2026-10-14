@@ -1305,6 +1305,26 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get(path)).text()
         return re.search(r'name="csrf" value="([^"]+)"', html).group(1)
 
+    async def test_owners_restart_the_bot_from_the_discord_page(self):
+        await self.login("boss", "boss-password")
+        self.assertIn("Restart the bot", await (await self.client.get("/discord")).text())
+        token = await self.csrf("/discord")
+        with unittest.mock.patch("panel.web.systemctl", new=unittest.mock.AsyncMock(return_value="")) as run:
+            response = await self.client.post("/bot/restart", data={"csrf": token}, allow_redirects=False)
+        self.assertEqual(response.status, 302)
+        run.assert_awaited_once_with("restart", "reforger-timer.service")
+        self.assertEqual(self.db.audit()[0]["action"], "restart bot")
+        with unittest.mock.patch("panel.web.systemctl", new=unittest.mock.AsyncMock(side_effect=RconError("sudo: a password is required"))):
+            await self.client.post("/bot/restart", data={"csrf": token})
+        self.assertFalse(self.db.audit()[0]["ok"])
+        await self.client.post("/logout", data={"csrf": token})
+        await self.login("mod", "mod-password")
+        token = await self.csrf("/")
+        with unittest.mock.patch("panel.web.systemctl", new=unittest.mock.AsyncMock()) as run:
+            response = await self.client.post("/bot/restart", data={"csrf": token}, allow_redirects=False)
+        self.assertEqual(response.status, 403)
+        run.assert_not_awaited()
+
     async def test_owners_can_give_one_person_one_discord_page(self):
         self.db.add_user("mo", auth.hash_password("mo-password-1"), "moderator")
         mo = self.db.user_by_name("mo")["id"]

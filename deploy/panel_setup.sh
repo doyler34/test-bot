@@ -41,20 +41,21 @@ as_panel "$PY" -c 'from panel.config import load_config; load_config()' || die "
 
 SERVICES="$(as_panel "$PY" -c 'from panel.config import load_config; print(" ".join(s.service for s in load_config().servers if s.service))')"
 SUDOERS=/etc/sudoers.d/oyb-panel
-if [ "$RUN_USER" != root ] && [ -n "$SERVICES" ]; then
+if [ "$RUN_USER" != root ]; then
     SYSTEMCTL="$(command -v systemctl)"
     STAGE_SUDO="$(mktemp)"
-    for unit in $SERVICES; do
-        for action in start stop restart; do
-            printf '%s ALL=(root) NOPASSWD: %s %s %s\n' "$RUN_USER" "$SYSTEMCTL" "$action" "$unit"
+    {
+        for unit in $SERVICES; do
+            for action in start stop restart; do
+                printf '%s ALL=(root) NOPASSWD: %s %s %s\n' "$RUN_USER" "$SYSTEMCTL" "$action" "$unit"
+            done
         done
-    done > "$STAGE_SUDO"
+        printf '%s ALL=(root) NOPASSWD: %s restart %s\n' "$RUN_USER" "$SYSTEMCTL" "$BOT"
+    } > "$STAGE_SUDO"
     visudo -cf "$STAGE_SUDO" >/dev/null || { rm -f "$STAGE_SUDO"; die "could not build the sudo rule for server controls."; }
     install -m 440 "$STAGE_SUDO" "$SUDOERS"
     rm -f "$STAGE_SUDO"
-    printf 'Start / Stop / Restart allowed for: %s\n' "$SERVICES"
-elif [ -f "$SUDOERS" ] && [ -z "$SERVICES" ]; then
-    rm -f "$SUDOERS"
+    printf 'Restart allowed for: %s %s\n' "$SERVICES" "$BOT"
 fi
 
 STAGE="$(mktemp -d)"
