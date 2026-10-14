@@ -357,7 +357,8 @@ function wire() {
   const from = el('windFrom');
 
   function windChanged() {
-    WIND.speed = Math.min(60, Math.max(0, Number(speed.value) || 0));
+    const typed = Number(String(speed.value).replace(',', '.')) || 0;
+    WIND.speed = Math.round(Math.min(60, Math.max(0, typed)) * 10) / 10;
     WIND.from = ((Number(from.value) || 0) % 360 + 360) % 360;
     speed.value = WIND.speed;
     from.value = WIND.from;
@@ -378,8 +379,8 @@ function wire() {
     if (!WIND.speed) speed.value = 1;
     windChanged();
   });
-  el('windUp').addEventListener('click', () => { speed.value = Number(speed.value) + 1; windChanged(); });
-  el('windDown').addEventListener('click', () => { speed.value = Number(speed.value) - 1; windChanged(); });
+  el('windUp').addEventListener('click', () => { speed.value = (Number(speed.value) || 0) + 0.1; windChanged(); });
+  el('windDown').addEventListener('click', () => { speed.value = (Number(speed.value) || 0) - 0.1; windChanged(); });
   speed.addEventListener('change', windChanged);
   speed.addEventListener('input', windChanged);
   from.addEventListener('change', windChanged);
