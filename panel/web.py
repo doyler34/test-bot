@@ -1391,7 +1391,10 @@ async def mortar_map_page(request):
         raise web.HTTPFound("/mortar")
     page = (MORTAR_STATIC / "mortar.html").read_text(encoding="utf-8")
     page = page.replace('data-token="__TOKEN__"', f'data-token="panel" data-csrf="{request[CSRF]}"')
-    page = page.replace('href="/static/', 'href="/mortar/panel/static/').replace('src="/static/', 'src="/mortar/panel/static/')
+    # Phones hold on to the old CSS and JS; a new file gets a new address.
+    for name in MORTAR_FILES:
+        version = int((MORTAR_STATIC / name).stat().st_mtime)
+        page = page.replace(f'"/static/{name}"', f'"/mortar/panel/static/{name}?v={version}"')
     return web.Response(text=page, content_type="text/html", headers={"Content-Security-Policy": MAP_CSP})
 
 
