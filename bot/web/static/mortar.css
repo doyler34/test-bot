@@ -62,7 +62,8 @@ select option { background: var(--card); }
   position: relative; height: clamp(240px, 46dvh, 560px); margin-bottom: 10px;
   border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
 }
-#map { position: absolute; inset: 0; background: #0a0f0d; touch-action: pan-x pan-y; }
+/* Every touch on the map is the map's: a pinch zooms the map, never the page. */
+#map { position: absolute; inset: 0; background: #0a0f0d; touch-action: none; }
 #hint {
   position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 500;
   display: flex; align-items: center; gap: 8px; max-width: calc(100% - 100px); white-space: nowrap;
@@ -168,7 +169,10 @@ select option { background: var(--card); }
 .problem b { display: block; font-size: 16px; letter-spacing: .06em; color: #ff8d89; }
 
 /* --- buttons -------------------------------------------------------- */
-.buttons { display: grid; grid-template-columns: 1.35fr 1.2fr .9fr 1.05fr; gap: 7px; margin-bottom: 10px; }
+.buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
+@media (min-width: 600px) and (max-width: 899px) {
+  .buttons { grid-template-columns: 1.35fr 1.2fr .9fr 1.05fr; }
+}
 .buttons button {
   display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0;
   min-height: var(--tap); padding: 0 6px; font: inherit; font-size: 14px; font-weight: 600;
@@ -230,7 +234,6 @@ select option { background: var(--card); }
   .grids > div { gap: 7px; padding: 8px; }
   .grids .icon { width: 22px; height: 22px; }
   .big em { font-size: 40px; }
-  .buttons { grid-template-columns: 1fr 1fr; }
   .windbar { gap: 9px; padding: 10px; }
   .dial { width: 40px; height: 40px; }
   .windbar button { padding: 0 10px; }
@@ -242,13 +245,13 @@ select option { background: var(--card); }
 /* --- desktop: map left, solution right ------------------------------ */
 @media (min-width: 900px) {
   body {
-    display: grid; grid-template-columns: 1fr 420px; grid-template-rows: auto auto 1fr;
+    display: grid; grid-template-columns: 1fr 460px; grid-template-rows: auto auto minmax(0, 1fr);
     column-gap: 12px; height: 100vh; padding-bottom: 12px; overflow: hidden;
   }
   .top { grid-column: 1 / -1; }
   .pickers { grid-column: 2; grid-row: 2; }
   #mapbox { grid-column: 1; grid-row: 2 / 4; height: auto; margin: 0; }
-  #panel { grid-column: 2; grid-row: 3; overflow-y: auto; }
+  #panel { grid-column: 2; grid-row: 3; align-self: start; max-height: 100%; overflow-y: auto; }
 }
 
 /* --- the expired-link page ------------------------------------------ */
