@@ -14,7 +14,7 @@ from panel import auth, maptiles
 from panel.config import PanelConfig
 from panel.db import PanelDB
 from panel.servers import ServerManager
-from panel.web import create_app
+from panel.web import CONFIG, create_app
 
 EVERON = json.loads((Path(__file__).parents[1] / 'assets/mortar/map.json').read_text())
 
@@ -129,6 +129,32 @@ class PanelMapTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(answer['valid'])
             self.assertEqual(answer['range_m'], 973)
         self.assertNotIn("'unsafe-inline'", (await self.client.get('/mortar')).headers['Content-Security-Policy'])
+
+    async def test_anyone_gets_the_map_on_the_public_site(self):
+        self.client.server.app[CONFIG].site_hosts = ['oybgaming.com']
+        site = {'Host': 'oybgaming.com'}
+        with mock.patch('panel.web.mortar_map', return_value=self.mapped):
+            page = await self.client.get('/mortar', headers=site)
+            html = await page.text()
+            self.assertEqual(page.status, 200)
+            self.assertIn('data-base="/mortar" data-api="/mortar/calculate"', html)
+            self.assertNotIn('data-csrf', html)
+            self.assertRegex(html, r'src="/mortar/static/mortar\.js\?v=\d+"')
+            self.assertEqual((await self.client.get('/mortar/static/mortar.css', headers=site)).status, 200)
+            self.assertEqual((await self.client.get('/mortar/static/web.py', headers=site)).status, 404)
+            self.assertEqual((await self.client.get('/mortar/tiles/3/2/1', headers=site)).status, 200)
+            self.assertEqual((await self.client.get('/mortar/tiles/3/9/9', headers=site)).status, 404)
+            loadouts = await (await self.client.get('/mortar/loadouts', headers=site)).json()
+            self.assertEqual(loadouts['map']['maxZoom'], 3)
+            body = {'tube': 'm252', 'round': 'he', 'gun': {'east': 4500, 'north': 10776},
+                    'target': {'east': 5200, 'north': 10100}}
+            answer = await (await self.client.post('/mortar/calculate', json=body, headers=site)).json()
+            self.assertEqual(answer['range_m'], 973)
+            # The owner pages stay on the panel's own address.
+            self.assertEqual((await self.client.get('/mortar/download', headers=site)).status, 404)
+            self.assertEqual((await self.client.get('/mortar/map', headers=site)).status, 404)
+        with mock.patch('panel.web.mortar_map', return_value=None):
+            self.assertEqual((await self.client.get('/mortar', headers=site)).status, 503)
 
     async def test_the_download_button(self):
         token = await self.login('boss', 'boss-password')

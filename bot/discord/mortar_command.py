@@ -12,7 +12,7 @@ import logging
 import discord
 from discord import app_commands
 
-from bot.config import mortar_command_enabled, mortar_map_config, mortar_session_ttl, mortar_web_base_url
+from bot.config import mortar_command_enabled, mortar_map_config, mortar_session_ttl, mortar_site_url, mortar_web_base_url
 from bot.mortar.plot import render
 from bot.mortar.solution import (OUT_OF_RANGE, bearing, parse_grid, profile, profiles,
                                  solution, swap, weapons)
@@ -252,6 +252,12 @@ class MortarCommand:
             await interaction.response.send_message(
                 'Tap the map to place your mortar, then the target.',
                 view=OpenMap(link), ephemeral=True)
+            return
+        site = mortar_site_url()
+        if site:
+            await interaction.response.send_message(
+                f'Tap the map to place your mortar, then the target. Bookmark it: {site}/mortar',
+                view=OpenMap(f'{site}/mortar'), ephemeral=True)
             return
         await interaction.response.send_modal(
             MortarModal(tube if tube in loaded else next(iter(loaded))))

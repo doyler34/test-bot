@@ -298,10 +298,14 @@ if __name__ == '__main__':
 
 
 class CommandSwitchTests(unittest.TestCase):
-    def test_discord_command_is_off_unless_turned_on(self):
+    def test_discord_command_is_on_unless_turned_off(self):
         from unittest import mock
-        from bot.config import mortar_command_enabled
+        from bot.config import mortar_command_enabled, mortar_site_url
         with mock.patch.dict('os.environ', {'MORTAR_COMMAND_ENABLED': ''}):
-            self.assertFalse(mortar_command_enabled())
-        with mock.patch.dict('os.environ', {'MORTAR_COMMAND_ENABLED': 'true'}):
             self.assertTrue(mortar_command_enabled())
+        with mock.patch.dict('os.environ', {'MORTAR_COMMAND_ENABLED': 'off'}):
+            self.assertFalse(mortar_command_enabled())
+        with mock.patch.dict('os.environ', {}, clear=True):
+            self.assertEqual(mortar_site_url(), 'https://oybgaming.com')
+        with mock.patch.dict('os.environ', {'MORTAR_SITE_URL': 'off'}):
+            self.assertEqual(mortar_site_url(), '')

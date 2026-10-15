@@ -14,6 +14,10 @@ plot of the two points.
 With the map page turned on, `/mortar` instead offers **🗺️ Open Mortar Map**
 and an **Enter grids instead** button, so both ways in stay available.
 
+By default the map it opens is the public site's, at `oybgaming.com/mortar`
+(`MORTAR_SITE_URL` changes the address). Anyone can open and bookmark that page;
+it's served by the panel, from the tiles the panel's Mortar page downloaded.
+
 ## The map page
 
 A page served by the bot itself: tap your mortar, tap the target, read the

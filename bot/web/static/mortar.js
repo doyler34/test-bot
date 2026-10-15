@@ -10,6 +10,9 @@
 const TOKEN = document.body.dataset.token;
 // Inside the panel the login is the key, and its forms need the panel's token.
 const CSRF = document.body.dataset.csrf || '';
+// Where this page's links live: the bot's own map server, or the panel.
+const BASE = document.body.dataset.base || `/mortar/${TOKEN}`;
+const API = document.body.dataset.api || '/api/mortar/calculate';
 // The imagery stops at its own deepest zoom; past that Leaflet enlarges those
 // tiles so a marker can still be put down to the metre.
 const EXTRA_ZOOM = 3;
@@ -384,7 +387,7 @@ async function solve() {
     wind: { speed_mps: WIND.speed, from_degrees: WIND.from },
   };
   try {
-    const reply = await fetch('/api/mortar/calculate', {
+    const reply = await fetch(API, {
       method: 'POST',
       headers: CSRF ? { 'Content-Type': 'application/json', 'X-CSRF': CSRF }
                     : { 'Content-Type': 'application/json' },
@@ -496,7 +499,7 @@ function wire() {
 
 /* --- start ---------------------------------------------------------- */
 async function start() {
-  const reply = await fetch(`/mortar/${TOKEN}/loadouts`);
+  const reply = await fetch(`${BASE}/loadouts`);
   if (!reply.ok) { window.location.reload(); return; }
   const data = await reply.json();
   MAP = data.map;
@@ -514,13 +517,13 @@ async function start() {
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
   if (MAP.tiles) {
-    layer = L.tileLayer(`/mortar/${TOKEN}/tiles/{z}/{x}/{y}`, {
+    layer = L.tileLayer(`${BASE}/tiles/{z}/{x}/{y}`, {
       tileSize: MAP.tiles.tileSize, minZoom: MAP.tiles.minZoom,
       maxNativeZoom: MAP.maxZoom, maxZoom: MAP.maxZoom + EXTRA_ZOOM,
       bounds, noWrap: true,
     }).addTo(map);
   } else {
-    layer = L.imageOverlay(`/mortar/${TOKEN}/map`, bounds).addTo(map);
+    layer = L.imageOverlay(`${BASE}/map`, bounds).addTo(map);
   }
 
   map.fitBounds(bounds);

@@ -228,6 +228,8 @@ async def public_site(request, handler):
             return web.Response(text="User-agent: *\nAllow: /\n")
         if request.method == "GET" and request.path in SITE_FILES:
             return await handler(request)
+        if request.path == "/mortar" or request.path.startswith("/mortar/"):
+            return await site_mortar(request)
         raise web.HTTPNotFound(text="Not found.")
     if request.path == "/robots.txt":
         return web.Response(text="User-agent: *\nDisallow: /\n")
@@ -1434,6 +1436,41 @@ async def mortar_picture(request):
 
 async def mortar_calculate(request):
     require(request, "mortar")
+    return await mortar_answer(request)
+
+
+async def site_mortar(request):
+    """The mortar map on the public site, for anyone: what /mortar in Discord links to."""
+    path, method = request.path.rstrip("/") or "/", request.method
+    if method == "GET" and path == "/mortar":
+        if mortar_map() is None:
+            return web.Response(text="The mortar map isn't ready yet. Use /mortar in Discord and enter grids instead.",
+                                status=503)
+        page = (MORTAR_STATIC / "mortar.html").read_text(encoding="utf-8")
+        page = page.replace('data-token="__TOKEN__"', 'data-token="site" data-base="/mortar" data-api="/mortar/calculate"')
+        for name in MORTAR_FILES:
+            version = int((MORTAR_STATIC / name).stat().st_mtime)
+            page = page.replace(f'"/static/{name}"', f'"/mortar/static/{name}?v={version}"')
+        return web.Response(text=page, content_type="text/html", headers={"Content-Security-Policy": MAP_CSP})
+    parts = path.split("/")[2:]
+    if method == "GET" and len(parts) == 2 and parts[0] == "static" and parts[1] in MORTAR_FILES:
+        return web.FileResponse(MORTAR_STATIC / parts[1], headers={"Content-Type": MORTAR_FILES[parts[1]],
+                                                                   "Cache-Control": "public, max-age=31536000"})
+    mapped = mortar_map()
+    if method == "GET" and parts == ["loadouts"] and mapped is not None:
+        return web.json_response({"map": mapped.describe(), "tubes": mortar_server.catalogue()})
+    if method == "GET" and len(parts) == 4 and parts[0] == "tiles" and mapped is not None:
+        tile = tile_path(mapped, *parts[1:])
+        if tile:
+            return web.FileResponse(tile, headers={"Cache-Control": "public, max-age=604800"})
+    if method == "GET" and parts == ["map"] and mapped is not None and image_path(mapped):
+        return web.FileResponse(image_path(mapped), headers={"Cache-Control": "public, max-age=86400"})
+    if method == "POST" and parts == ["calculate"]:
+        return await mortar_answer(request)
+    raise web.HTTPNotFound(text="Not found.")
+
+
+async def mortar_answer(request):
     try:
         body = await request.json()
     except ValueError:

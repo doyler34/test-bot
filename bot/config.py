@@ -96,9 +96,15 @@ def live_board_channel_id() -> int | None:
 
 
 def mortar_command_enabled() -> bool:
-    """Offer /mortar in Discord. Off by default while the tables are being checked;
-    owners can try it in the panel meanwhile."""
-    return os.getenv("MORTAR_COMMAND_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+    """Offer /mortar in Discord. On unless MORTAR_COMMAND_ENABLED says off."""
+    return os.getenv("MORTAR_COMMAND_ENABLED", "on").strip().lower() not in ("0", "false", "no", "off")
+
+
+def mortar_site_url() -> str:
+    """The public site whose /mortar page the command links to. "off" leaves
+    /mortar with just the grid boxes."""
+    raw = os.getenv("MORTAR_SITE_URL", "https://oybgaming.com").strip().rstrip("/")
+    return "" if raw.lower() in ("", "0", "off", "none") else raw
 
 
 def mortar_web_enabled() -> bool:
