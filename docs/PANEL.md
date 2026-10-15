@@ -134,14 +134,14 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   made-up players: run `.venv/bin/python dev/guide_demo.py`, then
   `node dev/guide_shots.js` to retake them after the look changes.
 - **Console**: raw RCON commands for anything the buttons don't cover.
-- **Audit log**: logins, kicks, bans, restarts, console commands, account changes.
+- **Audit log**: logins, kicks, bans, restarts, account changes.
 - **Admins**: create accounts, change roles, reset passwords, disable accounts.
 
 | Role | Can |
 |---|---|
 | Moderator | see everything, kick, add notes |
 | Admin | also ban / unban, server controls, audit log |
-| Owner | also the raw console and admin accounts |
+| Owner | also admin accounts |
 
 ## 1. Turn on RCON in each server
 

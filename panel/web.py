@@ -380,7 +380,7 @@ GUIDE = [
     ("history", "Past games", "Pulling up any day's games, and downloading or uploading logs.", None),
     ("health", "Health and memory", "Uptime, crashes, and when a server needs a full restart.", None),
     ("discord", "Discord", "What gets posted for staff, teamkill alerts, and linked accounts.", None),
-    ("console-audit", "Console and audit log", "Raw RCON commands, and the record of who did what.", "audit"),
+    ("console-audit", "Audit log", "The record of who did what in the panel.", "audit"),
     ("discord-messages", "Discord messages", "Every Discord page: what the bot posts, where, and staff alerts.", "discord"),
     ("discord-tutorial", "Discord tutorial", "Every Discord page step by step, with pictures. Also as a PDF.", "discord"),
     ("website", "The website", "The public site: its words, servers and rules.", "website"),
@@ -1941,30 +1941,6 @@ def name_clashes(doc, servers):
     return problems
 
 
-# console
-
-async def console_page(request):
-    require(request, "console")
-    return render(request, "console.html", output=None, chosen="", command="")
-
-
-async def console(request):
-    require(request, "console")
-    form = await request.post()
-    server_id, command = form.get("server", ""), form.get("command", "").strip()
-    server_or_404(request, server_id)
-    if not command or "\n" in command:
-        flash(request, "Type one command.", "error")
-        raise web.HTTPFound("/console")
-    try:
-        output = await request.app[MANAGER].command(server_id, command)
-        ok = True
-    except RconError as exc:
-        output, ok = f"Error: {exc}", False
-    audit(request, "console", server_id, command, clean(output, 300), ok=ok)
-    return render(request, "console.html", output=output, chosen=server_id, command=command)
-
-
 # audit
 
 async def audit_page(request):
@@ -2164,8 +2140,6 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/discord/{page}/channel", set_page_channel)
     app.router.add_get("/discord/{page}", discord_page)
     app.router.add_post("/discord/{page}", discord_save)
-    app.router.add_get("/console", console_page)
-    app.router.add_post("/console", console)
     app.router.add_get("/audit", audit_page)
     app.router.add_get("/users", users_page)
     app.router.add_post("/users", add_user)

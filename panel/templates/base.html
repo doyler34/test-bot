@@ -19,7 +19,7 @@
     <a href="/players" {% if path.startswith("/player") %}class="on"{% endif %}>Players</a>
     <a href="/bans" {% if path == "/bans" %}class="on"{% endif %}>Bans</a>
     {% set more %}
-    {% if can("console") %}<a href="/console" class="extra{{ ' on' if path == '/console' }}">Console</a>{% endif %}
+    {% if can("users") %}<a href="/bot/data" class="extra{{ ' on' if path == '/bot/data' }}">Bot data</a>{% endif %}
     {% if can("audit") %}<a href="/audit" class="extra{{ ' on' if path == '/audit' }}">Audit log</a>{% endif %}
     {% if can("discord") %}<a href="/discord" class="extra{{ ' on' if path.startswith('/discord') }}">Discord</a>{% endif %}
     {% if can("website") %}<a href="/website" class="extra{{ ' on' if path.startswith('/website') }}">Website</a>{% endif %}
@@ -27,7 +27,6 @@
     {% if can("mortar") %}<a href="/mortar" class="extra{{ ' on' if path == '/mortar' }}">Mortar</a>{% endif %}
     {% if can("game_admins") %}<a href="/game-admins" class="extra{{ ' on' if path == '/game-admins' }}">In-game admins</a>{% endif %}
     {% if can("users") %}<a href="/users" class="extra{{ ' on' if path == '/users' }}">Admins</a>{% endif %}
-    {% if can("users") %}<a href="/bot/data" class="extra{{ ' on' if path == '/bot/data' }}">Bot data</a>{% endif %}
     <a href="/guide" class="extra{{ ' on' if path.startswith('/guide') }}">Guide</a>
     {% endset %}
     {{ more }}

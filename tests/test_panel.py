@@ -128,7 +128,7 @@ class AuthTests(unittest.TestCase):
         self.assertTrue(auth.can("moderator", "kick"))
         self.assertFalse(auth.can("moderator", "ban"))
         self.assertTrue(auth.can("admin", "ban"))
-        self.assertFalse(auth.can("admin", "console"))
+        self.assertFalse(auth.can("admin", "users"))
         self.assertTrue(auth.can("owner", "users"))
         self.assertFalse(auth.can("nobody", "view"))
 
@@ -1567,13 +1567,12 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         page = await (await self.client.get("/server/server-1")).text()
         self.assertIn("<option>Toxic chat or VON: warning. Appeal: discord.gg/oyb</option>", page)
 
-    async def test_moderator_cannot_ban_or_use_console(self):
+    async def test_moderator_cannot_ban(self):
         await self.login("mod", "mod-password")
         token = await self.csrf()
         response = await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "reason": "x", "duration": "0"})
         self.assertEqual(response.status, 403)
-        self.assertEqual((await self.client.get("/console")).status, 403)
-        self.assertNotIn("Console", await (await self.client.get("/")).text())
+        self.assertNotIn("Bot data", await (await self.client.get("/")).text())
 
     async def test_ban_and_unban_hit_the_server(self):
         await self.login("boss", "boss-password")
@@ -2355,13 +2354,6 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         rcon = await (await self.client.get("/server/server-1/feed.part?show=rcon")).text()
         self.assertIn("Server 1 is online", rcon)
         self.assertNotIn("Player1 ", rcon)
-
-    async def test_console_is_audited(self):
-        await self.login("boss", "boss-password")
-        token = await self.csrf("/console")
-        html = await (await self.client.post("/console", data={"csrf": token, "server": "server-1", "command": "#status"})).text()
-        self.assertIn("ok: #status", html)
-        self.assertEqual(self.db.audit()[0]["target"], "#status")
 
     async def test_names_are_escaped(self):
         self.fake.players.append(("9", "<script>alert(1)</script>", "11111111-2222-4333-8444-555555555555"))
