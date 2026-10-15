@@ -1677,6 +1677,25 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("mod", "mod-password")
         self.assertEqual((await self.client.get("/bot/data", allow_redirects=False)).status, 403)
 
+    async def test_ip_lookup_page(self):
+        from tests.test_whois import ARIN
+        from panel import whois
+        self.db.add_connections("server-1", [{"identity": HAVOC, "ip": "99.102.29.3", "guid": "", "name": "Havoc", "at": now()}], {})
+        await self.login("boss", "boss-password")
+        self.assertIn("IP lookup", await (await self.client.get("/")).text())
+        with unittest.mock.patch("panel.whois.lookup", new=unittest.mock.AsyncMock(return_value={**whois.read(ARIN), "reverse": "x.att.net"})):
+            page = await (await self.client.get("/ip-lookup?ip=99.102.29.3")).text()
+        self.assertIn("AT&amp;T Corp.", page)
+        self.assertIn("99.96.0.0/11", page)
+        self.assertIn("x.att.net", page)
+        self.assertIn(f'href="/player/{HAVOC}"', page)
+        self.assertEqual(self.db.audit()[0]["action"], "ip lookup")
+        self.assertIn("isn't an IP address", await (await self.client.get("/ip-lookup?ip=nope")).text())
+        await self.client.post("/logout", data={"csrf": await self.csrf("/")})
+        await self.login("mod", "mod-password")
+        self.assertEqual((await self.client.get("/ip-lookup?ip=99.102.29.3", allow_redirects=False)).status, 403)
+        self.assertNotIn("IP lookup", await (await self.client.get("/")).text())
+
     async def test_bot_report_shows_on_the_page(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/discord/welcome")

@@ -684,6 +684,16 @@ class PanelDB:
                     entry["banned"].append(r["name"])
         return result
 
+    def ip_accounts(self, ip):
+        """Every account seen on this one address, most recent first."""
+        return self.all(
+            "SELECT c.identity, COALESCE(p.name, MAX(c.name)) AS name, SUM(c.times) AS times,"
+            " MIN(c.first_seen) AS first_seen, MAX(c.last_seen) AS last_seen,"
+            " EXISTS (SELECT 1 FROM bans b WHERE b.identity = c.identity AND b.removed_at IS NULL"
+            "   AND (b.expires_at IS NULL OR b.expires_at > ?)) AS banned"
+            " FROM connections c LEFT JOIN players p ON p.identity = c.identity"
+            " WHERE c.ip = ? GROUP BY c.identity ORDER BY last_seen DESC", now(), ip)
+
     def search_ip(self, text, limit=100):
         return self.all(
             "SELECT p.* FROM players p WHERE p.identity IN (SELECT identity FROM connections WHERE ip LIKE ?)"

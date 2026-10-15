@@ -20,7 +20,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, auth, investigate, maptiles, memory, outliers, site
+from . import archive, auth, investigate, maptiles, memory, outliers, site, whois
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -1644,6 +1644,19 @@ async def bot_data_page(request):
     return render(request, "bot_data.html", report=report, identity=identity)
 
 
+async def ip_lookup_page(request):
+    require(request, "ips")
+    typed = request.query.get("ip", "").strip()
+    ip = whois.clean_ip(typed)
+    result = accounts = None
+    if ip:
+        result = await whois.lookup(ip)
+        accounts = request.app[DB].ip_accounts(ip)
+        audit(request, "ip lookup", target=ip)
+    return render(request, "ip_lookup.html", typed=typed, ip=ip, result=result, accounts=accounts,
+                  banned=ip in request.app[DB].banned_ips() if ip else False)
+
+
 BOT_UNIT = "reforger-timer.service"
 
 
@@ -2134,6 +2147,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/bot/restart", restart_bot)
     app.router.add_get("/bot/data", bot_data_page)
+    app.router.add_get("/ip-lookup", ip_lookup_page)
     app.router.add_post("/discord/posts/new", new_post)
     app.router.add_get("/discord/posts/{post}", post_page)
     app.router.add_post("/discord/posts/{post}", post_save)

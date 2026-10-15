@@ -20,6 +20,7 @@
     <a href="/bans" {% if path == "/bans" %}class="on"{% endif %}>Bans</a>
     {% set more %}
     {% if can("users") %}<a href="/bot/data" class="extra{{ ' on' if path == '/bot/data' }}">Bot data</a>{% endif %}
+    {% if can("ips") %}<a href="/ip-lookup" class="extra{{ ' on' if path == '/ip-lookup' }}">IP lookup</a>{% endif %}
     {% if can("audit") %}<a href="/audit" class="extra{{ ' on' if path == '/audit' }}">Audit log</a>{% endif %}
     {% if can("discord") %}<a href="/discord" class="extra{{ ' on' if path.startswith('/discord') }}">Discord</a>{% endif %}
     {% if can("website") %}<a href="/website" class="extra{{ ' on' if path.startswith('/website') }}">Website</a>{% endif %}

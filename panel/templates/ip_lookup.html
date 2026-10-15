@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}IP lookup · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker">Data</p>
+<h1>IP lookup</h1>
+<p class="muted">Who an address is registered to (WHOIS), and every account the panel has seen on it.</p>
+<form method="get" class="card row">
+  <input name="ip" value="{{ typed }}" placeholder="e.g. 99.102.29.3" class="mono" inputmode="decimal" required>
+  <button data-loading="Looking up">Look up</button>
+</form>
+{% if typed and not ip %}<p class="flash error">That isn't an IP address.</p>{% endif %}
+{% if ip %}
+<section class="card">
+  <div class="row"><h2 class="mono">{{ ip }}</h2>{% if banned %}<span class="pill down">IP banned</span>{% endif %}</div>
+  {% if result.error %}
+  <p class="warn">{{ result.error }}</p>
+  {% else %}
+  <div class="stats">
+    <div class="stat"><b>{{ result.owner or result.name or "—" }}</b><span>Registered to</span></div>
+    <div class="stat"><b>{{ result.country or "—" }}</b><span>Country</span></div>
+    <div class="stat"><b>{{ result.name or "—" }}</b><span>Network name</span></div>
+  </div>
+  <ul class="evidence">
+    <li>Range: <span class="mono">{{ result.range }}</span>{% if result.cidrs %} <span class="muted mono">({{ result.cidrs|join(", ") }})</span>{% endif %}</li>
+    {% if result.reverse %}<li>Reverse DNS: <span class="mono">{{ result.reverse }}</span></li>{% endif %}
+    {% if result.type %}<li>Type: {{ result.type }}</li>{% endif %}
+    {% if result.registered %}<li>Registered {{ result.registered }}{% if result.changed %}, last changed {{ result.changed }}{% endif %}</li>{% endif %}
+    {% if result.abuse %}<li>Abuse contact: <span class="mono">{{ result.abuse }}</span></li>{% endif %}
+    {% if result.handle %}<li>Registry handle: <span class="mono">{{ result.handle }}</span></li>{% endif %}
+  </ul>
+  {% if result.contacts %}
+  <details><summary>Every contact on the record</summary>
+    <ul class="evidence">{% for c in result.contacts %}<li>{{ c.role }}: <b>{{ c.name }}</b>{% if c.email %} · <span class="mono">{{ c.email }}</span>{% endif %}{% if c.address %}<br><span class="muted">{{ c.address }}</span>{% endif %}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+  {% if result.remarks %}
+  <details><summary>Remarks</summary><ul class="evidence">{% for r in result.remarks %}<li>{{ r }}</li>{% endfor %}</ul></details>
+  {% endif %}
+  <p class="muted">A home broadband provider usually means a real household; a hosting company or data centre often means a VPN or proxy. Mobile networks share one address between many people.</p>
+  {% endif %}
+</section>
+<section class="card">
+  <h2>Seen in the panel</h2>
+  {% if not accounts %}
+  <p class="muted">No player has connected from this address.</p>
+  {% else %}
+  <ul class="evidence">{% for a in accounts %}
+    <li><a href="/player/{{ a.identity }}">{{ a.name or a.identity }}</a>{% if a.banned %} <span class="pill down">Banned</span>{% endif %}
+      <br><span class="muted">{{ a.times }}× · {{ a.first_seen|ts }} to {{ a.last_seen|ts }}</span></li>
+  {% endfor %}</ul>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
