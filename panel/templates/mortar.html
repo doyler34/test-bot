@@ -18,6 +18,7 @@
   {% endif %}
   {% if mapped %}
   <p>Tap your mortar, tap the target, and read off the solution. Drag either marker to adjust.</p>
+  <p class="muted">{% if ground %}Ground heights are in: tapping two spots takes their heights off the map and corrects for the difference.{% else %}Ground heights are downloading in the background (a few minutes, once). Until then, solutions assume both spots are at the same height.{% endif %}</p>
   <a class="button" href="/mortar/map">Open the map</a>
   {% if mapped.max_zoom < sharp and not working %}
   {% if job.state == "failed" %}<p class="warn">The last try didn't finish: {{ job.error }}</p>{% endif %}

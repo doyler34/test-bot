@@ -16,6 +16,7 @@ from aiohttp import web
 from bot.discord import welcome_doc
 from bot.discord.ban_roles import length_text
 from bot.mortar.calibration import calibration, image_path, tile_path
+from bot.mortar import heights
 from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
@@ -1345,8 +1346,11 @@ async def mortar_page(request):
                       "others": [r for r in fired.every if fired.final and r.ring != fired.final.ring]}
         except ValueError as exc:
             error = str(exc)
+    ground = heights.load() is not None
+    if not ground:
+        asyncio.get_running_loop().run_in_executor(None, heights.ensure)
     return render(request, "mortar.html", loaded=loaded, weapon=weapon, form=form, result=result, error=error,
-                  out_of_range=OUT_OF_RANGE, mapped=mortar_map(), job=maptiles.read_status(),
+                  ground=ground, out_of_range=OUT_OF_RANGE, mapped=mortar_map(), job=maptiles.read_status(),
                   sharp=maptiles.SHARP, free=maptiles.free_memory(), sharp_memory=maptiles.SHARP_MEMORY)
 
 
@@ -2085,6 +2089,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
             app[MANAGER].start()
             if app[BM]:
                 app[BM].start()
+            if heights.load() is None:
+                asyncio.get_running_loop().run_in_executor(None, heights.ensure)
             yield
             if app[BM]:
                 await app[BM].stop()

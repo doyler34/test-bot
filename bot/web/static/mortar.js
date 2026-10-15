@@ -312,6 +312,7 @@ function show(answer) {
   el('targetGrid').textContent = answer.target_grid || '—';
   el('range').textContent = `${answer.range_m.toLocaleString()} m`;
   showWind(answer);
+  showHeight(answer);
   const problem = el('problem');
   if (answer.valid) {
     problem.hidden = true;
@@ -339,6 +340,20 @@ function show(answer) {
   } else {
     problem.innerHTML = '<b>NO SOLUTION</b>That could not be worked out. Try again in a moment.';
   }
+}
+
+/* The ground heights come off the map on the server; this prints them. */
+function showHeight(answer) {
+  const known = answer.gun_height_m != null;
+  el('gunHeight').textContent = known ? `${Math.round(answer.gun_height_m)} m high` : '';
+  el('targetHeight').textContent = known ? `${Math.round(answer.target_height_m)} m high` : '';
+  const note = el('heightNote'), climb = Math.round(answer.climb_m || 0);
+  note.hidden = !known;
+  if (!known) return;
+  const fix = answer.height_correction_mils;
+  note.textContent = climb === 0 ? 'Target is level with the mortar.'
+    : `Target is ${Math.abs(climb)} m ${climb > 0 ? 'higher' : 'lower'} than the mortar`
+      + (fix ? `: ${fix > 0 ? '+' : ''}${fix} mils of elevation, already in the figure above.` : '.');
 }
 
 /* The backend does the wind. This only prints what it sent back. */

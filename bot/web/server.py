@@ -13,6 +13,7 @@ from pathlib import Path
 
 from aiohttp import web
 
+from bot.mortar import heights
 from bot.mortar.calibration import calibration, image_path, reason, tile_path
 from bot.mortar.solution import (apply_wind, bearing, profile, profiles, swap, weapons)
 from bot.mortar.wind import BadWind, read as read_wind
@@ -104,7 +105,12 @@ def calculate(body, mapped):
         wind = read_wind(body.get('wind'))
     except BadWind as exc:
         return {'valid': False, 'reason': 'bad_wind', 'detail': str(exc)}
-    climb = number(body.get('climb')) or 0.0
+    climb = number(body.get('climb'))
+    ground = None
+    if climb is None:
+        # Nobody typed heights: take them off the map, when it has them.
+        ground = (heights.at(*gun), heights.at(*target))
+        climb = ground[1] - ground[0] if None not in ground else 0.0
     mils, distance = bearing(gun, target, weapon.mils)
     # The wind is split against the line of fire once, here, in degrees.
     shot = apply_wind(weapon, distance, mils * 360 / weapon.mils, wind, climb)
@@ -114,6 +120,7 @@ def calculate(body, mapped):
         'tubeName': weapon.label, 'roundName': weapon.shell, 'mils': weapon.mils,
         'range_m': round(distance), 'azimuth_mils': round(mils),
         'min_range_m': low, 'max_range_m': high,
+        'climb_m': round(climb, 1),
         'gun': {'east': round(gun[0]), 'north': round(gun[1])},
         'target': {'east': round(target[0]), 'north': round(target[1])},
         'wind': {'speed_mps': wind.speed, 'from_degrees': wind.bearing,
@@ -127,6 +134,8 @@ def calculate(body, mapped):
                  'has_data': shot.has_data, 'measured': shot.measured,
                  'applied': shot.applied},
     }
+    if ground and None not in ground:
+        answer['gun_height_m'], answer['target_height_m'] = ground
     if mapped is not None:
         answer['mortar_grid'] = mapped.grid(*gun)
         answer['target_grid'] = mapped.grid(*target)

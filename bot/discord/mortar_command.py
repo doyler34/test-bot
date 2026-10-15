@@ -12,6 +12,7 @@ import logging
 import discord
 from discord import app_commands
 
+from bot.mortar import heights
 from bot.config import mortar_command_enabled, mortar_map_config, mortar_session_ttl, mortar_site_url, mortar_web_base_url
 from bot.mortar.plot import render
 from bot.mortar.solution import (OUT_OF_RANGE, bearing, parse_grid, profile, profiles,
@@ -169,9 +170,9 @@ class MortarModal(discord.ui.Modal, title='Mortar firing solution'):
                                      min_length=4, max_length=13)
     target_input = discord.ui.TextInput(label='Target grid', placeholder='0512 1096',
                                         min_length=4, max_length=13)
-    gun_height = discord.ui.TextInput(label='Your altitude (m)', placeholder='Optional',
+    gun_height = discord.ui.TextInput(label='Your altitude (m)', placeholder='Optional: blank takes it off the map',
                                       required=False, max_length=6)
-    target_height = discord.ui.TextInput(label='Target altitude (m)', placeholder='Optional',
+    target_height = discord.ui.TextInput(label='Target altitude (m)', placeholder='Optional: blank takes it off the map',
                                          required=False, max_length=6)
 
     def __init__(self, tube):
@@ -183,6 +184,9 @@ class MortarModal(discord.ui.Modal, title='Mortar firing solution'):
             gun = parse_grid(self.gun_input.value)
             target = parse_grid(self.target_input.value)
             climb = height(self.target_height.value) - height(self.gun_height.value)
+            if not (self.target_height.value or '').strip() and not (self.gun_height.value or '').strip():
+                # Neither altitude typed: take both off the map, when it has them.
+                climb = heights.climb(gun, target) or 0.0
         except ValueError as exc:
             await interaction.response.send_message(f'{exc} {HELP}', ephemeral=True)
             return
