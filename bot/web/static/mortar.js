@@ -271,6 +271,15 @@ function fillRounds(keep) {
   // Changing tube keeps the round in hand where that tube carries it.
   const held = tube.rounds.find((r) => r.key === wanted);
   el('round').value = held ? held.key : tube.rounds[0].key;
+  showPicks();
+}
+
+/* What each picker shows: the option the hidden dropdown has chosen. */
+function showPicks() {
+  const tube = currentTube(), round = currentRound();
+  el('tubeShown').textContent = tube ? tube.name : '—';
+  el('tubeSide').textContent = tube && tube.faction ? ` · ${tube.faction}` : '';
+  el('roundShown').textContent = round ? round.name : '—';
 }
 
 /* --- the solution --------------------------------------------------- */
@@ -398,7 +407,7 @@ async function solve() {
 /* --- buttons -------------------------------------------------------- */
 function wire() {
   el('tube').addEventListener('change', () => { fillRounds(el('round').value); draw(); solve(); });
-  el('round').addEventListener('change', () => { draw(); solve(); });
+  el('round').addEventListener('change', () => { showPicks(); draw(); solve(); });
 
   el('resetTarget').addEventListener('click', () => {
     if (target) { target.remove(); target = null; }
