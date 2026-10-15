@@ -1657,6 +1657,27 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/discord/welcome", data={"csrf": token, "action": "discard"})
         self.assertIsNone(self.db.discord_doc("welcome")["draft"])
 
+    async def test_bot_data_page_says_what_the_files_hold(self):
+        from panel.oyb_stats import OybStats
+        with tempfile.TemporaryDirectory() as data:
+            db = sqlite3.connect(Path(data, "playtime.sqlite3"))
+            db.execute("CREATE TABLE totals (identity TEXT, server TEXT, seconds INTEGER, name TEXT)")
+            db.execute("INSERT INTO totals VALUES ('abc', 's1', 3600, 'Bob')")
+            db.commit()
+            db.close()
+            Path(data, "account_links.sqlite3").write_bytes(b"not a database at all" * 100)
+            report = OybStats(data).health("abc")
+        playtime, links = report["files"]
+        self.assertEqual((playtime["check"], playtime["tables"]), ("ok", [("totals", 1)]))
+        self.assertIn("not a database", links["error"])
+        self.assertIn("'Bob'", report["player"]["SELECT server, seconds, name FROM totals WHERE identity = ?"])
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/bot/data")).text()
+        self.assertIn("playtime.sqlite3", page)
+        await self.client.post("/logout", data={"csrf": await self.csrf("/")})
+        await self.login("mod", "mod-password")
+        self.assertEqual((await self.client.get("/bot/data", allow_redirects=False)).status, 403)
+
     async def test_bot_report_shows_on_the_page(self):
         await self.login("boss", "boss-password")
         token = await self.csrf("/discord/welcome")

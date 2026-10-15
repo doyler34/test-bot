@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Bot data · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker">Owners</p>
+<h1>Bot data</h1>
+<p class="muted">What the panel finds in the bot's data folder. Time played, kills and Discord links on player pages come from these two files. If they show 0 for everyone, this page says why.</p>
+<section class="card">
+  <p>Folder: <span class="mono">{{ report.folder }}</span></p>
+  {% for f in report.files %}
+  <h2>{{ f.name }}</h2>
+  {% if not f.exists %}
+  <p class="warn">Not there. The bot hasn't written it, or it's looking in a different folder.</p>
+  {% else %}
+  <p>{{ (f.size / 1048576)|round(1) }} MB · last written {{ f.modified|ago }}{% if f.wal %} · plus {{ (f.wal / 1048576)|round(1) }} MB not yet merged in{% endif %}</p>
+  <p>Health check: {% if f.check == "ok" %}<span class="pill">ok</span>{% else %}<span class="pill down">{{ f.check or "didn't run" }}</span>{% endif %}</p>
+  {% if f.error %}<p class="warn">Couldn't read it: {{ f.error }}</p>{% endif %}
+  {% if f.tables %}<ul class="evidence">{% for table, count in f.tables %}<li><span class="mono">{{ table }}</span>: {{ count }} row{{ "s" if count != 1 }}</li>{% endfor %}</ul>{% endif %}
+  {% endif %}
+  {% endfor %}
+</section>
+<form method="get" class="card">
+  <h2>One player</h2>
+  <p class="muted">Paste a player's identity (the long code under their name) to see exactly what each file holds for them.</p>
+  <div class="row"><input name="player" value="{{ identity }}" placeholder="9529c571-9a2f-…" class="mono"><button class="small">Check</button></div>
+  {% if report.player %}
+  <ul class="evidence">{% for sql, result in report.player.items() %}<li><span class="mono muted">{{ sql }}</span><br><span class="mono">{{ result }}</span></li>{% endfor %}</ul>
+  {% endif %}
+</form>
+{% endblock %}

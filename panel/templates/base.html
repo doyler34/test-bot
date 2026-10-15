@@ -27,6 +27,7 @@
     {% if can("mortar") %}<a href="/mortar" class="extra{{ ' on' if path == '/mortar' }}">Mortar</a>{% endif %}
     {% if can("game_admins") %}<a href="/game-admins" class="extra{{ ' on' if path == '/game-admins' }}">In-game admins</a>{% endif %}
     {% if can("users") %}<a href="/users" class="extra{{ ' on' if path == '/users' }}">Admins</a>{% endif %}
+    {% if can("users") %}<a href="/bot/data" class="extra{{ ' on' if path == '/bot/data' }}">Bot data</a>{% endif %}
     <a href="/guide" class="extra{{ ' on' if path.startswith('/guide') }}">Guide</a>
     {% endset %}
     {{ more }}

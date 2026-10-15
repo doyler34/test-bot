@@ -1637,6 +1637,13 @@ async def discord_home(request):
     return render(request, "discord_home.html", groups=groups, bridge=report)
 
 
+async def bot_data_page(request):
+    require(request, "users")
+    identity = request.query.get("player", "").strip().lower()
+    report = request.app[STATS].health(identity if valid_identity(identity) else "")
+    return render(request, "bot_data.html", report=report, identity=identity)
+
+
 BOT_UNIT = "reforger-timer.service"
 
 
@@ -2150,6 +2157,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/game-admins/{id}/restart", restart_through_amp)
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/bot/restart", restart_bot)
+    app.router.add_get("/bot/data", bot_data_page)
     app.router.add_post("/discord/posts/new", new_post)
     app.router.add_get("/discord/posts/{post}", post_page)
     app.router.add_post("/discord/posts/{post}", post_save)

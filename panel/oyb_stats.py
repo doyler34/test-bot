@@ -113,6 +113,52 @@ class OybStats:
                     found = True
         return stats if found else None
 
+    def health(self, identity: str = "") -> dict:
+        """What the panel finds in the bot's data folder, errors and all, for when
+        the numbers look wrong: the panel's own pages hide a failed read."""
+        report = {"folder": str(self.data.resolve()), "files": [], "player": None}
+        for name in ("playtime.sqlite3", "account_links.sqlite3"):
+            path = self.data / name
+            entry = {"name": name, "exists": path.is_file(), "size": 0, "modified": 0, "wal": 0,
+                     "check": "", "tables": [], "error": ""}
+            report["files"].append(entry)
+            if not entry["exists"]:
+                continue
+            stat = path.stat()
+            entry["size"], entry["modified"] = stat.st_size, int(stat.st_mtime)
+            wal = path.with_name(name + "-wal")
+            entry["wal"] = wal.stat().st_size if wal.is_file() else 0
+            try:
+                db = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
+            except sqlite3.Error as exc:
+                entry["error"] = str(exc)
+                continue
+            with closing(db):
+                try:
+                    entry["check"] = "; ".join(r[0] for r in db.execute("PRAGMA quick_check").fetchall()[:5])
+                    for (table,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"):
+                        entry["tables"].append((table, db.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]))
+                except sqlite3.Error as exc:
+                    entry["error"] = str(exc)
+        if identity:
+            found = {}
+            for name, sql in (("playtime.sqlite3", "SELECT server, seconds, name FROM totals WHERE identity = ?"),
+                              ("playtime.sqlite3", "SELECT milliseconds FROM global_time WHERE identity = ?"),
+                              ("account_links.sqlite3",
+                               "SELECT player_kills, deaths, teamkills FROM combat_totals WHERE identity = ?"),
+                              ("account_links.sqlite3", "SELECT discord_id FROM account_links WHERE identity = ?")):
+                db = _open(self.data / name)
+                if db is None:
+                    found[sql] = "file missing"
+                    continue
+                with closing(db):
+                    try:
+                        found[sql] = repr(db.execute(sql, (identity,)).fetchall())
+                    except sqlite3.Error as exc:
+                        found[sql] = f"error: {exc}"
+            report["player"] = found
+        return report
+
     def weekly_board(self, limit: int = 10) -> dict | None:
         """The same weekly standings the bot pins in Discord: linked players only,
         kills first, reset every Monday. None when the bot's data isn't here."""
