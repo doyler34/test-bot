@@ -903,7 +903,7 @@ async def edit_ban(request):
         raise web.HTTPFound("/bans")
     any_ban = allowed(request, "edit_bans")
     if not any_ban and not (allowed(request, "ban") and ban["created_by"] == by):
-        raise web.HTTPForbidden(text="Only the admin who made this ban, or an owner, can change it.")
+        raise web.HTTPForbidden(text="Only the admin who made this ban, or a senior admin, can change it.")
     form = await request.post()
     reason = clean(form.get("reason", ""))
     if not reason:
@@ -2011,7 +2011,7 @@ async def change_user(request):
         if role not in auth.ROLES:
             raise web.HTTPBadRequest(text="Unknown role.")
         if last_owner and role != "owner":
-            flash(request, "There has to be at least one owner.", "error")
+            flash(request, "There has to be at least one senior admin.", "error")
         else:
             db.write("UPDATE users SET role = ? WHERE id = ?", role, target["id"])
             audit(request, "changed role", target=target["username"], detail=f"{target['role']} → {role}")
@@ -2029,7 +2029,7 @@ async def change_user(request):
         flash(request, f"{target['username']}'s extra access saved.")
     elif action in ("disable", "enable"):
         if action == "disable" and (target["id"] == request[USER]["id"] or last_owner):
-            flash(request, "You can't disable yourself or the last owner.", "error")
+            flash(request, "You can't disable yourself or the last senior admin.", "error")
         else:
             db.write("UPDATE users SET disabled = ? WHERE id = ?", int(action == "disable"), target["id"])
             if action == "disable":
@@ -2062,7 +2062,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[AMP] = Amp(**config.amp) if config.amp else None
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
-    env.filters.update(ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb,
+    env.filters.update(rolename=lambda role: auth.ROLE_NAMES.get(role, role), ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb,
                        part=lambda zone: body_part(zone) if zone else "")
     env.globals.update(ban_reasons=reason_options(BAN_REASONS), kick_reasons=reason_options(KICK_REASONS))
     app[JINJA] = env

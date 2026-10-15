@@ -3,7 +3,7 @@
 <section class="overview">
   <div class="hello">
     <h1>{{ welcome.greeting }}, {{ user.username }}</h1>
-    <p class="muted">Signed in as {{ "an" if user.role in ("admin", "owner") else "a" }} <b>{{ user.role }}</b> · <a href="/guide">Guide</a></p>
+    <p class="muted">Signed in as {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b> · <a href="/guide">Guide</a></p>
   </div>
   <div class="tiles">
     <div class="tile{{ ' bad' if welcome.online < cards|length }}"><b>{{ welcome.online }}/{{ cards|length }}</b><span>Servers online</span></div>

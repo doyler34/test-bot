@@ -1610,7 +1610,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_owner_guide_pages(self):
         await self.login("boss", "boss-password")
-        self.assertIn("Signed in as an <b>owner</b>", await (await self.client.get("/")).text())
+        self.assertIn("Signed in as a <b>senior admin</b>", await (await self.client.get("/")).text())
         for slug in ("console-audit", "discord-messages", "admins"):
             self.assertEqual((await self.client.get(f"/guide/{slug}")).status, 200)
         banning = await (await self.client.get("/guide/banning")).text()
@@ -2079,7 +2079,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         token = await self.csrf("/users")
         boss = self.db.user_by_name("boss")
         html = await (await self.client.post(f"/users/{boss['id']}", data={"csrf": token, "action": "role", "role": "admin"})).text()
-        self.assertIn("at least one owner", html)
+        self.assertIn("at least one senior admin", html)
         self.assertEqual(self.db.user_by_name("boss")["role"], "owner")
 
     async def test_disabled_admin_is_logged_out(self):

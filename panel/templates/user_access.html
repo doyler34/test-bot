@@ -7,7 +7,7 @@
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <input type="hidden" name="action" value="grants">
   <h2>Extra access</h2>
-  <p class="muted">{{ target.username }} is a <b>{{ target.role }}</b>. Tick anything they should have on top of that. Their menu and Guide only ever show what they can use.</p>
+  <p class="muted">{{ target.username }} is a <b>{{ target.role|rolename }}</b>. Tick anything they should have on top of that. Their menu and Guide only ever show what they can use.</p>
   {% for key, label in grant_list if not role_can(target.role, key) %}
   <label class="check"><input type="checkbox" name="grant" value="{{ key }}" {% if key in mine %}checked{% endif %}> {{ label }}</label>
   {% endfor %}

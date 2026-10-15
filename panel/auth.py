@@ -6,6 +6,8 @@ import time
 from .db import PanelDB, now
 
 ROLES = ("moderator", "admin", "owner")
+# What each role is called on screen; the stored names stay as they are.
+ROLE_NAMES = {"moderator": "moderator", "admin": "admin", "owner": "senior admin"}
 
 PERMISSIONS = {
     "view": "moderator",

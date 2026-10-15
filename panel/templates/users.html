@@ -16,11 +16,11 @@
   <div class="grid">
     <label>Username <input name="username" maxlength="32" required></label>
     <label>Role
-      <select name="role">{% for r in roles %}<option {% if r == "moderator" %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+      <select name="role">{% for r in roles %}<option value="{{ r }}" {% if r == "moderator" %}selected{% endif %}>{{ r|rolename }}</option>{% endfor %}</select>
     </label>
   </div>
   <button>Create account</button>
-  <p class="muted"><b>Moderator</b>: watch the servers, look players up (kill logs included), kick, add notes. <b>Admin</b>: also ban, and see the audit log. <b>Owner</b>: everything else: unbanning, IPs and other accounts on the same IP, restarts, uploads, Discord, the website and admin accounts.</p>
+  <p class="muted"><b>Moderator</b>: watch the servers, look players up (kill logs included), kick, add notes. <b>Admin</b>: also ban, and see the audit log. <b>Senior admin</b>: everything else: unbanning, IPs and other accounts on the same IP, restarts, uploads, Discord, the website and admin accounts.</p>
   <p class="muted">Need someone to have just one extra thing, like the Start here message in Discord? Give them the role, then use <b>Edit access</b> next to their name.</p>
 </form>
 
@@ -34,7 +34,7 @@
       <form method="post" action="/users/{{ u.id }}" class="inline">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="action" value="role">
-        <select name="role" data-autosubmit>{% for r in roles %}<option {% if r == u.role %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+        <select name="role" data-autosubmit>{% for r in roles %}<option value="{{ r }}" {% if r == u.role %}selected{% endif %}>{{ r|rolename }}</option>{% endfor %}</select>
         <noscript><button class="small">Save</button></noscript>
       </form>
     </td>

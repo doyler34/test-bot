@@ -32,7 +32,7 @@
     {{ more }}
   </nav>
   <div class="me">
-    <a href="/account">{{ user.username }}</a> <span class="role">{{ user.role }}</span>
+    <a href="/account">{{ user.username }}</a> <span class="role">{{ user.role|rolename }}</span>
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Log out</button></form>
   </div>
 </header>

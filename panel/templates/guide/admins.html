@@ -1,12 +1,12 @@
 {% extends "guide/_page.html" %}
 {% from "guide/_macros.html" import shot with context %}
 {% block guide %}
-<p>Owners manage who can log in, from <b>Admins</b> in the top menu.</p>
+<p>Senior admins manage who can log in, from <b>Admins</b> in the top menu.</p>
 {{ shot("users", "The Admins page.") }}
 
 <h2>Adding someone</h2>
 <ol class="steps">
-  <li>Under <b>New admin</b>, type their username and pick a role: moderator, admin or owner.</li>
+  <li>Under <b>New admin</b>, type their username and pick a role: moderator, admin or senior admin.</li>
   <li>Press <b>Create account</b>. The panel shows a temporary password <b>once</b>.</li>
   <li>Send them the panel's address, their username and that password. They'll pick their own password the first time they log in.</li>
 </ol>
@@ -19,13 +19,13 @@
 </ul>
 
 <h2>Extra access for one person</h2>
-<p>Sometimes one person needs one thing their role doesn't give, like editing the Start here message without being an owner. In the <b>Access</b> column (it says <b>Role only</b> until they have something extra):</p>
+<p>Sometimes one person needs one thing their role doesn't give, like editing the Start here message without being a senior admin. In the <b>Access</b> column (it says <b>Role only</b> until they have something extra):</p>
 <ol class="steps">
   <li>Press <b>Edit access</b> next to their name.</li>
   <li>Tick what they should have: banning, unbanning, IPs, the audit log, server power, the website, every Discord page, or only some Discord pages.</li>
   <li>Press <b>Save access</b>. It applies on their next page load.</li>
 </ol>
-<p>Their menu and this guide change to match: they only see the pages they can use, and the guide pages that explain them. Owners always have everything, and only owners can change anyone's access.</p>
+<p>Their menu and this guide change to match: they only see the pages they can use, and the guide pages that explain them. Senior admins always have everything, and only senior admins can change anyone's access.</p>
 
-<p class="tip">Give people the lowest role that does the job, and add single things with Access rather than making them owner. Start new staff as moderators.</p>
+<p class="tip">Give people the lowest role that does the job, and add single things with Access rather than making them senior admin. Start new staff as moderators.</p>
 {% endblock %}
