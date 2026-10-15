@@ -120,6 +120,13 @@
       </div>
       <div id="compass" class="compass"></div>
     </div>
+    <details class="shots">
+      <summary>Test shots</summary>
+      <p class="note">From the OYB Mortar Test mod: paste its <b>OYB_MORTAR</b> log lines here to see where each round really landed, and how far that was from your target.</p>
+      <textarea id="shotText" rows="4" placeholder="OYB_MORTAR from=6955,4480,64 to=5140,5481,56 ..."></textarea>
+      <div class="buttons"><button id="showShots" type="button">Show on map</button><button id="clearShots" type="button">Clear</button></div>
+      <ol id="shotList" class="note"></ol>
+    </details>
   </section>
 
 <script src="/static/leaflet.js"></script>

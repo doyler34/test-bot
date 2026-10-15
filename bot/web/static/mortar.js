@@ -422,6 +422,50 @@ async function solve() {
   }
 }
 
+/* --- test shots ---------------------------------------------------------
+ * Where rounds really landed, from the OYB Mortar Test mod's log lines, drawn
+ * on the map and measured against the target: how far long or short along the
+ * line of fire, and how far left or right of it.
+ */
+const SHOT = /OYB_MORTAR from=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+) to=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)(?: range=(-?[\d.]+))?(?: bearing=(-?[\d.]+))?(?: launch=(-?[\d.]+))?/;
+let shots = null;
+
+function dot(kind) {
+  return L.divIcon({ className: '', iconSize: [14, 14], html: `<div class="shot ${kind}"></div>` });
+}
+
+function showShots() {
+  shots = shots || L.layerGroup().addTo(map);
+  shots.clearLayers();
+  const list = el('shotList');
+  list.innerHTML = '';
+  const aimed = gun && target ? [toWorld(gun.getLatLng()), toWorld(target.getLatLng())] : null;
+  el('shotText').value.split('\n').map((line) => SHOT.exec(line)).filter(Boolean).forEach((m, i) => {
+    const from = { east: +m[1], north: +m[2] }, hit = { east: +m[4], north: +m[5] };
+    L.marker(toLatLng(from.east, from.north), { icon: dot('from'), interactive: false }).addTo(shots);
+    L.marker(toLatLng(hit.east, hit.north), { icon: dot('hit'), interactive: false }).addTo(shots);
+    L.polyline([toLatLng(from.east, from.north), toLatLng(hit.east, hit.north)],
+      { color: '#d0574f', weight: 1, dashArray: '4 4', interactive: false }).addTo(shots);
+    let words = `Landed ${gridText(hit.east, hit.north)}, ${m[7] || '?'} m from where it was fired`;
+    if (m[9]) words += `, left the tube at ${m[9]}°`;
+    if (aimed) {
+      const [g, t] = aimed;
+      const length = Math.hypot(t.east - g.east, t.north - g.north);
+      const ue = (t.east - g.east) / length, un = (t.north - g.north) / length;
+      const de = hit.east - t.east, dn = hit.north - t.north;
+      const along = Math.round(de * ue + dn * un), across = Math.round(de * un - dn * ue);
+      const off = Math.round(Math.hypot(from.east - g.east, from.north - g.north));
+      words += `. ${Math.abs(along)} m ${along >= 0 ? 'long' : 'short'}, ${Math.abs(across)} m ${across >= 0 ? 'right' : 'left'}`
+        + ` of the target (${Math.round(Math.hypot(de, dn))} m off)`;
+      if (off > 25) words += `. Fired ${off} m from where your mortar marker is`;
+    }
+    const item = document.createElement('li');
+    item.textContent = `${words}.`;
+    list.appendChild(item);
+  });
+  if (!list.children.length) list.innerHTML = '<li>No OYB_MORTAR lines found in that.</li>';
+}
+
 /* --- buttons -------------------------------------------------------- */
 function wire() {
   el('tube').addEventListener('change', () => { fillRounds(el('round').value); draw(); solve(); });
@@ -492,6 +536,13 @@ function wire() {
   speed.addEventListener('change', windChanged);
   speed.addEventListener('input', windChanged);
   from.addEventListener('change', windChanged);
+
+  el('showShots').addEventListener('click', showShots);
+  el('clearShots').addEventListener('click', () => {
+    shots.clearLayers();
+    el('shotList').innerHTML = '';
+    el('shotText').value = '';
+  });
 
   el('copy').addEventListener('click', async () => {
     const text = [el('loadout').textContent,

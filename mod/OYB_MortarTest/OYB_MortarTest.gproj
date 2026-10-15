@@ -1,0 +1,14 @@
+GameProject {
+ ID "OYB_MortarTest"
+ GUID "BF8B7B068A4C58C7"
+ TITLE "OYB Mortar Test"
+ Dependencies {
+  "58D0FB3206B6F859"
+ }
+ Configurations {
+  GameProjectConfig PC {
+  }
+  GameProjectConfig HEADLESS {
+  }
+ }
+}
