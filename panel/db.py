@@ -6,6 +6,9 @@ from pathlib import Path
 FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"), "tks": ("teamkill",), "sus": ("sus",),
               "rcon": ("rcon", "server"), "admin": ()}
 
+# Columns added after their table first shipped: older databases get them on start.
+ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"),)
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
@@ -106,7 +109,7 @@ CREATE TABLE IF NOT EXISTS server_samples (
     server TEXT NOT NULL,
     at INTEGER NOT NULL,
     players INTEGER, proc_cpu REAL, rss INTEGER, threads INTEGER, fps REAL,
-    query_ok INTEGER, query_ms REAL, disconnects INTEGER, errors INTEGER, reasons TEXT,
+    query_ok INTEGER, query_ms REAL, disconnects INTEGER, errors INTEGER, reasons TEXT, sock_drops REAL,
     PRIMARY KEY (server, at)
 );
 CREATE TABLE IF NOT EXISTS memory_samples (
@@ -301,6 +304,9 @@ class PanelDB:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys = ON")
         self.db.executescript(SCHEMA)
+        for table, column, kind in ADDED_COLUMNS:
+            if column not in {r["name"] for r in self.db.execute(f"PRAGMA table_info({table})")}:
+                self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
         self.db.commit()
 
     def close(self):
@@ -598,7 +604,7 @@ class PanelDB:
     BOX_KEYS = ("cpu", "load1", "mem_used", "mem_total", "swap_used", "rx_mbps", "tx_mbps", "rx_pps", "tx_pps",
                 "rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf")
     SERVER_KEYS = ("players", "proc_cpu", "rss", "threads", "fps", "query_ok", "query_ms", "disconnects",
-                   "errors", "reasons")
+                   "errors", "reasons", "sock_drops")
 
     def add_box_sample(self, row, at=None, keep_days=7):
         t = int(at or now())

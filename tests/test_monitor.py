@@ -149,3 +149,22 @@ class MonitorTests(unittest.IsolatedAsyncioTestCase):
                       "Lost packets per minute", "<polyline"):
             self.assertIn(words, page)
         self.assertIn("Open the Monitor", await (await client.get("/server/one")).text())
+
+
+class UpgradeTests(unittest.TestCase):
+    def test_an_older_database_gets_the_new_column(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as folder:
+            path = str(Path(folder, "panel.sqlite3"))
+            old = sqlite3.connect(path)
+            old.execute("CREATE TABLE server_samples (server TEXT NOT NULL, at INTEGER NOT NULL, players INTEGER, "
+                        "proc_cpu REAL, rss INTEGER, threads INTEGER, fps REAL, query_ok INTEGER, query_ms REAL, "
+                        "disconnects INTEGER, errors INTEGER, reasons TEXT, PRIMARY KEY (server, at))")
+            old.execute("INSERT INTO server_samples (server, at, players) VALUES ('one', 1, 5)")
+            old.commit()
+            old.close()
+            db = PanelDB(path)
+            db.add_server_sample("one", {"players": 6, "sock_drops": 12.0}, at=2)
+            rows = db.server_samples("one", 0)
+            db.close()
+        self.assertEqual([(r["players"], r["sock_drops"]) for r in rows], [(5, None), (6, 12.0)])

@@ -88,6 +88,18 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   and again when it can. For the outside check set `query_host` (the server's
   public IP) and `query_port` (its A2S query port) on that server; for server
   FPS start the server with `-logStats 10000`.
+  It also charts packets dropped on each game's own UDP ports: the closest
+  thing to a radio-cutting-out meter.
+- **Network check** (Data → Network check, senior admins): reads every network
+  counter twice, ten seconds apart, and gives each a verdict: which port carries
+  the default route, link speed, duplex and flaps, errors and missed packets on
+  the card (and its ring buffer and driver counters when `ethtool` is
+  installed), kernel backlog drops and time squeezes, UDP buffer drops, TCP
+  resends, buffer and backlog sizes, the connection tracking table, how network
+  interrupts are spread over the cores, the busiest core, each server's own UDP
+  ports and what's been dropped on them, repeated server browser queries, and
+  connection times out to Cloudflare and Google. It ends with a plain-text
+  report to send the host.
 - **Discord alerts**: bans, unbans, kicks, restarts, crashes, a server going
   offline or coming back, and memory that didn't clear, posted to a staff channel.
 - **Shared bans**: start typing a player's in-game name (or an old name, or

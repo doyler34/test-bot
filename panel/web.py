@@ -22,7 +22,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, auth, investigate, maptiles, memory, monitor, outliers, site, whois
+from . import archive, auth, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -757,6 +757,9 @@ def monitor_problems(box, server, state):
     stretch(server, lambda r: r["query_ok"] == 0, "The server browser couldn't reach it",
             "The outside check went unanswered. If the program was running at the time, the port or the network "
             "was down: players couldn't see or join the server.")
+    stretch(server, lambda r: (r["sock_drops"] or 0) > 0, "Packets dropped on the game's own ports",
+            "Players' packets reached the server but the game didn't read them in time, so the kernel threw them "
+            "away. This is what cuts out radio and voice, and makes movement stutter.")
     stretch(server, lambda r: r["fps"] is not None and r["fps"] < 30, "Server FPS under 30",
             "The server was struggling to keep up: players feel this as lag, rubber-banding and late hits.")
     stretch(server, lambda r: r["proc_cpu"] is not None and r["proc_cpu"] >= 95, "The game program maxed out a core",
@@ -801,8 +804,9 @@ async def monitor_page(request):
                               "rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf"),
                              peak=("rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf"))
     srv = monitor.downsample(server_rows, since, until,
-                             ("players", "fps", "proc_cpu", "rss_gb", "query_ms", "query_down", "disconnects", "errors"),
-                             peak=("query_down", "disconnects", "errors", "query_ms"))
+                             ("players", "fps", "proc_cpu", "rss_gb", "query_ms", "query_down", "disconnects", "errors",
+                              "sock_drops"),
+                             peak=("query_down", "disconnects", "errors", "query_ms", "sock_drops"))
     chart = lambda rows, series, floor=None: monitor.chart(rows, since, until, series, floor=floor)
     charts = [
         ("Players", chart(srv, [("players", "Players", "a")]), ""),
@@ -818,6 +822,8 @@ async def monitor_page(request):
         ("Lost packets per minute", chart(box, [("udp_errors", "UDP errors", "bad"), ("udp_rcvbuf", "UDP buffer full", "c"),
                                                 ("rx_drop", "Card dropped", "b")]),
          "Should be flat at zero. Anything above it is game traffic the server never got."),
+        ("Dropped on the game's ports (per minute)", chart(srv, [("sock_drops", "Dropped", "bad")]),
+         "Should be flat at zero. This is the closest thing to a radio-cutting-out meter."),
         ("Outside check (ms)", chart(srv, [("query_ms", "Answer time", "a")]),
          "" if state.config.query_host else 'Not set up: add "query_host" (the server\'s public IP) and "query_port" '
          "(its A2S query port, often 17777) to this server in panel.local.json."),
@@ -1749,6 +1755,30 @@ async def data_page(request):
     return render(request, "data.html")
 
 
+NETCHECK = web.AppKey("netcheck", dict)
+
+
+async def network_page(request):
+    require(request, "users")
+    result = request.app[NETCHECK].get("last")
+    if request.method == "POST":
+        manager = request.app[MANAGER]
+        servers = [(st.config.id, st.config.name, st.pid,
+                    (st.config.query_host, st.config.query_port) if st.config.query_host and st.config.query_port else None)
+                   for st in manager.states.values()]
+        result = await netcheck.run(servers)
+        request.app[NETCHECK]["last"] = result
+        audit(request, "network check")
+    counts = {}
+    for row in (result or {}).get("lines", []):
+        counts[row["verdict"]] = counts.get(row["verdict"], 0) + 1
+    sections = {}
+    for row in (result or {}).get("lines", []):
+        sections.setdefault(row["section"], []).append(row)
+    return render(request, "network.html", result=result, counts=counts, sections=sections,
+                  text=netcheck.report_text(result) if result else "")
+
+
 async def ip_lookup_page(request):
     require(request, "ips")
     typed = request.query.get("ip", "").strip()
@@ -2175,6 +2205,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[THROTTLE] = auth.LoginThrottle()
     app[FLASH] = {}
     app[STATS] = OybStats(config.oyb_data)
+    app[NETCHECK] = {}
     app[BM] = BanSync(app[DB], config.battlemetrics_token, config.battlemetrics_ban_list) \
         if config.battlemetrics_token else None
     app[AMP] = Amp(**config.amp) if config.amp else None
@@ -2255,6 +2286,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/bot/restart", restart_bot)
     app.router.add_get("/data", data_page)
+    app.router.add_route("GET", "/network", network_page)
+    app.router.add_post("/network", network_page)
     app.router.add_get("/bot/data", bot_data_page)
     app.router.add_get("/ip-lookup", ip_lookup_page)
     app.router.add_post("/discord/posts/new", new_post)

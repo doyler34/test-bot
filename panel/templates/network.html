@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Network check · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/data">← Data</a></p>
+<h1>Network check</h1>
+<form method="post" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <p class="muted">Reads every network counter on the box and on each server's own ports, waits ten seconds while it pings
+    the servers' query ports and the internet, then reads them all again. Anything that grew in those ten seconds is
+    happening right now. Run it while players are on, ideally while the problem is happening.</p>
+  <button data-loading="Checking (10 seconds)">Run network check</button>
+</form>
+{% if result %}
+<section class="card">
+  <h2>Result · {{ result.at|ts }}</h2>
+  <p>
+    {% if counts.bad %}<span class="pill down">{{ counts.bad }} problem{{ "s" if counts.bad != 1 }}</span>{% endif %}
+    {% if counts.warn %}<span class="pill gold">{{ counts.warn }} warning{{ "s" if counts.warn != 1 }}</span>{% endif %}
+    <span class="pill">{{ counts.ok or 0 }} fine</span>
+  </p>
+  {% if not result.ethtool %}<p class="muted">ethtool isn't installed on the box, so the network card's own counters and buffer sizes weren't read. <code>sudo apt install ethtool</code> adds them.</p>{% endif %}
+</section>
+{% for section, rows in sections.items() %}
+<section class="card">
+  <h2>{{ section }}</h2>
+  {% for r in rows %}
+  <div class="finding">
+    <p><span class="pill {{ 'down' if r.verdict == 'bad' else ('gold' if r.verdict == 'warn' else '') }}">{{ {'bad': 'problem', 'warn': 'warning', 'ok': 'ok', 'info': 'note'}[r.verdict] }}</span>
+      <b>{{ r.label }}</b>: <span class="mono">{{ r.value }}</span></p>
+    {% if r.why %}<p class="muted">{{ r.why }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+<details class="copy-box card" open>
+  <summary>Copy the report for the host</summary>
+  <textarea readonly rows="14" class="mono" id="net-text">{{ text }}</textarea>
+  <button type="button" class="small" data-copy="#net-text">Copy</button>
+</details>
+{% endif %}
+{% endblock %}

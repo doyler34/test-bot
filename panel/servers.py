@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
-from . import alerts as alert_colours, archive, memory, monitor
+from . import alerts as alert_colours, archive, memory, monitor, netcheck
 from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
@@ -89,6 +89,7 @@ class ServerState:
     disconnects: Counter = field(default_factory=Counter)
     errors: int = 0
     cpu_ticks: dict | None = None
+    sock_drops: dict | None = None
     unreachable: int = 0
     query: dict = field(default_factory=dict)
 
@@ -202,6 +203,13 @@ class ServerManager:
             if state.cpu_ticks and ticks and state.cpu_ticks.get("pid") == state.pid else None
         row["threads"] = ticks["threads"] if ticks else None
         state.cpu_ticks = {**ticks, "pid": state.pid} if ticks else None
+        # Packets the kernel threw away on the game's own UDP ports, per minute.
+        sockets = netcheck.game_sockets(state.pid, proc_root) if state.pid else None
+        reading = {"pid": state.pid, "at": time.monotonic(), "drops": sum(x["drops"] for x in sockets)} if sockets else None
+        last = state.sock_drops
+        if reading and last and last["pid"] == reading["pid"] and reading["at"] > last["at"]:
+            row["sock_drops"] = round(max(reading["drops"] - last["drops"], 0) * 60 / (reading["at"] - last["at"]), 1)
+        state.sock_drops = reading
         if state.config.query_host and state.config.query_port:
             state.query = await monitor.query(state.config.query_host, state.config.query_port)
             row["query_ok"] = 1 if state.query["ok"] else 0

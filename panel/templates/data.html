@@ -11,6 +11,10 @@
   </a>
   {% endif %}
   {% if can("users") %}
+  <a class="card" href="/network">
+    <h2>Network check</h2>
+    <p class="muted">Everything about the box's network and each server's ports, checked in ten seconds, with a report to send the host.</p>
+  </a>
   <a class="card" href="/bot/data">
     <h2>Bot data</h2>
     <p class="muted">What's in the bot's stats files: for when time played or kills look wrong.</p>
