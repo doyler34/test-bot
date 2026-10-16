@@ -541,3 +541,35 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .legend .key.c { background: #6f9ad3; }
 .legend .key.bad { background: var(--red); }
 @media (max-width: 520px) { .monitor-grid { grid-template-columns: 1fr; } }
+
+/* Network check */
+.net-verdict.bad { border-color: var(--red); }
+.net-verdict.ok h2 { color: var(--khaki); }
+.net-verdict.bad h2 { color: var(--red); }
+.net-counts { display: flex; gap: 6px; flex-wrap: wrap; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; background: var(--muted); vertical-align: middle; }
+.dot.bad { background: var(--red); }
+.dot.warn { background: var(--gold); }
+.dot.ok { background: var(--khaki); }
+.net-ports { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.net-port { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); background: var(--bg); }
+.net-port em { font-style: normal; font-size: .85rem; color: var(--muted); }
+.net-port.use { border-color: var(--gold); }
+.net-port.use em { color: var(--gold); }
+.net-port.down.fast { border-color: var(--red); }
+.net-port.down.fast em { color: var(--red); }
+.net-port.management, .net-port.down.onboard { opacity: .6; }
+.net-fixes { padding-left: 1.2rem; margin: 0; }
+.net-fixes li { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.net-fixes li:last-child { border-bottom: 0; }
+.net-fixes p { margin: 4px 0; }
+.net-do code { white-space: normal; word-break: break-all; }
+.net-section summary { cursor: pointer; font-family: var(--display); text-transform: uppercase; letter-spacing: .04em; font-size: 1.1rem; }
+.net-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+.net-table td { padding: 7px 6px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.net-table td:first-child { width: 18px; }
+.net-table td.mono { text-align: right; word-break: break-word; max-width: 45%; }
+@media (max-width: 520px) {
+  .net-table tr { display: grid; grid-template-columns: 18px 1fr; }
+  .net-table td.mono { grid-column: 2; text-align: left; border-top: 0; padding-top: 0; }
+}

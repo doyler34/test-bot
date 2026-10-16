@@ -90,6 +90,8 @@ class ServerState:
     errors: int = 0
     cpu_ticks: dict | None = None
     sock_drops: dict | None = None
+    # The game program found by its folder, for servers without a service set.
+    found_pid: int = 0
     unreachable: int = 0
     query: dict = field(default_factory=dict)
 
@@ -177,6 +179,7 @@ class ServerManager:
     async def _watch_monitor(self, proc_root="/proc"):
         before = await asyncio.to_thread(monitor.read_box, proc_root)
         due = time.monotonic()
+        beat = 0
         while not self._stopping:
             # Keep to the beat: a slow outside check mustn't push every later reading back.
             due += MONITOR_SECONDS
@@ -185,11 +188,25 @@ class ServerManager:
                 after = await asyncio.to_thread(monitor.read_box, proc_root)
                 self.db.add_box_sample(monitor.box_rates(before, after))
                 before = after
+                if beat % 4 == 0:
+                    await self.find_programs(proc_root)
+                beat += 1
                 await asyncio.gather(*(self.monitor_server(state, proc_root) for state in self.states.values()))
             except asyncio.CancelledError:
                 raise
             except Exception:
                 log.exception("monitor reading failed")
+
+    async def find_programs(self, proc_root="/proc"):
+        """Matches running game programs to servers that have no service set."""
+        missing = [st for st in self.states.values() if not st.config.service]
+        if not missing:
+            return
+        games = await asyncio.to_thread(netcheck.find_games, proc_root)
+        found = netcheck.match_games([(st.config.id, st.config.name, 0, None) for st in missing],
+                                     {st.config.id: st.config.log_dir for st in missing}, games)
+        for st in missing:
+            st.found_pid = found.get(st.config.id) or 0
 
     async def monitor_server(self, state: ServerState, proc_root="/proc"):
         """One Monitor reading for one server."""
@@ -198,14 +215,18 @@ class ServerManager:
                "disconnects": sum(state.disconnects.values()), "errors": state.errors,
                "reasons": json.dumps(dict(state.disconnects)) if state.disconnects else None}
         state.disconnects, state.errors = Counter(), 0
-        ticks = monitor.read_process(state.pid, proc_root) if state.pid else None
+        pid = state.pid or state.found_pid
+        ticks = monitor.read_process(pid, proc_root) if pid else None
         row["proc_cpu"] = monitor.process_cpu(state.cpu_ticks, ticks) \
-            if state.cpu_ticks and ticks and state.cpu_ticks.get("pid") == state.pid else None
+            if state.cpu_ticks and ticks and state.cpu_ticks.get("pid") == pid else None
         row["threads"] = ticks["threads"] if ticks else None
-        state.cpu_ticks = {**ticks, "pid": state.pid} if ticks else None
+        state.cpu_ticks = {**ticks, "pid": pid} if ticks else None
+        if not state.memory and pid:
+            sample = memory.process_memory(pid, proc_root)
+            row["rss"] = sample["rss"] if sample else None
         # Packets the kernel threw away on the game's own UDP ports, per minute.
-        sockets = netcheck.game_sockets(state.pid, proc_root) if state.pid else None
-        reading = {"pid": state.pid, "at": time.monotonic(), "drops": sum(x["drops"] for x in sockets)} if sockets else None
+        sockets = netcheck.game_sockets(pid, proc_root) if pid else None
+        reading = {"pid": pid, "at": time.monotonic(), "drops": sum(x["drops"] for x in sockets)} if sockets else None
         last = state.sock_drops
         if reading and last and last["pid"] == reading["pid"] and reading["at"] > last["at"]:
             row["sock_drops"] = round(max(reading["drops"] - last["drops"], 0) * 60 / (reading["at"] - last["at"]), 1)

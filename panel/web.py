@@ -1763,10 +1763,10 @@ async def network_page(request):
     result = request.app[NETCHECK].get("last")
     if request.method == "POST":
         manager = request.app[MANAGER]
-        servers = [(st.config.id, st.config.name, st.pid,
+        servers = [(st.config.id, st.config.name, st.pid or st.found_pid,
                     (st.config.query_host, st.config.query_port) if st.config.query_host and st.config.query_port else None)
                    for st in manager.states.values()]
-        result = await netcheck.run(servers)
+        result = await netcheck.run(servers, log_dirs={st.config.id: st.config.log_dir for st in manager.states.values()})
         request.app[NETCHECK]["last"] = result
         audit(request, "network check")
     counts = {}

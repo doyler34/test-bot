@@ -1,38 +1,76 @@
 {% extends "base.html" %}
 {% block title %}Network check · OYB Control{% endblock %}
+{% set names = {'bad': 'Problem', 'warn': 'Warning', 'ok': 'OK', 'info': 'Note'} %}
 {% block body %}
 <p class="kicker"><a href="/data">← Data</a></p>
 <h1>Network check</h1>
-<form method="post" class="card">
+<form method="post" class="card net-run">
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <p class="muted">Reads every network counter on the box and on each server's own ports, waits ten seconds while it pings
-    the servers' query ports and the internet, then reads them all again. Anything that grew in those ten seconds is
-    happening right now. Run it while players are on, ideally while the problem is happening.</p>
+  <p class="muted">Takes ten seconds. Run it while players are on, best of all while the problem is happening: anything
+    that goes wrong during those ten seconds shows up as happening now.</p>
   <button data-loading="Checking (10 seconds)">Run network check</button>
 </form>
 {% if result %}
-<section class="card">
-  <h2>Result · {{ result.at|ts }}</h2>
-  <p>
-    {% if counts.bad %}<span class="pill down">{{ counts.bad }} problem{{ "s" if counts.bad != 1 }}</span>{% endif %}
-    {% if counts.warn %}<span class="pill gold">{{ counts.warn }} warning{{ "s" if counts.warn != 1 }}</span>{% endif %}
+{% set fixes = result.lines|selectattr("verdict", "in", ["bad", "warn"])|list %}
+<section class="card net-verdict {{ 'bad' if counts.bad else ('warn' if counts.warn else 'ok') }}">
+  <p class="kicker">Checked {{ result.at|ts }}</p>
+  <h2>{% if counts.bad %}{{ counts.bad }} problem{{ "s" if counts.bad != 1 }} found{% elif counts.warn %}Nothing broken right now, {{ counts.warn }} thing{{ "s" if counts.warn != 1 }} to improve{% else %}All clear{% endif %}</h2>
+  <div class="net-counts">
+    <span class="pill down">{{ counts.bad or 0 }} problem{{ "s" if counts.bad != 1 }}</span>
+    <span class="pill gold">{{ counts.warn or 0 }} warning{{ "s" if counts.warn != 1 }}</span>
     <span class="pill">{{ counts.ok or 0 }} fine</span>
-  </p>
-  {% if not result.ethtool %}<p class="muted">ethtool isn't installed on the box, so the network card's own counters and buffer sizes weren't read. <code>sudo apt install ethtool</code> adds them.</p>{% endif %}
-</section>
-{% for section, rows in sections.items() %}
-<section class="card">
-  <h2>{{ section }}</h2>
-  {% for r in rows %}
-  <div class="finding">
-    <p><span class="pill {{ 'down' if r.verdict == 'bad' else ('gold' if r.verdict == 'warn' else '') }}">{{ {'bad': 'problem', 'warn': 'warning', 'ok': 'ok', 'info': 'note'}[r.verdict] }}</span>
-      <b>{{ r.label }}</b>: <span class="mono">{{ r.value }}</span></p>
-    {% if r.why %}<p class="muted">{{ r.why }}</p>{% endif %}
   </div>
-  {% endfor %}
 </section>
+
+{% if result.ports %}
+<section class="card">
+  <h2>Your network ports</h2>
+  <div class="net-ports">
+    {% for port in result.ports %}
+    <div class="net-port {{ 'use' if port.in_use else ('up' if port.up else 'down') }} {{ port.kind }}">
+      <b class="mono">{{ port.name }}</b>
+      <span>{{ port.words[0]|upper }}{{ port.words[1:] }}</span>
+      <em>{% if port.in_use %}Carrying all traffic{% if port.speed %} · {{ port.speed }} Mb/s{% endif %}{% elif port.up %}Link up, not in use{% else %}Link down{% endif %}</em>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if fixes %}
+<section class="card">
+  <h2>What to look at, worst first</h2>
+  <ol class="net-fixes">
+  {% for r in fixes|sort(attribute="verdict") %}
+    <li>
+      <p><span class="dot {{ r.verdict }}"></span><b>{{ r.label }}</b> <span class="mono muted">{{ r.value }}</span></p>
+      {% if r.why %}<p>{{ r.why }}</p>{% endif %}
+      {% if r.fix %}<p class="net-do"><b>What to do:</b> {% if r.fix.startswith("sysctl") or r.fix.startswith("ethtool") %}<code>{{ r.fix }}</code>{% else %}{{ r.fix }}{% endif %}</p>{% endif %}
+    </li>
+  {% endfor %}
+  </ol>
+  {% if not result.ethtool %}<p class="muted">The network card's own counters weren't read because ethtool isn't installed: <code>sudo apt install ethtool</code>.</p>{% endif %}
+</section>
+{% endif %}
+
+<h2 class="section">Everything that was checked</h2>
+{% for section, rows in sections.items() %}
+{% set worst = 'bad' if rows|selectattr("verdict", "equalto", "bad")|list else ('warn' if rows|selectattr("verdict", "equalto", "warn")|list else 'ok') %}
+<details class="card net-section" {% if worst == 'bad' %}open{% endif %}>
+  <summary><span class="dot {{ worst }}"></span>{{ section }} <span class="muted">· {{ rows|length }} check{{ "s" if rows|length != 1 }}</span></summary>
+  <table class="net-table">
+    {% for r in rows %}
+    <tr>
+      <td><span class="dot {{ r.verdict }}" title="{{ names[r.verdict] }}"></span></td>
+      <td><b>{{ r.label }}</b>{% if r.why and r.verdict in ('ok', 'info') %}<br><span class="muted">{{ r.why }}</span>{% endif %}</td>
+      <td class="mono">{{ r.value }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</details>
 {% endfor %}
-<details class="copy-box card" open>
+
+<details class="copy-box card">
   <summary>Copy the report for the host</summary>
   <textarea readonly rows="14" class="mono" id="net-text">{{ text }}</textarea>
   <button type="button" class="small" data-copy="#net-text">Copy</button>

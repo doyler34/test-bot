@@ -157,6 +157,57 @@ def game_sockets(pid, proc_root="/proc"):
     return sorted(found, key=lambda s: s["port"])
 
 
+def find_games(proc_root="/proc"):
+    """Every Arma Reforger server program running on the box."""
+    found = []
+    try:
+        pids = [p for p in os.listdir(proc_root) if p.isdigit()]
+    except OSError:
+        return found
+    for pid in pids:
+        try:
+            with open(f"{proc_root}/{pid}/cmdline", "rb") as fh:
+                cmdline = fh.read().replace(b"\0", b" ").decode(errors="replace").strip()
+        except OSError:
+            continue
+        if "ArmaReforgerServer" not in cmdline:
+            continue
+        try:
+            cwd = os.readlink(f"{proc_root}/{pid}/cwd")
+        except OSError:
+            cwd = ""
+        found.append({"pid": int(pid), "cmdline": cmdline, "cwd": cwd})
+    return found
+
+
+def _folder_keys(log_dir):
+    """Bits of a server's log folder path that its program's command line or
+    working folder will also contain."""
+    parts = [p for p in str(log_dir).split("/") if p]
+    if "instances" in parts and parts.index("instances") + 1 < len(parts):
+        return ["/instances/" + parts[parts.index("instances") + 1] + "/"]
+    while parts and parts[-1].lower() in ("logs", "profile"):
+        parts.pop()
+    return ["/" + "/".join(parts) + "/"] if parts else []
+
+
+def match_games(servers, log_dirs, games):
+    """Fills in the program for servers the panel doesn't already know one for."""
+    pids = {sid: pid for sid, _, pid, _ in servers}
+    taken = {pid for pid in pids.values() if pid}
+    for sid, _, pid, _ in servers:
+        if pid:
+            continue
+        keys = _folder_keys(log_dirs.get(sid, ""))
+        for game in games:
+            text = game["cmdline"] + " " + game["cwd"] + "/"
+            if game["pid"] not in taken and keys and any(key in text for key in keys):
+                pids[sid] = game["pid"]
+                taken.add(game["pid"])
+                break
+    return pids
+
+
 async def ethtool(name):
     """Ring sizes and the driver's own error counters, where ethtool is installed."""
     tool = shutil.which("ethtool")
@@ -224,8 +275,30 @@ def _spread(times, failed, tries):
 
 # --- turning it into verdicts --------------------------------------------
 
-def line(section, label, value, verdict=INFO, why=""):
-    return {"section": section, "label": label, "value": value, "verdict": verdict, "why": why}
+def line(section, label, value, verdict=INFO, why="", fix=""):
+    return {"section": section, "label": label, "value": value, "verdict": verdict, "why": why, "fix": fix}
+
+
+# What each network driver usually is, in words.
+ONBOARD = {"igb": "Intel 1 Gb", "igc": "Intel 2.5 Gb", "e1000e": "Intel 1 Gb", "r8169": "Realtek 1 Gb",
+           "tg3": "Broadcom 1 Gb"}
+FAST = {"bnxt_en": "Broadcom 10/25 Gb", "ixgbe": "Intel 10 Gb", "i40e": "Intel 10/40 Gb", "ice": "Intel 25/100 Gb",
+        "mlx5_core": "Mellanox 25/100 Gb", "mlx4_en": "Mellanox 10/40 Gb", "qede": "QLogic 25 Gb", "sfc": "Solarflare 10 Gb"}
+MANAGEMENT = {"cdc_ether", "rndis_host"}
+
+
+def port_kind(nic):
+    """('fast' | 'onboard' | 'management' | 'virtual' | 'other', words)."""
+    driver = nic["driver"]
+    if driver in FAST:
+        return "fast", f"{FAST[driver]} port"
+    if driver in ONBOARD:
+        return "onboard", f"motherboard {ONBOARD[driver]} port"
+    if driver in MANAGEMENT:
+        return "management", "the server's management link (BMC/IPMI over USB)"
+    if nic["virtual"]:
+        return "virtual", "virtual port"
+    return "other", f"{driver or 'unknown'} port"
 
 
 def judge(before, after, servers, extras):
@@ -245,15 +318,35 @@ def judge(before, after, servers, extras):
     else:
         out.append(line(s, "Default route", f"{routes[0]['interface']} via {routes[0]['gateway']}", OK,
                         "All traffic leaves through this port."))
+    nics = after["nics"]
+    in_use = [n for n in used if n in nics]
+    fast_down = [n for n, nic in nics.items() if port_kind(nic)[0] == "fast" and nic["state"] != "up"]
+    fast_up = [n for n, nic in nics.items() if port_kind(nic)[0] == "fast" and nic["state"] == "up"]
+    if in_use and port_kind(nics[in_use[0]])[0] == "onboard" and fast_down and not fast_up:
+        name = in_use[0]
+        out.insert(0, line(s, "Running on the backup port",
+                           f"{name} ({port_kind(nics[name])[1]}) is carrying everything; "
+                           f"{', '.join(fast_down)} ({port_kind(nics[fast_down[0]])[1]}s) are down",
+                           BAD,
+                           "This box has fast add-in network ports, but their link is down, so every server's traffic "
+                           "has fallen back to the motherboard's own port: a fraction of the capacity, a smaller packet "
+                           "buffer and more work for the CPU per packet. If the trouble started when the host changed "
+                           "something, this is the change.",
+                           f"Ask the host to bring the {port_kind(nics[fast_down[0]])[1].replace(' port', '')} link back "
+                           "(the faulty switch port or cable) and move the traffic back onto it. Until then, the fixes "
+                           "below make the backup port cope better."))
     for name, nic in after["nics"].items():
         if nic["virtual"] and name not in used:
             continue
         old = before["nics"].get(name, nic)
         grew = {k: nic["stats"][k] - old["stats"][k] for k in STAT_KEYS}
-        label = f"{name} ({nic['driver'] or 'virtual'})"
+        kind, words = port_kind(nic)
+        label = f"{name}: {words}"
         if nic["state"] != "up" and name not in used:
             out.append(line(s, label, "link down", INFO,
-                            "Not carrying traffic. Fine if this port was taken out of use on purpose."))
+                            "Normal for the management link." if kind == "management" else
+                            "Spare port, not carrying traffic." if kind == "onboard" else
+                            "Not carrying traffic. Fine only if it was taken out of use on purpose."))
             continue
         speed = nic["speed"] if nic["speed"] and nic["speed"] > 0 else None
         mbps = (grew["rx_bytes"] + grew["tx_bytes"]) * 8 / span / 1e6
@@ -291,14 +384,22 @@ def judge(before, after, servers, extras):
         if tool:
             if tool["rx_now"] and tool["rx_max"]:
                 small = tool["rx_now"] < tool["rx_max"]
-                out.append(line(s, f"{name} receive ring", f"{tool['rx_now']} of {tool['rx_max']}",
+                out.append(line(s, f"{name} receive buffer", f"{tool['rx_now']} of {tool['rx_max']} packets",
                                 WARN if small else OK,
-                                f"The card holds only {tool['rx_now']} packets while waiting for the CPU. Raising it "
-                                f"to {tool['rx_max']} (ethtool -G {name} rx {tool['rx_max']}) helps with bursts."
-                                if small else "Already at its biggest."))
+                                f"The card only holds {tool['rx_now']} packets while it waits for the CPU; a burst "
+                                "bigger than that is lost." if small else "Already at its biggest.",
+                                f"ethtool -G {name} rx {tool['rx_max']}" if small else ""))
             busy = {k: v for k, v in tool["counters"].items() if v}
-            if busy:
-                out.append(line(s, f"{name} card counters", ", ".join(f"{k} {v}" for k, v in sorted(busy.items())),
+            damaged = {k: v for k, v in busy.items() if "csum" in k or "crc" in k}
+            other = {k: v for k, v in busy.items() if k not in damaged}
+            if damaged:
+                out.append(line(s, f"{name} packets arriving damaged", f"{sum(damaged.values())} since boot "
+                                f"({', '.join(f'{k} {v}' for k, v in sorted(damaged.items()))})", WARN,
+                                "Packets reached the card with a bad checksum: corrupted on the way, usually by a faulty "
+                                "cable, switch port or transceiver. Damaged game packets are thrown away.",
+                                "Send this to the host: they can check the cable and switch port on their side."))
+            if other:
+                out.append(line(s, f"{name} card counters", ", ".join(f"{k} {v}" for k, v in sorted(other.items())),
                                 WARN, "The driver's own count of trouble since boot; rx_missed / rx_no_buffer mean "
                                       "packets arrived faster than they were taken off the card."))
 
@@ -312,27 +413,43 @@ def judge(before, after, servers, extras):
                     WARN if squeezed > 5 else OK,
                     "The CPU handling network traffic is too busy; packets wait and arrive late." if squeezed > 5 else ""))
     udp_a, udp_b = before["snmp"].get("Udp", {}), after["snmp"].get("Udp", {})
-    for key, text in (("InErrors", "UDP packets thrown away"), ("RcvbufErrors", "UDP receive buffer full"),
-                      ("SndbufErrors", "UDP send buffer full")):
-        grew = udp_b.get(key, 0) - udp_a.get(key, 0)
-        out.append(line(s, text, f"{grew} in 10 s ({udp_b.get(key, 0)} since boot)", BAD if grew else OK,
-                        "Game traffic lost on the box itself: players feel this as lag and radio cutting out." if grew else ""))
+    for key, text, way in (("InErrors", "Incoming UDP packets thrown away", "in"),
+                           ("SndbufErrors", "Outgoing UDP packets thrown away", "out")):
+        grew, ever = udp_b.get(key, 0) - udp_a.get(key, 0), udp_b.get(key, 0)
+        where = ("players' packets reached the box but were thrown away before the game read them" if way == "in"
+                 else "the game's own packets to players were thrown away before they left the box")
+        fix = ("sysctl -w net.core.rmem_max=16777216 net.core.rmem_default=4194304" if way == "in"
+               else "sysctl -w net.core.wmem_max=16777216 net.core.wmem_default=4194304")
+        full = udp_b.get("RcvbufErrors", 0) if way == "in" else ever
+        reason = f" ({full:,} because the buffer was full)" if way == "in" and full else ""
+        out.append(line(s, text, f"{grew:,} in 10 s, {ever:,} since boot{reason}",
+                        BAD if grew else WARN if ever > 1000 else OK,
+                        f"Right now, {where}: players feel this as lag, rubber-banding and radio cutting out." if grew else
+                        f"Not during the test, but {ever:,} times since boot {where}. It happens in bursts, and voice "
+                        "is the first thing to break up." if ever > 1000 else "", fix if grew or ever > 1000 else ""))
     tcp_a, tcp_b = before["snmp"].get("Tcp", {}), after["snmp"].get("Tcp", {})
     sent = tcp_b.get("OutSegs", 0) - tcp_a.get("OutSegs", 0)
     resent = tcp_b.get("RetransSegs", 0) - tcp_a.get("RetransSegs", 0)
     if sent:
         share = resent / sent
-        out.append(line(s, "TCP resends", f"{resent} of {sent} ({share:.1%})", BAD if share > 0.03 else WARN if share > 0.01 else OK,
-                        "Packets going missing somewhere between here and the other end." if share > 0.01 else ""))
+        few = sent < 1000
+        verdict = OK if share <= 0.01 else WARN if few or share <= 0.03 else BAD
+        out.append(line(s, "TCP resends", f"{resent} of {sent} ({share:.1%})", verdict,
+                        ("Packets going missing between here and the other end"
+                         + (" (only a small sample in 10 s: run it again to be sure)." if few else ".")) if share > 0.01 else "",
+                        "Send this to the host with the damaged-packet count." if verdict != OK else ""))
     k = extras["sysctl"]
-    if k["rmem_max"]:
-        small = k["rmem_max"] < 8 * 1024 * 1024
-        out.append(line(s, "Largest UDP receive buffer allowed", f"{k['rmem_max'] // 1024} KB", WARN if small else OK,
-                        "Small for busy game servers: a burst can overflow it. sysctl -w net.core.rmem_max=16777216 "
-                        "(and rmem_default) gives it room." if small else ""))
+    for key, text, fix in (("rmem_max", "Largest incoming UDP buffer allowed", "sysctl -w net.core.rmem_max=16777216"),
+                           ("wmem_max", "Largest outgoing UDP buffer allowed", "sysctl -w net.core.wmem_max=16777216")):
+        if k[key]:
+            small = k[key] < 8 * 1024 * 1024
+            out.append(line(s, text, f"{k[key] // 1024} KB", WARN if small else OK,
+                            "Small for busy game servers: a burst of traffic overflows it and packets are lost."
+                            if small else "", fix if small else ""))
     if k["backlog"]:
-        out.append(line(s, "Packet backlog per CPU", str(k["backlog"]), WARN if k["backlog"] < 2000 else OK,
-                        "Low for a busy game box: sysctl -w net.core.netdev_max_backlog=5000." if k["backlog"] < 2000 else ""))
+        out.append(line(s, "Packet backlog per CPU", f"{k['backlog']} packets", WARN if k["backlog"] < 2000 else OK,
+                        "Low for a busy game box: a burst can overflow it." if k["backlog"] < 2000 else "",
+                        "sysctl -w net.core.netdev_max_backlog=5000" if k["backlog"] < 2000 else ""))
     if k["conntrack_max"]:
         share = (k["conntrack"] or 0) / k["conntrack_max"]
         out.append(line(s, "Connection tracking table", f"{k['conntrack']} of {k['conntrack_max']} ({share:.0%})",
@@ -363,7 +480,9 @@ def judge(before, after, servers, extras):
         s = f"Server: {name}"
         if not pid:
             out.append(line(s, "Server program", "not found", WARN,
-                            "The panel can't see this server's program, so its own ports can't be checked."))
+                            "The panel couldn't find this server's program running, so its own ports weren't checked. "
+                            "It may be stopped, or running as a different user the panel can't see.",
+                            'Set "service" for this server in panel.local.json, or run the panel as root.'))
         else:
             socks_a = {x["inode"]: x for x in before["sockets"].get(sid) or []}
             socks = after["sockets"].get(sid)
@@ -414,9 +533,12 @@ def judge(before, after, servers, extras):
     return out
 
 
-async def run(servers, proc_root="/proc", sys_root="/sys"):
-    """The whole check, about ten seconds. `servers` is [(id, name, pid, (host, port) or None)]."""
-    pids = {sid: pid for sid, _, pid, _ in servers}
+async def run(servers, proc_root="/proc", sys_root="/sys", log_dirs=None):
+    """The whole check, about ten seconds. `servers` is [(id, name, pid, (host, port) or None)];
+    a server without a pid is matched to a running game program by its log folder."""
+    games = await asyncio.to_thread(find_games, proc_root)
+    pids = match_games(servers, log_dirs or {}, games)
+    servers = [(sid, name, pids.get(sid) or 0, query) for sid, name, _, query in servers]
     before = await asyncio.to_thread(snapshot, pids, proc_root, sys_root)
     used = {r["interface"] for r in default_routes(proc_root)}
 
@@ -440,7 +562,19 @@ async def run(servers, proc_root="/proc", sys_root="/sys"):
               "internet": found_internet,
               "ethtool": {n: t for n, t in zip(sorted(used), tools) if t}}
     lines = judge(before, after, servers, extras)
-    return {"at": time.time(), "lines": lines, "ethtool": bool(shutil.which("ethtool")),
+    spare = [g for g in games if g["pid"] not in pids.values()]
+    for game in spare:
+        lines.append(line("Network ports", f"Game program {game['pid']}", "running, not matched to a server", INFO,
+                          "An Arma Reforger server the panel doesn't have in panel.local.json."))
+    ports = []
+    for name, nic in after["nics"].items():
+        kind, words = port_kind(nic)
+        if kind == "virtual" and name not in used:
+            continue
+        ports.append({"name": name, "kind": kind, "words": words, "up": nic["state"] == "up", "in_use": name in used,
+                      "speed": nic["speed"] if nic["speed"] and nic["speed"] > 0 else None})
+    ports.sort(key=lambda port: (not port["in_use"], port["kind"] != "fast", port["name"]))
+    return {"at": time.time(), "lines": lines, "ethtool": bool(shutil.which("ethtool")), "ports": ports,
             "host": socket.gethostname(), "kernel": os.uname().release}
 
 

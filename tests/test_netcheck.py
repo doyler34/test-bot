@@ -65,18 +65,26 @@ class NetCheckTests(unittest.TestCase):
             extras = {"routes": netcheck.default_routes(proc_root), "sysctl": netcheck.sysctls(proc_root),
                       "queries": {"one": {"tries": 10, "failed": 2, "avg": 40.0, "worst": 300.0, "best": 20.0, "jitter": 35.0}},
                       "internet": {"Cloudflare (1.1.1.1)": {"tries": 10, "failed": 0, "avg": 3.0, "worst": 4.0, "best": 2.0, "jitter": 0.5}},
-                      "ethtool": {"enp4s0": {"rx_max": 4096, "rx_now": 256, "counters": {"rx_missed_errors": 250, "tx_timeout_count": 0}}}}
+                      "ethtool": {"enp4s0": {"rx_max": 4096, "rx_now": 256, "counters": {"rx_missed_errors": 250, "tx_timeout_count": 0,
+                                                                                         "rx_queue_0_csum_err": 80, "rx_queue_1_csum_err": 72}}}}
         rows = {(r["section"], r["label"]): r for r in netcheck.judge(before, after, [("one", "Classic", 4242, ("x", 1))], extras)}
         v = lambda section, label: rows[(section, label)]["verdict"]
         self.assertEqual(rows[("Network ports", "Default route")]["value"], "enp4s0 via 192.168.0.1")
-        self.assertEqual(v("Network ports", "enp4s0 (igb)"), "ok")
-        self.assertEqual(rows[("Network ports", "eno1np0 (bnxt_en)")]["value"], "link down")
+        self.assertEqual(v("Network ports", "enp4s0: motherboard Intel 1 Gb port"), "ok")
+        self.assertEqual(rows[("Network ports", "eno1np0: Broadcom 10/25 Gb port")]["value"], "link down")
+        backup = rows[("Network ports", "Running on the backup port")]
+        self.assertEqual(backup["verdict"], "bad")
+        self.assertIn("enp4s0 (motherboard Intel 1 Gb port) is carrying everything", backup["value"])
+        self.assertIn("eno1np0, eno2np1", backup["value"])
+        self.assertIn("Broadcom 10/25 Gb link back", backup["fix"])
+        self.assertEqual(rows[("Network ports", "enp4s0 packets arriving damaged")]["value"],
+                         "152 since boot (rx_queue_0_csum_err 80, rx_queue_1_csum_err 72)")
         self.assertEqual(v("Network ports", "enp4s0 traffic"), "warn")                 # 640 Mb/s of 1000
         self.assertEqual(v("Network ports", "enp4s0 errors right now"), "bad")          # rx_missed grew
-        self.assertEqual(v("Network ports", "enp4s0 receive ring"), "warn")              # 256 of 4096
+        self.assertEqual(rows[("Network ports", "enp4s0 receive buffer")]["fix"], "ethtool -G enp4s0 rx 4096")
         self.assertEqual(v("Kernel", "Packets dropped by the kernel (backlog full)"), "bad")
-        self.assertEqual(v("Kernel", "UDP packets thrown away"), "bad")
-        self.assertEqual(v("Kernel", "Largest UDP receive buffer allowed"), "warn")
+        self.assertEqual(v("Kernel", "Incoming UDP packets thrown away"), "bad")
+        self.assertEqual(v("Kernel", "Largest incoming UDP buffer allowed"), "warn")
         self.assertEqual(v("Kernel", "Connection tracking table"), "bad")
         self.assertEqual(v("Kernel", "enp4s0 interrupts"), "warn")                       # all on CPU0
         self.assertEqual(rows[("Server: Classic", "UDP port 2001")]["value"],
@@ -125,3 +133,35 @@ class PageTests(unittest.IsolatedAsyncioTestCase):
         await client.post("/logout", data={"csrf": token})
         await client.post("/login", data={"username": "adm", "password": "adm-password"})
         self.assertEqual((await client.get("/network", allow_redirects=False)).status, 403)
+
+
+class HistoryTests(unittest.TestCase):
+    def test_old_send_buffer_drops_still_warn(self):
+        before = {"at": 0, "nics": {}, "softnet": [], "irq": {}, "cores": {}, "sockets": {},
+                  "snmp": {"Udp": {"SndbufErrors": 93530224}, "Tcp": {"OutSegs": 1000, "RetransSegs": 0}}}
+        after = {**before, "at": 10, "snmp": {"Udp": {"SndbufErrors": 93530224}, "Tcp": {"OutSegs": 1237, "RetransSegs": 14}}}
+        extras = {"routes": [], "queries": {}, "internet": {}, "ethtool": {},
+                  "sysctl": {"rmem_max": 212992, "wmem_max": 212992, "backlog": 1000, "conntrack": None, "conntrack_max": None}}
+        rows = {r["label"]: r for r in netcheck.judge(before, after, [], extras)}
+        send = rows["Outgoing UDP packets thrown away"]
+        self.assertEqual((send["verdict"], send["value"]), ("warn", "0 in 10 s, 93,530,224 since boot"))
+        self.assertIn("wmem_max", send["fix"])
+        self.assertEqual(rows["TCP resends"]["verdict"], "warn")         # 5.9% but only 237 sent
+        self.assertIn("small sample", rows["TCP resends"]["why"])
+
+
+class FindGameTests(unittest.TestCase):
+    def test_matches_programs_to_servers_by_amp_folder(self):
+        with tempfile.TemporaryDirectory() as root:
+            for pid, cmd in ((101, "/home/amp/.ampdata/instances/Classic01/arma-reforger/ArmaReforgerServer\0-profile\0./profile"),
+                             (102, "/home/amp/.ampdata/instances/Plus01/arma-reforger/ArmaReforgerServer\0-config\0x"),
+                             (103, "python3\0-m\0panel")):
+                Path(root, str(pid)).mkdir()
+                Path(root, str(pid), "cmdline").write_bytes(cmd.replace("\\0", "\0").encode())
+            games = netcheck.find_games(root)
+            self.assertEqual(sorted(g["pid"] for g in games), [101, 102])
+            servers = [("s1", "Classic", 0, None), ("s4", "Plus01", 0, None), ("s2", "Server 2", 0, None)]
+            dirs = {"s1": "/home/amp/.ampdata/instances/Classic01/arma-reforger/profile/logs",
+                    "s4": "/home/amp/.ampdata/instances/Plus01/arma-reforger/profile/logs",
+                    "s2": "/home/amp/.ampdata/instances/Other/arma-reforger/profile/logs"}
+            self.assertEqual(netcheck.match_games(servers, dirs, games), {"s1": 101, "s4": 102, "s2": 0})
