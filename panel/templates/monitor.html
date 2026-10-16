@@ -16,12 +16,12 @@
   <div class="stat"><b>{{ num(latest.proc_cpu) }}{% if latest.proc_cpu is not none %}%{% endif %}</b><span>Game CPU (of one core)</span></div>
   <div class="stat"><b>{{ num(latest_box.cpu) }}{% if latest_box.cpu is not none %}%{% endif %}</b><span>Box CPU</span></div>
   <div class="stat"><b>{% if latest_box.mem_total %}{{ "%.1f"|format(latest_box.mem_used / gb) }} / {{ "%.0f"|format(latest_box.mem_total / gb) }} GB{% else %}—{% endif %}</b><span>Box memory</span></div>
-  <div class="stat"><b>{% if query.ok %}{{ query.ms|round|int }} ms{% elif query %}No answer{% else %}—{% endif %}</b><span>Outside check{% if reachable is not none %} · {{ "%.1f"|format(reachable * 100) }}% answered{% endif %}</span></div>
+  <div class="stat"><b>{% if latest.query_ok %}{{ latest.query_ms|round|int }} ms{% elif latest.query_ok == 0 %}No answer{% else %}—{% endif %}</b><span>Outside check{% if reachable is not none %} · {{ "%.1f"|format(reachable * 100) }}% answered{% endif %}</span></div>
 </div>
 
 <section class="card">
   <h2>What stands out · {{ range_label|lower }}</h2>
-  {% if not problems %}<p class="muted">Nothing: no lost packets, no CPU or memory trouble{% if query %}, and the server answered from outside every time{% endif %}.</p>{% endif %}
+  {% if not problems %}<p class="muted">Nothing: no lost packets, no CPU or memory trouble{% if reachable is not none %}, and the server answered from outside every time{% endif %}.</p>{% endif %}
   {% for p in problems %}
   <div class="finding">
     <p><span class="pill down">{{ p.count }}×</span> <b>{{ p.title }}</b> <span class="muted">· {{ p.first|clock }}{% if p.last != p.first %} to {{ p.last|clock }}{% endif %}</span></p>

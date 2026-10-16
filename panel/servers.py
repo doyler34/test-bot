@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import tarfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -174,8 +175,11 @@ class ServerManager:
 
     async def _watch_monitor(self, proc_root="/proc"):
         before = await asyncio.to_thread(monitor.read_box, proc_root)
+        due = time.monotonic()
         while not self._stopping:
-            await asyncio.sleep(MONITOR_SECONDS)
+            # Keep to the beat: a slow outside check mustn't push every later reading back.
+            due += MONITOR_SECONDS
+            await asyncio.sleep(max(due - time.monotonic(), 0))
             try:
                 after = await asyncio.to_thread(monitor.read_box, proc_root)
                 self.db.add_box_sample(monitor.box_rates(before, after))

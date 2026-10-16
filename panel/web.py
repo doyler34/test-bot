@@ -831,7 +831,7 @@ async def monitor_page(request):
                   range_label=label, range_ago=ago, charts=charts, problems=monitor_problems(box_rows, server_rows, state),
                   reasons=sorted(reasons.items(), key=lambda kv: -kv[1]), latest=latest, latest_box=latest_box,
                   reachable=(sum(r["query_ok"] for r in checked) / len(checked)) if checked else None,
-                  query=state.query, gb=GB)
+                  gb=GB)
 
 
 async def summary_part(request):
