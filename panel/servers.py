@@ -9,7 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
-from . import alerts as alert_colours, archive, memory
+from . import alerts as alert_colours, archive, memory, monitor
+from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
 from .db import PanelDB, now
@@ -83,6 +84,18 @@ class ServerState:
     tk_burst: TkBurst = field(default_factory=TkBurst)
     punished: dict = field(default_factory=dict)
     admins: list = field(default_factory=list)
+    # Since the last Monitor reading: disconnects by reason, and script errors.
+    disconnects: Counter = field(default_factory=Counter)
+    errors: int = 0
+    cpu_ticks: dict | None = None
+    unreachable: int = 0
+    query: dict = field(default_factory=dict)
+
+
+# How often the Monitor page gets a reading.
+MONITOR_SECONDS = 15
+# Unanswered outside checks in a row before it counts as unreachable.
+UNREACHABLE_AFTER = 4
 
 
 class ServerManager:
@@ -110,6 +123,7 @@ class ServerManager:
                 state.error = "RCON is not set up in panel.local.json"
         if any(s.config.service for s in self.states.values()):
             self._tasks.append(asyncio.create_task(self._watch_memory()))
+        self._tasks.append(asyncio.create_task(self._watch_monitor()))
         for state in self.states.values():
             if state.config.log_dir:
                 self._tasks.append(asyncio.create_task(self._watch_logs(state)))
@@ -158,6 +172,59 @@ class ServerManager:
                         log.exception("memory check failed for %s", state.config.id)
             await asyncio.sleep(self.config.poll_seconds)
 
+    async def _watch_monitor(self, proc_root="/proc"):
+        before = await asyncio.to_thread(monitor.read_box, proc_root)
+        while not self._stopping:
+            await asyncio.sleep(MONITOR_SECONDS)
+            try:
+                after = await asyncio.to_thread(monitor.read_box, proc_root)
+                self.db.add_box_sample(monitor.box_rates(before, after))
+                before = after
+                await asyncio.gather(*(self.monitor_server(state, proc_root) for state in self.states.values()))
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("monitor reading failed")
+
+    async def monitor_server(self, state: ServerState, proc_root="/proc"):
+        """One Monitor reading for one server."""
+        row = {"players": len(state.players) if state.online else None, "rss": state.memory or None,
+               "fps": state.fps if state.fps_at and now() - state.fps_at < 120 else None,
+               "disconnects": sum(state.disconnects.values()), "errors": state.errors,
+               "reasons": json.dumps(dict(state.disconnects)) if state.disconnects else None}
+        state.disconnects, state.errors = Counter(), 0
+        ticks = monitor.read_process(state.pid, proc_root) if state.pid else None
+        row["proc_cpu"] = monitor.process_cpu(state.cpu_ticks, ticks) \
+            if state.cpu_ticks and ticks and state.cpu_ticks.get("pid") == state.pid else None
+        row["threads"] = ticks["threads"] if ticks else None
+        state.cpu_ticks = {**ticks, "pid": state.pid} if ticks else None
+        if state.config.query_host and state.config.query_port:
+            state.query = await monitor.query(state.config.query_host, state.config.query_port)
+            row["query_ok"] = 1 if state.query["ok"] else 0
+            row["query_ms"] = state.query.get("ms")
+            self.reachability(state)
+        self.db.add_server_sample(state.config.id, row)
+
+    def reachability(self, state: ServerState):
+        """Says so when the server is running but the outside can't reach it,
+        and again when it can."""
+        running = state.online or state.pid
+        if state.query["ok"] or not running:
+            if state.unreachable >= UNREACHABLE_AFTER:
+                self.db.add_event(state.config.id, "online", "reachable from outside again")
+                self.alerts.send(f"{state.config.name} is reachable again",
+                                 "The server browser can see it again.", alert_colours.GREEN)
+            state.unreachable = 0
+            return
+        state.unreachable += 1
+        if state.unreachable == UNREACHABLE_AFTER:
+            why = state.query.get("error", "")
+            self.db.add_event(state.config.id, "offline", f"running but not answering from outside ({why})")
+            self.alerts.send(f"{state.config.name} can't be reached",
+                             f"The server is running, but its query port hasn't answered for a minute ({why}). "
+                             "Players probably can't see or join it: check the port and the network.",
+                             alert_colours.RED)
+
     async def _watch_logs(self, state: ServerState):
         reader = LogReader(state.config.log_dir)
         pruned = 0
@@ -181,6 +248,10 @@ class ServerManager:
         for event in events:
             if event["kind"] == "fps" and event["at"] >= state.fps_at:
                 state.fps, state.fps_at = event["fps"], event["at"]
+            elif event["kind"] == "disconnect":
+                state.disconnects[event["reason"]] += 1
+            elif event["kind"] == "error":
+                state.errors += 1
         if moved:
             self.db.add_connections(state.config.id, events, moved)
             self.db.add_kills(state.config.id, archive.kill_rows(events))

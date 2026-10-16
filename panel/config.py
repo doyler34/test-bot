@@ -31,6 +31,8 @@ class ServerConfig:
     service: str = ""
     log_dir: str = ""
     amp_instance: str = ""
+    query_host: str = ""
+    query_port: int = 0
     commands: dict = field(default_factory=lambda: dict(COMMANDS))
 
     @property
@@ -114,6 +116,8 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
             service=service,
             log_dir=str(entry.get("log_dir") or from_bot.get(server_id, "")),
             amp_instance=str(entry.get("amp_instance") or "").strip(),
+            query_host=str(entry.get("query_host") or "").strip(),
+            query_port=int(entry.get("query_port") or 0),
             commands={**COMMANDS, **entry.get("commands", {})},
         ))
     amp = raw.get("amp") or {}

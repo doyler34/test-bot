@@ -1,4 +1,5 @@
 import asyncio
+from collections import Counter
 import hashlib
 import json
 import logging
@@ -21,7 +22,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, auth, investigate, maptiles, memory, outliers, site, whois
+from . import archive, auth, investigate, maptiles, memory, monitor, outliers, site, whois
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -737,6 +738,100 @@ def health_data(db, state):
         "crashes": len([e for e in db.events(state.config.id, 200, ("crashed",)) if e["at"] > t - 7 * 86400]),
         "chart": memory_chart(db.memory(state.config.id, t - 86400), t - 86400, t, state.fresh),
     }
+
+
+MONITOR_RANGES = (("1h", "Last hour", 3600, "1 hour ago"), ("6h", "6 hours", 6 * 3600, "6 hours ago"),
+                  ("24h", "24 hours", 86400, "24 hours ago"), ("7d", "7 days", 7 * 86400, "7 days ago"))
+GB = 1024 ** 3
+
+
+def monitor_problems(box, server, state):
+    """Stretches worth a look, plainest first."""
+    found = []
+
+    def stretch(rows, test, title, why):
+        hits = [r["at"] for r in rows if test(r)]
+        if hits:
+            found.append({"title": title, "why": why, "count": len(hits), "first": hits[0], "last": hits[-1]})
+
+    stretch(server, lambda r: r["query_ok"] == 0, "The server browser couldn't reach it",
+            "The outside check went unanswered. If the program was running at the time, the port or the network "
+            "was down: players couldn't see or join the server.")
+    stretch(server, lambda r: r["fps"] is not None and r["fps"] < 30, "Server FPS under 30",
+            "The server was struggling to keep up: players feel this as lag, rubber-banding and late hits.")
+    stretch(server, lambda r: r["proc_cpu"] is not None and r["proc_cpu"] >= 95, "The game program maxed out a core",
+            "Reforger's server does most of its work on one core. Pinned at 100% it can't go any faster, and the "
+            "frame rate drops: usually too many AI, vehicles or players for the machine.")
+    stretch(box, lambda r: r["cpu"] is not None and r["cpu"] >= 90, "The whole box was nearly out of CPU",
+            "Something on the machine is using everything: the game, another server, or a backup or update.")
+    stretch(box, lambda r: (r["udp_errors"] or 0) > 0 or (r["udp_rcvbuf"] or 0) > 0,
+            "Game packets were thrown away on arrival",
+            "UDP packets reached the box but were dropped before the game read them, usually because the game was "
+            "too busy to keep up or the receive buffer is too small. Players feel this as lag and desync.")
+    stretch(box, lambda r: (r["rx_drop"] or 0) > 0, "The network card dropped packets",
+            "Traffic arrived faster than the machine took it in. Heavy load, or a flood of traffic at the box.")
+    stretch(box, lambda r: r["mem_total"] and r["mem_used"] / r["mem_total"] >= 0.92, "Memory nearly full",
+            "With memory this full the machine starts swapping and everything slows down, the game included.")
+    stretch(server, lambda r: (r["disconnects"] or 0) >= 5, "Several players dropped at once",
+            "Five or more disconnects in 15 seconds: a network hiccup, a crash or a restart. The reasons are "
+            "listed below.")
+    return found
+
+
+async def monitor_page(request):
+    state = server_or_404(request, request.match_info["id"])
+    key = request.query.get("range", "6h")
+    key, label, seconds, ago = next((r for r in MONITOR_RANGES if r[0] == key), MONITOR_RANGES[1])
+    until = now()
+    since = until - seconds
+    db = request.app[DB]
+    box_rows = [dict(r) for r in db.box_samples(since)]
+    server_rows = [dict(r) for r in db.server_samples(state.config.id, since)]
+    reasons = Counter()
+    for r in server_rows:
+        if r["reasons"]:
+            reasons.update({int(k): v for k, v in json.loads(r["reasons"]).items()})
+    for r in box_rows:
+        r["mem_gb"] = r["mem_used"] / GB if r["mem_used"] else None
+    for r in server_rows:
+        r["rss_gb"] = r["rss"] / GB if r["rss"] else None
+        r["query_down"] = None if r["query_ok"] is None else (0 if r["query_ok"] else 1)
+    box = monitor.downsample(box_rows, since, until,
+                             ("cpu", "mem_gb", "rx_mbps", "tx_mbps", "rx_pps", "tx_pps",
+                              "rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf"),
+                             peak=("rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf"))
+    srv = monitor.downsample(server_rows, since, until,
+                             ("players", "fps", "proc_cpu", "rss_gb", "query_ms", "query_down", "disconnects", "errors"),
+                             peak=("query_down", "disconnects", "errors", "query_ms"))
+    chart = lambda rows, series, floor=None: monitor.chart(rows, since, until, series, floor=floor)
+    charts = [
+        ("Players", chart(srv, [("players", "Players", "a")]), ""),
+        ("Server FPS", chart(srv, [("fps", "FPS", "a")], floor=60),
+         "" if any(r["fps"] for r in server_rows) else "The server isn't logging its frame rate. Add -logStats 10000 "
+         "to its start parameters and restart it; then this fills in every 10 seconds."),
+        ("Game program CPU (100% = one core)", chart(srv, [("proc_cpu", "Game", "a")], floor=100), ""),
+        ("Whole box CPU", chart(box, [("cpu", "All cores", "b")], floor=100), ""),
+        ("Memory (GB)", chart(srv, [("rss_gb", "Game", "a")]) if not box else
+         monitor.chart(box + srv, since, until, [("mem_gb", "Whole box", "b"), ("rss_gb", "Game", "a")]), ""),
+        ("Network (Mbps)", chart(box, [("rx_mbps", "In", "a"), ("tx_mbps", "Out", "b")]), ""),
+        ("Packets per second", chart(box, [("rx_pps", "In", "a"), ("tx_pps", "Out", "b")]), ""),
+        ("Lost packets per minute", chart(box, [("udp_errors", "UDP errors", "bad"), ("udp_rcvbuf", "UDP buffer full", "c"),
+                                                ("rx_drop", "Card dropped", "b")]),
+         "Should be flat at zero. Anything above it is game traffic the server never got."),
+        ("Outside check (ms)", chart(srv, [("query_ms", "Answer time", "a")]),
+         "" if state.config.query_host else 'Not set up: add "query_host" (the server\'s public IP) and "query_port" '
+         "(its A2S query port, often 17777) to this server in panel.local.json."),
+        ("Disconnects and script errors (most in 15 s)", chart(srv, [("disconnects", "Disconnects", "c"),
+                                                                     ("errors", "Script errors", "bad")]), ""),
+    ]
+    checked = [r for r in server_rows if r["query_ok"] is not None]
+    latest_box = box_rows[-1] if box_rows else {}
+    latest = server_rows[-1] if server_rows else {}
+    return render(request, "monitor.html", s=server_view(state), ranges=MONITOR_RANGES, range_key=key,
+                  range_label=label, range_ago=ago, charts=charts, problems=monitor_problems(box_rows, server_rows, state),
+                  reasons=sorted(reasons.items(), key=lambda kv: -kv[1]), latest=latest, latest_box=latest_box,
+                  reachable=(sum(r["query_ok"] for r in checked) / len(checked)) if checked else None,
+                  query=state.query, gb=GB)
 
 
 async def summary_part(request):
@@ -2117,6 +2212,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/server/{id}", server_page)
     app.router.add_get("/server/{id}/players.part", players_part)
     app.router.add_get("/server/{id}/memory.part", memory_part)
+    app.router.add_get("/server/{id}/monitor", monitor_page)
     app.router.add_get("/server/{id}/feed.part", feed_part)
     app.router.add_get("/server/{id}/summary.part", summary_part)
     app.router.add_get("/server/{id}/game/{folder}", game_page)

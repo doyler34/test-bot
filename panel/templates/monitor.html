@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Monitor · {{ s.name }} · OYB Control{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="60">{% endblock %}
+{% macro num(v) %}{% if v is none %}—{% elif v >= 100 or v == v|round %}{{ v|round|int }}{% elif v >= 10 %}{{ "%.1f"|format(v) }}{% else %}{{ "%.2f"|format(v) }}{% endif %}{% endmacro %}
+{% block body %}
+<p class="kicker"><a href="/server/{{ s.id }}">← {{ s.name }}</a></p>
+<h1>Monitor</h1>
+<form method="get" class="row inv-period">
+  <select name="range" data-autosubmit>{% for k, label, _, _ in ranges %}<option value="{{ k }}" {% if k == range_key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <span class="muted">A reading every 15 seconds, kept for 7 days. This page refreshes every minute.</span>
+</form>
+
+<div class="stats">
+  <div class="stat"><b>{{ latest.players if latest.players is not none else "—" }}</b><span>Players</span></div>
+  <div class="stat"><b>{{ num(latest.fps) }}</b><span>Server FPS</span></div>
+  <div class="stat"><b>{{ num(latest.proc_cpu) }}{% if latest.proc_cpu is not none %}%{% endif %}</b><span>Game CPU (of one core)</span></div>
+  <div class="stat"><b>{{ num(latest_box.cpu) }}{% if latest_box.cpu is not none %}%{% endif %}</b><span>Box CPU</span></div>
+  <div class="stat"><b>{% if latest_box.mem_total %}{{ "%.1f"|format(latest_box.mem_used / gb) }} / {{ "%.0f"|format(latest_box.mem_total / gb) }} GB{% else %}—{% endif %}</b><span>Box memory</span></div>
+  <div class="stat"><b>{% if query.ok %}{{ query.ms|round|int }} ms{% elif query %}No answer{% else %}—{% endif %}</b><span>Outside check{% if reachable is not none %} · {{ "%.1f"|format(reachable * 100) }}% answered{% endif %}</span></div>
+</div>
+
+<section class="card">
+  <h2>What stands out · {{ range_label|lower }}</h2>
+  {% if not problems %}<p class="muted">Nothing: no lost packets, no CPU or memory trouble{% if query %}, and the server answered from outside every time{% endif %}.</p>{% endif %}
+  {% for p in problems %}
+  <div class="finding">
+    <p><span class="pill down">{{ p.count }}×</span> <b>{{ p.title }}</b> <span class="muted">· {{ p.first|clock }}{% if p.last != p.first %} to {{ p.last|clock }}{% endif %}</span></p>
+    <p class="muted">{{ p.why }}</p>
+  </div>
+  {% endfor %}
+</section>
+
+<div class="monitor-grid">
+{% for title, c, note in charts %}
+<section class="card">
+  <h3>{{ title }}</h3>
+  {% if c %}
+  <svg class="chart" viewBox="0 0 {{ c.width }} {{ c.height }}" preserveAspectRatio="none" role="img" aria-label="{{ title }}">
+    {% for l in c.lines %}{% for run in l.runs %}<polyline class="line {{ l.kind }}" points="{{ run }}"/>{% endfor %}{% endfor %}
+  </svg>
+  <div class="legend"><span>{{ range_ago }}</span><span>{% for l in c.lines %}<i class="key {{ l.kind }}"></i>{{ l.label }}: {{ num(l.now) }} now, {{ num(l.peak) }} top{{ " · " if not loop.last }}{% endfor %}</span><span>now</span></div>
+  {% else %}
+  <p class="muted">No readings yet.</p>
+  {% endif %}
+  {% if note %}<p class="muted">{{ note }}</p>{% endif %}
+</section>
+{% endfor %}
+</div>
+
+<section class="card">
+  <h2>Why players disconnected · {{ range_label|lower }}</h2>
+  {% if not reasons %}<p class="muted">Nobody disconnected.</p>{% else %}
+  <ul class="evidence">{% for code, count in reasons %}<li>Reason {{ code }}: <b>{{ count }}</b></li>{% endfor %}</ul>
+  <p class="muted">The game logs each disconnect with a reason number. Leaving normally is the most common one; a sudden jump in any other number, or in the chart above, is a network problem or a crash.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -108,7 +108,7 @@
 
 <div data-tab-panel="health" hidden>
   <section class="card">
-    <h2>Health</h2>
+    <div class="row"><h2>Health</h2><a class="button small" href="/server/{{ s.id }}/monitor">Open the Monitor</a></div>
     {% if s.service %}
     <div data-refresh="/server/{{ s.id }}/memory.part">
     {% include "_memory.html" %}

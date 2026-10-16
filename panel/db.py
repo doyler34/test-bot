@@ -96,6 +96,19 @@ CREATE TABLE IF NOT EXISTS server_events (
     detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS server_events_at ON server_events(server, at);
+CREATE TABLE IF NOT EXISTS box_samples (
+    at INTEGER PRIMARY KEY,
+    cpu REAL, load1 REAL, mem_used INTEGER, mem_total INTEGER, swap_used INTEGER,
+    rx_mbps REAL, tx_mbps REAL, rx_pps REAL, tx_pps REAL,
+    rx_drop REAL, udp_errors REAL, udp_rcvbuf REAL, udp_sndbuf REAL
+);
+CREATE TABLE IF NOT EXISTS server_samples (
+    server TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    players INTEGER, proc_cpu REAL, rss INTEGER, threads INTEGER, fps REAL,
+    query_ok INTEGER, query_ms REAL, disconnects INTEGER, errors INTEGER, reasons TEXT,
+    PRIMARY KEY (server, at)
+);
 CREATE TABLE IF NOT EXISTS memory_samples (
     server TEXT NOT NULL,
     at INTEGER NOT NULL,
@@ -581,6 +594,31 @@ class PanelDB:
             up += now() - cursor
         span = now() - start
         return up / span if span > 0 else (1.0 if state == "online" else 0.0)
+
+    BOX_KEYS = ("cpu", "load1", "mem_used", "mem_total", "swap_used", "rx_mbps", "tx_mbps", "rx_pps", "tx_pps",
+                "rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf")
+    SERVER_KEYS = ("players", "proc_cpu", "rss", "threads", "fps", "query_ok", "query_ms", "disconnects",
+                   "errors", "reasons")
+
+    def add_box_sample(self, row, at=None, keep_days=7):
+        t = int(at or now())
+        keys = [k for k in self.BOX_KEYS if k in row]
+        self.write(f"INSERT OR REPLACE INTO box_samples (at, {', '.join(keys)}) VALUES (?{', ?' * len(keys)})",
+                   t, *(row[k] for k in keys))
+        self.write("DELETE FROM box_samples WHERE at < ?", t - keep_days * 86400)
+
+    def add_server_sample(self, server, row, at=None, keep_days=7):
+        t = int(at or now())
+        keys = [k for k in self.SERVER_KEYS if k in row]
+        self.write(f"INSERT OR REPLACE INTO server_samples (server, at, {', '.join(keys)})"
+                   f" VALUES (?, ?{', ?' * len(keys)})", server, t, *(row[k] for k in keys))
+        self.write("DELETE FROM server_samples WHERE server = ? AND at < ?", server, t - keep_days * 86400)
+
+    def box_samples(self, since):
+        return self.all("SELECT * FROM box_samples WHERE at >= ? ORDER BY at", since)
+
+    def server_samples(self, server, since):
+        return self.all("SELECT * FROM server_samples WHERE server = ? AND at >= ? ORDER BY at", server, since)
 
     def add_memory(self, server, rss, at=None):
         t = at or now()

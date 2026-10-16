@@ -529,3 +529,15 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .evidence li { margin-bottom: 6px; }
 .busy { opacity: .75; pointer-events: none; cursor: progress; }
 .busy::after { content: " …"; }
+
+/* Monitor */
+.monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 0 14px; }
+.monitor-grid h3 { margin-top: 0; }
+.chart .line.b { stroke: var(--khaki); }
+.chart .line.c { stroke: #6f9ad3; }
+.chart .line.bad { stroke: var(--red); }
+.legend .key { display: inline-block; width: 10px; height: 3px; margin: 0 4px 3px 0; background: var(--gold); vertical-align: middle; }
+.legend .key.b { background: var(--khaki); }
+.legend .key.c { background: #6f9ad3; }
+.legend .key.bad { background: var(--red); }
+@media (max-width: 520px) { .monitor-grid { grid-template-columns: 1fr; } }
