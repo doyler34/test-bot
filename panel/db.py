@@ -7,7 +7,9 @@ FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"),
               "rcon": ("rcon", "server"), "admin": ()}
 
 # Columns added after their table first shipped: older databases get them on start.
-ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"),)
+ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"),
+                 *(("box_samples", c, "REAL") for c in ("disk_pct", "disk_read", "disk_write", "temp", "conntrack",
+                                                        "tcp_retrans", "softnet_drop", "nic_errors")))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -629,7 +631,8 @@ class PanelDB:
                         " FROM login_attempts WHERE at >= ? GROUP BY ip ORDER BY n DESC LIMIT ?", since, limit)
 
     BOX_KEYS = ("cpu", "load1", "mem_used", "mem_total", "swap_used", "rx_mbps", "tx_mbps", "rx_pps", "tx_pps",
-                "rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf")
+                "rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf", "disk_pct", "disk_read", "disk_write", "temp",
+                "conntrack", "tcp_retrans", "softnet_drop", "nic_errors")
     SERVER_KEYS = ("players", "proc_cpu", "rss", "threads", "fps", "query_ok", "query_ms", "disconnects",
                    "errors", "reasons", "sock_drops")
 

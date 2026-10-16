@@ -128,6 +128,9 @@ class PageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("rx_missed_errors +240", page)
         self.assertIn("[BAD ] enp4s0 errors right now", page)
         self.assertIn("apt install ethtool", page)
+        for words in ("Box dashboard", "What stood out", "Busiest programs right now", "Game packets lost (per minute)",
+                      "Disk used (%)", "Temperature (°C)", "Login attacks today", "Port drops / min"):
+            self.assertIn(words, page)
         self.assertIn("rx_missed_errors +240", await (await client.get("/network")).text())   # the last result stays
         await client.post("/logout", data={"csrf": token})
         await client.post("/login", data={"username": "adm", "password": "adm-password"})

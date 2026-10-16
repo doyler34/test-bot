@@ -565,11 +565,15 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .net-fixes p { margin: 4px 0; }
 .net-do code { white-space: normal; word-break: break-all; }
 .net-section summary { cursor: pointer; font-family: var(--display); text-transform: uppercase; letter-spacing: .04em; font-size: 1.1rem; }
-.net-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
-.net-table td { padding: 7px 6px; border-top: 1px solid var(--line-soft); vertical-align: top; }
-.net-table td:first-child { width: 18px; }
-.net-table td.mono { text-align: right; word-break: break-word; max-width: 45%; }
-@media (max-width: 520px) {
-  .net-table tr { display: grid; grid-template-columns: 18px 1fr; }
-  .net-table td.mono { grid-column: 2; text-align: left; border-top: 0; padding-top: 0; }
-}
+.net-list { margin-top: 8px; }
+.net-item { padding: 8px 0; border-top: 1px solid var(--line-soft); }
+.net-item p { margin: 2px 0; }
+.net-value { font-size: .9rem; overflow-wrap: anywhere; color: var(--ink); }
+.net-fixes .net-value { color: var(--muted); }
+.net-rows > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 10px; padding: 6px 0;
+  border-top: 1px solid var(--line-soft); align-items: baseline; }
+.net-rows .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 14px; }
+.mini-grid h3 { margin: 6px 0 4px; font-size: .9rem; }
+.chart.mini { height: 70px; }
+.copy-box textarea { width: 100%; box-sizing: border-box; }

@@ -1,5 +1,5 @@
 import asyncio
-from collections import Counter
+from collections import Counter, defaultdict
 import hashlib
 import json
 import logging
@@ -1759,25 +1759,117 @@ async def data_page(request):
 NETCHECK = web.AppKey("netcheck", dict)
 
 
+def box_problems(box, servers):
+    """What stood out on the box and the servers, worst first."""
+    found = []
+
+    def stretch(rows, test, title, why, level="bad"):
+        hits = [r["at"] for r in rows if test(r)]
+        if hits:
+            found.append({"title": title, "why": why, "count": len(hits), "first": hits[0], "last": hits[-1],
+                          "level": level})
+
+    n = lambda r, key: r.get(key) or 0
+    stretch(box, lambda r: n(r, "udp_sndbuf") > 0, "Outgoing game packets dropped",
+            "The game's packets to players were thrown away before they left the box: voice and radio break up "
+            "first. Raise the send buffer: sysctl -w net.core.wmem_max=16777216 net.core.wmem_default=4194304")
+    stretch(box, lambda r: n(r, "udp_errors") > 0, "Incoming game packets dropped",
+            "Players' packets reached the box but were thrown away before the game read them. Raise the receive "
+            "buffer: sysctl -w net.core.rmem_max=16777216 net.core.rmem_default=4194304")
+    stretch(box, lambda r: n(r, "nic_errors") > 0 or n(r, "rx_drop") > 0, "The network port lost packets",
+            "Errors or drops on the network card itself: a faulty cable or switch port, or the card's buffer "
+            "overflowing (ethtool -G <port> rx 4096).")
+    stretch(box, lambda r: n(r, "softnet_drop") > 0, "The kernel couldn't keep up with packets",
+            "Packets arrived faster than the CPU took them in.")
+    stretch(box, lambda r: n(r, "tcp_retrans") > 120, "Lots of TCP resends",
+            "More than two lost-and-resent packets a second: packet loss between the box and the internet.", "warn")
+    stretch(box, lambda r: n(r, "cpu") >= 90, "The whole box was nearly out of CPU",
+            "Something on the machine is using everything: the game, another server, or a backup or update.")
+    stretch(box, lambda r: r.get("mem_total") and n(r, "mem_used") / r["mem_total"] >= 0.92, "Memory nearly full",
+            "With memory this full the machine starts swapping and everything slows down.")
+    stretch(box, lambda r: n(r, "disk_pct") >= 90, "Disk nearly full",
+            "When the disk fills, logs and saves stop being written and servers can crash. Clear old logs or backups.")
+    stretch(box, lambda r: n(r, "temp") >= 85, "Running hot",
+            "Above 85 °C the CPU slows itself down to cool off, and the game's frame rate drops with it.", "warn")
+    for name, rows in servers:
+        stretch(rows, lambda r: n(r, "sock_drops") > 0, f"{name}: packets dropped on the game's ports",
+                "Players' packets reached the server but the game didn't read them in time: radio cuts out and "
+                "movement stutters.")
+        stretch(rows, lambda r: r.get("query_ok") == 0, f"{name}: couldn't be reached from outside",
+                "The server browser check went unanswered: the port or the network was down.")
+        stretch(rows, lambda r: r.get("fps") is not None and r["fps"] < 30, f"{name}: server FPS under 30",
+                "The server was struggling to keep up: lag, rubber-banding and late hits.")
+        stretch(rows, lambda r: n(r, "proc_cpu") >= 95, f"{name}: the game maxed out a core",
+                "Reforger's server does most of its work on one core; pinned at 100% the frame rate drops.", "warn")
+    found.sort(key=lambda f: (f["level"] != "bad", -f["count"]))
+    return found
+
+
 async def network_page(request):
     require(request, "users")
+    db, manager = request.app[DB], request.app[MANAGER]
     result = request.app[NETCHECK].get("last")
     if request.method == "POST":
-        manager = request.app[MANAGER]
         servers = [(st.config.id, st.config.name, st.pid or st.found_pid,
                     (st.config.query_host, st.config.query_port) if st.config.query_host and st.config.query_port else None)
                    for st in manager.states.values()]
         result = await netcheck.run(servers, log_dirs={st.config.id: st.config.log_dir for st in manager.states.values()})
         request.app[NETCHECK]["last"] = result
         audit(request, "network check")
-    counts = {}
+    key = request.query.get("range", "6h")
+    key, label, seconds, ago = next((r for r in MONITOR_RANGES if r[0] == key), MONITOR_RANGES[1])
+    until = now()
+    since = until - seconds
+    box_rows = [dict(r) for r in db.box_samples(since)]
+    for r in box_rows:
+        r["mem_gb"] = r["mem_used"] / GB if r["mem_used"] else None
+        r["swap_gb"] = r["swap_used"] / GB if r["swap_used"] is not None else None
+    keys = ("cpu", "load1", "mem_gb", "swap_gb", "disk_pct", "disk_read", "disk_write", "temp", "conntrack",
+            "rx_mbps", "tx_mbps", "rx_pps", "tx_pps", "udp_errors", "udp_sndbuf", "nic_errors", "rx_drop",
+            "softnet_drop", "tcp_retrans")
+    box = monitor.downsample(box_rows, since, until, keys,
+                             peak=("udp_errors", "udp_sndbuf", "nic_errors", "rx_drop", "softnet_drop", "tcp_retrans"))
+    chart = lambda rows, series, floor=None, height=110: monitor.chart(rows, since, until, series, floor=floor, height=height)
+    charts = [
+        ("CPU (%)", chart(box, [("cpu", "All cores", "a")], floor=100), ""),
+        ("Load", chart(box, [("load1", "1 minute", "a")]), "How many programs are waiting for a CPU core. Above the core count, things queue."),
+        ("Memory (GB)", chart(box, [("mem_gb", "In use", "a"), ("swap_gb", "Swap", "bad")]), "Swap above zero means memory ran out and the disk is standing in: slow."),
+        ("Network (Mb/s)", chart(box, [("rx_mbps", "In", "a"), ("tx_mbps", "Out", "b")]), ""),
+        ("Packets per second", chart(box, [("rx_pps", "In", "a"), ("tx_pps", "Out", "b")]), ""),
+        ("Game packets lost (per minute)", chart(box, [("udp_errors", "Incoming", "c"), ("udp_sndbuf", "Outgoing", "bad")]),
+         "Should sit at zero. Outgoing is the game's voice and updates to players being dropped."),
+        ("Network port and kernel drops (per minute)", chart(box, [("nic_errors", "Port errors", "bad"), ("rx_drop", "Port drops", "c"),
+                                                                  ("softnet_drop", "Kernel drops", "b")]), "Should sit at zero."),
+        ("TCP resends (per minute)", chart(box, [("tcp_retrans", "Resent", "c")]), "Lost-and-resent packets on connections out of the box."),
+        ("Disk used (%)", chart(box, [("disk_pct", "Used", "a")], floor=100), ""),
+        ("Disk activity (MB/s)", chart(box, [("disk_read", "Read", "a"), ("disk_write", "Written", "b")]), ""),
+        ("Temperature (°C)", chart(box, [("temp", "Hottest sensor", "c")], floor=90), ""),
+        ("Connection tracking", chart(box, [("conntrack", "Connections", "a")]), "When this hits its limit, new traffic is dropped."),
+    ]
+    games, game_rows = [], []
+    for st in manager.states.values():
+        rows = [dict(r) for r in db.server_samples(st.config.id, since)]
+        game_rows.append((st.config.name, rows))
+        srv = monitor.downsample(rows, since, until, ("players", "fps", "proc_cpu", "sock_drops"),
+                                 peak=("sock_drops",))
+        latest = rows[-1] if rows else {}
+        games.append({"id": st.config.id, "name": st.config.name, "online": st.online, "players": len(st.players) if st.online else None,
+                      "latest": latest, "charts": [
+                          ("Players", chart(srv, [("players", "Players", "a")], height=60)),
+                          ("FPS", chart(srv, [("fps", "FPS", "a")], floor=60, height=60)),
+                          ("Game CPU (% of a core)", chart(srv, [("proc_cpu", "CPU", "a")], floor=100, height=60)),
+                          ("Port drops / min", chart(srv, [("sock_drops", "Dropped", "bad")], height=60))]})
+    latest = defaultdict(lambda: None, box_rows[-1] if box_rows else {})
+    top = await monitor.top_processes()
+    counts, sections = {}, {}
     for row in (result or {}).get("lines", []):
         counts[row["verdict"]] = counts.get(row["verdict"], 0) + 1
-    sections = {}
-    for row in (result or {}).get("lines", []):
         sections.setdefault(row["section"], []).append(row)
     return render(request, "network.html", result=result, counts=counts, sections=sections,
-                  text=netcheck.report_text(result) if result else "")
+                  text=netcheck.report_text(result) if result else "", ranges=MONITOR_RANGES, range_key=key,
+                  range_label=label, range_ago=ago, charts=charts, games=games, latest=latest, gb=GB,
+                  problems=box_problems(box_rows, game_rows), top=top,
+                  attacks=db.attack_sources(until - 86400), attackers=db.attackers(until - 86400, limit=5))
 
 
 async def attacks_page(request):

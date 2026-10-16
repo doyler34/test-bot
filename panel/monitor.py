@@ -12,7 +12,9 @@ server browser and BattleMetrics ask (Steam's A2S_INFO). If the program is up
 but that goes unanswered, the problem is the port or the network, not the game.
 """
 import asyncio
+import glob
 import os
+import re
 import socket
 import struct
 import time
@@ -25,9 +27,50 @@ def _read(path):
         return fh.read()
 
 
-def read_box(proc_root="/proc"):
+WHOLE_DISK = re.compile(r"^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme\d+n\d+|md\d+)$")
+
+
+def read_box(proc_root="/proc", sys_root="/sys", disk_path="/"):
     """Raw counters for the whole machine. Rates come from two of these."""
     sample = {"at": time.time()}
+    try:
+        disk = os.statvfs(disk_path)
+        total = disk.f_blocks * disk.f_frsize
+        sample["disk_pct"] = round(100 * (1 - disk.f_bavail * disk.f_frsize / total), 1) if total else None
+    except OSError:
+        pass
+    try:
+        read = written = 0
+        for line in _read(f"{proc_root}/diskstats").splitlines():
+            f = line.split()
+            if len(f) > 9 and WHOLE_DISK.match(f[2]):
+                read, written = read + int(f[5]) * 512, written + int(f[9]) * 512
+        sample["disk_read"], sample["disk_written"] = read, written
+    except (OSError, ValueError):
+        pass
+    temps = []
+    for path in glob.glob(f"{sys_root}/class/hwmon/hwmon*/temp*_input") + \
+            glob.glob(f"{sys_root}/class/thermal/thermal_zone*/temp"):
+        try:
+            value = int(_read(path).strip()) / 1000
+        except (OSError, ValueError):
+            continue
+        if 0 < value < 150:
+            temps.append(value)
+    if temps:
+        sample["temp"] = max(temps)
+    for key, path in (("conntrack", "sys/net/netfilter/nf_conntrack_count"),):
+        try:
+            sample[key] = int(_read(f"{proc_root}/{path}").strip())
+        except (OSError, ValueError):
+            pass
+    try:
+        dropped = 0
+        for line in _read(f"{proc_root}/net/softnet_stat").splitlines():
+            dropped += int(line.split()[1], 16)
+        sample["softnet_drop"] = dropped
+    except (OSError, ValueError, IndexError):
+        pass
     try:
         cpu = [int(v) for v in _read(f"{proc_root}/stat").splitlines()[0].split()[1:]]
         sample["cpu_total"], sample["cpu_idle"] = sum(cpu[:8]), cpu[3] + (cpu[4] if len(cpu) > 4 else 0)
@@ -48,7 +91,7 @@ def read_box(proc_root="/proc"):
     except (OSError, ValueError, IndexError):
         pass
     try:
-        rx = rx_packets = rx_drop = tx = tx_packets = 0
+        rx = rx_packets = rx_drop = tx = tx_packets = errors = 0
         for line in _read(f"{proc_root}/net/dev").splitlines()[2:]:
             name, values = line.split(":", 1)
             if name.strip() == "lo":
@@ -56,15 +99,21 @@ def read_box(proc_root="/proc"):
             v = [int(x) for x in values.split()]
             rx, rx_packets, rx_drop = rx + v[0], rx_packets + v[1], rx_drop + v[3]
             tx, tx_packets = tx + v[8], tx_packets + v[9]
-        sample.update(rx=rx, rx_packets=rx_packets, rx_drop=rx_drop, tx=tx, tx_packets=tx_packets)
+            errors += v[2] + v[4] + v[5] + v[10] + v[11]    # rx errs, fifo, frame; tx errs, drop
+        sample.update(rx=rx, rx_packets=rx_packets, rx_drop=rx_drop, tx=tx, tx_packets=tx_packets, nic_errors=errors)
     except (OSError, ValueError, IndexError):
         pass
     try:
-        lines = [line.split() for line in _read(f"{proc_root}/net/snmp").splitlines() if line.startswith("Udp:")]
+        snmp = _read(f"{proc_root}/net/snmp").splitlines()
+        lines = [line.split() for line in snmp if line.startswith("Udp:")]
         udp = dict(zip(lines[0][1:], (int(v) for v in lines[1][1:])))
         sample["udp_errors"] = udp.get("InErrors", 0)
         sample["udp_rcvbuf"] = udp.get("RcvbufErrors", 0)
         sample["udp_sndbuf"] = udp.get("SndbufErrors", 0)
+        tcp = [line.split() for line in snmp if line.startswith("Tcp:")]
+        if tcp:
+            sample["tcp_retrans"] = dict(zip(tcp[0][1:], tcp[1][1:])).get("RetransSegs")
+            sample["tcp_retrans"] = int(sample["tcp_retrans"]) if sample["tcp_retrans"] else None
     except (OSError, ValueError, IndexError):
         pass
     return sample
@@ -89,7 +138,8 @@ def box_rates(before, after):
     """The readings worth charting, from two raw samples."""
     span = after["at"] - before["at"]
     row = {"mem_used": after.get("mem_used"), "mem_total": after.get("mem_total"),
-           "swap_used": after.get("swap_used"), "load1": after.get("load1")}
+           "swap_used": after.get("swap_used"), "load1": after.get("load1"), "disk_pct": after.get("disk_pct"),
+           "temp": after.get("temp"), "conntrack": after.get("conntrack")}
     if "cpu_total" in before and "cpu_total" in after:
         total = after["cpu_total"] - before["cpu_total"]
         idle = after["cpu_idle"] - before["cpu_idle"]
@@ -98,9 +148,15 @@ def box_rates(before, after):
                             ("rx_packets", "rx_pps", 1), ("tx_packets", "tx_pps", 1)):
         rate = _per_second(before, after, key, span)
         row[out] = None if rate is None else round(rate * scale, 3)
-    for key in ("rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf"):
+    for key in ("rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf", "nic_errors", "softnet_drop", "tcp_retrans"):
+        if before.get(key) is None or after.get(key) is None:
+            row[key] = None
+            continue
         rate = _per_second(before, after, key, span)
         row[key] = None if rate is None else round(rate * 60, 2)  # per minute
+    for key, out in (("disk_read", "disk_read"), ("disk_written", "disk_write")):
+        rate = _per_second(before, after, key, span)
+        row[out] = None if rate is None else round(rate / 1e6, 3)   # MB/s
     return row
 
 
@@ -229,3 +285,35 @@ def chart(rows, since, until, series, width=600, height=110, floor=None):
         lines.append({"label": label, "kind": kind, "runs": [" ".join(r) for r in runs if len(r) > 1],
                       "now": latest, "peak": max((r[key] for r in rows if r.get(key) is not None), default=None)})
     return {"lines": lines, "top": top, "width": width, "height": height}
+
+
+def _processes(proc_root):
+    found = {}
+    for pid in os.listdir(proc_root):
+        if not pid.isdigit():
+            continue
+        try:
+            raw = _read(f"{proc_root}/{pid}/stat")
+            name = raw[raw.index("(") + 1:raw.rindex(")")]
+            fields = raw.rsplit(")", 1)[1].split()
+            found[int(pid)] = (name, int(fields[11]) + int(fields[12]), int(fields[21]) * os.sysconf("SC_PAGE_SIZE"))
+        except (OSError, ValueError, IndexError):
+            continue
+    return found
+
+
+async def top_processes(proc_root="/proc", wait=1.0, limit=8):
+    """The programs using the most CPU over the next second, with their memory."""
+    before = await asyncio.to_thread(_processes, proc_root)
+    started = time.monotonic()
+    await asyncio.sleep(wait)
+    after = await asyncio.to_thread(_processes, proc_root)
+    span = time.monotonic() - started
+    tick = os.sysconf("SC_CLK_TCK")
+    rows = []
+    for pid, (name, ticks, rss) in after.items():
+        if pid in before:
+            rows.append({"pid": pid, "name": name, "cpu": round(100 * (ticks - before[pid][1]) / tick / span, 1),
+                         "rss": rss})
+    rows.sort(key=lambda r: (-r["cpu"], -r["rss"]))
+    return rows[:limit]
