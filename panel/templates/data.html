@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Data · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker">Senior admins</p>
+<h1>Data</h1>
+<div class="cards">
+  {% if can("ips") %}
+  <a class="card" href="/ip-lookup">
+    <h2>IP lookup</h2>
+    <p class="muted">Who an address is registered to, and every account the panel has seen on it.</p>
+  </a>
+  {% endif %}
+  {% if can("users") %}
+  <a class="card" href="/bot/data">
+    <h2>Bot data</h2>
+    <p class="muted">What's in the bot's stats files: for when time played or kills look wrong.</p>
+  </a>
+  {% endif %}
+</div>
+{% endblock %}

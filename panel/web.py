@@ -1648,6 +1648,12 @@ async def bot_data_page(request):
     return render(request, "bot_data.html", report=report, identity=identity)
 
 
+async def data_page(request):
+    if not (allowed(request, "users") or allowed(request, "ips")):
+        raise web.HTTPForbidden(text="You do not have permission for that.")
+    return render(request, "data.html")
+
+
 async def ip_lookup_page(request):
     require(request, "ips")
     typed = request.query.get("ip", "").strip()
@@ -2152,6 +2158,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/game-admins/{id}/restart", restart_through_amp)
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/bot/restart", restart_bot)
+    app.router.add_get("/data", data_page)
     app.router.add_get("/bot/data", bot_data_page)
     app.router.add_get("/ip-lookup", ip_lookup_page)
     app.router.add_post("/discord/posts/new", new_post)
