@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
-from . import alerts as alert_colours, archive, memory, monitor, netcheck
+from . import alerts as alert_colours, archive, attacks, memory, monitor, netcheck
 from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
@@ -100,6 +100,9 @@ class ServerState:
 MONITOR_SECONDS = 15
 # Unanswered outside checks in a row before it counts as unreachable.
 UNREACHABLE_AFTER = 4
+# Failed logins from one address, within ATTACK_WINDOW seconds, that count as an attack.
+ATTACK_LOGINS = 10
+ATTACK_WINDOW = 600
 
 
 class ServerManager:
@@ -128,6 +131,7 @@ class ServerManager:
         if any(s.config.service for s in self.states.values()):
             self._tasks.append(asyncio.create_task(self._watch_memory()))
         self._tasks.append(asyncio.create_task(self._watch_monitor()))
+        self._tasks.append(asyncio.create_task(self._watch_attacks()))
         for state in self.states.values():
             if state.config.log_dir:
                 self._tasks.append(asyncio.create_task(self._watch_logs(state)))
@@ -196,6 +200,39 @@ class ServerManager:
                 raise
             except Exception:
                 log.exception("monitor reading failed")
+
+    async def _watch_attacks(self, reader=None):
+        reader = reader or attacks.Reader()
+        self.attack_reader = reader
+        reported: dict[str, float] = {}
+        while not self._stopping:
+            try:
+                await self.check_attacks(reader, reported)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("reading failed logins failed")
+            await asyncio.sleep(30)
+
+    async def check_attacks(self, reader, reported):
+        """Stores new failed logins and reports any address that's hammering a login."""
+        found = await asyncio.to_thread(reader.read)
+        if found:
+            self.db.add_attempts(found)
+        since = now() - ATTACK_WINDOW
+        recent = {row["ip"] for row in self.db.all("SELECT DISTINCT ip FROM login_attempts WHERE at >= ?", since)}
+        for ip in recent:
+            if time.monotonic() - reported.get(ip, -1e9) < 3600:
+                continue
+            row = self.db.attempts_from(ip, since)
+            if row["n"] >= ATTACK_LOGINS:
+                reported[ip] = time.monotonic()
+                users = ", ".join(u for u in (row["users"] or "").split(",") if u)[:200]
+                self.alerts.send(f"Login attack on {row['sources'].replace(',', ' and ')}",
+                                 f"{row['n']} failed logins from {ip} in the last {ATTACK_WINDOW // 60} minutes."
+                                 + (f"\nTried: {users}" if users else "")
+                                 + "\nLook it up and see everything it tried under Data → Login attacks in the panel.",
+                                 alert_colours.RED)
 
     async def find_programs(self, proc_root="/proc"):
         """Matches running game programs to servers that have no service set."""

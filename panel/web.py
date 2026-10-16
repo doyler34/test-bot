@@ -22,7 +22,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, auth, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
+from . import archive, attacks, auth, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -33,7 +33,7 @@ from .reasons import BAN_REASONS, KICK_REASONS, options as reason_options, with_
 from .rcon import RconError
 from .battlemetrics import BanSync
 from .suspicion import DAMAGE, DEFAULTS as SUS_DEFAULTS, LIMITS as SUS_LIMITS, body_part, check_settings as check_sus
-from .servers import RconError, ServerManager, clean, systemctl, valid_identity
+from .servers import ATTACK_LOGINS, ATTACK_WINDOW, RconError, ServerManager, clean, systemctl, valid_identity
 
 log = logging.getLogger("panel.web")
 
@@ -291,6 +291,7 @@ async def login(request):
     if not row or not good or row["disabled"]:
         throttle.failed(username)
         db.log(username or "?", "login failed", detail=client_ip(request), ok=False)
+        db.add_attempts([{"at": now(), "ip": client_ip(request), "source": "Panel", "user": (username or "")[:64]}])
         return render(request, "login.html", error="Wrong username or password.")
     throttle.cleared(username)
     token = auth.start_session(db, row["id"])
@@ -1779,6 +1780,18 @@ async def network_page(request):
                   text=netcheck.report_text(result) if result else "")
 
 
+async def attacks_page(request):
+    require(request, "ips")
+    db, t = request.app[DB], now()
+    reader = getattr(request.app[MANAGER], "attack_reader", None)
+    ports = attacks.open_ports()
+    return render(request, "attacks.html", day=db.attack_sources(t - 86400), week=db.attack_sources(t - 7 * 86400),
+                  attackers=db.attackers(t - 7 * 86400), banned=db.banned_ips(),
+                  ports=[(p, attacks.KNOWN_PORTS.get(p, "")) for p in ports],
+                  guard=await asyncio.to_thread(attacks.protections),
+                  unreadable=sorted(reader.unreadable) if reader else [], threshold=(ATTACK_LOGINS, ATTACK_WINDOW // 60))
+
+
 async def ip_lookup_page(request):
     require(request, "ips")
     typed = request.query.get("ip", "").strip()
@@ -2286,6 +2299,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/bot/restart", restart_bot)
     app.router.add_get("/data", data_page)
+    app.router.add_get("/attacks", attacks_page)
     app.router.add_route("GET", "/network", network_page)
     app.router.add_post("/network", network_page)
     app.router.add_get("/bot/data", bot_data_page)

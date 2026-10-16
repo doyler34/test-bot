@@ -100,6 +100,14 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   ports and what's been dropped on them, repeated server browser queries, and
   connection times out to Cloudflare and Google. It ends with a plain-text
   report to send the host.
+- **Login attacks** (Data → Login attacks, senior admins): failed logins on SSH
+  (from the system's auth log), the AMP panels (from AMP's own logs) and this
+  panel, read every 30 seconds and grouped by address. Ten or more failures from
+  one address within ten minutes posts to the Discord webhook, once an hour per
+  address. The page lists who's been trying and what they tried, every TCP port
+  open to the internet, and whether fail2ban is running and SSH still takes
+  passwords. Reading the auth log needs the panel to run as root or in the
+  `adm` group.
 - **Discord alerts**: bans, unbans, kicks, restarts, crashes, a server going
   offline or coming back, and memory that didn't clear, posted to a staff channel.
 - **Shared bans**: start typing a player's in-game name (or an old name, or

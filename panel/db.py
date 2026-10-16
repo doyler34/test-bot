@@ -99,6 +99,14 @@ CREATE TABLE IF NOT EXISTS server_events (
     detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS server_events_at ON server_events(server, at);
+CREATE TABLE IF NOT EXISTS login_attempts (
+    at INTEGER NOT NULL,
+    ip TEXT NOT NULL,
+    source TEXT NOT NULL,
+    user TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS login_attempts_at ON login_attempts (at);
+CREATE INDEX IF NOT EXISTS login_attempts_ip ON login_attempts (ip, at);
 CREATE TABLE IF NOT EXISTS box_samples (
     at INTEGER PRIMARY KEY,
     cpu REAL, load1 REAL, mem_used INTEGER, mem_total INTEGER, swap_used INTEGER,
@@ -600,6 +608,25 @@ class PanelDB:
             up += now() - cursor
         span = now() - start
         return up / span if span > 0 else (1.0 if state == "online" else 0.0)
+
+    def add_attempts(self, attempts, keep_days=30):
+        self.db.executemany("INSERT INTO login_attempts (at, ip, source, user) VALUES (?, ?, ?, ?)",
+                            [(int(a["at"]), a["ip"], a["source"], a.get("user", "")) for a in attempts])
+        self.db.execute("DELETE FROM login_attempts WHERE at < ?", (now() - keep_days * 86400,))
+        self.db.commit()
+
+    def attempts_from(self, ip, since):
+        return self.one("SELECT COUNT(*) AS n, GROUP_CONCAT(DISTINCT source) AS sources,"
+                        " GROUP_CONCAT(DISTINCT user) AS users FROM login_attempts WHERE ip = ? AND at >= ?", ip, since)
+
+    def attack_sources(self, since):
+        return self.all("SELECT source, COUNT(*) AS n, COUNT(DISTINCT ip) AS addresses FROM login_attempts"
+                        " WHERE at >= ? GROUP BY source ORDER BY n DESC", since)
+
+    def attackers(self, since, limit=50):
+        return self.all("SELECT ip, COUNT(*) AS n, GROUP_CONCAT(DISTINCT source) AS sources,"
+                        " GROUP_CONCAT(DISTINCT user) AS users, MIN(at) AS first, MAX(at) AS last"
+                        " FROM login_attempts WHERE at >= ? GROUP BY ip ORDER BY n DESC LIMIT ?", since, limit)
 
     BOX_KEYS = ("cpu", "load1", "mem_used", "mem_total", "swap_used", "rx_mbps", "tx_mbps", "rx_pps", "tx_pps",
                 "rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf")

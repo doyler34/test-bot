@@ -5,6 +5,10 @@
 <h1>Data</h1>
 <div class="cards">
   {% if can("ips") %}
+  <a class="card" href="/attacks">
+    <h2>Login attacks</h2>
+    <p class="muted">Failed logins on SSH, AMP and this panel, who's hammering them, and which ports are open to the internet.</p>
+  </a>
   <a class="card" href="/ip-lookup">
     <h2>IP lookup</h2>
     <p class="muted">Who an address is registered to, and every account the panel has seen on it.</p>

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Login attacks · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/data">← Data</a></p>
+<h1>Login attacks</h1>
+<p class="muted">Every failed login on this box's SSH, its AMP panels and this panel, read every 30 seconds. An address with
+  {{ threshold[0] }} or more failures in {{ threshold[1] }} minutes is posted to the staff channel in Discord.</p>
+
+<div class="stats">
+  {% for row in day %}<div class="stat"><b>{{ row.n }}</b><span>{{ row.source }} failures today · {{ row.addresses }} address{{ "es" if row.addresses != 1 }}</span></div>{% endfor %}
+  {% if not day %}<div class="stat"><b>0</b><span>Failed logins today</span></div>{% endif %}
+</div>
+
+<section class="card">
+  <h2>How well the box is guarded</h2>
+  <div class="finding">
+    <p><span class="dot {{ '' if guard.fail2ban is none else ('ok' if guard.fail2ban else 'bad') }}"></span><b>fail2ban</b>: {% if guard.fail2ban %}running{% elif guard.fail2ban is none %}couldn't tell{% else %}not running{% endif %}</p>
+    {% if guard.fail2ban == false %}<p class="muted">fail2ban blocks an address after a few wrong passwords, so a brute force stops itself. <code>sudo apt install fail2ban</code> protects SSH straight away; AMP needs its own rule.</p>{% endif %}
+  </div>
+  <div class="finding">
+    <p><span class="dot {{ '' if guard.ssh_passwords is none else ('warn' if guard.ssh_passwords else 'ok') }}"></span><b>SSH passwords</b>: {% if guard.ssh_passwords is none %}couldn't tell{% elif guard.ssh_passwords %}allowed{% else %}keys only{% endif %}</p>
+    {% if guard.ssh_passwords %}<p class="muted">While SSH accepts passwords, a brute force can eventually guess one. Logging in with a key and setting <code>PasswordAuthentication no</code> ends that.</p>{% endif %}
+  </div>
+  {% if unreadable %}
+  <div class="finding">
+    <p><span class="dot warn"></span><b>Couldn't read</b>: <span class="mono">{{ unreadable|join(", ") }}</span></p>
+    <p class="muted">The panel isn't allowed to read these, so their failed logins aren't counted. Run the panel as root, or add its user to the <code>adm</code> group for the system log.</p>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Ports open to the internet</h2>
+  <p class="muted">Every TCP port listening on all addresses: reachable from anywhere unless a firewall blocks it. Logins on these are what get attacked.</p>
+  <ul class="evidence">{% for port, name in ports %}<li><span class="mono">{{ port }}</span>{% if name %} · {{ name }}{% endif %}{% if port in (22, 8080, 8081, 3389, 3306, 5432, 6379, 27017) %} <span class="pill gold">login</span>{% endif %}</li>{% endfor %}</ul>
+  {% if not ports %}<p class="muted">None found.</p>{% endif %}
+  <p class="muted">For AMP, the safest setup is to let only your own addresses reach its port, or put it behind a login page
+    with HTTPS. Database ports (3306, 5432, 6379, 27017) should never be open to everyone.</p>
+</section>
+
+<section class="card">
+  <h2>Who's been trying, last 7 days</h2>
+  {% if not attackers %}<p class="muted">Nobody: no failed logins in the last week.</p>{% else %}
+  <ul class="evidence">{% for a in attackers %}
+    <li><a class="mono" href="/ip-lookup?ip={{ a.ip }}">{{ a.ip }}</a> · <b>{{ a.n }}</b> failed{% if a.ip in banned %} <span class="pill down">IP banned in game</span>{% endif %}
+      <br><span class="muted">{{ a.sources|replace(",", ", ") }} · {{ a.first|ts }} to {{ a.last|ts }}{% if a.users %} · tried {{ a.users.split(",")[:6]|join(", ") }}{% endif %}</span></li>
+  {% endfor %}</ul>
+  {% endif %}
+  {% for row in week %}{% if loop.first %}<p class="muted">This week: {% endif %}{{ row.n }} on {{ row.source }}{{ ", " if not loop.last else "." }}{% if loop.last %}</p>{% endif %}{% endfor %}
+</section>
+{% endblock %}
