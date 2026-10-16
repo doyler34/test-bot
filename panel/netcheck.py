@@ -295,7 +295,7 @@ def port_kind(nic):
     if driver in ONBOARD:
         return "onboard", f"motherboard {ONBOARD[driver]} port"
     if driver in MANAGEMENT:
-        return "management", "the server's management link (BMC/IPMI over USB)"
+        return "management", "management link to the BMC"
     if nic["virtual"]:
         return "virtual", "virtual port"
     return "other", f"{driver or 'unknown'} port"
@@ -324,17 +324,20 @@ def judge(before, after, servers, extras):
     fast_up = [n for n, nic in nics.items() if port_kind(nic)[0] == "fast" and nic["state"] == "up"]
     if in_use and port_kind(nics[in_use[0]])[0] == "onboard" and fast_down and not fast_up:
         name = in_use[0]
-        out.insert(0, line(s, "Running on the backup port",
-                           f"{name} ({port_kind(nics[name])[1]}) is carrying everything; "
-                           f"{', '.join(fast_down)} ({port_kind(nics[fast_down[0]])[1]}s) are down",
-                           BAD,
-                           "This box has fast add-in network ports, but their link is down, so every server's traffic "
-                           "has fallen back to the motherboard's own port: a fraction of the capacity, a smaller packet "
-                           "buffer and more work for the CPU per packet. If the trouble started when the host changed "
-                           "something, this is the change.",
-                           f"Ask the host to bring the {port_kind(nics[fast_down[0]])[1].replace(' port', '')} link back "
-                           "(the faulty switch port or cable) and move the traffic back onto it. Until then, the fixes "
-                           "below make the backup port cope better."))
+        nic = nics[name]
+        old = before["nics"].get(name, nic)
+        mbps = (nic["stats"]["rx_bytes"] - old["stats"]["rx_bytes"] + nic["stats"]["tx_bytes"] - old["stats"]["tx_bytes"]) \
+            * 8 / span / 1e6
+        share = mbps / nic["speed"] if nic["speed"] and nic["speed"] > 0 else 0
+        out.insert(1, line(s, "Running on the motherboard port",
+                           f"{name} ({port_kind(nic)[1]}); the {port_kind(nics[fast_down[0]])[1]}s aren't connected",
+                           WARN if share > 0.5 else INFO,
+                           f"Only one port is connected, so all traffic goes through the motherboard's {nic['speed']} Mb/s "
+                           f"port. You're using {share:.0%} of it, so its speed isn't the limit"
+                           + ("." if share <= 0.5 else ": it's getting full, and a faster port would help.")
+                           + " It does have a smaller packet buffer than the add-in ports, which the receive buffer "
+                             "line below covers.",
+                           "Ask the host about connecting a 10 Gb port." if share > 0.5 else ""))
     for name, nic in after["nics"].items():
         if nic["virtual"] and name not in used:
             continue
@@ -343,10 +346,7 @@ def judge(before, after, servers, extras):
         kind, words = port_kind(nic)
         label = f"{name}: {words}"
         if nic["state"] != "up" and name not in used:
-            out.append(line(s, label, "link down", INFO,
-                            "Normal for the management link." if kind == "management" else
-                            "Spare port, not carrying traffic." if kind == "onboard" else
-                            "Not carrying traffic. Fine only if it was taken out of use on purpose."))
+            out.append(line(s, label, "not connected", INFO, "No cable in it, or not in use: normal."))
             continue
         speed = nic["speed"] if nic["speed"] and nic["speed"] > 0 else None
         mbps = (grew["rx_bytes"] + grew["tx_bytes"]) * 8 / span / 1e6

@@ -26,14 +26,16 @@
 <section class="card">
   <h2>Your network ports</h2>
   <div class="net-ports">
-    {% for port in result.ports %}
-    <div class="net-port {{ 'use' if port.in_use else ('up' if port.up else 'down') }} {{ port.kind }}">
+    {% for port in result.ports if port.in_use or port.up %}
+    <div class="net-port {{ 'use' if port.in_use else 'up' }} {{ port.kind }}">
       <b class="mono">{{ port.name }}</b>
       <span>{{ port.words[0]|upper }}{{ port.words[1:] }}</span>
-      <em>{% if port.in_use %}Carrying all traffic{% if port.speed %} · {{ port.speed }} Mb/s{% endif %}{% elif port.up %}Link up, not in use{% else %}Link down{% endif %}</em>
+      <em>{% if port.in_use %}Carrying all traffic{% if port.speed %} · {{ port.speed }} Mb/s{% endif %}{% else %}Link up, not in use{% endif %}</em>
     </div>
     {% endfor %}
   </div>
+  {% set idle = result.ports|rejectattr("in_use")|rejectattr("up")|list %}
+  {% if idle %}<p class="muted">Not connected: {% for port in idle %}<span class="mono">{{ port.name }}</span> ({{ port.words|replace(" port", "") }}){{ ", " if not loop.last }}{% endfor %}.</p>{% endif %}
 </section>
 {% endif %}
 

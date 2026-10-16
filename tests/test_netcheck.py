@@ -71,12 +71,11 @@ class NetCheckTests(unittest.TestCase):
         v = lambda section, label: rows[(section, label)]["verdict"]
         self.assertEqual(rows[("Network ports", "Default route")]["value"], "enp4s0 via 192.168.0.1")
         self.assertEqual(v("Network ports", "enp4s0: motherboard Intel 1 Gb port"), "ok")
-        self.assertEqual(rows[("Network ports", "eno1np0: Broadcom 10/25 Gb port")]["value"], "link down")
-        backup = rows[("Network ports", "Running on the backup port")]
-        self.assertEqual(backup["verdict"], "bad")
-        self.assertIn("enp4s0 (motherboard Intel 1 Gb port) is carrying everything", backup["value"])
-        self.assertIn("eno1np0, eno2np1", backup["value"])
-        self.assertIn("Broadcom 10/25 Gb link back", backup["fix"])
+        self.assertEqual(rows[("Network ports", "eno1np0: Broadcom 10/25 Gb port")]["value"], "not connected")
+        port = rows[("Network ports", "Running on the motherboard port")]
+        self.assertEqual(port["verdict"], "warn")                                         # 64% of 1 Gb in use
+        self.assertEqual(port["value"], "enp4s0 (motherboard Intel 1 Gb port); the Broadcom 10/25 Gb ports aren't connected")
+        self.assertIn("You're using 64% of it", port["why"])
         self.assertEqual(rows[("Network ports", "enp4s0 packets arriving damaged")]["value"],
                          "152 since boot (rx_queue_0_csum_err 80, rx_queue_1_csum_err 72)")
         self.assertEqual(v("Network ports", "enp4s0 traffic"), "warn")                 # 640 Mb/s of 1000
