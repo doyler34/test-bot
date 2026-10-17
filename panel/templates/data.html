@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Data · OYB Control{% endblock %}
 {% block body %}
-<p class="kicker">Senior admins</p>
 <h1>Data</h1>
 <div class="cards">
   {% if can("ips") %}
@@ -22,6 +21,12 @@
   <a class="card" href="/bot/data">
     <h2>Bot data</h2>
     <p class="muted">What's in the bot's stats files: for when time played or kills look wrong.</p>
+  </a>
+  {% endif %}
+  {% if can("audit") %}
+  <a class="card" href="/audit">
+    <h2>Audit log</h2>
+    <p class="muted">Everything anyone has done in the panel: bans, kicks, restarts, settings changes.</p>
   </a>
   {% endif %}
 </div>

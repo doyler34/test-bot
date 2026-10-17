@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Settings · OYB Control{% endblock %}
+{% block body %}
+<h1>Settings</h1>
+<div class="cards">
+  {% if can("sus") %}
+  <a class="card" href="/sus-settings">
+    <h2>Sus settings</h2>
+    <p class="muted">When a kill pattern gets flagged as suspicious, and when it's posted to Discord.</p>
+  </a>
+  {% endif %}
+  {% if can("game_admins") %}
+  <a class="card" href="/game-admins">
+    <h2>In-game admins</h2>
+    <p class="muted">Who is admin in game on each server, changed through AMP.</p>
+  </a>
+  {% endif %}
+  {% if can("users") %}
+  <a class="card" href="/users">
+    <h2>Admins</h2>
+    <p class="muted">Panel accounts, roles and password resets.</p>
+  </a>
+  {% endif %}
+  {% if can("website") %}
+  <a class="card" href="/website">
+    <h2>Website</h2>
+    <p class="muted">The public site's words, servers and rules.</p>
+  </a>
+  {% endif %}
+  {% if can("mortar") %}
+  <a class="card" href="/mortar">
+    <h2>Mortar</h2>
+    <p class="muted">The mortar calculator and its map, for trying out before it goes in Discord.</p>
+  </a>
+  {% endif %}
+</div>
+{% endblock %}

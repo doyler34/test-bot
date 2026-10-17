@@ -1903,8 +1903,17 @@ async def bot_data_page(request):
     return render(request, "bot_data.html", report=report, identity=identity)
 
 
+SETTINGS_PERMISSIONS = ("sus", "game_admins", "users", "website", "mortar")
+
+
+async def settings_page(request):
+    if not any(allowed(request, p) for p in SETTINGS_PERMISSIONS):
+        raise web.HTTPForbidden(text="You do not have permission for that.")
+    return render(request, "settings.html")
+
+
 async def data_page(request):
-    if not (allowed(request, "users") or allowed(request, "ips")):
+    if not (allowed(request, "users") or allowed(request, "ips") or allowed(request, "audit")):
         raise web.HTTPForbidden(text="You do not have permission for that.")
     return render(request, "data.html")
 
@@ -2570,6 +2579,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/bot/restart", restart_bot)
     app.router.add_get("/data", data_page)
+    app.router.add_get("/settings", settings_page)
     app.router.add_get("/control", control_redirect)
     app.router.add_post("/server/{id}/power/{action}", control_power)
     app.router.add_get("/server/{id}/kills.json", control_kills)

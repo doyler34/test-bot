@@ -822,3 +822,7 @@ main { max-width: 1320px; padding: 22px 24px 64px; }
   .dock { background: #111418; }
   .dock > a, .dock summary { font-family: var(--body); text-transform: none; letter-spacing: 0; font-size: .75rem; }
 }
+.top-user .help { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line);
+  color: #c9ced4; font-weight: 700; }
+.top-user .help:hover, .top-user .help.on { border-color: var(--gold); color: var(--gold); text-decoration: none; }
+@media (max-width: 720px) { .top-user .help { display: none; } }
