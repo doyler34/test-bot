@@ -1,3 +1,11 @@
+  <section class="srv-summary">
+    <div><span>Players</span><b>{{ info.players }}{% if info.slots %} / {{ info.slots }}{% endif %}</b></div>
+    <div class="bar-row"><span>CPU</span><b>{{ "%.0f%%"|format(info.cpu) if info.cpu is not none else "—" }}</b>
+      <i class="bar cpu"><i style="width: {{ [info.cpu or 0, 100]|min }}%"></i></i></div>
+    <div><span>Uptime</span><b>{{ info.up_for|span if info.up_for else "—" }}</b></div>
+    <div class="bar-row"><span>Memory</span><b>{% if info.memory %}{{ "%.1f"|format(info.memory / gb) }}{% if info.mem_total %} / {{ "%.0f"|format(info.mem_total / gb) }}{% endif %} GB{% else %}—{% endif %}</b>
+      <i class="bar mem"><i style="width: {{ ([100 * info.memory / info.mem_total, 100]|min) if info.memory and info.mem_total else 0 }}%"></i></i></div>
+  </section>
   <div class="ctl-grid">
     <section class="ctl-panel">
       <h2>Server information</h2>

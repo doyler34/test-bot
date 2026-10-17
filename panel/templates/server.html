@@ -4,10 +4,10 @@
 <script src="/control-map/leaflet.js" defer></script>
 <script src="/static/control.js?v={{ asset_version }}" defer></script>{% endblock %}
 {% block body %}
-<p class="kicker"><a href="/">← All servers</a></p>
 <div class="srv-head">
-  <h1><span class="dot {{ 'ok' if s.online else 'bad' }}"></span>{{ s.name }}
-    {% if not s.configured %}<span class="ctl-state">Not set up</span>{% endif %}</h1>
+  <h1><a href="/" class="srv-back" aria-label="All servers">‹</a>{{ s.name }}
+    {% if not s.configured %}<span class="ctl-state">Not set up</span>
+    {% else %}<span class="ctl-state {{ 'on' if s.online else 'off' }}">{{ "Online" if s.online else "Offline" }}</span>{% endif %}</h1>
   <div class="srv-actions">
     {% if card.ping is not none %}<span class="muted">{{ card.ping|round|int }} ms</span>{% endif %}
     {% with c = card %}{% include "_power.html" %}{% endwith %}
@@ -17,7 +17,7 @@
 
 <nav class="tabs srv-tabs">
   <a href="#overview" data-tab="overview">Overview</a>
-  <a href="#live" data-tab="live">Live feed &amp; players</a>
+  <a href="#live" data-tab="live">Live feed</a>
   <a href="#history" data-tab="history">History</a>
   <a href="#health" data-tab="health">Health</a>
   <a href="/server/{{ s.id }}/monitor">Monitor</a>

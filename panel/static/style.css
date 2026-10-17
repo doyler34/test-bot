@@ -826,3 +826,42 @@ main { max-width: 1320px; padding: 22px 24px 64px; }
   color: #c9ced4; font-weight: 700; }
 .top-user .help:hover, .top-user .help.on { border-color: var(--gold); color: var(--gold); text-decoration: none; }
 @media (max-width: 720px) { .top-user .help { display: none; } }
+
+/* Server page header, summary bars and tinted power buttons (phone mock-up) */
+.srv-back { display: inline-grid; place-items: center; width: 34px; height: 34px; margin-right: 6px; border-radius: 8px;
+  color: #c9ced4; font-size: 1.7rem; line-height: 1; }
+.srv-back:hover { background: rgba(255, 255, 255, .06); color: #fff; text-decoration: none; }
+.srv-head h1 { gap: 10px; flex-wrap: wrap; }
+.srv-head h1 .ctl-state { font-size: .72rem; }
+.srv-summary {
+  display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 14px 28px; margin-bottom: 14px;
+  padding: 16px 18px; background: #181c21; border: 1px solid #2a3037; border-radius: 12px;
+}
+.srv-summary > div { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 4px 10px; }
+.srv-summary span { color: #9aa1a9; font-size: .78rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.srv-summary > div:not(.bar-row) { grid-template-columns: 1fr; }
+.srv-summary b { font-size: 1.3rem; font-weight: 600; color: #fff; }
+.srv-summary .bar-row b { font-size: 1rem; text-align: right; }
+.bar { grid-column: 1 / -1; display: block; height: 8px; border-radius: 99px; background: #2a3037; overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 99px; }
+.bar.cpu > i { background: linear-gradient(90deg, #2fa844, #4cd964); }
+.bar.mem > i { background: linear-gradient(90deg, #2f7fd3, #4ea1f3); }
+.srv-actions .ctl-btn { background: #161a1e; }
+.srv-actions .ctl-btn.start { color: #4cd964; border-color: rgba(76, 217, 100, .45); background: rgba(76, 217, 100, .08); }
+.srv-actions .ctl-btn.restart { color: #f6a04d; border-color: rgba(244, 123, 32, .5); background: rgba(244, 123, 32, .1); }
+.srv-actions .ctl-btn.stop { color: #ff7b72; border-color: rgba(224, 68, 58, .55); background: rgba(224, 68, 58, .1); }
+.srv-actions .ctl-btn.update { color: #c9ced4; }
+.srv-actions .ctl-btn.start::before { content: "\25B6"; margin-right: 6px; font-size: .75em; }
+.srv-actions .ctl-btn.restart::before { content: "\21BB"; margin-right: 6px; }
+.srv-actions .ctl-btn.stop::before { content: "\25A0"; margin-right: 6px; font-size: .8em; }
+
+@media (max-width: 720px) {
+  .srv-head h1 { font-size: 1.35rem; }
+  .srv-summary { gap: 12px 18px; padding: 14px; }
+  .srv-actions .ctl-power { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .srv-actions .ctl-power form:last-child { grid-column: 1 / -1; }
+  .srv-actions .ctl-btn { height: 46px; font-size: 1rem; }
+  .dock > a, .dock summary { border-top: 0; padding: 9px 4px 10px; gap: 4px; }
+  .dock > a.on, .dock .menu[open] summary { color: var(--gold); }
+  .dock > a.on svg { stroke-width: 2.1; }
+}

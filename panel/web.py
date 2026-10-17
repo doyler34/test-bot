@@ -1465,7 +1465,8 @@ def server_overview(request, state):
                       for p in state.players), key=lambda p: -p["played"]) if state.online else []
     info = {"online": state.online, "up_for": card["up_for"], "map": card["map"], "players": len(players),
             "slots": card["slots"], "fps": card["fps"], "cpu": latest.get("proc_cpu"),
-            "memory": state.memory or latest.get("rss"), "disk": box_latest.get("disk_pct"), "ping": card["ping"]}
+            "memory": state.memory or latest.get("rss"), "mem_total": box_latest.get("mem_total"),
+            "disk": box_latest.get("disk_pct"), "ping": card["ping"]}
     return {"info": info, "roster": players, "charts": charts, "has_map": mortar_map() is not None}
 
 

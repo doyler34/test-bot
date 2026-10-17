@@ -51,7 +51,7 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("/power/stop", home)      # no AMP, no buttons
         page = await (await self.client.get("/server/one")).text()
         for words in ("Server information", "2h 0m", "Player list", "Gaz", "1h 30m", "CPU usage", "Memory usage",
-                      "Network", "Kill map", "Live feed &amp; players", "← All servers"):
+                      "Network", "Kill map", "Live feed", "aria-label=\"All servers\"", "Memory", "bar cpu"):
             self.assertIn(words, page)
         two = await (await self.client.get("/server/two")).text()
         self.assertIn("The server is offline.", two)
