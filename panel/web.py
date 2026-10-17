@@ -1085,8 +1085,13 @@ async def unusual_page(request):
     since = 0 if period == "all" else now() - int(period) * 86400
     db = request.app[DB]
     players, typical = outliers.unusual(db.player_totals(since), db.incident_counts(since))
+    everyone = request.query.get("show") == "all"
+    staff = request.app[MANAGER].staff_ids()
+    hidden = sum(1 for p in players if p["identity"] in staff or not p["stands_out"])
+    if not everyone:
+        players = [p for p in players if p["stands_out"] and p["identity"] not in staff]
     return render(request, "unusual.html", players=players, typical=typical, metrics=outliers.METRICS,
-                  periods=UNUSUAL_PERIODS, period=period,
+                  periods=UNUSUAL_PERIODS, period=period, everyone=everyone, hidden=hidden, staff=staff,
                   scored=db.one("SELECT COUNT(*) AS n FROM scored_games")["n"],
                   archived=db.one("SELECT COUNT(*) AS n FROM log_archive")["n"])
 

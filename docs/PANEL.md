@@ -50,11 +50,12 @@ on `127.0.0.1`. Caddy sits in front and gives it a domain with HTTPS.
   An explosion or error flag waits 2 minutes, then names who joined in the 10
   minutes before (leaving out reconnects, the victims and anyone who had
   already left) and any player whose own kills landed within 150 m of the
-  explosions. It also saves everyone who was on the server, and a player who
-  was on for incidents on any server says so ("At earlier incidents too:
-  Buford (2x)"). Their player page lists every incident they were present for.
-  Being present once means nothing; the same name at several is worth
-  spectating. The logs never say which weapon was used, so a flag is a reason
+  explosions. It also saves everyone who was on the server. A player who has
+  been on for 3 or more incidents in 30 days, on any server, is named when
+  that's at least twice what an average player with their hours would rack
+  up ("At more incidents than their playtime explains: Buford (4 times,
+  3.1x normal)"); regulars who are simply always on, and staff, are left out.
+  Their player page lists every incident they were present for. The logs never say which weapon was used, so a flag is a reason
   to look, not proof. Kills credited from over 2 km away and collision deaths
   are ignored (a crash gets credited to whoever last damaged the vehicle), and
   so are long-range explosive kills by a named player (usually a gunship).

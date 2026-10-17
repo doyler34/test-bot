@@ -1005,14 +1005,36 @@ class PanelDB:
         self.db.commit()
         return incident
 
-    def repeat_suspects(self, incident, days=30):
-        """Players present at this incident who were also present at earlier ones, on any server."""
-        return self.all(
+    def repeat_suspects(self, incident, days=30, skip=(), min_times=3, min_lift=2.0):
+        """Players at this incident who keep turning up at incidents more than
+        their playtime explains. Someone on 10 hours a day is at most of them
+        by chance; they only count here if they're at more than min_lift times
+        the incidents of an average player with the same hours."""
+        since = now() - days * 86400
+        seen = self.all(
             "SELECT ip.identity, ip.name, COUNT(*) AS times FROM incident_players ip"
             " JOIN incidents i ON i.id = ip.incident"
             " WHERE ip.identity IN (SELECT identity FROM incident_players WHERE incident = ?)"
-            " AND i.at >= ? GROUP BY ip.identity HAVING times > 1 ORDER BY times DESC, ip.name",
-            incident, now() - days * 86400)
+            " AND i.at >= ? GROUP BY ip.identity HAVING times >= ?", incident, since, min_times)
+        seen = [r for r in seen if r["identity"] not in skip]
+        if not seen:
+            return []
+        totals = self.one(
+            "SELECT (SELECT COUNT(*) FROM incident_players ip JOIN incidents i ON i.id = ip.incident WHERE i.at >= ?)"
+            " AS presences, (SELECT SUM(seconds) FROM game_players WHERE started >= ?) / 3600.0 AS hours", since, since)
+        hours = {r["identity"]: r["hours"] for r in self.all(
+            "SELECT identity, SUM(seconds) / 3600.0 AS hours FROM game_players WHERE started >= ?"
+            f" AND identity IN ({','.join('?' * len(seen))}) GROUP BY identity", since, *[r["identity"] for r in seen])}
+        rate = totals["presences"] / totals["hours"] if totals["hours"] else None
+        found = []
+        for r in seen:
+            played = max(hours.get(r["identity"]) or 0, 1)
+            lift = r["times"] / (played * rate) if rate else None
+            if lift is None or lift >= min_lift:
+                found.append({"identity": r["identity"], "name": r["name"], "times": r["times"],
+                              "hours": played, "lift": lift})
+        found.sort(key=lambda f: (-(f["lift"] or 0), -f["times"], f["name"]))
+        return found
 
     def incidents_for(self, identity, limit=50):
         return self.all(

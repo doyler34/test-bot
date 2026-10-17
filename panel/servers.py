@@ -489,11 +489,13 @@ class ServerManager:
         present = [{"identity": i, "name": n} for i, (n, seen) in state.recent.items() if now() - seen <= 300]
         if flag["incident"] and fresh and present:
             incident = self.db.add_incident(state.config.id, flag["at"], text, present)
-            repeat = self.db.repeat_suspects(incident)
+            repeat = self.db.repeat_suspects(incident, skip=self.staff_ids())
             if repeat:
-                text += " Also online at earlier incidents: " + ", ".join(
-                    f"{r['name']} ({r['times']} times)" for r in repeat[:5]) + "."
-                fields = [(r["name"], f"{r['identity']}\n{r['times']} incidents") for r in repeat[:5]]
+                text += " At more incidents than their playtime explains: " + ", ".join(
+                    f"{r['name']} ({r['times']} times{', ' + format(r['lift'], '.1f') + 'x normal' if r['lift'] else ''})"
+                    for r in repeat[:5]) + "."
+                fields = [(r["name"], f"{r['identity']}\n{r['times']} incidents in {r['hours']:.0f} h played")
+                          for r in repeat[:5]]
         elif flag["identity"]:
             fields = [("Identity", flag["identity"])]
         row = self.db.add_feed(state.config.id, "sus", text, at=flag["at"])

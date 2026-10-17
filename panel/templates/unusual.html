@@ -3,10 +3,17 @@
 {% block body %}
 <p class="kicker"><a href="/players">Players</a></p>
 <h1>Unusual players</h1>
-<p class="muted">Everyone with at least 25 bullet kills in the saved games, compared with each other. <span class="pill down">Red</span> means that number is in the top 5% of all of them. Good players show up here too, so treat it as a list of who to spectate, not who to ban.</p>
-<form method="get" action="/players/unusual" class="inline">
+<p class="muted">Players with at least 25 bullet kills in the saved games, compared with each other. <span class="pill down">Red</span> means that number is in the top 5% of all of them. Normal players and staff are left out unless you pick Everyone. Good players still show up, so treat it as a list of who to spectate, not who to ban.</p>
+<form method="get" action="/players/unusual" class="row inv-period">
   <select name="days" data-autosubmit>{% for value, label in periods %}<option value="{{ value }}" {% if value == period %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <select name="show" data-autosubmit>
+    <option value="">Only players who stand out</option>
+    <option value="all" {% if everyone %}selected{% endif %}>Everyone, staff too</option>
+  </select>
 </form>
+<p class="muted">Incidents counts how often they were online when players were blown up by explosions credited to AI,
+  against how much they play: <b>3.0×</b> means three times as often as an average player with the same hours.
+  Red from 2× and 3 incidents. {% if not everyone and hidden %}{{ hidden }} normal player{{ "s" if hidden != 1 }} and staff hidden.{% endif %}</p>
 {% if scored < archived %}<p class="tip">Still adding up older games: {{ scored }} of {{ archived }} done. The rest are read in the background over the next few hours.</p>{% endif %}
 {% if players %}
 <div class="scroll"><table class="unusual">
@@ -20,19 +27,21 @@
     <td class="num">{{ "%.1f"|format(typical.kd) if typical.kd is not none }}</td><td></td></tr>
   {% for p in players %}
   <tr>
-    <td><a href="/player/{{ p.identity }}">{{ p.name }}</a></td>
+    <td><a href="/player/{{ p.identity }}">{{ p.name }}</a>{% if p.identity in staff %} <span class="pill">staff</span>{% endif %}</td>
     <td class="num">{{ p.games }}</td>
     <td class="num">{{ p.rifle }}</td>
+    {% if p.judged %}
     <td class="num">{% if "head_share" in p.high %}<span class="pill down">{{ "%.0f%%"|format(p.head_share * 100) }}</span>{% else %}{{ "%.0f%%"|format(p.head_share * 100) }}{% endif %}</td>
     <td class="num">{% if "long_share" in p.high %}<span class="pill down">{{ "%.0f%%"|format(p.long_share * 100) }}</span>{% else %}{{ "%.0f%%"|format(p.long_share * 100) }}{% endif %}</td>
     <td class="num">{% if p.per_hour is none %}—{% elif "per_hour" in p.high %}<span class="pill down">{{ "%.1f"|format(p.per_hour) }}</span>{% else %}{{ "%.1f"|format(p.per_hour) }}{% endif %}</td>
     <td class="num">{% if "kd" in p.high %}<span class="pill down">{{ "%.1f"|format(p.kd) }}</span>{% else %}{{ "%.1f"|format(p.kd) }}{% endif %}</td>
-    <td class="num">{{ p.incidents or "" }}</td>
+    {% else %}<td class="num muted" colspan="4">too few kills to judge aim</td>{% endif %}
+    <td class="num">{% if p.incidents %}{% if p.incidents_high %}<span class="pill down">{{ p.incidents }} · {{ "%.1f"|format(p.incident_lift) }}×</span>{% else %}{{ p.incidents }}{% if p.incident_lift %} · {{ "%.1f"|format(p.incident_lift) }}×{% endif %}{% endif %}{% endif %}</td>
   </tr>
   {% endfor %}
   </tbody>
 </table></div>
 {% else %}
-<p class="muted">Nobody has 25 bullet kills in the saved games for this period yet.</p>
+<p class="muted">{% if everyone %}Nobody has 25 bullet kills in the saved games for this period yet.{% else %}Nobody stands out in this period.{% endif %}</p>
 {% endif %}
 {% endblock %}

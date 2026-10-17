@@ -884,15 +884,33 @@ class IncidentTests(unittest.TestCase):
 
     def test_the_same_face_at_incidents_on_both_servers(self):
         self.incident("one", ("Buford", BUFORD), ("M1SF1T", person(5)))
-        self.assertNotIn("earlier incidents", self.db.feed("one")[0]["text"])
+        self.assertNotIn("playtime explains", self.db.feed("one")[0]["text"])
+        self.incident("two", ("Buford", BUFORD), ("Someone", person(6)))
+        self.assertNotIn("playtime explains", self.db.feed("two")[0]["text"])   # twice could be chance
         self.incident("two", ("Buford", BUFORD), ("Someone", person(6)))
         self.assertEqual(self.db.feed("two")[0]["kind"], "sus")
-        self.assertIn("Also online at earlier incidents: Buford (2 times)", self.db.feed("two")[0]["text"])
+        self.assertIn("At more incidents than their playtime explains: Buford (3 times)", self.db.feed("two")[0]["text"])
         title, _, fields = self.manager.alerts.sent[-1]
         self.assertEqual(title, "Suspicious on Two")
         self.assertIn(BUFORD, fields["Buford"])
-        self.assertEqual(len(self.db.incidents_for(BUFORD)), 2)
+        self.assertEqual(len(self.db.incidents_for(BUFORD)), 3)
         self.assertEqual(len(self.db.incidents_for(person(5))), 1)
+
+    def test_regulars_at_incidents_are_left_out_unless_its_more_than_their_hours(self):
+        regular, sneaky, admin = person(7), person(8), person(9)
+        self.db.add_game_players("one", "logs_2026-10-01_10-00-00", now() - 3600, [
+            {"identity": regular, "name": "Regular", "first": 0, "last": 200 * 3600, "kills": 0, "deaths": 0, "rifle": 0, "heads": 0, "long": 0, "metres": 0.0, "measured": 0},
+            {"identity": sneaky, "name": "Sneaky", "first": 0, "last": 5 * 3600, "kills": 0, "deaths": 0, "rifle": 0, "heads": 0, "long": 0, "metres": 0.0, "measured": 0},
+            {"identity": admin, "name": "Admin", "first": 0, "last": 5 * 3600, "kills": 0, "deaths": 0, "rifle": 0, "heads": 0, "long": 0, "metres": 0.0, "measured": 0},
+            *[{"identity": person(20 + n), "name": f"Filler{n}", "first": 0, "last": 100 * 3600, "kills": 0, "deaths": 0, "rifle": 0, "heads": 0, "long": 0, "metres": 0.0, "measured": 0}
+              for n in range(5)]])
+        self.db.set_staff(admin, "boss")
+        for _ in range(4):
+            self.incident("one", ("Regular", regular), ("Sneaky", sneaky), ("Admin", admin))
+        text = self.db.feed("one")[0]["text"]
+        self.assertIn("At more incidents than their playtime explains: Sneaky (4 times, ", text)
+        self.assertNotIn("Regular (", text)
+        self.assertNotIn("Admin (", text)
 
     def test_a_running_tally_updates_its_line(self):
         state = self.manager.states["one"]
@@ -973,11 +991,15 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
             "identity": person(99), "name": "Few", "first": 0, "last": 600, "kills": 3, "deaths": 1,
             "rifle": 3, "heads": 3, "long": 0, "metres": 0.0, "measured": 0}])
         await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
-        html = await (await self.client.get("/players/unusual")).text()
+        html = await (await self.client.get("/players/unusual?show=all")).text()
         self.assertLess(html.index("P0"), html.index("P1<"))
         self.assertEqual(html.count('class="pill down"'), 2)
         self.assertIn('<span class="pill down">100%</span>', html)
         self.assertNotIn("Few", html)
+        html = await (await self.client.get("/players/unusual")).text()
+        self.assertIn("P0", html)
+        self.assertNotIn("P1<", html)
+        self.assertIn("11 normal players and staff hidden", html)
 
     async def test_kill_log_finds_a_revenge_teamkill(self):
         tk = lambda clock, killer, killer_id, victim: shot(clock, killer, killer_id, victim, 0, 0).replace("KILL ENEMY", "KILL TK")
