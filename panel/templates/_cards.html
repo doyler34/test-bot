@@ -1,5 +1,6 @@
 {% for c in cards %}
-<section class="ctl-card">
+<section class="ctl-card{{ ' has-image' if c.image }}">
+  {% if c.image %}<img class="ctl-card-img" src="{{ c.image }}" alt="" loading="lazy">{% endif %}
   <a class="ctl-card-link" href="/server/{{ c.id }}" aria-label="Open {{ c.name }}"></a>
   {% if not c.configured %}<span class="ctl-state">Not set up</span>
   {% else %}<span class="ctl-state {{ 'on' if c.online else 'off' }}">{{ "Online" if c.online else "Offline" }}</span>{% endif %}

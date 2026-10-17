@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Server pictures · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/settings">← Settings</a></p>
+<header class="page-head">
+  <div>
+    <h1>Server pictures</h1>
+    <p>The picture behind the top of each server's card on the dashboard. JPG, PNG or WebP, up to {{ limit }} MB; a wide one around 1280×720 works best.</p>
+  </div>
+</header>
+<div class="pic-list">
+  {% for r in rows %}
+  <section class="card pic-row">
+    <div class="pic-preview">{% if r.image %}<img src="{{ r.image }}" alt="">{% else %}<span>No picture</span>{% endif %}</div>
+    <div class="pic-body">
+      <h2>{{ r.name }}</h2>
+      <form method="post" action="/settings/pictures/{{ r.id }}/picture/upload?csrf={{ csrf }}" enctype="multipart/form-data" class="pic-form">
+        <input type="file" name="picture" accept="image/jpeg,image/png,image/webp" required>
+        <button class="small">{{ "Change" if r.image else "Upload" }}</button>
+      </form>
+      {% if r.image %}
+      <form method="post" action="/settings/pictures/{{ r.id }}/remove" data-confirm="Remove this picture?">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="small danger">Remove</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

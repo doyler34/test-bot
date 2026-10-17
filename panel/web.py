@@ -261,7 +261,7 @@ async def session(request, handler):
         if request.path.startswith("/api/") or request.path.endswith((".part", ".json")):
             raise web.HTTPUnauthorized(text="Log in again.")
         raise web.HTTPFound("/login")
-    if request.method == "POST" and request.path.endswith("/history/upload"):
+    if request.method == "POST" and request.path.endswith(("/history/upload", "/picture/upload")):
         # Streamed straight to disk, so the token rides in the URL instead of the form.
         if not csrf or request.query.get("csrf") != csrf:
             raise web.HTTPForbidden(text="This form expired. Go back, reload the page and try again.")
@@ -365,7 +365,7 @@ def server_view(state):
 
 async def dashboard(request):
     live = list(request.app[MANAGER].states.values())
-    states = [control_card(s) for s in live]
+    states = [control_card(s, request.app[PICTURES]) for s in live]
     db = request.app[DB]
     hour = time.localtime().tm_hour
     welcome = {
@@ -420,7 +420,7 @@ async def guide_page(request):
 
 
 async def dashboard_part(request):
-    states = [control_card(s) for s in request.app[MANAGER].states.values()]
+    states = [control_card(s, request.app[PICTURES]) for s in request.app[MANAGER].states.values()]
     return render(request, "_cards.html", cards=states, amp=bool(request.app[AMP]))
 
 
@@ -428,7 +428,7 @@ async def server_page(request):
     state = server_or_404(request, request.match_info["id"])
     db = request.app[DB]
     recent = db.audit(server=state.config.id, limit=15)
-    return render(request, "server.html", s=server_view(state), card=control_card(state), recent=recent,
+    return render(request, "server.html", s=server_view(state), card=control_card(state, request.app[PICTURES]), recent=recent,
                   health=health_data(db, state), alts=alt_flags(request, state),
                   played=played(request, [p["identity"] for p in state.players]), amp=bool(request.app[AMP]),
                   gb=GB, csp=MAP_CSP, feed=db.feed(state.config.id), **server_overview(request, state),
@@ -1430,11 +1430,34 @@ CONTROL_SECONDS = 3600
 CONTROL_ACTIONS = {"start": "Starting", "restart": "Restarting", "stop": "Stopping", "update": "Updating"}
 
 
-def control_card(state):
+PICTURE_TYPES = {"jpg": b"\xff\xd8\xff", "png": b"\x89PNG", "webp": b"RIFF"}
+PICTURE_LIMIT = 5 * 1024 * 1024
+
+
+def picture_file(folder, name):
+    """A card picture on disk: <server id>.jpg/.png/.webp, or default.* for every server."""
+    for ext in PICTURE_TYPES:
+        path = folder / f"{name}.{ext}"
+        if path.is_file():
+            return path
+    return None
+
+
+def server_image(folder, server_id):
+    """The address of a server's card picture: its own, else the default, else none."""
+    for name in (server_id, "default"):
+        path = picture_file(folder, name)
+        if path:
+            return f"/server-picture/{path.name}?v={int(path.stat().st_mtime)}"
+    return None
+
+
+def control_card(state, pictures=None):
     """One server's card on the home page."""
     q = state.query if (state.query or {}).get("ok") else {}
     view = server_view(state)
-    return {**view, "count": len(state.players) if state.online else 0, "slots": q.get("slots"),
+    return {**view, "image": server_image(pictures, state.config.id) if pictures else None,
+            "count": len(state.players) if state.online else 0, "slots": q.get("slots"),
             "map": q.get("map"), "ping": q.get("ms"), "unreachable": state.unreachable >= UNREACHABLE_AFTER}
 
 
@@ -1495,6 +1518,86 @@ def attention(request, states):
     out.sort(key=lambda x: x[0] != "bad")
     return out
 
+
+
+async def pictures_page(request):
+    require(request, "users")
+    folder = request.app[PICTURES]
+    rows = [{"id": "default", "name": "Every server (used when a server has no picture of its own)",
+             "image": server_image(folder, "default") if picture_file(folder, "default") else None}]
+    rows += [{"id": st.config.id, "name": st.config.name,
+              "image": server_image(folder, st.config.id) if picture_file(folder, st.config.id) else None}
+             for st in request.app[MANAGER].states.values()]
+    return render(request, "pictures.html", rows=rows, limit=PICTURE_LIMIT // (1024 * 1024))
+
+
+def picture_target(request):
+    target = request.match_info["id"]
+    if target != "default" and target not in request.app[MANAGER].states:
+        raise web.HTTPNotFound(text="No such server.")
+    return target
+
+
+async def upload_picture(request):
+    require(request, "users")
+    target = picture_target(request)
+    folder = request.app[PICTURES]
+    folder.mkdir(parents=True, exist_ok=True)
+    reader = await request.multipart()
+    part = await reader.next()
+    while part is not None and part.name != "picture":
+        part = await reader.next()
+    if part is None or not part.filename:
+        flash(request, "Choose a picture to upload.", "error")
+        raise web.HTTPFound("/settings/pictures")
+    temp = folder / f".{secrets.token_hex(8)}.upload"
+    size = 0
+    try:
+        with open(temp, "wb") as out:
+            while chunk := await part.read_chunk(1 << 16):
+                size += len(chunk)
+                if size > PICTURE_LIMIT:
+                    raise UploadError(f"That picture is over {PICTURE_LIMIT // (1024 * 1024)} MB.")
+                out.write(chunk)
+        with open(temp, "rb") as fh:
+            head = fh.read(12)
+        ext = next((e for e, magic in PICTURE_TYPES.items() if head.startswith(magic)), None)
+        if ext == "webp" and head[8:12] != b"WEBP":
+            ext = None
+        if not ext:
+            raise UploadError("That isn't a JPG, PNG or WebP picture.")
+        old = picture_file(folder, target)
+        if old:
+            old.unlink()
+        temp.replace(folder / f"{target}.{ext}")
+    except UploadError as exc:
+        flash(request, str(exc), "error")
+        raise web.HTTPFound("/settings/pictures")
+    finally:
+        temp.unlink(missing_ok=True)
+    audit(request, "card picture", None if target == "default" else target, detail=f"{size // 1024} KB")
+    flash(request, "Picture saved. It shows on the card straight away.")
+    raise web.HTTPFound("/settings/pictures")
+
+
+async def remove_picture(request):
+    require(request, "users")
+    target = picture_target(request)
+    old = picture_file(request.app[PICTURES], target)
+    if old:
+        old.unlink()
+        audit(request, "removed card picture", None if target == "default" else target)
+    flash(request, "Picture removed.")
+    raise web.HTTPFound("/settings/pictures")
+
+
+async def picture_serve(request):
+    name = request.match_info["name"]
+    stem, _, ext = name.rpartition(".")
+    path = picture_file(request.app[PICTURES], stem) if ext in PICTURE_TYPES else None
+    if not path or path.name != name:
+        raise web.HTTPNotFound()
+    return web.FileResponse(path, headers={"Cache-Control": "private, max-age=604800"})
 
 async def control_redirect(request):
     raise web.HTTPFound("/")
@@ -1920,6 +2023,7 @@ async def data_page(request):
 
 
 NETCHECK = web.AppKey("netcheck", dict)
+PICTURES = web.AppKey("pictures", Path)
 
 
 def box_problems(box, servers):
@@ -2500,6 +2604,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[FLASH] = {}
     app[STATS] = OybStats(config.oyb_data)
     app[NETCHECK] = {}
+    app[PICTURES] = Path(config.database).resolve().parent / "server-pictures"
     app[BM] = BanSync(app[DB], config.battlemetrics_token, config.battlemetrics_ban_list) \
         if config.battlemetrics_token else None
     app[AMP] = Amp(**config.amp) if config.amp else None
@@ -2581,6 +2686,10 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/bot/restart", restart_bot)
     app.router.add_get("/data", data_page)
     app.router.add_get("/settings", settings_page)
+    app.router.add_get("/settings/pictures", pictures_page)
+    app.router.add_post("/settings/pictures/{id}/picture/upload", upload_picture)
+    app.router.add_post("/settings/pictures/{id}/remove", remove_picture)
+    app.router.add_get("/server-picture/{name}", picture_serve)
     app.router.add_get("/control", control_redirect)
     app.router.add_post("/server/{id}/power/{action}", control_power)
     app.router.add_get("/server/{id}/kills.json", control_kills)

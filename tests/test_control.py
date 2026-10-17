@@ -96,3 +96,64 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         reply = await self.client.post("/server/one/power/stop", data={"csrf": token}, allow_redirects=False)
         self.assertEqual(reply.status, 403)
         self.assertEqual(amp.power.await_count, 1)
+
+
+class PictureTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        import tempfile
+        from pathlib import Path
+        from panel.web import PICTURES
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.db = PanelDB(":memory:")
+        self.db.add_user("boss", auth.hash_password("boss-password"), "owner")
+        self.db.add_user("mod", auth.hash_password("mod-password"), "mod")
+        config = PanelConfig(database=":memory:", cookie_secure=False, servers=[ServerConfig("one", "Everon Tactical")])
+        app = create_app(config, self.db, ServerManager(config, self.db), start_manager=False)
+        app[PICTURES] = self.folder = Path(self.tmp.name) / "server-pictures"
+        self.client = TestClient(TestServer(app))
+        await self.client.start_server()
+        self.addAsyncCleanup(self.client.close)
+
+    async def login(self, who):
+        await self.client.post("/login", data={"username": who, "password": f"{who}-password"})
+        page = await (await self.client.get("/")).text()
+        return re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+
+    async def upload(self, token, target, data, name="pic.png"):
+        import aiohttp
+        form = aiohttp.FormData()
+        form.add_field("picture", data, filename=name, content_type="application/octet-stream")
+        return await self.client.post(f"/settings/pictures/{target}/picture/upload?csrf={token}", data=form,
+                                      allow_redirects=False)
+
+    async def test_senior_admins_set_a_picture_that_shows_on_the_card(self):
+        token = await self.login("boss")
+        self.assertIn("No picture", await (await self.client.get("/settings/pictures")).text())
+        png = b"\x89PNG\r\n\x1a\n" + b"\0" * 100
+        self.assertEqual((await self.upload(token, "one", png)).headers["Location"], "/settings/pictures")
+        self.assertTrue((self.folder / "one.png").is_file())
+        home = await (await self.client.get("/")).text()
+        address = re.search(r'src="(/server-picture/one\.png\?v=\d+)"', home).group(1)
+        self.assertEqual(await (await self.client.get(address)).read(), png)
+        jpg = b"\xff\xd8\xff\xe0" + b"\0" * 50
+        await self.upload(token, "one", jpg, "new.jpg")
+        self.assertFalse((self.folder / "one.png").exists())
+        self.assertTrue((self.folder / "one.jpg").is_file())
+        await self.upload(token, "one", b"<script>alert(1)</script>", "evil.png")
+        self.assertTrue((self.folder / "one.jpg").is_file())
+        self.assertEqual([p.name for p in self.folder.iterdir()], ["one.jpg"])
+        await self.upload(token, "default", png)
+        self.assertTrue((self.folder / "default.png").is_file())
+        await self.client.post("/settings/pictures/one/remove", data={"csrf": token})
+        self.assertFalse((self.folder / "one.jpg").exists())
+        self.assertIn('src="/server-picture/default.png', await (await self.client.get("/")).text())
+        self.assertEqual((await self.upload(token, "nope", png)).status, 404)
+        self.assertEqual((await self.client.get("/server-picture/../panel.sqlite3")).status, 404)
+
+    async def test_others_cant(self):
+        token = await self.login("mod")
+        self.assertEqual((await self.client.get("/settings/pictures")).status, 403)
+        reply = await self.upload(token, "one", b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(reply.status, 403)
+        self.assertFalse(self.folder.exists())
