@@ -322,13 +322,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--oyb-orange); out
 .ServerEntryStatus::before { content: "\25CF"; margin-right: 6px; font-size: .9em; }
 .ServerEntryStatus .mat-icon { display: none; }
 .ServerEntryMetric {
-  background-color: rgba(14, 17, 20, .7) !important;
-  border: 1px solid rgba(255, 255, 255, .06);
-  border-radius: 8px;
+  background-color: transparent !important;
+  border: none;
+  box-shadow: none !important;
 }
-.ServerEntryActions { gap: 6px; padding: 0 10px 10px; }
+.ServerEntryMetric .mat-icon { color: #c9ced4 !important; }
+.ServerEntryMetric h3 { font-size: .8em; text-transform: uppercase; letter-spacing: .04em; }
+.ServerEntryMetric h4 { font-size: 1.05em; font-weight: 600; }
+.ServerEntryActions { display: flex !important; gap: 6px; padding: 0 12px 12px; width: 100%; box-sizing: border-box; }
 .ServerEntryActions .iconButton {
-  min-width: 42px;
+  flex: 1 1 0;
+  min-width: 36px;
   height: 38px;
   border-radius: 8px !important;
   border: 1px solid #30373f;
@@ -342,3 +346,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--oyb-orange); out
 #statusActions h2, .metricsHeader h2 { font-weight: 600; }
 #AMP_Core_ServerStatus button { min-width: 110px; height: 40px; border-radius: 8px; }
 #AMP_Core_ServerStatus .bgRed { background-color: var(--oyb-red); border-color: var(--oyb-red); }
+
+/* Card heading like the mock-up: status pill top-left, then the name */
+.ServerEntryTop {
+  display: flex !important;
+  flex-direction: column;
+  align-items: flex-start !important;
+  gap: 6px;
+}
+.ServerEntryTop .grow { display: none; }
+.ServerEntryTop .ServerEntryStatus { order: -1; padding: 3px 10px; font-size: .72em; }
+.ServerEntryHeader h5 { color: #9aa1a9 !important; font-size: .82em; }
+.ServerEntryInfo h2, .ServerEntryInfo h3 { font-size: 1.05em; font-weight: 600; color: #d7dbe0; }
+.ServerEntryInfo p, .ServerEntryInfo span:not(.mat-icon) { color: #9aa1a9; }
+#topSearchBox { min-width: 340px; }
