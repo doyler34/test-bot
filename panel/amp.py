@@ -154,8 +154,13 @@ class Amp:
             return saved
 
     async def restart(self, inst):
+        await self.power(inst, "restart")
+
+    async def power(self, inst, action):
+        """Start, stop or restart the game server in one instance."""
+        endpoint = {"start": "Core/Start", "stop": "Core/Stop", "restart": "Core/Restart"}[action]
         async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
             base, session = await self._instance(http, inst)
-            result = await self._call(http, base, session, "Core/Restart")
+            result = await self._call(http, base, session, endpoint)
         if isinstance(result, dict) and result.get("Status") is False:
-            raise AmpError(f"AMP didn't restart it: {result.get('Reason') or 'no reason given'}")
+            raise AmpError(f"AMP didn't {action} it: {result.get('Reason') or 'no reason given'}")

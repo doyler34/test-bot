@@ -138,7 +138,8 @@ def render(request, template, **context):
         flashes=request.app[FLASH].pop(user["id"], []) if user and not template.startswith("_") else [],
     )
     html = request.app[JINJA].get_template(template).render(**context)
-    return web.Response(text=html, content_type="text/html")
+    headers = {"Content-Security-Policy": context["csp"]} if context.get("csp") else None
+    return web.Response(text=html, content_type="text/html", headers=headers)
 
 
 def flash(request, message, kind="ok"):
@@ -1417,6 +1418,125 @@ async def restart_through_amp(request):
     raise web.HTTPFound("/game-admins")
 
 
+
+CONTROL_SECONDS = 3600
+CONTROL_ACTIONS = {"start": "Starting", "restart": "Restarting", "stop": "Stopping"}
+
+
+def control_card(state):
+    q = state.query or {}
+    return {"id": state.config.id, "name": state.config.name, "online": state.online,
+            "players": len(state.players) if state.online else 0,
+            "slots": q.get("slots") if q.get("ok") else None,
+            "map": q.get("map") if q.get("ok") else None,
+            "ping": q.get("ms") if q.get("ok") else None}
+
+
+async def control_page(request):
+    """The server dashboard: every server at a glance with its power buttons,
+    then one server in detail - its numbers, a map of recent kills, who's on
+    and the last hour as charts."""
+    manager, db = request.app[MANAGER], request.app[DB]
+    states = list(manager.states.values())
+    if not states:
+        return render(request, "control.html", cards=[], chosen=None)
+    chosen = manager.states.get(request.query.get("server", "")) or states[0]
+    until = now()
+    since = until - CONTROL_SECONDS
+    rows = [dict(r) for r in db.server_samples(chosen.config.id, since)]
+    for r in rows:
+        r["rss_gb"] = r["rss"] / GB if r.get("rss") else None
+    box_rows = [dict(r) for r in db.box_samples(since)]
+    srv = monitor.downsample(rows, since, until, ("players", "proc_cpu", "rss_gb"))
+    box = monitor.downsample(box_rows, since, until, ("rx_mbps", "tx_mbps"))
+    chart = lambda data, series, floor=None: monitor.chart(data, since, until, series, floor=floor, height=90)
+    charts = [
+        ("CPU usage", "cpu", chart(srv, [("proc_cpu", "Game", "a")], floor=100), "%"),
+        ("Memory usage", "mem", chart(srv, [("rss_gb", "In use", "c")]), " GB"),
+        ("Players", "players", chart(srv, [("players", "Players", "ok")]), ""),
+        ("Network", "net", chart(box, [("rx_mbps", "In", "c"), ("tx_mbps", "Out", "b")]), " Mb/s"),
+    ]
+    latest = rows[-1] if rows else {}
+    box_latest = box_rows[-1] if box_rows else {}
+    view = server_view(chosen)
+    q = chosen.query or {}
+    players = sorted(({"name": p["name"], "identity": p["identity"],
+                       "played": now() - chosen.joined.get(p["identity"] or p["name"], now())}
+                      for p in chosen.players), key=lambda p: -p["played"]) if chosen.online else []
+    info = {"online": chosen.online, "up_for": view["up_for"], "map": q.get("map") if q.get("ok") else None,
+            "players": len(players), "slots": q.get("slots") if q.get("ok") else None, "fps": view["fps"],
+            "cpu": latest.get("proc_cpu"), "memory": chosen.memory or latest.get("rss"),
+            "disk": box_latest.get("disk_pct"), "ping": q.get("ms") if q.get("ok") else None}
+    return render(request, "control.html", cards=[control_card(s) for s in states], chosen=chosen.config,
+                  info=info, players=players, charts=charts, amp=bool(request.app[AMP]), gb=GB,
+                  has_map=mortar_map() is not None, csp=MAP_CSP)
+
+
+async def control_power(request):
+    require(request, "power")
+    action = request.match_info["action"]
+    back = f"/control?server={request.match_info['id']}"
+    if action not in CONTROL_ACTIONS:
+        raise web.HTTPNotFound()
+    if not request.app[AMP]:
+        flash(request, "The panel isn't connected to AMP, so it can't start or stop servers.", "error")
+        raise web.HTTPFound(back)
+    try:
+        state, instance = await amp_instance_for(request, request.match_info["id"])
+        await request.app[AMP].power(instance, action)
+    except AmpError as exc:
+        audit(request, f"{action} through AMP", request.match_info["id"], detail=str(exc), ok=False)
+        flash(request, f"That didn't work: {exc}", "error")
+        raise web.HTTPFound(back)
+    audit(request, f"{action} through AMP", state.config.id)
+    alert(request, f"{CONTROL_ACTIONS[action]} {state.config.name}", "From the Control page.",
+          colour=RED if action == "stop" else GOLD)
+    flash(request, f"{CONTROL_ACTIONS[action]} {state.config.name}. AMP takes a minute or two.")
+    raise web.HTTPFound(back)
+
+
+async def control_kills(request):
+    state = server_or_404(request, request.match_info["id"])
+    since = now() - 1800
+    spots = [k for k in state.kill_spots if k["at"] >= since]
+    return web.json_response({"kills": [{
+        "at": k["at"], "teamkill": k["kind"] == "teamkill", "ai": bool(k.get("by_ai")),
+        "killer": k.get("killer_name") or ("AI" if k.get("by_ai") else ""), "victim": k.get("victim_name") or "",
+        "how": DAMAGE.get(k.get("damage"), (k.get("damage") or "").lower()),
+        "distance": round(k["distance"]) if k.get("distance") else None,
+        "from": list(k["killer_at"]) if k.get("killer_at") else None, "to": list(k["victim_at"])} for k in spots]})
+
+
+async def control_map(request):
+    mapped = mortar_map()
+    if mapped is None:
+        raise web.HTTPNotFound()
+    return web.json_response({"map": mapped.describe()})
+
+
+async def control_tile(request):
+    mapped = mortar_map()
+    path = mapped and tile_path(mapped, request.match_info["z"], request.match_info["x"], request.match_info["y"])
+    if not path:
+        raise web.HTTPNotFound()
+    return web.FileResponse(path, headers={"Cache-Control": "private, max-age=604800"})
+
+
+async def control_picture(request):
+    mapped = mortar_map()
+    path = mapped and image_path(mapped)
+    if not path:
+        raise web.HTTPNotFound()
+    return web.FileResponse(path, headers={"Cache-Control": "private, max-age=86400"})
+
+
+async def control_leaflet(request):
+    name = request.match_info["name"]
+    if name not in ("leaflet.css", "leaflet.js"):
+        raise web.HTTPNotFound()
+    return web.FileResponse(MORTAR_STATIC / name, headers={"Content-Type": MORTAR_FILES[name],
+                                                            "Cache-Control": "private, max-age=86400"})
+
 def mortar_number(text, name, low=None, high=None):
     raw = (text or "").strip().replace(",", ".")
     if not raw:
@@ -2423,6 +2543,13 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/bot/restart", restart_bot)
     app.router.add_get("/data", data_page)
+    app.router.add_get("/control", control_page)
+    app.router.add_post("/control/{id}/{action}", control_power)
+    app.router.add_get("/control/{id}/kills.json", control_kills)
+    app.router.add_get("/control-map/map.json", control_map)
+    app.router.add_get("/control-map/tiles/{z}/{x}/{y}", control_tile)
+    app.router.add_get("/control-map/picture", control_picture)
+    app.router.add_get("/control-map/{name}", control_leaflet)
     app.router.add_get("/attacks", attacks_page)
     app.router.add_post("/attacks/trust", trust_ip)
     app.router.add_post("/attacks/untrust", untrust_ip)
