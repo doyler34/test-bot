@@ -1,10 +1,10 @@
 @import url("https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap");
 
 :root {
-  --oyb-bg: #0d0f0e;
-  --oyb-panel: #151917;
-  --oyb-panel-2: #1d221f;
-  --oyb-line: #2a312c;
+  --oyb-bg: #111418;
+  --oyb-panel: #181c21;
+  --oyb-panel-2: #1f242a;
+  --oyb-line: #2a3037;
   --oyb-ink: #e8e6e1;
   --oyb-muted: #8f958f;
   --oyb-orange: #f47b20;
@@ -23,9 +23,10 @@ body,
   font-family: "Inter", system-ui, sans-serif;
 }
 
-h1, h2, h3, #tabInfo h2, .menuTitle, .ServerEntryHeader h3, .ServerGroupHeader {
-  font-family: "Oswald", "Inter", sans-serif;
-  letter-spacing: .02em;
+h1, h2, h3, #tabInfo h2, .ServerEntryHeader h3, .ServerGroupHeader {
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 a { color: var(--oyb-orange); }
@@ -58,7 +59,7 @@ input.searchBox { background-color: transparent; }
 
 /* Side menu */
 #loginContainer, #sideMenuContainer, .sideItemList, .subMenuWell {
-  background-color: #101311;
+  background-color: #0e1114;
 }
 #sideMenuContainer { border-right: 1px solid var(--oyb-line); }
 .sideItemList { border-left: 1px solid var(--oyb-line); }
@@ -92,7 +93,7 @@ input.searchBox { background-color: transparent; }
 
 #sideMenu a { font-size: 100%; box-sizing: border-box; border-left: 3px solid transparent; }
 #sideMenu a:hover { background-color: var(--oyb-panel-2); }
-#sideMenu a:active { background-color: #090b0a; }
+#sideMenu a:active { background-color: #0b0d10; }
 #sideMenu a.selected {
   color: #fff;
   border-left-color: var(--oyb-orange);
@@ -115,8 +116,8 @@ input.searchBox { background-color: transparent; }
 .ServerGroupContainer .ServerGroup,
 .ServerGroupContainer .ServerGroup.Platform-1,
 .ServerGroupContainer .ServerGroup.Platform-2 { background-image: none !important; }
-.ServerGroupHeader .ServerGroupName > span { font-family: "Oswald", sans-serif; font-size: 1.15em; text-transform: uppercase; letter-spacing: .06em; }
-.ServerGroupActions .slimButton { background-color: #2a302c; border-color: #353c37; color: var(--oyb-ink); }
+.ServerGroupHeader .ServerGroupName > span { font-size: 1.05em; font-weight: 600; }
+.ServerGroupActions .slimButton { background-color: #232930; border-color: #30373f; color: var(--oyb-ink); }
 .ServerGroupActions .slimButton.bgGreen { background-color: var(--oyb-green); border-color: var(--oyb-green); color: #fff; }
 .ServerGroupActions .slimButton.bgRed { background-color: var(--oyb-red); border-color: var(--oyb-red); color: #fff; }
 .ServerGroupActions .slimButton:last-child { background-color: var(--oyb-orange); border-color: var(--oyb-orange); color: #fff; }
@@ -142,14 +143,14 @@ input.searchBox { background-color: transparent; }
   letter-spacing: .05em;
   border-radius: 6px;
 }
-.ServerEntryStatus.bgGray { background-color: rgba(20, 24, 22, .85); border: 1px solid #3a403c; color: #c9ccc8; }
+.ServerEntryStatus.bgGray { background-color: rgba(20, 24, 22, .85); border: 1px solid #353c44; color: #c9ccc8; }
 .ServerEntryStatus.bgGreen { background-color: rgba(18, 40, 24, .9); border: 1px solid var(--oyb-green); color: #6fe08a; }
 .ServerEntryStatus.bgRed { background-color: rgba(48, 16, 14, .9); border: 1px solid var(--oyb-red); color: #ff8a80; }
 #bgtext, #versionHeadline { color: #4c534e; }
 .ServerGroupContainer .ServerGroup.Online .InstanceList .ServerEntry.NewServerEntry,
 .ServerEntry.NewServerEntry {
   background: var(--oyb-panel-2);
-  border: 2px dashed #3a423c;
+  border: 2px dashed #353c44;
   box-shadow: none;
 }
 .ServerEntry.NewServerEntry:hover { border-color: var(--oyb-orange); }
@@ -162,10 +163,10 @@ input.searchBox { background-color: transparent; }
 .bgRed { background-color: var(--oyb-red); border-color: var(--oyb-red); }
 .bgAmber { background-color: var(--oyb-amber); border-color: var(--oyb-amber); }
 .bgBlue { background-color: var(--oyb-blue); border-color: var(--oyb-blue); }
-.bgGray { background-color: #3a403c; border-color: #3a403c; }
+.bgGray { background-color: #353c44; border-color: #353c44; }
 .bgInfo, .bgPink, .bgPurple {
-  background-color: #2a302c;
-  border: 1px solid #353c37;
+  background-color: #232930;
+  border: 1px solid #30373f;
 }
 .bgInfo:hover, .bgPink:hover, .bgPurple:hover,
 .ServerGroupContainer .ServerGroup.Online .InstanceList .ServerEntry .ServerEntryInfo .bgInfo:hover {
@@ -184,8 +185,8 @@ input.searchBox { background-color: transparent; }
 .iconButton.toggled { background-color: #3b3b3b; }
 .ServerEntryActions .iconButton,
 #AMP_Core_ConsoleButtons .iconButton:not(.bgGreen):not(.bgRed):not(.bgAmber) {
-  background-color: #2a302c;
-  border-color: #353c37;
+  background-color: #232930;
+  border-color: #30373f;
 }
 .ServerEntryActions .iconButton.bgRed, #AMP_Core_ConsoleButtons .bgRed { background-color: var(--oyb-red); border-color: var(--oyb-red); }
 .ServerEntryActions .iconButton.bgGreen, #AMP_Core_ConsoleButtons .bgGreen { background-color: var(--oyb-green); border-color: var(--oyb-green); }
@@ -195,7 +196,7 @@ input.searchBox { background-color: transparent; }
 /* Forms */
 input[type=text], input[type=password], input[type=url], input[type=number],
 input[type=email], input[type=search], select, textarea, .popupTrigger {
-  background-color: #0f1211;
+  background-color: #0f1216;
   color: var(--oyb-ink);
   border: 1px solid var(--oyb-line);
   border-radius: 6px;
@@ -237,8 +238,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--oyb-orange); out
   padding: 14px 16px 6px !important;
   background-color: transparent !important;
   color: #fff !important;
-  font-family: "Oswald", sans-serif;
-  font-size: 1.1em;
+  font-size: 1.05em;
+  font-weight: 600;
 }
 .DisplayMetricHeader > div:nth-child(2) { font-weight: 600; color: var(--oyb-orange); }
 .DisplayMetricHeader .circleChart { display: none !important; }
@@ -260,7 +261,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--oyb-orange); out
 .AppStatus.bgAmber { background-color: rgba(50, 36, 10, .9); border: 1px solid var(--oyb-amber); color: #ffd27a; }
 
 /* Console */
-#consoleArea { background-color: #090b0a; border: 1px solid var(--oyb-line); border-radius: 10px; }
+#consoleArea { background-color: #0b0d10; border: 1px solid var(--oyb-line); border-radius: 10px; }
 .consoleTimestamp { color: var(--oyb-orange); }
 
 /* File manager */
@@ -293,3 +294,53 @@ input:focus, select:focus, textarea:focus { border-color: var(--oyb-orange); out
   #mainBody { background-color: var(--oyb-bg); }
   #sideMenuContainer { background-image: linear-gradient(180deg, var(--oyb-bg), transparent 10%); }
 }
+
+/* Closer to the OYB dashboard mock-up */
+#sideMenuContainer {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 262' preserveAspectRatio='xMidYMax slice'%3E%3Cpath fill='%230c0f12' d='M-10 262h4v-27h-4zM-28.4 246L-8.0 202L12.4 246ZM-24.3 222L-8.0 179L8.3 222ZM-20.2 199L-8.0 155L4.2 199ZM-16.1 176L-8.0 125L0.1 176ZM17 262h4v-28h-4zM-0.8 245L19.2 201L39.3 245ZM3.2 222L19.2 178L35.3 222ZM7.2 199L19.2 155L31.3 199ZM11.2 175L19.2 124L27.3 175ZM41 262h4v-24h-4zM23.0 247L43.1 209L63.2 247ZM27.1 227L43.1 188L59.2 227ZM31.1 206L43.1 168L55.2 206ZM35.1 186L43.1 141L51.1 186ZM65 262h4v-32h-4zM49.9 243L67.4 193L85.0 243ZM53.4 216L67.4 166L81.5 216ZM56.9 190L67.4 139L78.0 190ZM60.4 163L67.4 104L74.4 163ZM86 262h4v-23h-4zM66.6 248L88.4 211L110.3 248ZM71.0 229L88.4 192L105.9 229ZM75.3 209L88.4 172L101.6 209ZM79.7 189L88.4 147L97.2 189ZM111 262h4v-23h-4zM90.5 248L113.4 213L136.3 248ZM95.1 229L113.4 194L131.7 229ZM99.6 210L113.4 174L127.1 210ZM104.2 191L113.4 149L122.5 191ZM139 262h4v-30h-4zM120.3 244L141.0 197L161.7 244ZM124.5 219L141.0 171L157.6 219ZM128.6 193L141.0 146L153.4 193ZM132.8 168L141.0 113L149.3 168ZM159 262h4v-22h-4zM140.4 249L160.6 213L180.8 249ZM144.5 230L160.6 194L176.7 230ZM148.5 211L160.6 176L172.7 211ZM152.5 192L160.6 151L168.7 192ZM177 262h4v-24h-4zM160.7 247L179.2 209L197.7 247ZM164.4 227L179.2 188L194.0 227ZM168.1 206L179.2 167L190.3 206ZM171.8 186L179.2 141L186.6 186ZM196 262h4v-28h-4zM177.9 245L197.5 202L217.1 245ZM181.8 222L197.5 178L213.2 222ZM185.7 199L197.5 155L209.3 199ZM189.6 175L197.5 124L205.4 175ZM222 262h4v-28h-4zM203.1 245L223.9 200L244.8 245ZM207.3 221L223.9 176L240.6 221ZM211.4 197L223.9 152L236.4 197ZM215.6 173L223.9 121L232.3 173ZM245 262h4v-30h-4zM227.2 244L246.9 196L266.7 244ZM231.1 219L246.9 171L262.7 219ZM235.1 193L246.9 145L258.8 193ZM239.0 168L246.9 112L254.8 168Z'/%3E%3Cpath fill='%23050709' d='M2 262h4v-21h-4zM-17.0 249L4.0 216L25.0 249ZM-12.8 232L4.0 198L20.8 232ZM-8.6 214L4.0 180L16.6 214ZM-4.4 196L4.0 157L12.4 196ZM45 262h4v-18h-4zM29.9 251L47.4 222L65.0 251ZM33.4 235L47.4 206L61.5 235ZM36.9 220L47.4 190L58.0 220ZM40.4 204L47.4 170L54.5 204ZM79 262h4v-15h-4zM64.8 253L81.1 230L97.5 253ZM68.0 241L81.1 218L94.2 241ZM71.3 228L81.1 205L90.9 228ZM74.6 216L81.1 189L87.7 216ZM121 262h4v-16h-4zM103.1 253L123.4 228L143.6 253ZM107.2 239L123.4 215L139.6 239ZM111.2 226L123.4 201L135.5 226ZM115.3 213L123.4 184L131.5 213ZM158 262h4v-21h-4zM139.3 250L159.6 217L179.8 250ZM143.4 232L159.6 199L175.8 232ZM147.4 215L159.6 182L171.7 215ZM151.5 197L159.6 159L167.7 197ZM188 262h4v-14h-4zM169.0 254L189.6 232L210.1 254ZM173.1 242L189.6 220L206.0 242ZM177.2 230L189.6 208L201.9 230ZM181.4 218L189.6 193L197.8 218ZM225 262h4v-21h-4zM209.1 250L227.1 216L245.1 250ZM212.7 232L227.1 199L241.5 232ZM216.3 214L227.1 181L237.9 214ZM219.9 196L227.1 158L234.3 196Z'/%3E%3Crect y='252' width='240' height='10' fill='%23050709'/%3E%3C/svg%3E") bottom / 100% auto no-repeat,
+    linear-gradient(180deg, #13171b 0%, #121619 55%, #1c2227 100%) !important;
+}
+#sideMenu a {
+  padding-top: 11px;
+  padding-bottom: 11px;
+  border-radius: 0 8px 8px 0;
+  margin-right: 10px;
+}
+#sideMenu a .mat-icon { color: #9aa1a9; }
+#sideMenu a.selected {
+  background: linear-gradient(90deg, rgba(244, 123, 32, .22), rgba(244, 123, 32, .04));
+  box-shadow: inset 3px 0 0 var(--oyb-orange);
+}
+
+#barTop { background-color: var(--oyb-bg); }
+#topSearchBox { background-color: var(--oyb-panel); }
+
+.ServerEntry { border-radius: 12px; }
+.ServerEntry .ServerEntryImage.Main { filter: brightness(.75) saturate(.9); }
+.ServerEntryTop { background: linear-gradient(180deg, rgba(10, 12, 15, .55), rgba(10, 12, 15, 0)); }
+.ServerEntryInfo, .ServerEntryActions { background: linear-gradient(0deg, rgba(10, 12, 15, .85), rgba(10, 12, 15, 0)); }
+.ServerEntryHeader h3 { font-size: 1.3em; font-weight: 700; text-shadow: 0 2px 6px rgba(0, 0, 0, .6); }
+.ServerEntryStatus::before { content: "\25CF"; margin-right: 6px; font-size: .9em; }
+.ServerEntryStatus .mat-icon { display: none; }
+.ServerEntryMetric {
+  background-color: rgba(14, 17, 20, .7) !important;
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 8px;
+}
+.ServerEntryActions { gap: 6px; padding: 0 10px 10px; }
+.ServerEntryActions .iconButton {
+  min-width: 42px;
+  height: 38px;
+  border-radius: 8px !important;
+  border: 1px solid #30373f;
+}
+.ServerEntryActions .iconButton.bgGreen, .ServerEntryActions .iconButton.bgRed { border: none; }
+
+.settingsGroup, #statusActions > div, .DisplayMetric, .scheduleTriggerInfo, .datastoreItem {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .25);
+}
+#statusActions > div, .DisplayMetric { border-radius: 12px; }
+#statusActions h2, .metricsHeader h2 { font-weight: 600; }
+#AMP_Core_ServerStatus button { min-width: 110px; height: 40px; border-radius: 8px; }
+#AMP_Core_ServerStatus .bgRed { background-color: var(--oyb-red); border-color: var(--oyb-red); }
