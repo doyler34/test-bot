@@ -183,7 +183,11 @@ def parse_info(data):
     _, at = _string(data, at)
     _, at = _string(data, at)
     players, slots = data[at + 2], data[at + 3]
-    return {"name": name, "map": game_map, "players": players, "slots": slots}
+    try:
+        version = _string(data, at + 9)[0]
+    except (IndexError, ValueError):
+        version = ""
+    return {"name": name, "map": game_map, "players": players, "slots": slots, "version": version}
 
 
 class _Query(asyncio.DatagramProtocol):
@@ -282,7 +286,10 @@ def chart(rows, since, until, series, width=600, height=110, floor=None):
         if run:
             runs.append(run)
         latest = next((r[key] for r in reversed(rows) if r.get(key) is not None), None)
-        lines.append({"label": label, "kind": kind, "runs": [" ".join(r) for r in runs if len(r) > 1],
+        kept = [r for r in runs if len(r) > 1]
+        lines.append({"label": label, "kind": kind, "runs": [" ".join(r) for r in kept],
+                      # the same runs closed down to the baseline, for a shaded area under the line
+                      "areas": [f"{r[0].split(',')[0]},{height} {' '.join(r)} {r[-1].split(',')[0]},{height}" for r in kept],
                       "now": latest, "peak": max((r[key] for r in rows if r.get(key) is not None), default=None)})
     return {"lines": lines, "top": top, "width": width, "height": height}
 

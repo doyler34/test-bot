@@ -100,6 +100,17 @@ def _span(seconds):
     return f"{seconds // 60}m"
 
 
+def _axis(value, kind):
+    """A chart's axis label in that chart's unit."""
+    if kind == "cpu":
+        return f"{value:.0f}%"
+    if kind == "mem":
+        return f"{value:.0f} GB"
+    if kind == "net":
+        return f"{value:.0f} MB/s" if value >= 10 or value == 0 else f"{value:.1f} MB/s"
+    return f"{value:.0f}"
+
+
 def _clock(value):
     if not value:
         return ""
@@ -140,6 +151,8 @@ def render(request, template, **context):
         path=request.path,
         flashes=request.app[FLASH].pop(user["id"], []) if user and not template.startswith("_") else [],
     )
+    if user and not template.startswith("_"):
+        context.setdefault("notices", attention(request, list(request.app[MANAGER].states.values())))
     html = request.app[JINJA].get_template(template).render(**context)
     headers = {"Content-Security-Policy": context["csp"]} if context.get("csp") else None
     return web.Response(text=html, content_type="text/html", headers=headers)
@@ -365,7 +378,10 @@ def server_view(state):
 
 async def dashboard(request):
     live = list(request.app[MANAGER].states.values())
-    states = [control_card(s, request.app[PICTURES]) for s in live]
+    details = card_details(request.app[DB])
+    states = [control_card(s, request.app[PICTURES], details) for s in live]
+    chosen = request.app[MANAGER].states.get(request.query.get("server", "")) \
+        or next((s for s in live if s.online), live[0] if live else None)
     db = request.app[DB]
     hour = time.localtime().tm_hour
     welcome = {
@@ -375,8 +391,11 @@ async def dashboard(request):
         "bans": len(db.bans()),
         "sus": db.one("SELECT COUNT(*) FROM feed WHERE kind = 'sus' AND at > ?", now() - 86400)[0],
     }
-    return render(request, "dashboard.html", cards=states, welcome=welcome, attention=attention(request, live),
-                  amp=bool(request.app[AMP]))
+    extra = {}
+    if chosen:
+        extra = {"chosen": next(c for c in states if c["id"] == chosen.config.id), **server_overview(request, chosen),
+                 "csp": MAP_CSP}
+    return render(request, "dashboard.html", cards=states, welcome=welcome, amp=bool(request.app[AMP]), gb=GB, **extra)
 
 
 GUIDE = [
@@ -420,15 +439,16 @@ async def guide_page(request):
 
 
 async def dashboard_part(request):
-    states = [control_card(s, request.app[PICTURES]) for s in request.app[MANAGER].states.values()]
-    return render(request, "_cards.html", cards=states, amp=bool(request.app[AMP]))
+    details = card_details(request.app[DB])
+    states = [control_card(s, request.app[PICTURES], details) for s in request.app[MANAGER].states.values()]
+    return render(request, "_cards.html", cards=states, amp=bool(request.app[AMP]), chosen_id=request.query.get("server", ""))
 
 
 async def server_page(request):
     state = server_or_404(request, request.match_info["id"])
     db = request.app[DB]
     recent = db.audit(server=state.config.id, limit=15)
-    return render(request, "server.html", s=server_view(state), card=control_card(state, request.app[PICTURES]), recent=recent,
+    return render(request, "server.html", s=server_view(state), card=control_card(state, request.app[PICTURES], card_details(db)), recent=recent,
                   health=health_data(db, state), alts=alt_flags(request, state),
                   played=played(request, [p["identity"] for p in state.players]), amp=bool(request.app[AMP]),
                   gb=GB, csp=MAP_CSP, feed=db.feed(state.config.id), **server_overview(request, state),
@@ -1106,6 +1126,11 @@ async def unusual_page(request):
 
 async def players_page(request):
     q = clean(request.query.get("q", ""), 64)
+    # The top bar's search also finds servers by name.
+    server = next((st for st in request.app[MANAGER].states.values()
+                   if q and q.lower() in (st.config.name.lower(), st.config.id.lower())), None)
+    if server:
+        raise web.HTTPFound(f"/?server={server.config.id}")
     rows = [dict(r) for r in request.app[DB].search_players(q, limit=50)]
     if q and re.fullmatch(r"[0-9a-fA-F.:]{3,}", q) and allowed(request, "ips"):
         seen = {r["identity"] for r in rows}
@@ -1444,19 +1469,33 @@ def picture_file(folder, name):
 
 
 def server_image(folder, server_id):
-    """The address of a server's card picture: its own, else the default, else none."""
+    """The address of a server's card picture: its own, else the uploaded default,
+    else the dark forest that ships with the panel."""
     for name in (server_id, "default"):
         path = picture_file(folder, name)
         if path:
             return f"/server-picture/{path.name}?v={int(path.stat().st_mtime)}"
-    return None
+    return "/static/card-default.jpg"
 
 
-def control_card(state, pictures=None):
+def card_details(db):
+    """What senior admins wrote for each server's card: a description and the join address."""
+    row = db.discord_doc("cards")
+    try:
+        saved = json.loads(row["published"]) if row and row["published"] else {}
+    except ValueError:
+        saved = {}
+    return saved if isinstance(saved, dict) else {}
+
+
+def control_card(state, pictures=None, details=None):
     """One server's card on the home page."""
     q = state.query if (state.query or {}).get("ok") else {}
     view = server_view(state)
+    mine = (details or {}).get(state.config.id) or {}
     return {**view, "image": server_image(pictures, state.config.id) if pictures else None,
+            "description": mine.get("description", ""), "address": mine.get("address", ""),
+            "version": q.get("version") or "",
             "count": len(state.players) if state.online else 0, "slots": q.get("slots"),
             "map": q.get("map"), "ping": q.get("ms"), "unreachable": state.unreachable >= UNREACHABLE_AFTER}
 
@@ -1472,13 +1511,17 @@ def server_overview(request, state):
         r["rss_gb"] = r["rss"] / GB if r.get("rss") else None
     box_rows = [dict(r) for r in db.box_samples(since)]
     srv = monitor.downsample(rows, since, until, ("players", "proc_cpu", "rss_gb"))
-    box = monitor.downsample(box_rows, since, until, ("rx_mbps", "tx_mbps"))
+    for r in box_rows:
+        r["net_mbs"] = ((r.get("rx_mbps") or 0) + (r.get("tx_mbps") or 0)) / 8 if r.get("rx_mbps") is not None else None
+    box = monitor.downsample(box_rows, since, until, ("net_mbs",))
     chart = lambda data, series, floor=None: monitor.chart(data, since, until, series, floor=floor, height=90)
+    slots = (state.query or {}).get("slots") if (state.query or {}).get("ok") else None
+    total_gb = box_rows[-1]["mem_total"] / GB if box_rows and box_rows[-1].get("mem_total") else None
     charts = [
         ("CPU usage", "cpu", chart(srv, [("proc_cpu", "Game", "a")], floor=100), "%"),
-        ("Memory usage", "mem", chart(srv, [("rss_gb", "In use", "c")]), " GB"),
-        ("Players", "players", chart(srv, [("players", "Players", "ok")]), ""),
-        ("Network", "net", chart(box, [("rx_mbps", "In", "c"), ("tx_mbps", "Out", "b")]), " Mb/s"),
+        ("Memory usage", "mem", chart(srv, [("rss_gb", "In use", "c")], floor=total_gb), " GB"),
+        ("Players", "players", chart(srv, [("players", "Players", "ok")], floor=slots), ""),
+        ("Network", "net", chart(box, [("net_mbs", "In and out", "c")]), " MB/s"),
     ]
     latest = rows[-1] if rows else {}
     box_latest = box_rows[-1] if box_rows else {}
@@ -1486,7 +1529,14 @@ def server_overview(request, state):
     players = sorted(({"name": p["name"], "identity": p["identity"],
                        "played": now() - state.joined.get(p["identity"] or p["name"], now())}
                       for p in state.players), key=lambda p: -p["played"]) if state.online else []
+    try:
+        disk = shutil.disk_usage(state.config.log_dir or "/")
+    except OSError:
+        disk = None
     info = {"online": state.online, "up_for": card["up_for"], "map": card["map"], "players": len(players),
+            "version": card["version"], "cores": os.cpu_count() or 1,
+            "admins": [a["name"] for a in state.admins] if state.online else [],
+            "disk_used": disk.used if disk else None, "disk_total": disk.total if disk else None,
             "slots": card["slots"], "fps": card["fps"], "cpu": latest.get("proc_cpu"),
             "memory": state.memory or latest.get("rss"), "mem_total": box_latest.get("mem_total"),
             "disk": box_latest.get("disk_pct"), "ping": card["ping"]}
@@ -1523,9 +1573,10 @@ def attention(request, states):
 async def pictures_page(request):
     require(request, "users")
     folder = request.app[PICTURES]
+    details = card_details(request.app[DB])
     rows = [{"id": "default", "name": "Every server (used when a server has no picture of its own)",
              "image": server_image(folder, "default") if picture_file(folder, "default") else None}]
-    rows += [{"id": st.config.id, "name": st.config.name,
+    rows += [{"id": st.config.id, "name": st.config.name, **(details.get(st.config.id) or {}),
               "image": server_image(folder, st.config.id) if picture_file(folder, st.config.id) else None}
              for st in request.app[MANAGER].states.values()]
     return render(request, "pictures.html", rows=rows, limit=PICTURE_LIMIT // (1024 * 1024))
@@ -1577,6 +1628,27 @@ async def upload_picture(request):
         temp.unlink(missing_ok=True)
     audit(request, "card picture", None if target == "default" else target, detail=f"{size // 1024} KB")
     flash(request, "Picture saved. It shows on the card straight away.")
+    raise web.HTTPFound("/settings/pictures")
+
+
+ADDRESS = re.compile(r"[A-Za-z0-9.\-]{1,253}:\d{2,5}")
+
+
+async def save_card_details(request):
+    require(request, "users")
+    target = picture_target(request)
+    if target == "default":
+        raise web.HTTPNotFound()
+    form = await request.post()
+    address = clean(form.get("address", ""), 270).replace(" ", "")
+    if address and not ADDRESS.fullmatch(address):
+        flash(request, "The join address has to look like 185.123.45.67:2001.", "error")
+        raise web.HTTPFound("/settings/pictures")
+    details = card_details(request.app[DB])
+    details[target] = {"description": clean(form.get("description", ""), 80), "address": address}
+    request.app[DB].publish_discord_doc("cards", json.dumps(details), request[USER]["username"])
+    audit(request, "card details", target, detail=f"{details[target]['description']} {address}".strip())
+    flash(request, "Saved. It shows on the card straight away.")
     raise web.HTTPFound("/settings/pictures")
 
 
@@ -2610,7 +2682,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[AMP] = Amp(**config.amp) if config.amp else None
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
-    env.filters.update(rolename=lambda role: auth.ROLE_NAMES.get(role, role), ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb,
+    env.filters.update(axis=_axis, rolename=lambda role: auth.ROLE_NAMES.get(role, role), ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb,
                        part=lambda zone: body_part(zone) if zone else "")
     env.globals.update(ban_reasons=reason_options(BAN_REASONS), kick_reasons=reason_options(KICK_REASONS))
     app[JINJA] = env
@@ -2689,6 +2761,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/settings/pictures", pictures_page)
     app.router.add_post("/settings/pictures/{id}/picture/upload", upload_picture)
     app.router.add_post("/settings/pictures/{id}/remove", remove_picture)
+    app.router.add_post("/settings/pictures/{id}/details", save_card_details)
     app.router.add_get("/server-picture/{name}", picture_serve)
     app.router.add_get("/control", control_redirect)
     app.router.add_post("/server/{id}/power/{action}", control_power)

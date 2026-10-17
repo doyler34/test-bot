@@ -1614,7 +1614,8 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
     async def test_welcome_and_guide(self):
         await self.login("mod", "mod-password")
         html = await (await self.client.get("/")).text()
-        self.assertIn(", mod · signed in as a <b>moderator</b>", html)
+        self.assertIn('<span class="name">mod</span>', html)
+        self.assertIn('<span class="role">moderator</span>', html)
         self.assertIn('href="/guide"', html)
         guide = await (await self.client.get("/guide")).text()
         self.assertIn("Welcome to OYB Control", guide)
@@ -1633,7 +1634,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_owner_guide_pages(self):
         await self.login("boss", "boss-password")
-        self.assertIn("signed in as a <b>senior admin</b>", await (await self.client.get("/")).text())
+        self.assertIn('<span class="role">senior admin</span>', await (await self.client.get("/")).text())
         for slug in ("console-audit", "discord-messages", "admins"):
             self.assertEqual((await self.client.get(f"/guide/{slug}")).status, 200)
         banning = await (await self.client.get("/guide/banning")).text()
@@ -2330,7 +2331,8 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.staff_ids(), {HAVOC})
         await self.manager.refresh_players(self.manager.state("server-1"))
         cards = await (await self.client.get("/cards.part")).text()
-        self.assertIn("Admin on: Sgt Havoc", cards)
+        self.assertNotIn("No admin on", cards)
+        self.assertIn('<b class="on names" title="Sgt Havoc">Sgt Havoc</b>', await (await self.client.get("/?server=server-1")).text())
         players = await (await self.client.get("/server/server-1/players.part")).text()
         self.assertIn('<span class="pill on">Admin</span>', players)
         await self.client.post(f"/player/{HAVOC}/staff", data={"csrf": token, "on": "0"})

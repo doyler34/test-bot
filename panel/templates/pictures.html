@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Server pictures · OYB Control{% endblock %}
+{% block title %}Server cards · OYB Control{% endblock %}
 {% block body %}
 <p class="kicker"><a href="/settings">← Settings</a></p>
 <header class="page-head">
   <div>
-    <h1>Server pictures</h1>
-    <p>The picture behind the top of each server's card on the dashboard. JPG, PNG or WebP, up to {{ limit }} MB; a wide one around 1280×720 works best.</p>
+    <h1>Server cards</h1>
+    <p>What each server's card on the dashboard shows: its picture (JPG, PNG or WebP, up to {{ limit }} MB, wide like 1280×720 works best), a short description and the address players join on.</p>
   </div>
 </header>
 <div class="pic-list">
@@ -18,6 +18,14 @@
         <input type="file" name="picture" accept="image/jpeg,image/png,image/webp" required>
         <button class="small">{{ "Change" if r.image else "Upload" }}</button>
       </form>
+      {% if r.id != "default" %}
+      <form method="post" action="/settings/pictures/{{ r.id }}/details" class="pic-details">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label>Description <input name="description" value="{{ r.description or '' }}" maxlength="80" placeholder="Milsim / Daily Ops"></label>
+        <label>Join address <input name="address" value="{{ r.address or '' }}" maxlength="270" placeholder="185.123.45.67:2001"></label>
+        <button class="small ghost">Save</button>
+      </form>
+      {% endif %}
       {% if r.image %}
       <form method="post" action="/settings/pictures/{{ r.id }}/remove" data-confirm="Remove this picture?">
         <input type="hidden" name="csrf" value="{{ csrf }}">

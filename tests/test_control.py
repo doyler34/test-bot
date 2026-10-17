@@ -45,13 +45,14 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
     async def test_home_has_a_card_per_server_and_each_opens_its_page(self):
         await self.login("boss")
         home = await (await self.client.get("/")).text()
-        for words in ("Everon Tactical", "Conflict Legacy", "1 / 128", "32 ms", "No admin on", 'href="/server/one"',
-                      'href="/server/two"'):
+        for words in ("Everon Tactical", "Conflict Legacy", "1 / 128", "32 ms", "No admin on", 'href="/?server=one"',
+                      'href="/?server=two"', "Server Information", "Player List (1)", 'href="/server/one"'):
             self.assertIn(words, home)
-        self.assertNotIn("/power/stop", home)      # no AMP, no buttons
+        self.assertNotIn("/power/stop", home)      # no AMP: the buttons are there but disabled, and say why
+        self.assertIn('disabled title="Connect the panel to AMP to use this">Stop</button>', home)
         page = await (await self.client.get("/server/one")).text()
-        for words in ("Server information", "2h 0m", "Player list", "Gaz", "1h 30m", "CPU usage", "Memory usage",
-                      "Network", "Kill map", "Live feed", "aria-label=\"All servers\"", "Memory", "bar cpu"):
+        for words in ("Server Information", "2h 0m", "Player List", "Gaz", "1h 30m", "CPU usage", "Memory usage",
+                      "Network", "Live Map", "Live feed", "Admins on", "None", "aria-label=\"All servers\"", "Memory", "bar cpu"):
             self.assertIn(words, page)
         two = await (await self.client.get("/server/two")).text()
         self.assertIn("The server is offline.", two)
@@ -82,7 +83,8 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         await self.login("boss")
         page = await (await self.client.get("/")).text()
         self.assertIn('action="/server/one/power/stop"', page)
-        self.assertIn('action="/server/one/power/update"', page)
+        self.assertNotIn('action="/server/one/power/update"', page)      # three buttons on the cards, as drawn
+        self.assertIn('action="/server/one/power/update"', await (await self.client.get("/server/one")).text())
         token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
         reply = await self.client.post("/server/one/power/restart", data={"csrf": token}, allow_redirects=False)
         self.assertEqual(reply.headers["Location"], "/")
@@ -157,3 +159,51 @@ class PictureTests(unittest.IsolatedAsyncioTestCase):
         reply = await self.upload(token, "one", b"\x89PNG\r\n\x1a\n")
         self.assertEqual(reply.status, 403)
         self.assertFalse(self.folder.exists())
+
+
+class DashboardDetailTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = PanelDB(":memory:")
+        self.db.add_user("boss", auth.hash_password("boss-password"), "owner")
+        self.db.add_user("mod", auth.hash_password("mod-password"), "mod")
+        config = PanelConfig(database=":memory:", cookie_secure=False, servers=[ServerConfig("one", "Everon Tactical"),
+                                                                                  ServerConfig("two", "Conflict Legacy")])
+        self.manager = ServerManager(config, self.db)
+        one = self.manager.states["one"]
+        one.online, one.players = True, [{"name": "Gaz", "identity": PERSON}]
+        one.query = {"ok": True, "ms": 20.0, "map": "Everon", "players": 1, "slots": 128, "version": "1.2.1.189"}
+        self.client = TestClient(TestServer(create_app(config, self.db, self.manager, start_manager=False)))
+        await self.client.start_server()
+        self.addAsyncCleanup(self.client.close)
+
+    async def login(self, who):
+        await self.client.post("/login", data={"username": who, "password": f"{who}-password"})
+        return re.search(r'name="csrf" value="([^"]+)"', await (await self.client.get("/")).text()).group(1)
+
+    async def test_card_details_show_on_the_dashboard(self):
+        token = await self.login("boss")
+        home = await (await self.client.get("/")).text()
+        self.assertIn("1.2.1.189", home)
+        self.assertIn("128 Slot", home)
+        self.assertNotIn("steam://connect", home)                 # no address yet: no Join
+        await self.client.post("/settings/pictures/one/details",
+                               data={"csrf": token, "description": "Milsim / Daily Ops", "address": "185.123.45.67:2001"})
+        home = await (await self.client.get("/")).text()
+        self.assertIn("128 Slot - Milsim / Daily Ops", home)
+        self.assertIn('href="steam://connect/185.123.45.67:2001"', home)
+        self.assertIn('data-copy-text="185.123.45.67:2001"', home)
+        await self.client.post("/settings/pictures/one/details", data={"csrf": token, "description": "x", "address": "not an address"})
+        self.assertIn("185.123.45.67:2001", await (await self.client.get("/")).text())     # a bad address isn't saved
+        two = await (await self.client.get("/?server=two")).text()
+        self.assertIn("<h2><i class=\"dot bad\"></i>Conflict Legacy</h2>", two)
+
+    async def test_search_finds_a_server_and_the_bell_counts(self):
+        await self.login("mod")
+        reply = await self.client.get("/players", params={"q": "conflict legacy"}, allow_redirects=False)
+        self.assertEqual(reply.headers["Location"], "/?server=two")
+        self.assertNotIn('class="count"', await (await self.client.get("/")).text())
+        self.db.add_feed("one", "sus", "3 players were blown up in the same second")
+        home = await (await self.client.get("/")).text()
+        self.assertIn('<i class="count">1</i>', home)
+        self.assertIn("1 sus flag in the last hour", home)
+        self.assertEqual((await self.client.post("/settings/pictures/one/details", data={})).status, 403)

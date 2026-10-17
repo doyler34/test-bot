@@ -48,7 +48,10 @@ class ReadingTests(unittest.TestCase):
 
     def test_reads_the_server_browser_reply(self):
         reply = (b"\xff\xff\xff\xffI\x11OYB Classic\x00Everon\x00reforger\x00Arma Reforger\x00\x00\x00\x2a\x80\x00")
-        self.assertEqual(monitor.parse_info(reply), {"name": "OYB Classic", "map": "Everon", "players": 42, "slots": 128})
+        self.assertEqual(monitor.parse_info(reply), {"name": "OYB Classic", "map": "Everon", "players": 42, "slots": 128,
+                                                     "version": ""})
+        full = reply + b"dl\x00\x001.2.1.189\x00"
+        self.assertEqual(monitor.parse_info(full)["version"], "1.2.1.189")
 
     def test_squeezing_keeps_spikes(self):
         rows = [{"at": i, "cpu": 10.0, "udp_errors": 50.0 if i == 7 else 0.0} for i in range(100)]

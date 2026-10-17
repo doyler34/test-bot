@@ -1,41 +1,34 @@
-  <section class="srv-summary">
-    <div><span>Players</span><b>{{ info.players }}{% if info.slots %} / {{ info.slots }}{% endif %}</b></div>
-    <div class="bar-row"><span>CPU</span><b>{{ "%.0f%%"|format(info.cpu) if info.cpu is not none else "—" }}</b>
-      <i class="bar cpu"><i style="width: {{ [info.cpu or 0, 100]|min }}%"></i></i></div>
-    <div><span>Uptime</span><b>{{ info.up_for|span if info.up_for else "—" }}</b></div>
-    <div class="bar-row"><span>Memory</span><b>{% if info.memory %}{{ "%.1f"|format(info.memory / gb) }}{% if info.mem_total %} / {{ "%.0f"|format(info.mem_total / gb) }}{% endif %} GB{% else %}—{% endif %}</b>
-      <i class="bar mem"><i style="width: {{ ([100 * info.memory / info.mem_total, 100]|min) if info.memory and info.mem_total else 0 }}%"></i></i></div>
-  </section>
   <div class="ctl-grid">
     <section class="ctl-panel">
-      <h2>Server information</h2>
+      <h2>Server Information</h2>
       <dl class="ctl-info">
-        <dt>Status</dt><dd class="{{ 'on' if info.online else 'off' }}">{{ "Online" if info.online else "Offline" }}</dd>
-        <dt>Uptime</dt><dd>{{ info.up_for|span if info.up_for else "—" }}</dd>
-        <dt>Game</dt><dd>Arma Reforger</dd>
-        <dt>Map</dt><dd>{{ info.map or "—" }}</dd>
-        <dt>Players</dt><dd>{{ info.players }}{% if info.slots %} / {{ info.slots }}{% endif %}</dd>
-        <dt>Server FPS</dt><dd>{{ info.fps|round|int if info.fps else "—" }}</dd>
-        <dt>CPU</dt><dd>{{ "%.0f%%"|format(info.cpu) if info.cpu is not none else "—" }}</dd>
-        <dt>Memory</dt><dd>{{ "%.1f GB"|format(info.memory / gb) if info.memory else "—" }}</dd>
-        <dt>Disk</dt><dd>{{ "%.0f%% used"|format(info.disk) if info.disk is not none else "—" }}</dd>
-        <dt>Ping</dt><dd>{{ "%.0f ms"|format(info.ping) if info.ping is not none else "—" }}</dd>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Status</dt><dd><b class="{{ 'on' if info.online else 'off' }}"><i class="dot {{ 'ok' if info.online else 'bad' }}"></i>{{ "Online" if info.online else "Offline" }}</b></dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>Uptime</dt><dd>{{ info.up_for|span if info.up_for else "—" }}</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/></svg>Admins on</dt><dd>{% if info.online %}{% if info.admins %}<b class="on names" title="{{ info.admins|join(', ') }}">{{ info.admins|join(", ") }}</b>{% else %}<b class="off">None</b>{% endif %}{% else %}—{% endif %}</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/></svg>Game</dt><dd>Arma Reforger</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>Map</dt><dd>{{ info.map or "—" }}</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/></svg>Players</dt><dd>{{ info.players }}{% if info.slots %} / {{ info.slots }}{% endif %}</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Version</dt><dd>{{ info.version or "—" }}</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>CPU</dt><dd>{% if info.cpu is not none %}{{ "%.0f"|format(info.cpu) }}% / {{ info.cores * 100 }}%{% else %}—{% endif %}</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 7v10M11 7v10M15 7v10"/></svg>Memory</dt><dd>{% if info.memory %}{{ "%.1f"|format(info.memory / gb) }} GB{% if info.mem_total %} / {{ "%.0f"|format(info.mem_total / gb) }} GB{% endif %}{% else %}—{% endif %}</dd></div>
+        <div><dt><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15h18M7 17h.01"/></svg>Disk</dt><dd>{% if info.disk_total %}{{ "%.1f"|format(info.disk_used / gb) }} GB / {{ "%.0f"|format(info.disk_total / gb) }} GB{% else %}—{% endif %}</dd></div>
       </dl>
     </section>
 
-    <section class="ctl-panel">
-      <h2>Kill map <span class="muted">· last 30 minutes</span></h2>
+    <section class="ctl-panel ctl-map-panel">
+      <h2>Live Map <span class="muted">· kills, last 30 min</span></h2>
       {% if has_map %}
       <div id="ctl-map" data-server="{{ s.id }}"></div>
-      <p class="ctl-legend"><span><i class="k"></i>Kill</span><span><i class="t"></i>Teamkill</span><span><i class="a"></i>Killed by AI or unknown</span></p>
+      <p class="ctl-legend"><span><i class="k"></i>Kill</span><span><i class="t"></i>Teamkill</span><span><i class="a"></i>AI or unknown</span></p>
       {% else %}
-      <p class="muted">The map hasn't been downloaded yet. It comes with the mortar calculator.</p>
+      <p class="muted">The Everon map hasn't been downloaded on this box yet. It comes with the mortar calculator.</p>
       {% endif %}
     </section>
 
     <section class="ctl-panel">
-      <h2>Player list <span class="muted">({{ roster|length }})</span></h2>
-      <input type="search" class="ctl-search" placeholder="Search players…" data-filter-list="#ctl-players">
+      <div class="ctl-panel-head"><h2>Player List ({{ roster|length }})</h2>
+        <label class="ctl-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input type="search" placeholder="Search players..." data-filter-list="#ctl-players" aria-label="Search players on this server"></label></div>
       <div class="ctl-players" id="ctl-players">
         <div class="ctl-row head"><span>Name</span><span>Playtime</span></div>
         {% for p in roster %}
@@ -52,13 +45,16 @@
     {% for title, kind, c, unit in charts %}
     <section class="ctl-panel ctl-chart {{ kind }}">
       <div class="ctl-chart-head"><h2>{{ title }}</h2>
-        <b>{% if c %}{% for l in c.lines %}{% if l.now is none %}—{% elif kind == "players" %}{{ l.now|round|int }}{% else %}{{ l.now|round(1) }}{% endif %}{{ " / " if not loop.last }}{% endfor %}{{ unit }}{% else %}—{% endif %}</b></div>
-      {% if c %}
-      <svg class="chart" viewBox="0 0 {{ c.width }} {{ c.height }}" preserveAspectRatio="none" role="img" aria-label="{{ title }}">
-        {% for l in c.lines %}{% for run in l.runs %}<polyline class="line {{ l.kind }}" points="{{ run }}"/>{% endfor %}{% endfor %}
-      </svg>
-      {% else %}<div class="chart empty">No readings yet</div>{% endif %}
-      <p class="muted">Last 60 minutes{% if kind == "net" %} · whole box, in / out{% endif %}</p>
+        <b>{% if c %}{% set l = c.lines[0] %}{% if l.now is none %}—{% elif kind == "players" %}{{ l.now|round|int }}{% if info.slots %} / {{ info.slots }}{% endif %}{% elif kind == "mem" %}{{ "%.1f"|format(l.now) }} GB{% if info.mem_total %} / {{ "%.0f"|format(info.mem_total / gb) }} GB{% endif %}{% elif kind == "cpu" %}{{ l.now|round|int }}%{% else %}{{ "%.1f"|format(l.now) }}{{ unit }}{% endif %}{% else %}—{% endif %}</b></div>
+      <div class="ctl-plot">
+        {% if c %}
+        <div class="ctl-axis"><span>{{ c.top|axis(kind) }}</span><span>{{ (c.top / 2)|axis(kind) }}</span><span>{{ 0|axis(kind) }}</span></div>
+        <svg class="chart" viewBox="0 0 {{ c.width }} {{ c.height }}" preserveAspectRatio="none" role="img" aria-label="{{ title }}, last 60 minutes">
+          {% for l in c.lines %}{% for area in l.areas %}<polygon class="area" points="{{ area }}"/>{% endfor %}{% for run in l.runs %}<polyline class="line {{ l.kind }}" points="{{ run }}"/>{% endfor %}{% endfor %}
+        </svg>
+        {% else %}<div class="chart empty">No readings yet</div>{% endif %}
+      </div>
+      <p>Last 60 minutes</p>
     </section>
     {% endfor %}
   </div>

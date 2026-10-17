@@ -18,6 +18,7 @@ async function refresh(box) {
     if (response.status === 401) return location.reload();
     if (response.ok) {
       box.innerHTML = await response.text();
+      box.dispatchEvent(new Event("refreshed"));
       for (const input of document.querySelectorAll("[data-filter-rows]")) filterRows(input);
     }
   } catch (err) {}
@@ -204,5 +205,12 @@ window.addEventListener("pageshow", (event) => {
   for (const el of document.querySelectorAll(".busy")) {
     el.classList.remove("busy");
     el.textContent = el.dataset.label;
+  }
+});
+
+// The bell and name menus close when you click anywhere else.
+document.addEventListener("click", (event) => {
+  for (const open of document.querySelectorAll(".top-pop[open]")) {
+    if (!open.contains(event.target)) open.removeAttribute("open");
   }
 });

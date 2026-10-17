@@ -1,24 +1,22 @@
 {% for c in cards %}
-<section class="ctl-card{{ ' has-image' if c.image }}">
+<section class="ctl-card{{ ' chosen' if c.id == chosen_id }}" data-id="{{ c.id }}">
   {% if c.image %}<img class="ctl-card-img" src="{{ c.image }}" alt="" loading="lazy">{% endif %}
-  <a class="ctl-card-link" href="/server/{{ c.id }}" aria-label="Open {{ c.name }}"></a>
-  {% if not c.configured %}<span class="ctl-state">Not set up</span>
-  {% else %}<span class="ctl-state {{ 'on' if c.online else 'off' }}">{{ "Online" if c.online else "Offline" }}</span>{% endif %}
+  <a class="ctl-card-link" href="/?server={{ c.id }}" aria-label="Show {{ c.name }}"></a>
+  <div class="ctl-card-top"><div class="ctl-pills">
+    {% if not c.configured %}<span class="ctl-state">Not set up</span>
+    {% else %}<span class="ctl-state {{ 'on' if c.online else 'off' }}">{{ "Online" if c.online else "Offline" }}</span>{% endif %}
+    {% if c.online and c.players and not c.admins %}<span class="ctl-flag" title="Nobody from staff is on this server">No admin on</span>{% endif %}
+    </div>
+    <button type="button" class="fav" data-fav="{{ c.id }}" title="Favourite: keep it first" aria-label="Favourite {{ c.name }}" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.4l-5.6 2.9 1.1-6.2L3 9.7l6.2-.9z"/></svg></button>
+  </div>
   <h2>{{ c.name }}</h2>
+  <p class="ctl-sub">{% if c.slots %}{{ c.slots }} Slot{% if c.description %} - {% endif %}{% endif %}{{ c.description or ("" if c.slots else "Arma Reforger") }}</p>
   <div class="ctl-stats">
     <span title="Players"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/></svg>{{ c.count }}{% if c.slots %} / {{ c.slots }}{% endif %}</span>
     <span title="Map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>{{ c.map or "—" }}</span>
-    <span class="ctl-ping{{ ' bad' if c.unreachable }}" title="How long the server browser check took">{% if c.unreachable %}Unreachable{% elif c.ping is not none %}{{ c.ping|round|int }} ms{% else %}—{% endif %}</span>
+    <span class="ctl-ping{{ ' bad' if c.unreachable }}" title="How long the server browser check took"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20v-4M12 20v-9M18 20V5"/></svg>{% if c.unreachable %}Unreachable{% elif c.ping is not none %}<b>{{ c.ping|round|int }} ms</b>{% else %}—{% endif %}</span>
   </div>
-  <div class="ctl-extra">
-    {% if c.online %}
-    <span>{% if c.fps is not none %}<b class="{{ 'warn' if c.fps < 20 }}">{{ "%.0f"|format(c.fps) }}</b>{% else %}—{% endif %} FPS</span>
-    {% if c.up_for is not none %}<span>Up <b>{{ c.up_for|span }}</b></span>{% endif %}
-    {% if c.admins %}<span class="admin-on">Admin on: {{ c.admins|map(attribute="name")|join(", ") }}</span>
-    {% else %}<span class="no-admin-on">No admin on</span>{% endif %}
-    {% else %}<span>{{ c.error or "Connecting…" }}</span>{% endif %}
-  </div>
-  {% if c.check and c.check.status == "leak" %}<p class="ctl-note warn">Memory didn't clear after the last mission restart</p>{% endif %}
+  {% if not c.online and c.error %}<p class="ctl-note">{{ c.error }}</p>{% endif %}
   {% include "_power.html" %}
 </section>
 {% endfor %}

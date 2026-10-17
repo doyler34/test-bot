@@ -11,6 +11,10 @@
   <div class="srv-actions">
     {% if card.ping is not none %}<span class="muted">{{ card.ping|round|int }} ms</span>{% endif %}
     {% with c = card %}{% include "_power.html" %}{% endwith %}
+    {% if can("power") and amp %}
+    <form method="post" action="/server/{{ s.id }}/power/update" data-confirm="Update {{ s.name }}? AMP stops it to update the game.">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="ctl-btn update">Update</button></form>
+    {% endif %}
   </div>
 </div>
 {% if not s.online %}<p class="muted">{{ s.error or "Connecting…" }}</p>{% endif %}
@@ -24,7 +28,15 @@
 </nav>
 
 <div data-tab-panel="overview">
-{% include "_overview.html" %}
+  <section class="srv-summary">
+    <div><span>Players</span><b>{{ info.players }}{% if info.slots %} / {{ info.slots }}{% endif %}</b></div>
+    <div class="bar-row"><span>CPU</span><b>{{ "%.0f%%"|format(info.cpu) if info.cpu is not none else "—" }}</b>
+      <i class="bar cpu"><i style="width: {{ [info.cpu or 0, 100]|min }}%"></i></i></div>
+    <div><span>Uptime</span><b>{{ info.up_for|span if info.up_for else "—" }}</b></div>
+    <div class="bar-row"><span>Memory</span><b>{% if info.memory %}{{ "%.1f"|format(info.memory / gb) }}{% if info.mem_total %} / {{ "%.0f"|format(info.mem_total / gb) }}{% endif %} GB{% else %}—{% endif %}</b>
+      <i class="bar mem"><i style="width: {{ ([100 * info.memory / info.mem_total, 100]|min) if info.memory and info.mem_total else 0 }}%"></i></i></div>
+  </section>
+  <div class="dash">{% include "_overview.html" %}</div>
 </div>
 
 <div data-tab-panel="live" hidden>

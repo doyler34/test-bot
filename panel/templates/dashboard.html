@@ -1,29 +1,41 @@
 {% extends "base.html" %}
+{% block head %}<link rel="stylesheet" href="/control-map/leaflet.css">
+<script src="/control-map/leaflet.js" defer></script>
+<script src="/static/control.js?v={{ asset_version }}" defer></script>{% endblock %}
 {% block body %}
-<header class="page-head">
-  <div>
-    <h1>Dashboard</h1>
-    <p>{{ welcome.greeting }}, {{ user.username }} · signed in as {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b></p>
-  </div>
-</header>
-<div class="home-tiles">
-  <div class="home-tile"><span>Servers online</span><b>{{ welcome.online }}<small> / {{ cards|length }}</small></b>
-    {% if welcome.online < cards|length %}<em class="bad">{{ cards|length - welcome.online }} offline</em>{% else %}<em class="ok">All up</em>{% endif %}</div>
-  <a class="home-tile" href="/players"><span>Players on</span><b>{{ welcome.players }}</b><em>Across every server</em></a>
-  <a class="home-tile" href="/bans"><span>Active bans</span><b>{{ welcome.bans }}</b><em>On all servers</em></a>
-  <div class="home-tile"><span>Sus flags</span><b>{{ welcome.sus }}</b>{% if welcome.sus %}<em class="warn">Last 24 hours</em>{% else %}<em>Last 24 hours</em>{% endif %}</div>
+<h1 class="visually-hidden">Dashboard</h1>
+<div class="dash">
+<div class="ctl-cards" data-refresh="/cards.part{{ '?server=' ~ chosen.id if chosen }}" data-favourites>
+{% with chosen_id = chosen.id if chosen else "" %}{% include "_cards.html" %}{% endwith %}
 </div>
-{% if attention %}
-<section class="home-alert">
-  <h3>Needs attention</h3>
-  {% for level, text, when, link in attention %}
-  <a href="{{ link }}"><i class="{{ level }}"></i><span>{{ text }}</span>{% if when %}<em>{{ when }}</em>{% endif %}</a>
-  {% endfor %}
+{% if not cards %}<p class="muted">No servers are set up yet.</p>{% endif %}
+{% if can("power") and not amp %}<p class="dash-note">Start, Restart and Stop work once the panel is connected to AMP.</p>{% endif %}
+
+{% if chosen %}
+<section class="dash-panel">
+  <header class="dash-panel-head">
+    <h2><i class="dot {{ 'ok' if chosen.online else 'bad' }}"></i>{{ chosen.name }}</h2>
+    <div class="dash-ip">
+      {% if chosen.address %}
+      <span>IP: {{ chosen.address }}</span>
+      <button type="button" class="icon-btn" data-copy-text="{{ chosen.address }}" title="Copy IP" aria-label="Copy IP"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
+      <a class="join" href="steam://connect/{{ chosen.address }}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>Join</a>
+      {% elif can("users") %}<a class="muted small-link" href="/settings/pictures">Add the join address</a>{% endif %}
+    </div>
+  </header>
+  <nav class="dash-tabs">
+    <a class="on" href="/?server={{ chosen.id }}">Overview</a>
+    <span class="off" title="Not in the panel yet">Console</span>
+    <a href="/server/{{ chosen.id }}#live">Players</a>
+    <span class="off" title="Not in the panel yet">Files</span>
+    {% if can("game_admins") %}<a href="/game-admins">Settings</a>{% else %}<span class="off" title="Needs the in-game admins permission">Settings</span>{% endif %}
+    <span class="off" title="Not in the panel yet">Plugins</span>
+    <span class="off" title="Not in the panel yet">Schedule</span>
+    <span class="off" title="Not in the panel yet">Backups</span>
+    <a class="more" href="/server/{{ chosen.id }}">Full page →</a>
+  </nav>
+  {% with s = chosen %}{% include "_overview.html" %}{% endwith %}
 </section>
 {% endif %}
-<div class="section-head"><h2>Servers</h2><span>{{ cards|length }} server{{ "s" if cards|length != 1 }}</span></div>
-<div class="ctl-cards" data-refresh="/cards.part">
-{% include "_cards.html" %}
 </div>
-{% if can("power") and not amp %}<p class="muted">Start, Restart, Stop and Update appear on the cards once the panel is connected to AMP.</p>{% endif %}
 {% endblock %}
