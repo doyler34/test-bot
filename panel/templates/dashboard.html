@@ -3,7 +3,7 @@
 <header class="page-head">
   <div>
     <h1>Dashboard</h1>
-    <p>{{ welcome.greeting }}, {{ user.username }} · every OYB Arma Reforger server</p>
+    <p>{{ welcome.greeting }}, {{ user.username }} · signed in as {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b></p>
   </div>
 </header>
 <div class="home-tiles">
