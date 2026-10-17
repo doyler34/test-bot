@@ -124,3 +124,28 @@ class PageTests(unittest.IsolatedAsyncioTestCase):
         await client.post("/logout", data={"csrf": token})
         await client.post("/login", data={"username": "adm", "password": "adm-password"})
         self.assertEqual((await client.get("/attacks", allow_redirects=False)).status, 403)
+
+    async def test_admin_ips_are_never_flagged(self):
+        db = PanelDB(":memory:")
+        db.add_user("boss", auth.hash_password("boss-password"), "owner")
+        db.add_attempts([{"at": now() - 60, "ip": "86.40.12.9", "source": "AMP", "user": "gaz"}] * 12
+                        + [{"at": now() - 60, "ip": "185.220.101.4", "source": "SSH", "user": "root"}] * 3)
+        config = PanelConfig(database=":memory:", cookie_secure=False, servers=[ServerConfig("one", "One")])
+        client = TestClient(TestServer(create_app(config, db, ServerManager(config, db), start_manager=False)))
+        await client.start_server()
+        self.addAsyncCleanup(client.close)
+        await client.post("/login", data={"username": "boss", "password": "boss-password"})
+        token = re.search(r'name="csrf" value="([^"]+)"', await (await client.get("/attacks")).text()).group(1)
+        await client.post("/attacks/trust", data={"csrf": token, "ip": "86.40.12.0/24 ", "name": "Gaz home"})
+        self.assertEqual([r["ip"] for r in db.attackers(0)], ["185.220.101.4"])    # earlier failures cleared
+        db.add_attempts([{"at": now(), "ip": "86.40.12.77", "source": "SSH", "user": "gaz"}])
+        self.assertEqual([r["ip"] for r in db.attackers(0)], ["185.220.101.4"])
+        page = await (await client.get("/attacks")).text()
+        self.assertIn("86.40.12.0/24", page)
+        self.assertIn("Gaz home", page)
+        await client.post("/attacks/trust", data={"csrf": token, "ip": "not an ip"})
+        self.assertEqual(len(db.trusted_ips()), 1)
+        await client.post("/attacks/untrust", data={"csrf": token, "ip": "86.40.12.0/24"})
+        self.assertEqual(db.trusted_ips(), [])
+        db.add_attempts([{"at": now(), "ip": "86.40.12.77", "source": "SSH", "user": "gaz"}])
+        self.assertIn("86.40.12.77", [r["ip"] for r in db.attackers(0)])

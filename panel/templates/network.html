@@ -26,7 +26,7 @@
   <div class="stat"><b>{% if latest.temp %}{{ latest.temp|round|int }} °C{% else %}—{% endif %}</b><span>Hottest sensor</span></div>
   <div class="stat"><b>{{ num(latest.rx_mbps) }} / {{ num(latest.tx_mbps) }}</b><span>Mb/s in / out</span></div>
   <div class="stat"><b>{{ num(latest.udp_sndbuf) }}</b><span>Outgoing lost / min</span></div>
-  <div class="stat"><b>{{ games|sum(attribute="players", start=0) if games|selectattr("players")|list else 0 }}</b><span>Players on all servers</span></div>
+  <div class="stat"><b>{{ players }}</b><span>Players on all servers</span></div>
 </div>
 
 <section class="card">

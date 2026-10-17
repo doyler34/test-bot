@@ -1,6 +1,7 @@
 import asyncio
 from collections import Counter, defaultdict
 import hashlib
+import ipaddress
 import json
 import logging
 import os
@@ -1868,6 +1869,7 @@ async def network_page(request):
     return render(request, "network.html", result=result, counts=counts, sections=sections,
                   text=netcheck.report_text(result) if result else "", ranges=MONITOR_RANGES, range_key=key,
                   range_label=label, range_ago=ago, charts=charts, games=games, latest=latest, gb=GB,
+                  players=sum(g["players"] or 0 for g in games),
                   problems=box_problems(box_rows, game_rows), top=top,
                   attacks=db.attack_sources(until - 86400), attackers=db.attackers(until - 86400, limit=5))
 
@@ -1881,7 +1883,32 @@ async def attacks_page(request):
                   attackers=db.attackers(t - 7 * 86400), banned=db.banned_ips(),
                   ports=[(p, attacks.KNOWN_PORTS.get(p, "")) for p in ports],
                   guard=await asyncio.to_thread(attacks.protections),
-                  unreadable=sorted(reader.unreadable) if reader else [], threshold=(ATTACK_LOGINS, ATTACK_WINDOW // 60))
+                  unreadable=sorted(reader.unreadable) if reader else [], threshold=(ATTACK_LOGINS, ATTACK_WINDOW // 60),
+                  trusted=db.trusted_ips(), my_ip=client_ip(request))
+
+
+async def trust_ip(request):
+    require(request, "ips")
+    form = await request.post()
+    try:
+        network = str(ipaddress.ip_network(form.get("ip", "").strip(), strict=False))
+    except ValueError:
+        flash(request, "That isn't an IP address or range.", "error")
+        raise web.HTTPFound("/attacks")
+    name = form.get("name", "").strip()[:60]
+    request.app[DB].trust_ip(network, name, request[USER]["username"])
+    audit(request, "trust ip", target=network, detail=name)
+    flash(request, f"{network} won't be flagged, and its earlier failed logins are cleared.")
+    raise web.HTTPFound("/attacks")
+
+
+async def untrust_ip(request):
+    require(request, "ips")
+    network = (await request.post()).get("ip", "")
+    request.app[DB].untrust_ip(network)
+    audit(request, "untrust ip", target=network)
+    flash(request, f"{network} is off the admin list.")
+    raise web.HTTPFound("/attacks")
 
 
 async def ip_lookup_page(request):
@@ -2392,6 +2419,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/bot/restart", restart_bot)
     app.router.add_get("/data", data_page)
     app.router.add_get("/attacks", attacks_page)
+    app.router.add_post("/attacks/trust", trust_ip)
+    app.router.add_post("/attacks/untrust", untrust_ip)
     app.router.add_route("GET", "/network", network_page)
     app.router.add_post("/network", network_page)
     app.router.add_get("/bot/data", bot_data_page)

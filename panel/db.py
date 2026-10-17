@@ -1,3 +1,4 @@
+import ipaddress
 import json
 import sqlite3
 import time
@@ -109,6 +110,12 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 );
 CREATE INDEX IF NOT EXISTS login_attempts_at ON login_attempts (at);
 CREATE INDEX IF NOT EXISTS login_attempts_ip ON login_attempts (ip, at);
+CREATE TABLE IF NOT EXISTS trusted_ips (
+    ip TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    added_by TEXT NOT NULL DEFAULT '',
+    at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS box_samples (
     at INTEGER PRIMARY KEY,
     cpu REAL, load1 REAL, mem_used INTEGER, mem_total INTEGER, swap_used INTEGER,
@@ -611,7 +618,32 @@ class PanelDB:
         span = now() - start
         return up / span if span > 0 else (1.0 if state == "online" else 0.0)
 
+    def trusted_ips(self):
+        return self.all("SELECT ip, name, added_by, at FROM trusted_ips ORDER BY name, ip")
+
+    def is_trusted(self, ip, networks=None):
+        try:
+            address = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        if networks is None:
+            networks = [ipaddress.ip_network(r["ip"]) for r in self.trusted_ips()]
+        return any(address.version == n.version and address in n for n in networks)
+
+    def trust_ip(self, network, name, added_by):
+        self.db.execute("INSERT OR REPLACE INTO trusted_ips (ip, name, added_by, at) VALUES (?, ?, ?, ?)",
+                        (network, name, added_by, now()))
+        networks = [ipaddress.ip_network(network)]
+        gone = [r["ip"] for r in self.all("SELECT DISTINCT ip FROM login_attempts") if self.is_trusted(r["ip"], networks)]
+        self.db.executemany("DELETE FROM login_attempts WHERE ip = ?", [(ip,) for ip in gone])
+        self.db.commit()
+
+    def untrust_ip(self, network):
+        self.write("DELETE FROM trusted_ips WHERE ip = ?", network)
+
     def add_attempts(self, attempts, keep_days=30):
+        networks = [ipaddress.ip_network(r["ip"]) for r in self.trusted_ips()]
+        attempts = [a for a in attempts if not self.is_trusted(a["ip"], networks)]
         self.db.executemany("INSERT INTO login_attempts (at, ip, source, user) VALUES (?, ?, ?, ?)",
                             [(int(a["at"]), a["ip"], a["source"], a.get("user", "")) for a in attempts])
         self.db.execute("DELETE FROM login_attempts WHERE at < ?", (now() - keep_days * 86400,))

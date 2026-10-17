@@ -12,6 +12,25 @@
 </div>
 
 <section class="card">
+  <h2>Admin IPs</h2>
+  <p class="muted">Failed logins from these are never counted or posted to Discord. A range like <span class="mono">86.40.0.0/16</span>
+    covers a home connection whose address changes.</p>
+  {% if not trusted %}<p class="muted">None yet.</p>{% endif %}
+  <ul class="evidence">{% for t in trusted %}
+    <li><span class="mono">{{ t.ip }}</span>{% if t.name %} · {{ t.name }}{% endif %} <span class="muted">· added by {{ t.added_by }}</span>
+      <form method="post" action="/attacks/untrust" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="ip" value="{{ t.ip }}"><button class="small">Remove</button></form></li>
+  {% endfor %}</ul>
+  <form method="post" action="/attacks/trust" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="ip" placeholder="IP or range" value="{{ my_ip }}" required>
+    <input name="name" placeholder="Whose (e.g. Gaz home)" maxlength="60">
+    <button>Add</button>
+  </form>
+  <p class="muted">Filled in with your address right now: <span class="mono">{{ my_ip }}</span>.</p>
+</section>
+
+<section class="card">
   <h2>How well the box is guarded</h2>
   <div class="finding">
     <p><span class="dot {{ '' if guard.fail2ban is none else ('ok' if guard.fail2ban else 'bad') }}"></span><b>fail2ban</b>: {% if guard.fail2ban %}running{% elif guard.fail2ban is none %}couldn't tell{% else %}not running{% endif %}</p>

@@ -111,8 +111,11 @@ class PageTests(unittest.IsolatedAsyncioTestCase):
         db = PanelDB(":memory:")
         db.add_user("boss", auth.hash_password("boss-password"), "owner")
         db.add_user("adm", auth.hash_password("adm-password"), "admin")
-        config = PanelConfig(database=":memory:", cookie_secure=False, servers=[ServerConfig("one", "Classic")])
-        client = TestClient(TestServer(create_app(config, db, ServerManager(config, db), start_manager=False)))
+        config = PanelConfig(database=":memory:", cookie_secure=False,
+                             servers=[ServerConfig("one", "Classic"), ServerConfig("two", "Hardcore")])
+        manager = ServerManager(config, db)
+        manager.states["one"].online, manager.states["one"].players = True, {"a": {}, "b": {}}   # two is offline
+        client = TestClient(TestServer(create_app(config, db, manager, start_manager=False)))
         await client.start_server()
         self.addAsyncCleanup(client.close)
         await client.post("/login", data={"username": "boss", "password": "boss-password"})
@@ -123,7 +126,8 @@ class PageTests(unittest.IsolatedAsyncioTestCase):
             netcheck.line("Kernel", "UDP packets thrown away", "0 in 10 s", netcheck.OK)]}
         with mock.patch("panel.netcheck.run", new=mock.AsyncMock(return_value=result)) as run:
             page = await (await client.post("/network", data={"csrf": token})).text()
-        self.assertEqual(run.await_args.args[0], [("one", "Classic", 0, None)])
+        self.assertEqual(run.await_args.args[0], [("one", "Classic", 0, None), ("two", "Hardcore", 0, None)])
+        self.assertIn("<b>2</b><span>Players on all servers", page)
         self.assertIn("1 problem", page)
         self.assertIn("rx_missed_errors +240", page)
         self.assertIn("[BAD ] enp4s0 errors right now", page)
