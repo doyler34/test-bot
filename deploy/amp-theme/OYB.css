@@ -1,0 +1,190 @@
+/* OYB theme for AMP. Goes in ADS01's WebRoot/Themes; pick it under Settings → search "Theme". */
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap");
+
+:root {
+  --oyb-bg: #0d0f0e;
+  --oyb-panel: #151917;
+  --oyb-panel-2: #1b201d;
+  --oyb-line: #262c28;
+  --oyb-ink: #e8e6e1;
+  --oyb-muted: #8f958f;
+  --oyb-orange: #f47b20;
+  --oyb-red: #e0443a;
+  --oyb-green: #2fbf4a;
+  --oyb-amber: #e9a23b;
+  --oyb-blue: #3d8bd8;
+}
+
+body {
+  background: var(--oyb-bg) !important;
+  color: var(--oyb-ink) !important;
+  font-family: "Inter", system-ui, sans-serif !important;
+}
+
+h1, h2, h3, #tabTitle, .menuTitle, .ServerEntryHeader h3 {
+  font-family: "Oswald", "Inter", sans-serif !important;
+  letter-spacing: .02em;
+}
+
+a { color: var(--oyb-orange); }
+
+/* Top bar */
+#barTop {
+  background: var(--oyb-bg) !important;
+  border-bottom: 1px solid var(--oyb-line) !important;
+  box-shadow: none !important;
+}
+#tabTitle { color: var(--oyb-ink) !important; }
+#tabCaption { color: var(--oyb-muted) !important; }
+#topSearchBox, #topSearchBox .searchBox {
+  background: var(--oyb-panel) !important;
+  border-color: var(--oyb-line) !important;
+  color: var(--oyb-ink) !important;
+  border-radius: 8px !important;
+}
+
+/* Side menu */
+#sideMenuContainer {
+  background: linear-gradient(180deg, #111412 0%, #0b0d0c 100%) !important;
+  border-right: 1px solid var(--oyb-line) !important;
+}
+#userInfo {
+  background: transparent !important;
+  border-bottom: 1px solid var(--oyb-line) !important;
+  color: var(--oyb-ink) !important;
+}
+#userInfo::before {
+  content: "OYB";
+  display: block;
+  font: 700 2.6rem/1 "Oswald", sans-serif;
+  letter-spacing: .04em;
+  color: #fff;
+  margin: 6px 0 2px;
+}
+#userInfo::after {
+  content: "OLD YOUNG BASTARDS";
+  display: block;
+  font: 600 .8rem/1.2 "Oswald", sans-serif;
+  letter-spacing: .12em;
+  color: var(--oyb-muted);
+  margin-bottom: 10px;
+}
+.menuTitle { color: var(--oyb-muted) !important; text-transform: uppercase; font-size: .75rem !important; }
+#sideMenu a {
+  color: var(--oyb-ink) !important;
+  border-left: 3px solid transparent;
+  border-radius: 0 6px 6px 0;
+}
+#sideMenu a:hover { background: var(--oyb-panel-2) !important; }
+#sideMenu a.selected {
+  background: linear-gradient(90deg, rgba(244, 123, 32, .18), rgba(244, 123, 32, 0)) !important;
+  border-left-color: var(--oyb-orange);
+  color: #fff !important;
+}
+#sideMenu a.selected .mat-icon { color: var(--oyb-orange) !important; }
+
+/* Main area */
+#mainBody, #mainBodyArea, .bodyTab { background: transparent !important; color: var(--oyb-ink) !important; }
+
+/* Instance cards */
+.ServerEntry {
+  background: var(--oyb-panel) !important;
+  border: 1px solid var(--oyb-line) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35) !important;
+  overflow: hidden;
+  transition: border-color .15s, transform .15s;
+}
+.ServerEntry:hover { border-color: var(--oyb-orange) !important; transform: translateY(-2px); }
+.ServerEntryImage.Main { filter: brightness(.55) saturate(.8); }
+.ServerEntryImage.Blur { filter: blur(18px) brightness(.35); }
+.ServerEntryImage.Offline { filter: grayscale(1) brightness(.35) !important; }
+.ServerEntryHeader h3 { color: #fff !important; font-size: 1.35rem !important; }
+.ServerEntryHeader h5 { color: #c9ccc8 !important; }
+.ServerEntryMetric .mat-icon { color: var(--oyb-muted) !important; }
+.ServerEntryMetric h3 { color: var(--oyb-muted) !important; }
+.ServerEntryMetric h4 { color: #fff !important; }
+.ServerEntryStatus, .AppStatus {
+  border-radius: 6px !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-size: .78rem !important;
+}
+
+/* Colours used for status pills and buttons */
+.bgGreen { background-color: var(--oyb-green) !important; color: #fff !important; }
+.bgRed { background-color: var(--oyb-red) !important; color: #fff !important; }
+.bgAmber { background-color: var(--oyb-amber) !important; color: #111 !important; }
+.bgBlue { background-color: var(--oyb-blue) !important; color: #fff !important; }
+.bgGray { background-color: #3a403c !important; color: #ddd !important; }
+
+/* Buttons */
+button, .iconButton, .slimButton {
+  border-radius: 6px !important;
+  font-family: "Inter", sans-serif !important;
+  font-weight: 600 !important;
+  transition: filter .15s, transform .1s;
+}
+button:hover { filter: brightness(1.12); }
+button:active { transform: translateY(1px); }
+.iconButton:not(.bgGreen):not(.bgRed):not(.bgAmber):not(.bgBlue),
+.slimButton:not(.bgGreen):not(.bgRed):not(.bgAmber):not(.bgBlue) {
+  background-color: #2a302c !important;
+  color: var(--oyb-ink) !important;
+  border: 1px solid #353c37 !important;
+}
+button[data-method="Restart"], button[title="Restart Instance"] {
+  background-color: var(--oyb-orange) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* Settings, status and metrics */
+.settingsGroup, .groupBody, .settingContainer, .DisplayMetric, .consoleHeader {
+  background: var(--oyb-panel) !important;
+  border-color: var(--oyb-line) !important;
+  color: var(--oyb-ink) !important;
+  border-radius: 10px !important;
+}
+.settingLabel { color: #fff !important; }
+.settingDescription { color: var(--oyb-muted) !important; }
+.DisplayMetric { border-width: 1px !important; overflow: hidden; }
+.DisplayMetric[data-metric="CPUUsage"] .DisplayMetricHeader { background-color: var(--oyb-orange) !important; }
+.DisplayMetric[data-metric="MemoryUsage"] .DisplayMetricHeader { background-color: var(--oyb-blue) !important; }
+.DisplayMetric[data-metric="Users"] .DisplayMetricHeader { background-color: var(--oyb-green) !important; }
+
+input, select, textarea {
+  background: #0f1211 !important;
+  color: var(--oyb-ink) !important;
+  border: 1px solid var(--oyb-line) !important;
+  border-radius: 6px !important;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--oyb-orange) !important;
+  outline: none !important;
+}
+
+/* Console */
+#consoleArea {
+  background: #090b0a !important;
+  border: 1px solid var(--oyb-line) !important;
+  border-radius: 10px !important;
+}
+.consoleContents { color: #d7dbd5 !important; }
+.consoleTimestamp { color: var(--oyb-orange) !important; }
+#consoleUsers { background: var(--oyb-panel) !important; border-radius: 10px; }
+
+/* Pop-ups */
+.modalpanel, .wizardPopup {
+  background: var(--oyb-panel) !important;
+  color: var(--oyb-ink) !important;
+  border: 1px solid var(--oyb-line) !important;
+  border-radius: 12px !important;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--oyb-bg); }
+::-webkit-scrollbar-thumb { background: #2c332e; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--oyb-orange); }
