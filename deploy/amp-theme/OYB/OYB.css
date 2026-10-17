@@ -63,24 +63,30 @@ input.searchBox { background-color: transparent; }
 #sideMenuContainer { border-right: 1px solid var(--oyb-line); }
 .sideItemList { border-left: 1px solid var(--oyb-line); }
 #userInfo { border-bottom: 1px solid var(--oyb-line); }
-#userInfo::before {
-  content: "OYB";
-  display: block;
-  font: 400 3.2rem/1 "Black Ops One", "Oswald", sans-serif;
-  letter-spacing: .04em;
-  color: #fff;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, .6);
-  margin: 6px 0 0;
-}
-#userInfo::after {
-  content: "OLD YOUNG BASTARDS";
-  display: block;
-  font: 600 .75rem/1.4 "Oswald", sans-serif;
-  letter-spacing: .14em;
-  color: var(--oyb-muted);
+.menuTitle {
+  font-size: 0 !important;
+  line-height: 0;
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--oyb-line);
   margin-bottom: 8px;
 }
-.menuTitle { color: var(--oyb-muted); text-transform: uppercase; }
+.menuTitle::before {
+  content: "OYB";
+  display: block;
+  font: 400 52px/1 "Black Ops One", "Oswald", sans-serif;
+  letter-spacing: 2px;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .6);
+}
+.menuTitle::after {
+  content: "OLD YOUNG BASTARDS";
+  display: block;
+  font: 600 13px/1.6 "Oswald", sans-serif;
+  letter-spacing: 2px;
+  color: var(--oyb-muted);
+  margin-top: 4px;
+}
+
 #sideMenu a { font-size: 100%; border-left: 3px solid transparent; }
 #sideMenu a:hover { background-color: var(--oyb-panel-2); }
 #sideMenu a:active { background-color: #090b0a; }
