@@ -135,6 +135,8 @@ def render(request, template, **context):
         csrf=request.get(CSRF, ""),
         can=(lambda perm: bool(user) and allowed(request, perm)),
         servers=request.app[CONFIG].servers,
+        nav_servers=[{"id": st.config.id, "name": st.config.name, "online": st.online}
+                     for st in request.app[MANAGER].states.values()],
         path=request.path,
         flashes=request.app[FLASH].pop(user["id"], []) if user and not template.startswith("_") else [],
     )
