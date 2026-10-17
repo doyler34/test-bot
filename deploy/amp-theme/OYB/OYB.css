@@ -302,8 +302,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--oyb-orange); out
     linear-gradient(180deg, #13171b 0%, #121619 55%, #1c2227 100%) !important;
 }
 #sideMenu a {
-  padding-top: 11px;
-  padding-bottom: 11px;
   border-radius: 0 8px 8px 0;
   margin-right: 10px;
 }
