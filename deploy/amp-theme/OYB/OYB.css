@@ -218,14 +218,46 @@ input:focus, select:focus, textarea:focus { border-color: var(--oyb-orange); out
 .itemList .item:hover { background-color: var(--oyb-panel-2); }
 .itemList .item.selected { border-right: 4px solid var(--oyb-orange); }
 
-/* Status page graphs (AMP colours their headers inline) */
-.DisplayMetric { background-color: var(--oyb-panel); border-radius: 10px; overflow: hidden; }
-.DisplayMetric[data-metric="CPUUsage"] { border-color: var(--oyb-orange) !important; }
-.DisplayMetric[data-metric="CPUUsage"] .DisplayMetricHeader { background-color: var(--oyb-orange) !important; }
-.DisplayMetric[data-metric="MemoryUsage"] { border-color: var(--oyb-blue) !important; }
-.DisplayMetric[data-metric="MemoryUsage"] .DisplayMetricHeader { background-color: var(--oyb-blue) !important; }
-.DisplayMetric[data-metric="Users"] { border-color: var(--oyb-green) !important; }
-.DisplayMetric[data-metric="Users"] .DisplayMetricHeader { background-color: var(--oyb-green) !important; }
+/* Status page: metric cards like the OYB dashboard (AMP colours them inline) */
+.DisplayMetric {
+  display: flex !important;
+  flex-direction: column !important;
+  background-color: var(--oyb-panel) !important;
+  border: 1px solid var(--oyb-line) !important;
+  border-top: 3px solid var(--oyb-orange) !important;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.DisplayMetricHeader {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: baseline;
+  width: auto !important;
+  height: auto !important;
+  padding: 14px 16px 6px !important;
+  background-color: transparent !important;
+  color: #fff !important;
+  font-family: "Oswald", sans-serif;
+  font-size: 1.1em;
+}
+.DisplayMetricHeader > div:nth-child(2) { font-weight: 600; color: var(--oyb-orange); }
+.DisplayMetricHeader .circleChart { display: none !important; }
+.DisplayMetricGraph { flex: 1; min-height: 130px; width: 100% !important; }
+.DisplayMetric[data-metric="MemoryUsage"] { border-top-color: var(--oyb-blue) !important; }
+.DisplayMetric[data-metric="MemoryUsage"] .DisplayMetricHeader > div:nth-child(2) { color: #6fb0f0; }
+.DisplayMetric[data-metric="ActiveUsers"] { border-top-color: var(--oyb-green) !important; }
+.DisplayMetric[data-metric="ActiveUsers"] .DisplayMetricHeader > div:nth-child(2) { color: #6fe08a; }
+
+#statusActions > div {
+  background-color: var(--oyb-panel);
+  border: 1px solid var(--oyb-line);
+  border-radius: 10px;
+  padding: 4px 18px 16px;
+}
+#statusActions h2 { font-size: 1.25em; }
+.AppStatus.bgGreen, .listenPort .AppStatus.bgGreen { background-color: rgba(18, 40, 24, .9); border: 1px solid var(--oyb-green); color: #6fe08a; }
+.AppStatus.bgRed, .listenPort .AppStatus.bgRed { background-color: rgba(48, 16, 14, .9); border: 1px solid var(--oyb-red); color: #ff8a80; }
+.AppStatus.bgAmber { background-color: rgba(50, 36, 10, .9); border: 1px solid var(--oyb-amber); color: #ffd27a; }
 
 /* Console */
 #consoleArea { background-color: #090b0a; border: 1px solid var(--oyb-line); border-radius: 10px; }
