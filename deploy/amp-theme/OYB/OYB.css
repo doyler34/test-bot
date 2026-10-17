@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap");
 
 :root {
   --oyb-bg: #0d0f0e;
@@ -66,10 +66,11 @@ input.searchBox { background-color: transparent; }
 #userInfo::before {
   content: "OYB";
   display: block;
-  font: 700 2.4rem/1 "Oswald", sans-serif;
-  letter-spacing: .05em;
+  font: 400 3.2rem/1 "Black Ops One", "Oswald", sans-serif;
+  letter-spacing: .04em;
   color: #fff;
-  margin: 4px 0 0;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .6);
+  margin: 6px 0 0;
 }
 #userInfo::after {
   content: "OLD YOUNG BASTARDS";
@@ -102,6 +103,15 @@ input.searchBox { background-color: transparent; }
   border-bottom: 2px solid var(--oyb-orange);
 }
 .ServerGroupContainer .ServerGroup.Online .InstanceList { background-color: var(--oyb-panel); }
+.ServerGroupContainer .ServerGroup,
+.ServerGroupContainer .ServerGroup.Platform-1,
+.ServerGroupContainer .ServerGroup.Platform-2 { background-image: none !important; }
+.ServerGroupHeader .ServerGroupName > span { font-family: "Oswald", sans-serif; font-size: 1.15em; text-transform: uppercase; letter-spacing: .06em; }
+.ServerGroupActions .slimButton { background-color: #2a302c; border-color: #353c37; color: var(--oyb-ink); }
+.ServerGroupActions .slimButton.bgGreen { background-color: var(--oyb-green); border-color: var(--oyb-green); color: #fff; }
+.ServerGroupActions .slimButton.bgRed { background-color: var(--oyb-red); border-color: var(--oyb-red); color: #fff; }
+.ServerGroupActions .slimButton:last-child { background-color: var(--oyb-orange); border-color: var(--oyb-orange); color: #fff; }
+.ServerGroupActions .slimButton:hover { filter: brightness(1.2); }
 .ServerEntry {
   border: 1px solid var(--oyb-line);
   border-radius: 10px;
@@ -121,11 +131,22 @@ input.searchBox { background-color: transparent; }
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .05em;
+  border-radius: 6px;
 }
-.ServerGroupContainer .ServerGroup.Online .InstanceList .ServerEntry.NewServerEntry {
-  background-color: var(--oyb-panel-2);
-  border: 1px dashed var(--oyb-orange);
+.ServerEntryStatus.bgGray { background-color: rgba(20, 24, 22, .85); border: 1px solid #3a403c; color: #c9ccc8; }
+.ServerEntryStatus.bgGreen { background-color: rgba(18, 40, 24, .9); border: 1px solid var(--oyb-green); color: #6fe08a; }
+.ServerEntryStatus.bgRed { background-color: rgba(48, 16, 14, .9); border: 1px solid var(--oyb-red); color: #ff8a80; }
+#bgtext, #versionHeadline { color: #4c534e; }
+.ServerGroupContainer .ServerGroup.Online .InstanceList .ServerEntry.NewServerEntry,
+.ServerEntry.NewServerEntry {
+  background: var(--oyb-panel-2);
+  border: 2px dashed #3a423c;
+  box-shadow: none;
 }
+.ServerEntry.NewServerEntry:hover { border-color: var(--oyb-orange); }
+.ServerEntry.NewServerEntry .ServerEntryHeader,
+.ServerEntry.NewServerEntry .ServerEntryHeader h4 { background: transparent; color: var(--oyb-muted); }
+.ServerEntry.NewServerEntry > span { color: var(--oyb-orange); }
 
 /* Colours AMP uses for pills and buttons */
 .bgGreen { background-color: var(--oyb-green); border-color: var(--oyb-green); }
