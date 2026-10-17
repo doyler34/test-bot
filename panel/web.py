@@ -34,7 +34,8 @@ from .reasons import BAN_REASONS, KICK_REASONS, options as reason_options, with_
 from .rcon import RconError
 from .battlemetrics import BanSync
 from .suspicion import DAMAGE, DEFAULTS as SUS_DEFAULTS, LIMITS as SUS_LIMITS, body_part, check_settings as check_sus
-from .servers import ATTACK_LOGINS, ATTACK_WINDOW, RconError, ServerManager, clean, systemctl, valid_identity
+from .servers import (ATTACK_LOGINS, ATTACK_WINDOW, UNREACHABLE_AFTER, RconError, ServerManager, clean, systemctl,
+                      valid_identity)
 
 log = logging.getLogger("panel.web")
 
@@ -361,7 +362,8 @@ def server_view(state):
 
 
 async def dashboard(request):
-    states = [server_view(s) for s in request.app[MANAGER].states.values()]
+    live = list(request.app[MANAGER].states.values())
+    states = [control_card(s) for s in live]
     db = request.app[DB]
     hour = time.localtime().tm_hour
     welcome = {
@@ -371,7 +373,8 @@ async def dashboard(request):
         "bans": len(db.bans()),
         "sus": db.one("SELECT COUNT(*) FROM feed WHERE kind = 'sus' AND at > ?", now() - 86400)[0],
     }
-    return render(request, "dashboard.html", cards=states, welcome=welcome)
+    return render(request, "dashboard.html", cards=states, welcome=welcome, attention=attention(request, live),
+                  amp=bool(request.app[AMP]))
 
 
 GUIDE = [
@@ -415,17 +418,19 @@ async def guide_page(request):
 
 
 async def dashboard_part(request):
-    states = [server_view(s) for s in request.app[MANAGER].states.values()]
-    return render(request, "_cards.html", cards=states)
+    states = [control_card(s) for s in request.app[MANAGER].states.values()]
+    return render(request, "_cards.html", cards=states, amp=bool(request.app[AMP]))
 
 
 async def server_page(request):
     state = server_or_404(request, request.match_info["id"])
     db = request.app[DB]
     recent = db.audit(server=state.config.id, limit=15)
-    return render(request, "server.html", s=server_view(state), recent=recent, health=health_data(db, state), alts=alt_flags(request, state),
-                  played=played(request, [p["identity"] for p in state.players]),
-                  feed=db.feed(state.config.id), **history(request, state))
+    return render(request, "server.html", s=server_view(state), card=control_card(state), recent=recent,
+                  health=health_data(db, state), alts=alt_flags(request, state),
+                  played=played(request, [p["identity"] for p in state.players]), amp=bool(request.app[AMP]),
+                  gb=GB, csp=MAP_CSP, feed=db.feed(state.config.id), **server_overview(request, state),
+                  **history(request, state))
 
 
 def history(request, state):
@@ -1420,30 +1425,24 @@ async def restart_through_amp(request):
 
 
 CONTROL_SECONDS = 3600
-CONTROL_ACTIONS = {"start": "Starting", "restart": "Restarting", "stop": "Stopping"}
+CONTROL_ACTIONS = {"start": "Starting", "restart": "Restarting", "stop": "Stopping", "update": "Updating"}
 
 
 def control_card(state):
-    q = state.query or {}
-    return {"id": state.config.id, "name": state.config.name, "online": state.online,
-            "players": len(state.players) if state.online else 0,
-            "slots": q.get("slots") if q.get("ok") else None,
-            "map": q.get("map") if q.get("ok") else None,
-            "ping": q.get("ms") if q.get("ok") else None}
+    """One server's card on the home page."""
+    q = state.query if (state.query or {}).get("ok") else {}
+    view = server_view(state)
+    return {**view, "count": len(state.players) if state.online else 0, "slots": q.get("slots"),
+            "map": q.get("map"), "ping": q.get("ms"), "unreachable": state.unreachable >= UNREACHABLE_AFTER}
 
 
-async def control_page(request):
-    """The server dashboard: every server at a glance with its power buttons,
-    then one server in detail - its numbers, a map of recent kills, who's on
-    and the last hour as charts."""
-    manager, db = request.app[MANAGER], request.app[DB]
-    states = list(manager.states.values())
-    if not states:
-        return render(request, "control.html", cards=[], chosen=None)
-    chosen = manager.states.get(request.query.get("server", "")) or states[0]
+def server_overview(request, state):
+    """The Overview tab of a server's page: its numbers, a map of recent kills,
+    who's on and the last hour as charts."""
+    db = request.app[DB]
     until = now()
     since = until - CONTROL_SECONDS
-    rows = [dict(r) for r in db.server_samples(chosen.config.id, since)]
+    rows = [dict(r) for r in db.server_samples(state.config.id, since)]
     for r in rows:
         r["rss_gb"] = r["rss"] / GB if r.get("rss") else None
     box_rows = [dict(r) for r in db.box_samples(since)]
@@ -1458,24 +1457,50 @@ async def control_page(request):
     ]
     latest = rows[-1] if rows else {}
     box_latest = box_rows[-1] if box_rows else {}
-    view = server_view(chosen)
-    q = chosen.query or {}
+    card = control_card(state)
     players = sorted(({"name": p["name"], "identity": p["identity"],
-                       "played": now() - chosen.joined.get(p["identity"] or p["name"], now())}
-                      for p in chosen.players), key=lambda p: -p["played"]) if chosen.online else []
-    info = {"online": chosen.online, "up_for": view["up_for"], "map": q.get("map") if q.get("ok") else None,
-            "players": len(players), "slots": q.get("slots") if q.get("ok") else None, "fps": view["fps"],
-            "cpu": latest.get("proc_cpu"), "memory": chosen.memory or latest.get("rss"),
-            "disk": box_latest.get("disk_pct"), "ping": q.get("ms") if q.get("ok") else None}
-    return render(request, "control.html", cards=[control_card(s) for s in states], chosen=chosen.config,
-                  info=info, players=players, charts=charts, amp=bool(request.app[AMP]), gb=GB,
-                  has_map=mortar_map() is not None, csp=MAP_CSP)
+                       "played": now() - state.joined.get(p["identity"] or p["name"], now())}
+                      for p in state.players), key=lambda p: -p["played"]) if state.online else []
+    info = {"online": state.online, "up_for": card["up_for"], "map": card["map"], "players": len(players),
+            "slots": card["slots"], "fps": card["fps"], "cpu": latest.get("proc_cpu"),
+            "memory": state.memory or latest.get("rss"), "disk": box_latest.get("disk_pct"), "ping": card["ping"]}
+    return {"info": info, "roster": players, "charts": charts, "has_map": mortar_map() is not None}
+
+
+def attention(request, states):
+    """What needs someone now, worst first: each is (level, text, when, link)."""
+    db, out = request.app[DB], []
+    for st in states:
+        name = st.config.name
+        if st.config.configured and not st.online:
+            out.append(("bad", f"{name} is offline" + (f": {st.error}" if st.error else ""), "", f"/server/{st.config.id}"))
+        elif st.unreachable >= UNREACHABLE_AFTER:
+            out.append(("bad", f"{name} is running but can't be reached from outside", "", f"/server/{st.config.id}/monitor"))
+        if st.online and len(st.players) >= 10 and not st.admins:
+            out.append(("warn", f"No admin on {name} · {len(st.players)} players", "", f"/server/{st.config.id}#live"))
+        if st.check and st.check.get("status") == "leak":
+            out.append(("warn", f"{name}: memory didn't clear after the last mission restart", "", f"/server/{st.config.id}#health"))
+    sus = db.all("SELECT server, at, text FROM feed WHERE kind = 'sus' AND at >= ? ORDER BY at DESC", now() - 3600)
+    if sus:
+        out.append(("warn", f"{len(sus)} sus flag{'s' if len(sus) != 1 else ''} in the last hour. Latest: {sus[0]['text'][:110]}",
+                    _clock(sus[0]["at"]), f"/server/{sus[0]['server']}#live"))
+    if allowed(request, "ips"):
+        for a in db.attackers(now() - ATTACK_WINDOW, limit=3):
+            if a["n"] >= ATTACK_LOGINS:
+                out.append(("warn", f"Login attack on {a['sources'].replace(',', ' and ')} from {a['ip']} · {a['n']} tries",
+                            _clock(a["last"]), "/attacks"))
+    out.sort(key=lambda x: x[0] != "bad")
+    return out
+
+
+async def control_redirect(request):
+    raise web.HTTPFound("/")
 
 
 async def control_power(request):
     require(request, "power")
     action = request.match_info["action"]
-    back = f"/control?server={request.match_info['id']}"
+    back = request.headers.get("Referer", "/") if request.headers.get("Referer", "").startswith(site_url(request)) else "/"
     if action not in CONTROL_ACTIONS:
         raise web.HTTPNotFound()
     if not request.app[AMP]:
@@ -1489,7 +1514,7 @@ async def control_power(request):
         flash(request, f"That didn't work: {exc}", "error")
         raise web.HTTPFound(back)
     audit(request, f"{action} through AMP", state.config.id)
-    alert(request, f"{CONTROL_ACTIONS[action]} {state.config.name}", "From the Control page.",
+    alert(request, f"{CONTROL_ACTIONS[action]} {state.config.name}", "From the panel.",
           colour=RED if action == "stop" else GOLD)
     flash(request, f"{CONTROL_ACTIONS[action]} {state.config.name}. AMP takes a minute or two.")
     raise web.HTTPFound(back)
@@ -2543,9 +2568,9 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/discord", discord_home)
     app.router.add_post("/bot/restart", restart_bot)
     app.router.add_get("/data", data_page)
-    app.router.add_get("/control", control_page)
-    app.router.add_post("/control/{id}/{action}", control_power)
-    app.router.add_get("/control/{id}/kills.json", control_kills)
+    app.router.add_get("/control", control_redirect)
+    app.router.add_post("/server/{id}/power/{action}", control_power)
+    app.router.add_get("/server/{id}/kills.json", control_kills)
     app.router.add_get("/control-map/map.json", control_map)
     app.router.add_get("/control-map/tiles/{z}/{x}/{y}", control_tile)
     app.router.add_get("/control-map/picture", control_picture)

@@ -1,28 +1,23 @@
 {% for c in cards %}
-<section class="card server">
-  <div class="row">
-    <h2><a href="/server/{{ c.id }}">{{ c.name }}</a></h2>
-    {% if not c.configured %}<span class="badge off">Not set up</span>
-    {% elif c.online %}<span class="badge on">Online</span>
-    {% else %}<span class="badge down">Offline</span>{% endif %}
+<section class="ctl-card">
+  <a class="ctl-card-link" href="/server/{{ c.id }}" aria-label="Open {{ c.name }}"></a>
+  {% if not c.configured %}<span class="ctl-state">Not set up</span>
+  {% else %}<span class="ctl-state {{ 'on' if c.online else 'off' }}">{{ "Online" if c.online else "Offline" }}</span>{% endif %}
+  <h2>{{ c.name }}</h2>
+  <div class="ctl-stats">
+    <span title="Players"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/></svg>{{ c.count }}{% if c.slots %} / {{ c.slots }}{% endif %}</span>
+    <span title="Map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>{{ c.map or "—" }}</span>
+    <span class="ctl-ping{{ ' bad' if c.unreachable }}" title="How long the server browser check took">{% if c.unreachable %}Unreachable{% elif c.ping is not none %}{{ c.ping|round|int }} ms{% else %}—{% endif %}</span>
   </div>
-  {% if c.online %}
-  <div class="mini">
-    <div><b>{{ c.players|length }}</b><span>Players</span></div>
-    <div>{% if c.fps is not none %}<b class="{{ 'warn' if c.fps < 20 }}">{{ "%.0f"|format(c.fps) }}</b>{% else %}<b class="na">No data</b>{% endif %}<span>FPS</span></div>
-    <div>{% if c.pid %}<b>{{ c.memory|gb }}</b>{% else %}<b class="na">No data</b>{% endif %}<span>Memory</span></div>
-    <div>{% if c.up_for is not none %}<b>{{ c.up_for|span }}</b>{% else %}<b class="na">No data</b>{% endif %}<span>Up for</span></div>
+  <div class="ctl-extra">
+    {% if c.online %}
+    <span>{% if c.fps is not none %}<b class="{{ 'warn' if c.fps < 20 }}">{{ "%.0f"|format(c.fps) }}</b>{% else %}—{% endif %} FPS</span>
+    {% if c.up_for is not none %}<span>Up <b>{{ c.up_for|span }}</b></span>{% endif %}
+    {% if c.admins %}<span class="admin-on">Admin on: {{ c.admins|map(attribute="name")|join(", ") }}</span>
+    {% else %}<span class="no-admin-on">No admin on</span>{% endif %}
+    {% else %}<span>{{ c.error or "Connecting…" }}</span>{% endif %}
   </div>
-  {% if c.admins %}<p class="admins-on">Admin on: {{ c.admins|map(attribute="name")|join(", ") }}</p>
-  {% else %}<p class="no-admin">No admin on</p>{% endif %}
-  {% else %}
-  <p class="muted">{{ c.error or "Connecting…" }}</p>
-  {% endif %}
-  {% if c.check and c.check.status == "leak" %}<p class="warn">Memory didn't clear after the last mission restart</p>{% endif %}
-  <div class="quick">
-    <a class="button small" href="/server/{{ c.id }}">Players &amp; feed</a>
-    <a class="button small ghost" href="/server/{{ c.id }}#health">Health</a>
-    <a class="button small ghost" href="/server/{{ c.id }}#history">History</a>
-  </div>
+  {% if c.check and c.check.status == "leak" %}<p class="ctl-note warn">Memory didn't clear after the last mission restart</p>{% endif %}
+  {% include "_power.html" %}
 </section>
 {% endfor %}

@@ -1,0 +1,10 @@
+{% if can("power") and amp %}
+<div class="ctl-power">
+  {% for action, label in (("start", "Start"), ("restart", "Restart"), ("stop", "Stop"), ("update", "Update")) %}
+  <form method="post" action="/server/{{ c.id }}/power/{{ action }}"{% if action != "start" %} data-confirm="{{ label }} {{ c.name }}?"{% endif %}>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="ctl-btn {{ action }}">{{ label }}</button>
+  </form>
+  {% endfor %}
+</div>
+{% endif %}

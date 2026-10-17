@@ -16,7 +16,6 @@
   <a class="brand" href="/"><img src="/static/oyb-mark.svg" alt=""><b>O.Y.B</b> <span>Control</span></a>
   <nav>
     <a href="/" {% if path == "/" %}class="on"{% endif %}>Servers</a>
-    <a href="/control" {% if path == "/control" %}class="on"{% endif %}>Control</a>
     <a href="/players" {% if path.startswith("/player") %}class="on"{% endif %}>Players</a>
     <a href="/bans" {% if path == "/bans" %}class="on"{% endif %}>Bans</a>
     {% set more %}
@@ -50,7 +49,6 @@
   <details class="menu">
     <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>More</summary>
     <div class="menu-list">
-      <a href="/control" class="extra{{ ' on' if path == '/control' }}">Control</a>
       {{ more }}
       <a href="/account" class="extra">Account · {{ user.username }}</a>
       <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Log out</button></form>

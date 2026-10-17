@@ -42,19 +42,33 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
     async def login(self, who):
         await self.client.post("/login", data={"username": who, "password": f"{who}-password"})
 
-    async def test_the_page_shows_every_server_and_the_chosen_one(self):
+    async def test_home_has_a_card_per_server_and_each_opens_its_page(self):
         await self.login("boss")
-        page = await (await self.client.get("/control")).text()
-        for words in ("Everon Tactical", "Conflict Legacy", "1 / 128", "32 ms", "Server information", "2h 0m",
-                      "Player list", "Gaz", "1h 30m", "CPU usage", "Memory usage", "Network", "Kill map"):
+        home = await (await self.client.get("/")).text()
+        for words in ("Everon Tactical", "Conflict Legacy", "1 / 128", "32 ms", "No admin on", 'href="/server/one"',
+                      'href="/server/two"'):
+            self.assertIn(words, home)
+        self.assertNotIn("/power/stop", home)      # no AMP, no buttons
+        page = await (await self.client.get("/server/one")).text()
+        for words in ("Server information", "2h 0m", "Player list", "Gaz", "1h 30m", "CPU usage", "Memory usage",
+                      "Network", "Kill map", "Live feed &amp; players", "← All servers"):
             self.assertIn(words, page)
-        self.assertNotIn('action="/control/one/stop"', page)      # no AMP, no buttons
-        two = await (await self.client.get("/control?server=two")).text()
+        two = await (await self.client.get("/server/two")).text()
         self.assertIn("The server is offline.", two)
+        self.assertEqual((await self.client.get("/control", allow_redirects=False)).headers["Location"], "/")
+
+    async def test_needs_attention(self):
+        self.manager.states["one"].players = [{"name": f"P{i}", "identity": ""} for i in range(12)]
+        self.db.add_feed("one", "sus", "5 players were blown up in the same second")
+        await self.login("boss")
+        home = await (await self.client.get("/")).text()
+        self.assertIn("Needs attention", home)
+        self.assertIn("No admin on Everon Tactical · 12 players", home)
+        self.assertIn("1 sus flag in the last hour. Latest: 5 players were blown up", home)
 
     async def test_kills_from_the_last_half_hour(self):
         await self.login("mod")
-        kills = (await (await self.client.get("/control/one/kills.json")).json())["kills"]
+        kills = (await (await self.client.get("/server/one/kills.json")).json())["kills"]
         self.assertEqual(len(kills), 1)
         self.assertEqual(kills[0]["killer"], "Gaz")
         self.assertTrue(kills[0]["teamkill"])
@@ -66,18 +80,19 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         amp.power = mock.AsyncMock()
         self.app[AMP] = amp
         await self.login("boss")
-        page = await (await self.client.get("/control")).text()
-        self.assertIn('action="/control/one/stop"', page)
+        page = await (await self.client.get("/")).text()
+        self.assertIn('action="/server/one/power/stop"', page)
+        self.assertIn('action="/server/one/power/update"', page)
         token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
-        reply = await self.client.post("/control/one/restart", data={"csrf": token}, allow_redirects=False)
-        self.assertEqual(reply.headers["Location"], "/control?server=one")
+        reply = await self.client.post("/server/one/power/restart", data={"csrf": token}, allow_redirects=False)
+        self.assertEqual(reply.headers["Location"], "/")
         amp.power.assert_awaited_once_with({"InstanceID": "x", "InstanceName": "A3x01"}, "restart")
         self.assertEqual(self.db.all("SELECT action FROM audit WHERE action LIKE '%AMP%'")[0]["action"], "restart through AMP")
         await self.client.post("/logout", data={"csrf": token})
         await self.login("mod")
-        page = await (await self.client.get("/control")).text()
-        self.assertNotIn('action="/control/one/stop"', page)
+        page = await (await self.client.get("/")).text()
+        self.assertNotIn('action="/server/one/power/stop"', page)
         token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
-        reply = await self.client.post("/control/one/stop", data={"csrf": token}, allow_redirects=False)
+        reply = await self.client.post("/server/one/power/stop", data={"csrf": token}, allow_redirects=False)
         self.assertEqual(reply.status, 403)
         self.assertEqual(amp.power.await_count, 1)

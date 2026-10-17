@@ -38,13 +38,15 @@ async function startMap(box) {
   }
   map.fitBounds(bounds);
   map.setMaxBounds(bounds.pad(0.2));
+  // Drawn inside a tab that may have been hidden: size it again when it shows.
+  window.addEventListener("hashchange", () => setTimeout(() => { map.invalidateSize(); map.fitBounds(bounds); }, 0));
 
   const layer = L.layerGroup().addTo(map);
   const clock = (at) => new Date(at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const text = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   async function draw() {
-    const res = await fetch(`/control/${encodeURIComponent(box.dataset.server)}/kills.json`, { credentials: "same-origin" });
+    const res = await fetch(`/server/${encodeURIComponent(box.dataset.server)}/kills.json`, { credentials: "same-origin" });
     if (!res.ok) return;
     const { kills } = await res.json();
     layer.clearLayers();

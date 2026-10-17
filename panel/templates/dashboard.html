@@ -1,20 +1,25 @@
 {% extends "base.html" %}
 {% block body %}
-<section class="overview">
-  <div class="hello">
-    <h1>{{ welcome.greeting }}, {{ user.username }}</h1>
-    <p class="muted">Signed in as {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b> · <a href="/guide">Guide</a></p>
-  </div>
-  <div class="tiles">
-    <div class="tile{{ ' bad' if welcome.online < cards|length }}"><b>{{ welcome.online }}/{{ cards|length }}</b><span>Servers online</span></div>
-    <a class="tile" href="/players"><b>{{ welcome.players }}</b><span>Players on</span></a>
-    <a class="tile" href="/bans"><b>{{ welcome.bans }}</b><span>Active bans</span></a>
-    <div class="tile{{ ' bad' if welcome.sus }}"><b>{{ welcome.sus }}</b><span>Sus flags, 24h</span></div>
-  </div>
+<section class="home-hello">
+  <h1>{{ welcome.greeting }}, {{ user.username }}</h1>
+  <p class="muted">Signed in as {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b> · <a href="/guide">Guide</a></p>
 </section>
-
-<h2 class="section">Servers</h2>
-<div class="cards" data-refresh="/cards.part">
+<div class="home-tiles">
+  <div class="home-tile{{ ' bad' if welcome.online < cards|length }}"><b>{{ welcome.online }}/{{ cards|length }}</b><span>Servers online</span></div>
+  <a class="home-tile" href="/players"><b>{{ welcome.players }}</b><span>Players on</span></a>
+  <a class="home-tile" href="/bans"><b>{{ welcome.bans }}</b><span>Active bans</span></a>
+  <div class="home-tile{{ ' bad' if welcome.sus }}"><b>{{ welcome.sus }}</b><span>Sus flags, 24h</span></div>
+</div>
+{% if attention %}
+<section class="home-alert">
+  <h3>Needs attention</h3>
+  {% for level, text, when, link in attention %}
+  <a href="{{ link }}"><i class="{{ level }}"></i><span>{{ text }}</span>{% if when %}<em>{{ when }}</em>{% endif %}</a>
+  {% endfor %}
+</section>
+{% endif %}
+<div class="ctl-cards" data-refresh="/cards.part">
 {% include "_cards.html" %}
 </div>
+{% if can("power") and not amp %}<p class="muted">Start, Restart, Stop and Update appear on the cards once the panel is connected to AMP.</p>{% endif %}
 {% endblock %}

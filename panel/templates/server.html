@@ -1,26 +1,36 @@
 {% extends "base.html" %}
 {% block title %}{{ s.name }} · OYB Control{% endblock %}
+{% block head %}<link rel="stylesheet" href="/control-map/leaflet.css">
+<script src="/control-map/leaflet.js" defer></script>
+<script src="/static/control.js?v={{ asset_version }}" defer></script>{% endblock %}
 {% block body %}
-<p class="kicker">Server</p>
-<div class="row">
-  <h1>{{ s.name }}</h1>
-  {% if not s.configured %}<span class="badge off">Not set up</span>
-  {% elif s.online %}<span class="badge on">Online</span>
-  {% else %}<span class="badge down">Offline</span>{% endif %}
+<p class="kicker"><a href="/">← All servers</a></p>
+<div class="srv-head">
+  <h1><span class="dot {{ 'ok' if s.online else 'bad' }}"></span>{{ s.name }}
+    {% if not s.configured %}<span class="ctl-state">Not set up</span>{% endif %}</h1>
+  <div class="srv-actions">
+    {% if card.ping is not none %}<span class="muted">{{ card.ping|round|int }} ms</span>{% endif %}
+    {% with c = card %}{% include "_power.html" %}{% endwith %}
+  </div>
 </div>
 {% if not s.online %}<p class="muted">{{ s.error or "Connecting…" }}</p>{% endif %}
 
-<div data-refresh="/server/{{ s.id }}/summary.part">
-{% include "_summary.html" %}
-</div>
-
-<nav class="tabs">
+<nav class="tabs srv-tabs">
   <a href="#overview" data-tab="overview">Overview</a>
-  <a href="#health" data-tab="health">Health</a>
+  <a href="#live" data-tab="live">Live feed &amp; players</a>
   <a href="#history" data-tab="history">History</a>
+  <a href="#health" data-tab="health">Health</a>
+  <a href="/server/{{ s.id }}/monitor">Monitor</a>
 </nav>
 
 <div data-tab-panel="overview">
+{% include "_overview.html" %}
+</div>
+
+<div data-tab-panel="live" hidden>
+  <div data-refresh="/server/{{ s.id }}/summary.part">
+  {% include "_summary.html" %}
+  </div>
   <div class="panes">
     <section class="card pane" data-expand>
       <div class="row">

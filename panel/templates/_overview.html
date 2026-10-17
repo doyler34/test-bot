@@ -1,49 +1,3 @@
-{% extends "base.html" %}
-{% block title %}Control · OYB Control{% endblock %}
-{% block head %}<link rel="stylesheet" href="/control-map/leaflet.css">
-<script src="/control-map/leaflet.js" defer></script>
-<script src="/static/control.js?v={{ asset_version }}" defer></script>{% endblock %}
-{% block body %}
-{% if not cards %}
-<h1>Control</h1>
-<p class="muted">No servers are set up yet.</p>
-{% else %}
-<div class="ctl-cards">
-  {% for c in cards %}
-  <section class="ctl-card{{ ' chosen' if chosen and c.id == chosen.id }}">
-    <a class="ctl-card-link" href="/control?server={{ c.id }}" aria-label="Show {{ c.name }}"></a>
-    <span class="ctl-state {{ 'on' if c.online else 'off' }}">{{ "Online" if c.online else "Offline" }}</span>
-    <h2>{{ c.name }}</h2>
-    <div class="ctl-stats">
-      <span title="Players"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/></svg>{{ c.players }}{% if c.slots %} / {{ c.slots }}{% endif %}</span>
-      <span title="Map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>{{ c.map or "—" }}</span>
-      <span class="ctl-ping" title="Server browser answer time">{% if c.ping is not none %}{{ c.ping|round|int }} ms{% else %}—{% endif %}</span>
-    </div>
-    {% if can("power") and amp %}
-    <div class="ctl-power">
-      {% for action, label in (("start", "Start"), ("restart", "Restart"), ("stop", "Stop")) %}
-      <form method="post" action="/control/{{ c.id }}/{{ action }}"{% if action != "start" %} data-confirm="{{ label }} {{ c.name }}?"{% endif %}>
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button class="ctl-btn {{ action }}">{{ label }}</button>
-      </form>
-      {% endfor %}
-    </div>
-    {% endif %}
-  </section>
-  {% endfor %}
-</div>
-{% if can("power") and not amp %}<p class="muted">Start, Restart and Stop appear here once the panel is connected to AMP.</p>{% endif %}
-
-<section class="ctl-detail">
-  <div class="ctl-head">
-    <h1><span class="dot {{ 'ok' if info.online else 'bad' }}"></span>{{ chosen.name }}</h1>
-    <nav class="ctl-links">
-      <a href="/server/{{ chosen.id }}">Server page</a>
-      <a href="/server/{{ chosen.id }}#history">History</a>
-      <a href="/server/{{ chosen.id }}/monitor">Monitor</a>
-    </nav>
-  </div>
-
   <div class="ctl-grid">
     <section class="ctl-panel">
       <h2>Server information</h2>
@@ -64,7 +18,7 @@
     <section class="ctl-panel">
       <h2>Kill map <span class="muted">· last 30 minutes</span></h2>
       {% if has_map %}
-      <div id="ctl-map" data-server="{{ chosen.id }}"></div>
+      <div id="ctl-map" data-server="{{ s.id }}"></div>
       <p class="ctl-legend"><span><i class="k"></i>Kill</span><span><i class="t"></i>Teamkill</span><span><i class="a"></i>Killed by AI or unknown</span></p>
       {% else %}
       <p class="muted">The map hasn't been downloaded yet. It comes with the mortar calculator.</p>
@@ -72,11 +26,11 @@
     </section>
 
     <section class="ctl-panel">
-      <h2>Player list <span class="muted">({{ players|length }})</span></h2>
+      <h2>Player list <span class="muted">({{ roster|length }})</span></h2>
       <input type="search" class="ctl-search" placeholder="Search players…" data-filter-list="#ctl-players">
       <div class="ctl-players" id="ctl-players">
         <div class="ctl-row head"><span>Name</span><span>Playtime</span></div>
-        {% for p in players %}
+        {% for p in roster %}
         <a class="ctl-row" href="{{ '/player/' ~ p.identity if p.identity else '#' }}" data-name="{{ p.name|lower }}">
           <span><i class="dot ok"></i>{{ p.name }}</span><span>{{ p.played|span }}</span></a>
         {% else %}
@@ -100,6 +54,3 @@
     </section>
     {% endfor %}
   </div>
-</section>
-{% endif %}
-{% endblock %}
