@@ -7,7 +7,7 @@
 <svg class="chart{{ ' mini' if c.height < 100 }}" viewBox="0 0 {{ c.width }} {{ c.height }}" preserveAspectRatio="none" role="img" aria-label="{{ title }}">
   {% for l in c.lines %}{% for run in l.runs %}<polyline class="line {{ l.kind }}" points="{{ run }}"/>{% endfor %}{% endfor %}
 </svg>
-<div class="legend"><span>{{ range_ago }}</span><span>{% for l in c.lines %}<i class="key {{ l.kind }}"></i>{{ l.label }} {{ num(l.now) }} · top {{ num(l.peak) }}{{ " · " if not loop.last }}{% endfor %}</span><span>now</span></div>
+<div class="legend"><span class="ends">{{ range_ago }}</span><span>{% for l in c.lines %}<i class="key {{ l.kind }}"></i>{{ l.label }} {{ num(l.now) }} · top {{ num(l.peak) }}{{ " · " if not loop.last }}{% endfor %}</span><span class="ends">now</span></div>
 {% else %}<p class="muted">No readings yet.</p>{% endif %}
 {% endmacro %}
 {% block body %}
@@ -18,6 +18,14 @@
   <span class="muted">A reading every 15 seconds, kept 7 days.</span>
 </form>
 
+<nav class="tabs dash-tabs">
+  <a href="#overview" data-tab="overview">Overview</a>
+  <a href="#box" data-tab="box">Box</a>
+  <a href="#servers" data-tab="servers">Servers</a>
+  <a href="#check" data-tab="check">Network check</a>
+</nav>
+
+<div data-tab-panel="overview">
 <div class="stats">
   <div class="stat"><b>{{ num(latest.cpu) }}{% if latest.cpu is not none %}%{% endif %}</b><span>CPU</span></div>
   <div class="stat"><b>{{ num(latest.load1) }}</b><span>Load</span></div>
@@ -40,27 +48,13 @@
   {% endfor %}
 </section>
 
-<h2 class="section">The box</h2>
-<div class="monitor-grid">
-{% for title, c, note in charts %}
 <section class="card">
-  <h3>{{ title }}</h3>
-  {{ drawn(c, title) }}
-  {% if note %}<p class="muted">{{ note }}</p>{% endif %}
+  <h2>Game servers</h2>
+  {% for g in games %}
+  <p class="row"><a href="#servers">{{ g.name }}</a>
+    <span class="pill {{ '' if g.online else 'down' }}">{% if g.online %}{{ g.players }} on{% if g.latest.fps %} · {{ g.latest.fps|round|int }} FPS{% endif %}{% else %}offline{% endif %}</span></p>
+  {% endfor %}
 </section>
-{% endfor %}
-</div>
-
-<h2 class="section">Game servers</h2>
-{% for g in games %}
-<section class="card">
-  <div class="row"><h2><a href="/server/{{ g.id }}/monitor">{{ g.name }}</a></h2>
-    <span class="pill {{ '' if g.online else 'down' }}">{% if g.online %}{{ g.players }} on{% else %}offline{% endif %}</span></div>
-  <div class="mini-grid">
-    {% for title, c in g.charts %}<div><h3>{{ title }}</h3>{{ drawn(c, title) }}</div>{% endfor %}
-  </div>
-</section>
-{% endfor %}
 
 <div class="monitor-grid">
 <section class="card">
@@ -80,9 +74,35 @@
   <p><a href="/attacks">All login attacks →</a></p>
 </section>
 </div>
+</div>
 
-<h2 class="section">Full network check</h2>
-<form method="post" class="card net-run">
+<div data-tab-panel="box" hidden>
+<div class="monitor-grid dash-charts">
+{% for title, c, note in charts %}
+<section class="card">
+  <h3>{{ title }}</h3>
+  {{ drawn(c, title) }}
+  {% if note %}<p class="muted chart-note">{{ note }}</p>{% endif %}
+</section>
+{% endfor %}
+</div>
+</div>
+
+<div data-tab-panel="servers" hidden>
+{% for g in games %}
+<details class="card dash-server" {% if g.online or loop.first %}open{% endif %}>
+  <summary class="row"><b>{{ g.name }}</b>
+    <span class="pill {{ '' if g.online else 'down' }}">{% if g.online %}{{ g.players }} on{% else %}offline{% endif %}</span></summary>
+  <div class="mini-grid">
+    {% for title, c in g.charts %}<div><h3>{{ title }}</h3>{{ drawn(c, title) }}</div>{% endfor %}
+  </div>
+  <p><a href="/server/{{ g.id }}/monitor">Full Monitor →</a></p>
+</details>
+{% endfor %}
+</div>
+
+<div data-tab-panel="check" hidden>
+<form method="post" action="/network#check" class="card net-run">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <p class="muted">Reads every network counter, waits ten seconds while it tests the servers and the internet, then reads
     them again. Run it while players are on, best of all while the problem is happening.</p>
@@ -125,7 +145,7 @@
 
 {% for section, rows in sections.items() %}
 {% set worst = 'bad' if rows|selectattr("verdict", "equalto", "bad")|list else ('warn' if rows|selectattr("verdict", "equalto", "warn")|list else 'ok') %}
-<details class="card net-section" {% if worst == 'bad' %}open{% endif %}>
+<details class="card net-section">
   <summary><span class="dot {{ worst }}"></span>{{ section }} <span class="muted">· {{ rows|length }} check{{ "s" if rows|length != 1 }}</span></summary>
   <div class="net-list">
     {% for r in rows %}
@@ -145,4 +165,5 @@
   <button type="button" class="small" data-copy="#net-text">Copy</button>
 </details>
 {% endif %}
+</div>
 {% endblock %}

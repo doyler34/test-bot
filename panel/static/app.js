@@ -4,7 +4,10 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("change", (event) => {
-  if (event.target.matches("[data-autosubmit]")) event.target.form.submit();
+  if (event.target.matches("[data-autosubmit]")) {
+    if (location.hash) event.target.form.action = location.pathname + location.hash;
+    event.target.form.submit();
+  }
 });
 
 async function refresh(box) {

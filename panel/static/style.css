@@ -577,3 +577,20 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .mini-grid h3 { margin: 6px 0 4px; font-size: .9rem; }
 .chart.mini { height: 70px; }
 .copy-box textarea { width: 100%; box-sizing: border-box; }
+.tabs.dash-tabs { overflow-x: auto; scrollbar-width: none; }
+.dash-tabs a { white-space: nowrap; }
+.dash-server summary { cursor: pointer; list-style: none; }
+.dash-server summary::-webkit-details-marker { display: none; }
+.dash-server[open] summary { margin-bottom: 8px; }
+@media (max-width: 520px) {
+  .dash-tabs a { padding: 6px 10px; font-size: .95rem; }
+  .dash-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 8px; }
+  .dash-charts .card { padding: 10px; margin-bottom: 8px; }
+  .dash-charts h3 { font-size: .78rem; margin-bottom: 6px; }
+  .dash-charts .chart { height: 72px; }
+  .dash-charts .chart-note, .dash-charts .legend .ends, .dash-server .legend .ends { display: none; }
+  .dash-charts .legend, .dash-server .legend { font-size: .7rem; }
+  .dash-server .mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
+  .dash-server .chart.mini { height: 52px; }
+  .dash-server h3 { font-size: .75rem; }
+}
