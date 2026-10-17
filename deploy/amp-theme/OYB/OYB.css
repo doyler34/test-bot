@@ -63,7 +63,10 @@ input.searchBox { background-color: transparent; }
 #sideMenuContainer { border-right: 1px solid var(--oyb-line); }
 .sideItemList { border-left: 1px solid var(--oyb-line); }
 #userInfo { border-bottom: 1px solid var(--oyb-line); }
+#sideMenuContainer, #sideMenu { overflow-x: hidden; }
 .menuTitle {
+  box-sizing: border-box;
+  width: 100%;
   font-size: 0 !important;
   line-height: 0;
   padding: 18px 16px 14px;
@@ -87,7 +90,7 @@ input.searchBox { background-color: transparent; }
   margin-top: 4px;
 }
 
-#sideMenu a { font-size: 100%; border-left: 3px solid transparent; }
+#sideMenu a { font-size: 100%; box-sizing: border-box; border-left: 3px solid transparent; }
 #sideMenu a:hover { background-color: var(--oyb-panel-2); }
 #sideMenu a:active { background-color: #090b0a; }
 #sideMenu a.selected {
