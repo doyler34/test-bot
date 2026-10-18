@@ -25,13 +25,8 @@
   </header>
   <nav class="dash-tabs">
     <a class="on" href="/?server={{ chosen.id }}">Overview</a>
-    <span class="off" title="Not in the panel yet">Console</span>
     <a href="/server/{{ chosen.id }}#live">Players</a>
-    <span class="off" title="Not in the panel yet">Files</span>
-    {% if can("game_admins") %}<a href="/game-admins">Settings</a>{% else %}<span class="off" title="Needs the in-game admins permission">Settings</span>{% endif %}
-    <span class="off" title="Not in the panel yet">Plugins</span>
-    <span class="off" title="Not in the panel yet">Schedule</span>
-    <span class="off" title="Not in the panel yet">Backups</span>
+    {% if can("game_admins") %}<a href="/game-admins">Settings</a>{% endif %}
     <a class="more" href="/server/{{ chosen.id }}">Full page →</a>
   </nav>
   {% with s = chosen %}{% include "_overview.html" %}{% endwith %}
