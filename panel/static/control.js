@@ -73,6 +73,26 @@ const mapBox = document.getElementById("ctl-map");
 if (mapBox && window.L) startMap(mapBox);
 
 const KILL_COLOURS = { k: "#f47b20", t: "#e0443a", a: "#b18cff" };
+// The log's hit zones on the same body as the player page's combat card.
+const ZONE_PART = { Head: "head", Neck: "neck", Chest: "chest", Abdomen: "abdomen", Hips: "hips",
+  LArm: "larm", LForearm: "larm", LHand: "larm", RArm: "rarm", RForearm: "rarm", RHand: "rarm",
+  LThigh: "lleg", LCalf: "lleg", LFoot: "lleg", RThigh: "rleg", RCalf: "rleg", RFoot: "rleg" };
+const ZONE_WORDS = { LArm: "left arm", LForearm: "left forearm", LHand: "left hand", RArm: "right arm",
+  RForearm: "right forearm", RHand: "right hand", LThigh: "left thigh", LCalf: "left calf", LFoot: "left foot",
+  RThigh: "right thigh", RCalf: "right calf", RFoot: "right foot" };
+const BODY_SHAPES = {
+  head: '<circle cx="60" cy="20" r="15"/>',
+  neck: '<path d="M54 34h12v12h-12z"/>',
+  chest: '<path d="M33 54Q36 46 48 45H72Q84 46 87 54L84 86Q83 89 79 89H41Q37 89 36 86Z"/>',
+  abdomen: '<path d="M40 91H80L78 114Q77 116 74 116H46Q43 116 42 114Z"/>',
+  hips: '<path d="M42 118H78Q83 122 83 132L81 138H39L37 132Q37 122 42 118Z"/>',
+  rarm: '<path d="M30 50Q22 52 21 62L14 118Q13 128 16 136L22 137Q25 128 25 120L33 70Z"/>',
+  larm: '<path d="M90 50Q98 52 99 62L106 118Q107 128 104 136L98 137Q95 128 95 120L87 70Z"/>',
+  rleg: '<path d="M39 140H58L56 200L54 248Q54 256 47 256H42Q38 256 39 248L40 200Q37 170 39 140Z"/>',
+  lleg: '<path d="M62 140H81Q83 170 80 200L81 248Q82 256 78 256H73Q66 256 66 248L64 200Z"/>',
+};
+const hitBody = (zone) => `<svg class="kill-body" viewBox="0 0 120 262" aria-hidden="true">${Object.entries(BODY_SHAPES)
+  .map(([part, shape]) => shape.replace("/>", ` class="${ZONE_PART[zone] === part ? "hit" : ""}"/>`)).join("")}</svg>`;
 const RANGE_WORDS = { "30m": "last 30 min", "1h": "last hour", "6h": "last 6 hours", "24h": "last 24 hours",
   "7d": "last 7 days", "30d": "last 30 days" };
 
@@ -178,15 +198,17 @@ async function startMap(box) {
       const colour = KILL_COLOURS[kind];
       const to = toLatLng(k.to[0], k.to[1]);
       if (k.from) L.polyline([toLatLng(k.from[0], k.from[1]), to], { color: colour, weight: 1.5, dashArray: "4 4", interactive: false }).addTo(layers.lines);
-      const details = `<div class="kill-pop"><b class="${kind}">${k.teamkill ? "Teamkill" : kind === "a" ? "Killed by AI or nobody" : "Kill"}</b>`
+      const zone = ZONE_PART[k.zone] ? `<p class="kill-zone">Hit in the <b>${text(ZONE_WORDS[k.zone] || k.zone.toLowerCase())}</b></p>` : "";
+      const details = `<div class="kill-pop">${ZONE_PART[k.zone] ? hitBody(k.zone) : ""}<div>`
+        + `<b class="${kind}">${k.teamkill ? "Teamkill" : kind === "a" ? "Killed by AI or nobody" : "Kill"}</b>`
         + `<p>${k.ai ? text(k.killer || "AI") : who(k.killer, k.killer_id)} → ${who(k.victim, k.victim_id)}</p>`
-        + `<p>${text(k.how || "unknown")}${k.distance ? `, ${k.distance} m` : ""}</p>`
-        + `<p>${clock(k.at)} · grid ${grid(k.to[0], k.to[1])}</p></div>`;
+        + `<p>${text(k.how || "unknown")}${k.distance ? `, ${k.distance} m` : ""}</p>${zone}`
+        + `<p>${clock(k.at)} · grid ${grid(k.to[0], k.to[1])}</p></div></div>`;
       L.circleMarker(to, { radius: touch ? 8 : 6, color: "#fff", weight: 1.5, fillColor: colour, fillOpacity: .95 })
         .on("click", () => {
           // While counting, a dot is just a spot to count around.
           if (state.count) { state.spot = [...k.to]; state.zoomTo = true; drawCount(); return; }
-          L.popup({ maxWidth: 260 }).setLatLng(to).setContent(details).openOn(map);
+          L.popup({ maxWidth: 300 }).setLatLng(to).setContent(details).openOn(map);
         })
         .addTo(layers.dots);
     }
@@ -247,6 +269,11 @@ async function startMap(box) {
     drawCount();
   });
   map.on("zoomend", () => { if (state.heat) drawHeat(); });
+  map.on("popupopen", () => {
+    if (!touch) return;
+    panel.classList.remove("map-tools-open");
+    panel.querySelector("[data-map-layers]")?.setAttribute("aria-expanded", "false");
+  });
   const layersButton = panel.querySelector("[data-map-layers]");
   layersButton?.addEventListener("click", () => {
     const open = panel.classList.toggle("map-tools-open");

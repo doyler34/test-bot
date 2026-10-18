@@ -1766,7 +1766,7 @@ async def control_kills(request):
         "at": r["at"], "teamkill": r["kind"] == "teamkill", "ai": not r["killer"],
         "killer": r["killer_name"] or "", "killer_id": r["killer"], "victim": r["victim_name"], "victim_id": r["victim"],
         "how": DAMAGE.get(r["damage"], (r["damage"] or "").lower()),
-        "distance": round(r["distance"]) if r["distance"] else None,
+        "distance": round(r["distance"]) if r["distance"] else None, "zone": r["zone"] or None,
         "from": [r["killer_x"], r["killer_y"]] if r["killer_x"] is not None else None,
         "to": [r["victim_x"], r["victim_y"]]} for r in rows]})
 

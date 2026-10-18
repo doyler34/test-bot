@@ -29,7 +29,7 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         one.query = {"ok": True, "ms": 31.6, "map": "Everon", "players": 1, "slots": 128}
         self.db.add_kills("one", archive.kill_rows([
             {"at": now() - 60, "kind": "teamkill", "killer": PERSON, "killer_name": "Gaz", "victim": "d-1",
-             "victim_name": "Dave", "damage": "KINETIC", "distance": 41.2, "killer_at": (4000.0, 5000.0),
+             "victim_name": "Dave", "damage": "KINETIC", "distance": 41.2, "zone": "LForearm", "killer_at": (4000.0, 5000.0),
              "victim_at": (4030.0, 5020.0)},
             {"at": now() - 3000, "kind": "kill", "killer": "o-1", "killer_name": "Old", "victim": "n-1",
              "victim_name": "News", "damage": "KINETIC", "distance": 10, "killer_at": (1, 1), "victim_at": (2, 2)},
@@ -79,6 +79,7 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((kills[0]["killer"], kills[0]["killer_id"], kills[0]["victim_id"]), ("Gaz", PERSON, "d-1"))
         self.assertTrue(kills[0]["teamkill"])
         self.assertEqual((kills[0]["from"], kills[0]["to"]), ([4000.0, 5000.0], [4030.0, 5020.0]))
+        self.assertEqual(kills[0]["zone"], "LForearm")
         week = (await (await self.client.get("/server/one/kills.json?range=7d")).json())["kills"]
         self.assertEqual([k["victim"] for k in week], ["Dave", "News", "News"])
         self.assertTrue(week[2]["ai"])
