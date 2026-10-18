@@ -78,6 +78,7 @@
     </div>
   </details>
 </nav>
+{% if tour %}{% include "_tour.html" %}<script src="/static/tour.js?v={{ asset_version }}" defer></script>{% endif %}
 {% endif %}
 </body>
 </html>

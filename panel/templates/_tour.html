@@ -1,0 +1,127 @@
+{% set tap = '<span class="only-desk">Click</span><span class="only-phone">Tap</span>' %}
+{% set last_page = "bans" if can("ban") else "players" %}
+<div id="tour" hidden data-chapters="Dashboard,Server page,Players{{ ',Bans' if can('ban') }}">
+{% if path == "/" %}
+  <section data-step data-splash data-chapter="0">
+    <img class="tour-logo" src="/static/oyb-mark.svg" alt="">
+    <p class="tour-kicker">OYB Control</p>
+    <h3>Welcome, {{ user.username }}</h3>
+    <p>You're {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b>. Here's what that lets you do:</p>
+    <ul class="tour-can">
+      <li>Watch every server live: players, kills, teamkills and Sus flags</li>
+      <li>Look anyone up, with their history and kill log</li>
+      {% if can("notes") %}<li>Leave notes on players for the rest of the staff</li>{% endif %}
+      {% if can("kick") %}<li>Kick players</li>{% endif %}
+      {% if can("ban") %}<li>Ban players on every server at once</li>{% endif %}
+      {% if can("power") %}<li>Start, restart and stop servers</li>{% endif %}
+      {% if can("ips") %}<li>See IPs and alt accounts</li>{% endif %}
+      {% if can("audit") %}<li>Read the audit log</li>{% endif %}
+    </ul>
+    <p>The tour takes about two minutes and walks you through the pages you'll use most.</p>
+  </section>
+  <section data-step data-chapter="0" data-target=".ctl-cards">
+    <h3>Every server</h3>
+    <p>A card for each server: online or not, players on, the map and ping. A red <b>No admin on</b> means nobody's watching it.</p>
+    <p>{{ tap|safe }} a card to open that server underneath. The ★ keeps your favourites first, just for you.</p>
+  </section>
+  <section data-step data-chapter="0" data-target=".dash-panel-head">
+    <h3>The server you picked</h3>
+    <p>Its join address, with a copy and <b>Join</b> button. <b>Players</b> opens its full player list and live feed. <b>Full page →</b> has its history, health and the Monitor.</p>
+  </section>
+  <section data-step data-chapter="0" data-target=".ctl-info">
+    <h3>Server information</h3>
+    <p>How long it's been up, who's on, and which admins are in game. Red <b>None</b> next to Admins on means you might want to jump in.</p>
+  </section>
+  <section data-step data-chapter="0" data-target=".ctl-map-panel">
+    <h3>Live map</h3>
+    <p>Every kill in the last 30 minutes, where it happened. <i class="tour-dot k"></i> a kill, <i class="tour-dot t"></i> a teamkill, <i class="tour-dot a"></i> a kill by AI or with nobody named.
+      <span class="only-desk">Hover over</span><span class="only-phone">Tap</span> a dot for who, with what and from how far.</p>
+    <p>A cluster of purple nobody can explain is how an explosion cheat shows.</p>
+  </section>
+  <section data-step data-chapter="0" data-target=".ctl-panel:has(.ctl-switch)">
+    <h3>Players and the live feed</h3>
+    <p>Switch this box between who's on now and the live feed. Next to the map, you can spot a teamkill in the feed and see where it happened at once. {{ tap|safe }} any name to open that player.</p>
+  </section>
+  <section data-step data-chapter="0" data-target=".ctl-charts">
+    <h3>Charts</h3>
+    <p>CPU, memory, players and network over the last hour. A sudden spike when players complain about lag is worth mentioning to a senior admin.</p>
+  </section>
+  <section data-step data-chapter="0" data-target="aside.side .side-nav" data-phone-target="nav.dock">
+    <h3>Getting around</h3>
+    <p><span class="only-desk">The menu on the left has Players, Bans and everything else you have access to. The <b>Servers</b> list jumps straight to a server.</span><span class="only-phone">The bar at the bottom has the dashboard, Players and Bans. <b>More</b> has everything else, your account and Log out.</span></p>
+  </section>
+  <section data-step data-chapter="0" data-target=".top-search">
+    <h3>Search</h3>
+    <p>Type a player's name, an old name or their ID, and press Enter. A server's name takes you to that server.</p>
+  </section>
+  <section data-step data-chapter="0" data-target="details.bell" data-next="{{ '/server/' ~ chosen.id ~ '?tour=1#live' if chosen else '/players?tour=1' }}">
+    <h3>The bell</h3>
+    <p>A red number means something needs someone: a server down, lots of players and no admin on, or Sus flags in the last hour. {{ tap|safe }} it for the list.</p>
+    <p class="tour-hint">Next we'll open a server's own page.</p>
+  </section>
+{% elif path.startswith("/server/") %}
+  <section data-step data-chapter="1" data-target=".srv-head">
+    <h3>{{ s.name }}'s own page</h3>
+    <p>Everything about one server.{% if can("power") %} The power buttons are here too: Restart and Stop kick everyone, so they always ask first.{% endif %}</p>
+  </section>
+  <section data-step data-chapter="1" data-target=".srv-tabs">
+    <h3>Its tabs</h3>
+    <p><b>Live feed</b> is where you deal with people. <b>History</b> has every past game, <b>Health</b> its uptime and memory, and <b>Monitor</b> a reading every 15 seconds for working out lag.</p>
+  </section>
+  <section data-step data-chapter="1" data-target='[data-tab-panel=live] [data-refresh$="summary.part"]'>
+    <h3>The strip at the top</h3>
+    <p>Players on, admins on (a red 0 means nobody's watching), how fast the server answers, and server FPS. Below 20 FPS turns red and players feel lag.</p>
+  </section>
+  <section data-step data-chapter="1" data-target="[data-tab-panel=live] section.pane">
+    <h3>Who's on</h3>
+    <p>Everyone on now, A to Z, with search at the top. An <b>Admin</b> tag marks staff.{% if can("kick") %} <b>Kick</b>{% if can("ban") %} and <b>Ban</b> are{% else %} is{% endif %} on each row. A kick lets them rejoin straight away; it's for a warning.{% endif %}</p>
+    {% if can("kick") %}<p>Whenever you deal with someone, leave a note on their player page saying why.</p>{% endif %}
+  </section>
+  <section data-step data-chapter="1" data-target="section.pane[data-filter] .filters">
+    <h3>Filter the feed</h3>
+    <p>{{ tap|safe }} <b>TKs</b> for just the teamkills, or <b>Sus</b> for just the cheat flags. Each looks back through the whole week. <b>All</b> shows everything again.</p>
+  </section>
+  <section data-step data-chapter="1" data-target="section.pane[data-filter] button.expand" data-next="/players?tour=1">
+    <h3>Full screen</h3>
+    <p>The <b>⤢</b> on any box fills the screen with it: handy for a busy feed.</p>
+    <p class="tour-hint">Next: finding a player.</p>
+  </section>
+{% elif path == "/players" %}
+  <section data-step data-chapter="2" data-target="form.search">
+    <h3>Finding anyone</h3>
+    <p>Everyone who's ever been on our servers is here, on or offline. Search by name, old name or ID{{ " or IP" if can("ips") }}.</p>
+  </section>
+  <section data-step data-chapter="2" data-target="table">
+    <h3>A player's page</h3>
+    <p>{{ tap|safe }} a name for their record: time played, K/D and teamkills, every name they've used, admin notes, their full kill log and any incidents they were on for.</p>
+  </section>
+  <section data-step data-chapter="2" data-target='a[href="/players/unusual"]'{% if last_page == "bans" %} data-next="/bans?tour=1"{% endif %}>
+    <h3>Unusual players</h3>
+    <p>Compares everyone's headshots, long kills, kills per hour and K/D over every saved game. Red is the top 5%. It's where to look, not who to ban: good players show up too.</p>
+    {% if last_page == "bans" %}<p class="tour-hint">Last stop: bans.</p>{% endif %}
+  </section>
+{% elif path == "/bans" %}
+  <section data-step data-chapter="3" data-target='form.card[action="/bans"]'>
+    <h3>Banning</h3>
+    <p>Type part of their name and pick them from the list, choose how long, pick or type a reason, and press <b>Ban on all servers</b>. It applies to every server at once, and they're told how to appeal.</p>
+    {% if can("ips") %}<p><b>IP ban</b> also catches their alts and any new account from the same IP. People in the same house share an IP, so only tick it when you mean it.</p>{% endif %}
+  </section>
+  <section data-step data-chapter="3" data-target="section.card">
+    <h3>Every ban</h3>
+    <p>Who, why, how long is left, who did it, and whether each server has it yet.{% if not can("unban") %} Taking a ban off is for senior admins: ask one if a ban was a mistake.{% endif %}</p>
+  </section>
+{% endif %}
+{% if path == "/" ~ last_page %}
+  <section data-step data-final>
+    <img class="tour-logo" src="/static/oyb-mark.svg" alt="">
+    <h3>You're set</h3>
+    <ul class="tour-can">
+      {% if can("notes") %}<li>Leave a note whenever you deal with someone, so the next admin knows</li>{% endif %}
+      <li>Keep an eye on the bell and on <b>No admin on</b></li>
+      <li>A Sus flag is a reason to look, not proof. The same name at several is.</li>
+    </ul>
+    <p>Everything's in the guide in more detail, with pictures, and you can take this tour again from there.</p>
+    <p class="tour-links"><a class="button ghost small" href="/guide">Open the guide</a></p>
+  </section>
+{% endif %}
+</div>

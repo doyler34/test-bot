@@ -1642,9 +1642,17 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done.status, 204)
         self.assertNotIn('id="tour"', await (await self.client.get("/")).text())
         self.assertIn('id="tour"', await (await self.client.get("/?tour=1")).text())
+        server = await (await self.client.get("/server/server-1?tour=1")).text()
+        self.assertIn('data-next="/players?tour=1"', server)
+        players = await (await self.client.get("/players?tour=1")).text()
+        self.assertIn("data-final", players)                       # moderators can't ban, so it ends here
+        self.assertNotIn("/bans?tour=1", players)
+        self.assertNotIn('id="tour"', await (await self.client.get("/players")).text())
         await self.client.post("/logout", data={"csrf": token})
         await self.login("boss", "boss-password")
         self.assertNotIn('id="tour"', await (await self.client.get("/")).text())
+        self.assertIn('data-next="/bans?tour=1"', await (await self.client.get("/players?tour=1")).text())
+        self.assertIn("data-final", await (await self.client.get("/bans?tour=1")).text())
 
     async def test_welcome_and_guide(self):
         await self.login("mod", "mod-password")

@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% block head %}<link rel="stylesheet" href="/control-map/leaflet.css">
 <script src="/control-map/leaflet.js" defer></script>
-<script src="/static/control.js?v={{ asset_version }}" defer></script>
-{% if tour %}<script src="/static/tour.js?v={{ asset_version }}" defer></script>{% endif %}{% endblock %}
+<script src="/static/control.js?v={{ asset_version }}" defer></script>{% endblock %}
 {% block body %}
 <h1 class="visually-hidden">Dashboard</h1>
 <div class="dash">
@@ -34,46 +33,4 @@
 </section>
 {% endif %}
 </div>
-{% if tour %}
-<div id="tour" hidden>
-  <section data-step>
-    <img class="tour-logo" src="/static/oyb-mark.svg" alt="">
-    <h3>Welcome to OYB Control, {{ user.username }}</h3>
-    <p>A quick look round before you start: it takes under a minute. You can skip it, and run it again any time from the Guide.</p>
-  </section>
-  <section data-step data-target=".ctl-cards">
-    <h3>Every server</h3>
-    <p>A card for each server: online or not, players on, the map and ping. A red <b>No admin on</b> means nobody's watching it.
-      <span class="only-desk">Click</span><span class="only-phone">Tap</span> a card to open that server underneath, and the ★ keeps your favourites first.</p>
-  </section>
-  <section data-step data-target=".dash-panel-head">
-    <h3>The server you picked</h3>
-    <p>Its join address, with a copy and <b>Join</b> button. <b>Players</b> opens its full player list and live feed{% if can("kick") %}, where you {{ "kick and ban" if can("ban") else "kick" }} people{% endif %}. <b>Full page →</b> has its history, health and the Monitor.</p>
-  </section>
-  <section data-step data-target=".ctl-map-panel">
-    <h3>Live map</h3>
-    <p>Every kill in the last 30 minutes, where it happened. Orange is a kill, red a teamkill, purple a kill by AI or nobody. <span class="only-desk">Hover over</span><span class="only-phone">Tap</span> a dot for who, what and from how far.</p>
-  </section>
-  <section data-step data-target=".ctl-panel:has(.ctl-switch)">
-    <h3>Players and the live feed</h3>
-    <p>Switch this box between who's on now and the live feed: kills, teamkills, joins and Sus flags as they happen. <span class="only-desk">Click</span><span class="only-phone">Tap</span> any name to open that player.</p>
-  </section>
-  <section data-step data-target="aside.side .side-nav" data-phone-target="nav.dock">
-    <h3>Getting around</h3>
-    <p><span class="only-desk">The menu on the left has Players, Bans and everything else you have access to.</span><span class="only-phone">The bar at the bottom has the dashboard, Players and Bans; <b>More</b> has everything else.</span> You only ever see what you're allowed to use.</p>
-  </section>
-  <section data-step data-target=".top-search">
-    <h3>Search</h3>
-    <p>Type a player's name, an old name or their ID to find them. A server's name takes you to that server.</p>
-  </section>
-  <section data-step data-target="details.bell">
-    <h3>The bell</h3>
-    <p>A red number means something needs someone: a server down, lots of players and no admin on, or Sus flags in the last hour.</p>
-  </section>
-  <section data-step data-target='aside.side a[href="/guide"]' data-phone-target="nav.dock details.menu">
-    <h3>The guide</h3>
-    <p>Everything in more detail, with pictures, under <b><span class="only-desk">Support</span><span class="only-phone">More → Guide</span></b>. It only shows what your role can do. Leave a note on a player whenever you deal with them, and you're set.</p>
-  </section>
-</div>
-{% endif %}
 {% endblock %}

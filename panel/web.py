@@ -135,6 +135,10 @@ def _until(value):
     return "under a minute"
 
 
+# The first-login tour starts on the dashboard and walks on through these pages.
+TOUR_PAGES = ("dashboard.html", "server.html", "players.html", "bans.html")
+
+
 def render(request, template, **context):
     user = request.get(USER)
     context.update(
@@ -153,6 +157,8 @@ def render(request, template, **context):
     )
     if user and not template.startswith("_"):
         context.setdefault("notices", attention(request, list(request.app[MANAGER].states.values())))
+        context.setdefault("tour", template in TOUR_PAGES and (request.query.get("tour") == "1" or (
+            template == "dashboard.html" and user["role"] != "owner" and not user["toured"])))
     html = request.app[JINJA].get_template(template).render(**context)
     headers = {"Content-Security-Policy": context["csp"]} if context.get("csp") else None
     return web.Response(text=html, content_type="text/html", headers=headers)
@@ -395,10 +401,7 @@ async def dashboard(request):
     if chosen:
         extra = {"chosen": next(c for c in states if c["id"] == chosen.config.id), **server_overview(request, chosen),
                  "csp": MAP_CSP}
-    user = request[USER]
-    tour = request.query.get("tour") == "1" or (user["role"] != "owner" and not user["toured"])
-    return render(request, "dashboard.html", cards=states, welcome=welcome, amp=bool(request.app[AMP]), gb=GB,
-                  tour=tour, **extra)
+    return render(request, "dashboard.html", cards=states, welcome=welcome, amp=bool(request.app[AMP]), gb=GB, **extra)
 
 
 async def tour_done(request):
