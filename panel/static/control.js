@@ -23,6 +23,27 @@ for (const button of document.querySelectorAll("[data-copy-text]")) {
   });
 }
 
+/* The right-hand panel switches between who's on and the live feed; the choice is remembered. */
+const SIDE_TAB = "oyb-side-tab";
+for (const panel of document.querySelectorAll(".ctl-switch")) {
+  const box = panel.closest(".ctl-panel");
+  const show = (name) => {
+    for (const b of panel.querySelectorAll("[data-side-tab]")) b.classList.toggle("on", b.dataset.sideTab === name);
+    for (const part of box.querySelectorAll("[data-side-panel]")) part.hidden = part.dataset.sidePanel !== name;
+    const search = box.querySelector(".ctl-search");
+    if (search) search.hidden = name !== "players";
+  };
+  let saved = "players";
+  try { saved = localStorage.getItem(SIDE_TAB) || "players"; } catch (err) { /* private window */ }
+  show(saved);
+  panel.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-side-tab]");
+    if (!button) return;
+    show(button.dataset.sideTab);
+    try { localStorage.setItem(SIDE_TAB, button.dataset.sideTab); } catch (err) { /* private window */ }
+  });
+}
+
 /* Favourite servers are kept first, per browser. */
 const FAVOURITES = "oyb-favourite-servers";
 const favourites = () => { try { return JSON.parse(localStorage.getItem(FAVOURITES)) || []; } catch (err) { return []; } };

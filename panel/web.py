@@ -1540,7 +1540,8 @@ def server_overview(request, state):
             "slots": card["slots"], "fps": card["fps"], "cpu": latest.get("proc_cpu"),
             "memory": state.memory or latest.get("rss"), "mem_total": box_latest.get("mem_total"),
             "disk": box_latest.get("disk_pct"), "ping": card["ping"]}
-    return {"info": info, "roster": players, "charts": charts, "has_map": mortar_map() is not None}
+    return {"info": info, "roster": players, "charts": charts, "has_map": mortar_map() is not None,
+            "live_feed": db.feed(state.config.id)}
 
 
 def attention(request, states):

@@ -1305,3 +1305,25 @@ body.app .side-nav a, body.app .side-group summary, body.app .side-off { font-si
 .srv-actions .ctl-btn.start::before, .srv-actions .ctl-btn.restart::before, .srv-actions .ctl-btn.stop::before { content: none; }
 .srv-actions > form { margin: 0; }
 .srv-actions > form .ctl-btn { height: calc(var(--u) * 2.45); min-width: calc(var(--u) * 7); border-radius: 5px; font: 500 calc(var(--u) * .98) var(--body); }
+
+/* players / live feed switch in the right-hand panel */
+.ctl-switch { display: flex; gap: calc(var(--u, 14px) * .2); background: #1b1f24; border: 1px solid #2a3038; border-radius: 6px; padding: 2px; }
+.ctl-switch button { background: none; border: 0; border-radius: 4px; padding: calc(var(--u, 14px) * .35) calc(var(--u, 14px) * .7);
+  font: 600 calc(var(--u, 14px) * .92) var(--body); color: #9aa1a9; white-space: nowrap; }
+.ctl-switch button:hover { background: none; color: #e9ebee; }
+.ctl-switch button.on { background: #2b3038; color: #fff; }
+.ctl-panel-head .ctl-search[hidden] { display: none; }
+.ctl-feed .filters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: calc(var(--u, 14px) * .5); }
+.ctl-feed .chip { padding: 1px calc(var(--u, 14px) * .55); font-size: calc(var(--u, 14px) * .75); background: #1b1f24; border: 1px solid #2a3038; color: #a7adb5; }
+.ctl-feed[data-filter="all"] .chip[data-show="all"], .ctl-feed[data-filter="kills"] .chip[data-show="kills"],
+.ctl-feed[data-filter="tks"] .chip[data-show="tks"], .ctl-feed[data-filter="sus"] .chip[data-show="sus"],
+.ctl-feed[data-filter="joins"] .chip[data-show="joins"], .ctl-feed[data-filter="admin"] .chip[data-show="admin"] {
+  background: var(--c-orange, #f47b20); border-color: var(--c-orange, #f47b20); color: #fff; }
+.ctl-feed-body { max-height: calc(var(--u, 14px) * 13.6); overflow-y: auto; }
+.ctl-feed .feed { font-size: calc(var(--u, 14px) * .82); }
+.ctl-feed .feed li { grid-template-columns: calc(var(--u, 14px) * 4.6) calc(var(--u, 14px) * 3.2) 1fr; gap: calc(var(--u, 14px) * .5);
+  padding: calc(var(--u, 14px) * .3) 2px; border-bottom-color: #1e2329; }
+.ctl-feed .feed b { font-family: var(--body); text-transform: none; letter-spacing: 0; font-size: calc(var(--u, 14px) * .78); }
+.ctl-feed .feed .k-kill b { color: var(--c-orange, #f47b20); }
+.ctl-feed .feed .k-join b, .ctl-feed .feed .k-side b { color: var(--c-green, #3ccf5e); }
+.ctl-feed .muted { font-size: calc(var(--u, 14px) * .85); }

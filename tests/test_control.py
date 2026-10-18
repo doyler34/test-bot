@@ -206,4 +206,8 @@ class DashboardDetailTests(unittest.IsolatedAsyncioTestCase):
         home = await (await self.client.get("/")).text()
         self.assertIn('<i class="count">1</i>', home)
         self.assertIn("1 sus flag in the last hour", home)
+        # the player panel also carries the live feed, filtered by the same part the server page uses
+        self.assertIn('data-side-tab="feed"', home)
+        self.assertIn('data-refresh="/server/one/feed.part"', home)
+        self.assertIn("3 players were blown up in the same second", home)
         self.assertEqual((await self.client.post("/settings/pictures/one/details", data={})).status, 403)

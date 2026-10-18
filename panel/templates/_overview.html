@@ -26,10 +26,14 @@
     </section>
 
     <section class="ctl-panel">
-      <div class="ctl-panel-head"><h2>Player List ({{ roster|length }})</h2>
+      <div class="ctl-panel-head">
+        <div class="ctl-switch" role="tablist">
+          <button type="button" class="on" data-side-tab="players" role="tab">Player List ({{ roster|length }})</button>
+          <button type="button" data-side-tab="feed" role="tab">Live feed</button>
+        </div>
         <label class="ctl-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
           <input type="search" placeholder="Search players..." data-filter-list="#ctl-players" aria-label="Search players on this server"></label></div>
-      <div class="ctl-players" id="ctl-players">
+      <div class="ctl-players" id="ctl-players" data-side-panel="players">
         <div class="ctl-row head"><span>Name</span><span>Playtime</span></div>
         {% for p in roster %}
         <a class="ctl-row" href="{{ '/player/' ~ p.identity if p.identity else '#' }}" data-name="{{ p.name|lower }}">
@@ -37,6 +41,16 @@
         {% else %}
         <p class="muted">{{ "Nobody on right now." if info.online else "The server is offline." }}</p>
         {% endfor %}
+      </div>
+      <div class="ctl-feed" data-side-panel="feed" data-filter="all" hidden>
+        <div class="filters">
+          {% for key, label in [("all", "All"), ("kills", "Kills"), ("tks", "TKs"), ("sus", "Sus"), ("joins", "Joins"), ("admin", "Admin")] %}
+          <button type="button" class="chip" data-show="{{ key }}">{{ label }}</button>
+          {% endfor %}
+        </div>
+        <div class="ctl-feed-body" data-refresh="/server/{{ s.id }}/feed.part" data-every="5000">
+        {% with feed = live_feed, s = s %}{% include "_feed.html" %}{% endwith %}
+        </div>
       </div>
     </section>
   </div>
