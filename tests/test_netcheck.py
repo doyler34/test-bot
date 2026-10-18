@@ -161,6 +161,71 @@ class PageTests(unittest.IsolatedAsyncioTestCase):
         await client.post("/logout", data={"csrf": token})
         await client.post("/login", data={"username": "adm", "password": "adm-password"})
         self.assertEqual((await client.get("/network", allow_redirects=False)).status, 403)
+        self.assertEqual((await client.post("/network/tune", data={"csrf": token}, allow_redirects=False)).status, 403)
+
+    async def test_fix_the_network_button(self):
+        from aiohttp.test_utils import TestClient, TestServer
+        from panel import auth
+        from panel.config import PanelConfig
+        from panel.db import PanelDB
+        from panel.servers import ServerManager
+        from panel.web import create_app
+        import re
+        db = PanelDB(":memory:")
+        db.add_user("boss", auth.hash_password("boss-password"), "owner")
+        config = PanelConfig(database=":memory:", cookie_secure=False, servers=[])
+        client = TestClient(TestServer(create_app(config, db, ServerManager(config, db), start_manager=False)))
+        await client.start_server()
+        self.addAsyncCleanup(client.close)
+        await client.post("/login", data={"username": "boss", "password": "boss-password"})
+        page = await (await client.get("/network")).text()
+        self.assertIn(">Fix the network</button>", page)
+        token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+        steps = [("Bigger network buffers", True, "16 MB allowed."), ("enp4s0 send queue", True, "1000 → 10000 packets.")]
+        with mock.patch("panel.web.apply_network_tune", return_value=steps):
+            page = await (await client.post("/network/tune", data={"csrf": token})).text()
+        self.assertIn("1000 → 10000 packets.", page)
+        self.assertIn(">Apply again</button>", page)
+        self.assertEqual(db.audit()[0]["action"], "network fix")
+        page = await (await client.post("/network/tune", data={"csrf": token, "action": "off"})).text()
+        self.assertIn(">Fix the network</button>", page)
+
+
+class TuneTests(unittest.TestCase):
+    def test_sets_buffers_and_the_send_queue_without_touching_the_link(self):
+        with tempfile.TemporaryDirectory() as root:
+            proc, sys_root, conf = Path(root, "proc"), Path(root, "sys"), Path(root, "90-arma.conf")
+            for key in netcheck.TUNE_SYSCTL:
+                Path(proc, "sys", key).parent.mkdir(parents=True, exist_ok=True)
+                Path(proc, "sys", key).write_text("212992\n")
+            Path(sys_root, "class/net/enp4s0").mkdir(parents=True)
+            Path(sys_root, "class/net/enp4s0/tx_queue_len").write_text("1000\n")
+            steps = netcheck.tune(["enp4s0"], str(proc), str(sys_root), str(conf))
+            self.assertTrue(all(ok for _, ok, _ in steps))
+            self.assertEqual(Path(proc, "sys/net/core/wmem_max").read_text(), "16777216")
+            self.assertEqual(Path(sys_root, "class/net/enp4s0/tx_queue_len").read_text(), "10000")
+            self.assertIn("net.core.wmem_default=4194304", conf.read_text())
+            again = netcheck.tune(["enp4s0"], str(proc), str(sys_root), str(conf))
+            self.assertEqual(again[1][2], "Already 10000 packets.")
+
+    def test_short_send_queue_and_queue_drops_are_flagged(self):
+        nic = {"state": "up", "speed": 1000, "duplex": "full", "mtu": 1500, "carrier_changes": 2, "driver": "igb",
+               "virtual": False, "txqueuelen": 1000, "stats": {k: 0 for k in netcheck.STAT_KEYS}}
+        snap = {"at": 0, "nics": {"enp4s0": nic}, "softnet": [], "irq": {}, "cores": {}, "sockets": {},
+                "snmp": {"Udp": {}, "Tcp": {"OutSegs": 0, "RetransSegs": 0}}}
+        extras = {"routes": [{"interface": "enp4s0", "gateway": "x"}], "queries": {}, "internet": {}, "ethtool": {},
+                  "queued": {"enp4s0": (40, 183)},
+                  "sysctl": {"rmem_max": 16777216, "wmem_max": 16777216, "backlog": 5000, "conntrack": None, "conntrack_max": None}}
+        rows = {r["label"]: r for r in netcheck.judge(snap, {**snap, "at": 10}, [], extras)}
+        self.assertEqual((rows["enp4s0 send queue"]["verdict"], rows["enp4s0 send queue"]["fix"]), ("warn", "Press Fix the network below."))
+        self.assertEqual(rows["enp4s0 queue drops"]["value"], "143 in 10 s, 183 since boot")
+        self.assertEqual(rows["enp4s0 queue drops"]["verdict"], "bad")
+        sending = dict(snap, snmp={"Udp": {"SndbufErrors": 100}, "Tcp": {"OutSegs": 0, "RetransSegs": 0}})
+        later = dict(sending, at=10, snmp={"Udp": {"SndbufErrors": 243}, "Tcp": {"OutSegs": 0, "RetransSegs": 0}})
+        raised = dict(extras, sysctl={**extras["sysctl"], "rmem_default": 4194304, "wmem_default": 4194304})
+        out = {r["label"]: r for r in netcheck.judge(sending, later, [], raised)}["Outgoing UDP packets thrown away"]
+        self.assertIn("Press Fix the network", out["fix"])
+        self.assertEqual(netcheck.parse_qdisc("qdisc mq 0: root\n Sent 9 bytes 3 pkt (dropped 7, overlimits 0)"), 7)
 
 
 class HistoryTests(unittest.TestCase):

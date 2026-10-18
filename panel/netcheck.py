@@ -20,6 +20,12 @@ STAT_KEYS = ("rx_bytes", "tx_bytes", "rx_packets", "tx_packets", "rx_errors", "t
              "tx_dropped", "rx_crc_errors", "rx_missed_errors", "rx_fifo_errors", "rx_over_errors", "collisions")
 ETHTOOL_WORTH = re.compile(r"miss|drop|err|crc|over|fifo|no_buffer|discard|timeout|restart", re.I)
 TARGETS = (("Cloudflare", "1.1.1.1", 443), ("Google", "8.8.8.8", 443))
+# What "Fix the network" sets: changes that take effect at once and never drop
+# the link. The card's own ring sizes (ethtool -G) reset the port, so they're left to a person.
+TUNE_SYSCTL = {"net/core/rmem_max": 16777216, "net/core/rmem_default": 4194304, "net/core/wmem_max": 16777216,
+               "net/core/wmem_default": 4194304, "net/core/netdev_max_backlog": 5000}
+TUNE_FILE = "/etc/sysctl.d/90-arma.conf"
+TXQUEUELEN = 10000
 
 
 def _read(path, default=""):
@@ -59,6 +65,7 @@ def interfaces(sys_root="/sys"):
             "state": _read(f"{here}/operstate", "unknown"), "carrier": _int(_read(f"{here}/carrier")),
             "speed": _int(_read(f"{here}/speed")), "duplex": _read(f"{here}/duplex"),
             "mtu": _int(_read(f"{here}/mtu")), "carrier_changes": _int(_read(f"{here}/carrier_changes")),
+            "txqueuelen": _int(_read(f"{here}/tx_queue_len")),
             "driver": driver, "virtual": not os.path.exists(f"{here}/device"),
             "stats": {k: _int(_read(f"{here}/statistics/{k}"), 0) for k in STAT_KEYS},
         }
@@ -229,6 +236,56 @@ async def ethtool(name):
                 counters[key] = int(value)
     return {"rx_max": _int(numbers[0]) if numbers else None, "rx_now": _int(numbers[1]) if len(numbers) > 1 else None,
             "counters": counters}
+
+
+def parse_qdisc(text):
+    """`tc -s qdisc show dev X`: packets the root queue in front of the card threw away."""
+    found = re.search(r"dropped (\d+)", text)
+    return int(found[1]) if found else None
+
+
+async def qdisc_drops(name):
+    tool = shutil.which("tc")
+    if not tool:
+        return None
+    proc = await asyncio.create_subprocess_exec(tool, "-s", "qdisc", "show", "dev", name, stdout=asyncio.subprocess.PIPE,
+                                                stderr=asyncio.subprocess.DEVNULL)
+    out, _ = await proc.communicate()
+    return parse_qdisc(out.decode(errors="replace"))
+
+
+def tune(names, proc_root="/proc", sys_root="/sys", conf=TUNE_FILE):
+    """Bigger buffers and a longer send queue on the ports traffic leaves by:
+    [(what, done, words)]. Nothing here resets the link."""
+    steps = []
+    try:
+        for key, value in TUNE_SYSCTL.items():
+            with open(f"{proc_root}/sys/{key}", "w") as f:
+                f.write(str(value))
+        with open(conf, "w") as f:
+            f.write("".join(f"{k.replace('/', '.')}={v}\n" for k, v in TUNE_SYSCTL.items()))
+        steps.append(("Bigger network buffers", True, "16 MB allowed, 4 MB by default, kept after a reboot."))
+    except OSError as exc:
+        steps.append(("Bigger network buffers", False, _refused(exc)))
+    for name in names:
+        path = f"{sys_root}/class/net/{name}/tx_queue_len"
+        now_len = _int(_read(path))
+        if now_len is not None and now_len >= TXQUEUELEN:
+            steps.append((f"{name} send queue", True, f"Already {now_len} packets."))
+            continue
+        try:
+            with open(path, "w") as f:
+                f.write(str(TXQUEUELEN))
+            steps.append((f"{name} send queue", True, f"{now_len} → {TXQUEUELEN} packets."))
+        except OSError as exc:
+            steps.append((f"{name} send queue", False, _refused(exc)))
+    return steps
+
+
+def _refused(exc):
+    if isinstance(exc, PermissionError):
+        return "The panel isn't running as root, so the box wouldn't let it."
+    return str(exc)
 
 
 def parse_ss(text):
@@ -412,6 +469,18 @@ def judge(before, after, servers, extras):
         if total:
             out.append(line(s, f"{name} errors since boot", ", ".join(f"{k} {v}" for k, v in total.items()),
                             WARN if not live else INFO, "Built up over time; only matters if it's still growing."))
+        if nic.get("txqueuelen"):
+            short = nic["txqueuelen"] < TXQUEUELEN
+            out.append(line(s, f"{name} send queue", f"{nic['txqueuelen']} packets", WARN if short else OK,
+                            "How many packets can wait to go out of this port. Short, and a burst of game traffic "
+                            "is thrown away before it leaves: players hear it as radio cutting out." if short else "",
+                            "Press Fix the network below." if short else ""))
+        if name in extras.get("queued", {}):
+            was, now_q = extras["queued"][name]
+            grew = now_q - was
+            out.append(line(s, f"{name} queue drops", f"{grew} in 10 s, {now_q:,} since boot",
+                            BAD if grew else OK,
+                            "The queue in front of the port was full, so packets going out were thrown away." if grew else ""))
         tool = extras["ethtool"].get(name)
         if tool:
             if tool["rx_now"] and tool["rx_max"]:
@@ -419,7 +488,8 @@ def judge(before, after, servers, extras):
                 out.append(line(s, f"{name} receive buffer", f"{tool['rx_now']} of {tool['rx_max']} packets",
                                 WARN if small else OK,
                                 f"The card only holds {tool['rx_now']} packets while it waits for the CPU; a burst "
-                                "bigger than that is lost." if small else "Already at its biggest.",
+                                "bigger than that is lost. Changing it drops the port for a second or two, so do it "
+                                "when the servers are empty." if small else "Already at its biggest.",
                                 f"ethtool -G {name} rx {tool['rx_max']}" if small else ""))
             busy = {k: v for k, v in tool["counters"].items() if v}
             damaged = {k: v for k, v in busy.items() if "csum" in k or "crc" in k}
@@ -453,7 +523,12 @@ def judge(before, after, servers, extras):
         fix = ("sysctl -w net.core.rmem_max=16777216 net.core.rmem_default=4194304" if way == "in"
                else "sysctl -w net.core.wmem_max=16777216 net.core.wmem_default=4194304")
         raised = (extras["sysctl"].get("rmem_default" if way == "in" else "wmem_default") or 0) >= 1024 * 1024
-        if raised:
+        routed = {r["interface"] for r in extras.get("routes", [])}
+        short_queue = any(((after["nics"].get(n) or {}).get("txqueuelen") or TXQUEUELEN) < TXQUEUELEN for n in routed)
+        if raised and short_queue and way == "out":
+            fix = ("The buffers are big enough now; next is the send queue in front of the port. Press Fix the network "
+                   "below: it doesn't interrupt anyone.")
+        elif raised:
             fix = ("The box already allows bigger buffers: restart the game servers so they use them. Each server's "
                    "\"Buffers it's using\" line shows which still need it.")
         full = udp_b.get("RcvbufErrors", 0) if way == "in" else ever
@@ -608,12 +683,15 @@ async def run(servers, proc_root="/proc", sys_root="/sys", log_dirs=None):
         return {f"{label} ({host})": r for (label, host, _), r in zip(TARGETS, results)}
 
     started = time.monotonic()
+    queued = await asyncio.gather(*(qdisc_drops(n) for n in sorted(used)))
     found_queries, found_internet, tools, buffers = await asyncio.gather(
         queries(), internet(), asyncio.gather(*(ethtool(n) for n in sorted(used))), socket_buffers())
     await asyncio.sleep(max(WINDOW - (time.monotonic() - started), 0))
     after = await asyncio.to_thread(snapshot, pids, proc_root, sys_root)
+    queued = {n: (a, b) for n, a, b in zip(sorted(used), queued, await asyncio.gather(*(qdisc_drops(n) for n in sorted(used))))
+              if a is not None and b is not None}
     extras = {"routes": default_routes(proc_root), "sysctl": sysctls(proc_root), "queries": found_queries,
-              "internet": found_internet, "buffers": buffers,
+              "internet": found_internet, "buffers": buffers, "queued": queued,
               "ethtool": {n: t for n, t in zip(sorted(used), tools) if t}}
     lines = judge(before, after, servers, extras)
     spare = [g for g in games if g["pid"] not in pids.values()]

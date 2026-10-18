@@ -2205,6 +2205,33 @@ def box_problems(box, servers):
     return found
 
 
+def network_tuned(db):
+    row = db.discord_doc("network_tune")
+    return bool(row and row["published"])
+
+
+def apply_network_tune():
+    return netcheck.tune(sorted({r["interface"] for r in netcheck.default_routes()}))
+
+
+async def network_tune(request):
+    require(request, "box")
+    form = await request.post()
+    db = request.app[DB]
+    if form.get("action") == "off":
+        db.publish_discord_doc("network_tune", "", request[USER]["username"])
+        audit(request, "network fix off")
+        flash(request, "The panel won't set these again when it starts. What's set now stays until the box reboots.")
+        raise web.HTTPFound("/network#check")
+    steps = await asyncio.to_thread(apply_network_tune)
+    done = all(ok for _, ok, _ in steps)
+    if done:
+        db.publish_discord_doc("network_tune", json.dumps({"on": True}), request[USER]["username"])
+    audit(request, "network fix", ok=done, detail="; ".join(f"{what}: {words}" for what, _, words in steps))
+    flash(request, " ".join(f"{what}: {words}" for what, _, words in steps), "ok" if done else "error")
+    raise web.HTTPFound("/network#check")
+
+
 async def network_page(request):
     require(request, "box")
     db, manager = request.app[DB], request.app[MANAGER]
@@ -2270,7 +2297,8 @@ async def network_page(request):
                   range_label=label, range_ago=ago, charts=charts, games=games, latest=latest, gb=GB,
                   players=sum(g["players"] or 0 for g in games),
                   problems=box_problems(box_rows, game_rows), top=top,
-                  attacks=db.attack_sources(until - 86400), attackers=db.attackers(until - 86400, limit=5))
+                  attacks=db.attack_sources(until - 86400), attackers=db.attackers(until - 86400, limit=5),
+                  tuned=network_tuned(db))
 
 
 async def attacks_page(request):
@@ -2765,6 +2793,9 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
                 app[BM].start()
             if heights.load() is None:
                 asyncio.get_running_loop().run_in_executor(None, heights.ensure)
+            if network_tuned(app[DB]):
+                # A reboot clears the send queue length; nothing in it disturbs the link.
+                asyncio.get_running_loop().run_in_executor(None, apply_network_tune)
             yield
             if app[BM]:
                 await app[BM].stop()
@@ -2847,6 +2878,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/attacks/untrust", untrust_ip)
     app.router.add_route("GET", "/network", network_page)
     app.router.add_post("/network", network_page)
+    app.router.add_post("/network/tune", network_tune)
     app.router.add_get("/bot/data", bot_data_page)
     app.router.add_get("/ip-lookup", ip_lookup_page)
     app.router.add_post("/discord/posts/new", new_post)
