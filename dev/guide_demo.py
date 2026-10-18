@@ -24,7 +24,7 @@ from aiohttp import web  # noqa: E402
 from bot.storage.account_links import AccountLinks  # noqa: E402
 from bot.storage.combat_store import migrate as migrate_combat  # noqa: E402
 from dev.fake_rcon import FakeRcon  # noqa: E402
-from panel import auth  # noqa: E402
+from panel import archive, auth  # noqa: E402
 from panel.config import PanelConfig, ServerConfig  # noqa: E402
 from panel.db import PanelDB, now  # noqa: E402
 from panel.servers import ServerManager  # noqa: E402
@@ -279,20 +279,24 @@ def stand_in_map(root):
     return path
 
 
-def demo_kills(state):
-    """Kills in the last half hour where the map can show them."""
+def demo_kills(db, rng):
+    """A week of kills with places, for the kill map: a busy town, a contested hill and scattered fights."""
     t = now()
-    rows = [(PLAYERS[0], PLAYERS[3], "kill", "KINETIC", (5200, 6100), (5420, 6260)),
-            (PLAYERS[4], PLAYERS[5], "kill", "KINETIC", (7300, 7900), (7180, 7650)),
-            (PLAYERS[1], PLAYERS[5], "teamkill", "KINETIC", (6100, 4300), (6150, 4360)),
-            (None, PLAYERS[0], "kill", "EXPLOSIVE", None, (4800, 8200)),
-            (None, PLAYERS[1], "kill", "EXPLOSIVE", None, (4830, 8170)),
-            (PLAYERS[7], PLAYERS[0], "kill", "KINETIC", (3900, 5600), (4420, 5900))]
-    for n, (killer, victim, kind, damage, came, went) in enumerate(rows):
-        state.kill_spots.append({"at": t - 1500 + n * 240, "kind": kind, "killer_name": killer and killer[0],
-                                 "victim_name": victim[0], "damage": damage, "by_ai": killer is None,
-                                 "distance": ((came[0] - went[0]) ** 2 + (came[1] - went[1]) ** 2) ** .5 if came else None,
-                                 "killer_at": came, "victim_at": went})
+    hot = [(5300, 6200), (7200, 7700), (6100, 4350)]
+    events = []
+    for n in range(420):
+        at = t - int(rng.random() ** 2 * 7 * 86400) - 60
+        cx, cy = rng.choice(hot) if rng.random() < .7 else (rng.uniform(3000, 9000), rng.uniform(3000, 9500))
+        went = (cx + rng.gauss(0, 180), cy + rng.gauss(0, 180))
+        killer, victim = rng.sample(PLAYERS, 2)
+        ai = rng.random() < .12
+        came = None if ai else (went[0] + rng.uniform(-300, 300), went[1] + rng.uniform(-300, 300))
+        events.append({"at": at, "kind": "teamkill" if not ai and rng.random() < .08 else "kill",
+                       "killer": "" if ai else killer[1], "killer_name": None if ai else killer[0], "by_ai": ai,
+                       "victim": victim[1], "victim_name": victim[0], "damage": "EXPLOSIVE" if ai else "KINETIC",
+                       "distance": None if ai else ((came[0] - went[0]) ** 2 + (came[1] - went[1]) ** 2) ** .5,
+                       "victim_at": went, "killer_at": came})
+    db.add_kills("eu1", archive.kill_rows(events))
 
 
 async def main(port):
@@ -320,6 +324,7 @@ async def main(port):
     seed_panel(db, config)
     seed_numbers(db, rng)
     seed_charts(db, rng)
+    demo_kills(db, rng)
     db.publish_discord_doc("cards", json.dumps({
         "eu1": {"description": "Conflict · Everon", "address": "203.0.113.10:2001"},
         "eu2": {"description": "Conflict · Arland", "address": "203.0.113.10:2002"},
@@ -338,7 +343,6 @@ async def main(port):
         return {"pid": pid, "rss": int(1.45 * GB), "age": now() - (now() - 2 * 3600)}
 
     manager = ServerManager(config, db, sampler=sampler)
-    demo_kills(manager.states["eu1"])
     runner = web.AppRunner(create_app(config, db, manager))
     await runner.setup()
     await web.TCPSite(runner, "127.0.0.1", port).start()

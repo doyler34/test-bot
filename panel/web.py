@@ -152,7 +152,7 @@ def render(request, template, **context):
         csrf=request.get(CSRF, ""),
         can=(lambda perm: bool(user) and allowed(request, perm)),
         servers=request.app[CONFIG].servers,
-        nav_servers=[{"id": st.config.id, "name": st.config.name, "online": st.online}
+        nav_servers=[{"id": st.config.id, "name": st.config.name, "online": st.online, "map": st.query.get("map") or ""}
                      for st in request.app[MANAGER].states.values()],
         path=request.path,
         flashes=request.app[FLASH].pop(user["id"], []) if user and not template.startswith("_") else [],
@@ -1720,16 +1720,22 @@ async def control_power(request):
     raise web.HTTPFound(back)
 
 
+# How far back the kill map can look, by the key its picker sends.
+KILL_RANGES = {"30m": 1800, "1h": 3600, "6h": 6 * 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400}
+KILL_MAP_LIMIT = 3000
+
+
 async def control_kills(request):
     state = server_or_404(request, request.match_info["id"])
-    since = now() - 1800
-    spots = [k for k in state.kill_spots if k["at"] >= since]
-    return web.json_response({"kills": [{
-        "at": k["at"], "teamkill": k["kind"] == "teamkill", "ai": bool(k.get("by_ai")),
-        "killer": k.get("killer_name") or ("AI" if k.get("by_ai") else ""), "victim": k.get("victim_name") or "",
-        "how": DAMAGE.get(k.get("damage"), (k.get("damage") or "").lower()),
-        "distance": round(k["distance"]) if k.get("distance") else None,
-        "from": list(k["killer_at"]) if k.get("killer_at") else None, "to": list(k["victim_at"])} for k in spots]})
+    since = now() - KILL_RANGES.get(request.query.get("range", "30m"), 1800)
+    rows = request.app[DB].map_kills(state.config.id, since, KILL_MAP_LIMIT)
+    return web.json_response({"capped": len(rows) == KILL_MAP_LIMIT, "kills": [{
+        "at": r["at"], "teamkill": r["kind"] == "teamkill", "ai": not r["killer"],
+        "killer": r["killer_name"] or "", "killer_id": r["killer"], "victim": r["victim_name"], "victim_id": r["victim"],
+        "how": DAMAGE.get(r["damage"], (r["damage"] or "").lower()),
+        "distance": round(r["distance"]) if r["distance"] else None,
+        "from": [r["killer_x"], r["killer_y"]] if r["killer_x"] is not None else None,
+        "to": [r["victim_x"], r["victim_y"]]} for r in rows]})
 
 
 async def control_map(request):

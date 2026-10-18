@@ -125,9 +125,10 @@ def kill_rows(events, game=None):
         if e["kind"] not in ("kill", "teamkill") or not e.get("victim"):
             continue
         killer_name = e.get("killer_name") or ("AI" if e.get("by_ai") else "")
+        died, shot = e.get("victim_at") or (None, None), e.get("killer_at") or (None, None)
         rows.append((int(game if game is not None else e.get("game") or 0), int(e["at"]), e["kind"],
                      e.get("killer") or "", killer_name, e["victim"], e.get("victim_name") or "",
-                     e.get("damage") or "", e.get("distance"), e.get("zone") or ""))
+                     e.get("damage") or "", e.get("distance"), e.get("zone") or "", *died, *shot))
     return rows
 
 

@@ -64,6 +64,7 @@ async function take(page, phone, out) {
   await page.evaluate(() => { try { localStorage.clear(); } catch (err) { /* fine */ } });
 
   await open("/?server=eu1", 1500);
+  if (await page.locator(".tour-skip").count()) { await page.click(".tour-skip"); await page.waitForTimeout(300); }
   await shot("dashboard");
   if (phone) {
     await page.click("nav.dock details.menu summary");
@@ -80,10 +81,12 @@ async function take(page, phone, out) {
   await page.click("details.bell summary");
   await shot("cards", ".ctl-card");
   await page.locator(".ctl-map-panel").scrollIntoViewIfNeeded();
-  const dot = page.locator(".leaflet-interactive.ctl-kill.t").first();
-  if (phone) await dot.dispatchEvent("click"); else await dot.hover();
-  await page.waitForTimeout(300);
-  await shot("map", await around(page, [".ctl-map-panel", ".leaflet-tooltip"], 4));
+  await page.selectOption("[data-map-range]", "24h");
+  await page.click("[data-map-layers]");
+  await page.waitForTimeout(600);
+  await shot("map", ".ctl-map-panel");
+  await page.click("[data-map-layers]");
+  await page.selectOption("[data-map-range]", "30m");
   await page.click("[data-side-tab=feed]");
   await page.waitForTimeout(300);
   await shot("side-feed", ".ctl-panel:has(.ctl-switch)");

@@ -9,6 +9,7 @@ FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"),
 
 # Columns added after their table first shipped: older databases get them on start.
 ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"),
+                 *(("kills", c, "REAL") for c in ("victim_x", "victim_y", "killer_x", "killer_y")),
                  *(("box_samples", c, "REAL") for c in ("disk_pct", "disk_read", "disk_write", "temp", "conntrack",
                                                         "tcp_retrans", "softnet_drop", "nic_errors")))
 
@@ -269,6 +270,7 @@ CREATE TABLE IF NOT EXISTS kills (
 );
 CREATE INDEX IF NOT EXISTS kills_killer ON kills(killer, at);
 CREATE INDEX IF NOT EXISTS kills_victim ON kills(victim, at);
+CREATE INDEX IF NOT EXISTS kills_server ON kills(server, at);
 CREATE TABLE IF NOT EXISTS platforms (
     identity TEXT PRIMARY KEY,
     platform TEXT NOT NULL,
@@ -277,6 +279,11 @@ CREATE TABLE IF NOT EXISTS platforms (
 );
 CREATE INDEX IF NOT EXISTS platforms_steam ON platforms(steam_id);
 CREATE TABLE IF NOT EXISTS platforms_read (
+    server TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    PRIMARY KEY (server, folder)
+);
+CREATE TABLE IF NOT EXISTS kill_places_read (
     server TEXT NOT NULL,
     folder TEXT NOT NULL,
     PRIMARY KEY (server, folder)
@@ -893,11 +900,23 @@ class PanelDB:
     # every kill, for the kill log on a player's page
 
     def add_kills(self, server, rows, folder=None):
+        """Rows from archive.kill_rows. A kill saved before positions were kept
+        gets them filled in when its game is read again."""
         with self.db:
-            self.db.executemany("INSERT OR IGNORE INTO kills VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                [(server, *row) for row in rows])
+            self.db.executemany(
+                "INSERT INTO kills (server, game, at, kind, killer, killer_name, victim, victim_name, damage, distance,"
+                " zone, victim_x, victim_y, killer_x, killer_y) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                " ON CONFLICT (server, at, kind, killer, victim) DO UPDATE SET victim_x = excluded.victim_x,"
+                " victim_y = excluded.victim_y, killer_x = excluded.killer_x, killer_y = excluded.killer_y"
+                " WHERE kills.victim_x IS NULL", [(server, *row) for row in rows])
             if folder:
                 self.db.execute("INSERT OR IGNORE INTO kills_read VALUES (?, ?)", (server, folder))
+                self.db.execute("INSERT OR IGNORE INTO kill_places_read VALUES (?, ?)", (server, folder))
+
+    def map_kills(self, server, since, limit=3000):
+        """Kills with a place on the map, newest first."""
+        return self.all("SELECT * FROM kills WHERE server = ? AND at >= ? AND victim_x IS NOT NULL"
+                        " ORDER BY at DESC LIMIT ?", server, since, limit)
 
     def add_platforms(self, events, server=None, folder=None, commit=True):
         """PC on Steam (with the Steam ID) or console, per account, as the log said
@@ -930,6 +949,11 @@ class PanelDB:
 
     def unread_kill_games(self, server, limit=20):
         return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM kills_read r"
+                        " WHERE r.server = a.server AND r.folder = a.folder) ORDER BY started DESC LIMIT ?",
+                        server, limit)
+
+    def unread_place_games(self, server, limit=20):
+        return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM kill_places_read r"
                         " WHERE r.server = a.server AND r.folder = a.folder) ORDER BY started DESC LIMIT ?",
                         server, limit)
 

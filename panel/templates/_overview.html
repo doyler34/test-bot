@@ -16,9 +16,33 @@
     </section>
 
     <section class="ctl-panel ctl-map-panel">
-      <h2>Live Map <span class="muted">· kills, last 30 min</span></h2>
+      <div class="ctl-panel-head">
+        <h2>Live Map <span class="muted" data-map-sub></span></h2>
+        {% if has_map %}
+        <select class="map-range" data-map-range aria-label="How far back">
+          {% for key, label in (("30m", "30 min"), ("1h", "1 hour"), ("6h", "6 hours"), ("24h", "24 hours"), ("7d", "7 days"), ("30d", "30 days")) %}
+          <option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+        <button type="button" class="icon-btn" data-map-full title="Full screen" aria-label="Full screen map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        {% endif %}
+      </div>
       {% if has_map %}
-      <div id="ctl-map" data-server="{{ s.id }}"></div>
+      <div class="map-wrap">
+        <div id="ctl-map" data-server="{{ s.id }}"></div>
+        <button type="button" class="chip map-layers" data-map-layers aria-expanded="false">Layers</button>
+        <div class="map-tools" data-map-tools>
+          {% if nav_servers|length > 1 %}
+          <select data-map-server aria-label="Server">
+            {% for sv in nav_servers %}<option value="{{ sv.id }}" data-map-name="{{ sv.map }}" {% if sv.id == s.id %}selected{% endif %}>{{ sv.name }}</option>{% endfor %}
+          </select>
+          {% endif %}
+          <button type="button" class="chip on" data-map-toggle="lines" aria-pressed="true" title="Lines from killer to victim">Lines</button>
+          <button type="button" class="chip" data-map-toggle="heat" aria-pressed="false" title="Kills per 500 m square">Density</button>
+          <button type="button" class="chip" data-map-toggle="grid" aria-pressed="false" title="1 km grid lines">Grid</button>
+          <button type="button" class="chip" data-map-toggle="count" aria-pressed="false" title="Count the kills around a spot">Count</button>
+        </div>
+        <p class="map-readout" data-map-readout></p>
+      </div>
       <p class="ctl-legend"><span><i class="k"></i>Kill</span><span><i class="t"></i>Teamkill</span><span><i class="a"></i>AI or unknown</span></p>
       {% else %}
       <p class="muted">The Everon map hasn't been downloaded on this box yet. It comes with the mortar calculator.</p>

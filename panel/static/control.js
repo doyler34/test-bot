@@ -72,20 +72,31 @@ for (const grid of document.querySelectorAll("[data-favourites]")) {
 const mapBox = document.getElementById("ctl-map");
 if (mapBox && window.L) startMap(mapBox);
 
+const KILL_COLOURS = { k: "#f47b20", t: "#e0443a", a: "#b18cff" };
+const RANGE_WORDS = { "30m": "last 30 min", "1h": "last hour", "6h": "last 6 hours", "24h": "last 24 hours",
+  "7d": "last 7 days", "30d": "last 30 days" };
+
 async function startMap(box) {
+  const panel = box.closest(".ctl-map-panel");
   const reply = await fetch("/control-map/map.json", { credentials: "same-origin" });
   if (!reply.ok) { box.textContent = "The map isn't available."; return; }
   const MAP = (await reply.json()).map;
   const corrected = (m, size) => (MAP.earthCorrection ? (m - MAP.correction / 2) / (1 - MAP.correction / size) : m);
+  const uncorrected = (m, size) => (MAP.earthCorrection ? m * (1 - MAP.correction / size) + MAP.correction / 2 : m);
   const toLatLng = (east, north) => L.latLng(
     corrected(north, MAP.size[1]) / MAP.transform.lat.cof - MAP.transform.lat.offset,
     corrected(east, MAP.size[0]) / MAP.transform.lng.cof - MAP.transform.lng.offset);
+  const toMetres = (ll) => [uncorrected((ll.lng + MAP.transform.lng.offset) * MAP.transform.lng.cof, MAP.size[0]),
+    uncorrected((ll.lat + MAP.transform.lat.offset) * MAP.transform.lat.cof, MAP.size[1])];
+  const digits = MAP.digits || 3;
+  const grid = (east, north) => `${String(Math.floor(east / 100)).padStart(digits, "0")} ${String(Math.floor(north / 100)).padStart(digits, "0")}`;
+  const touch = window.matchMedia("(pointer: coarse)").matches;
 
   const bounds = L.latLngBounds(L.latLng(0, 0), L.latLng(MAP.span[1], MAP.span[0]));
   const map = L.map(box, {
     crs: L.extend({}, L.CRS.Simple, { transformation: new L.Transformation(1, 0, 1, 0) }),
     minZoom: MAP.tiles ? MAP.tiles.minZoom : 0, maxZoom: MAP.maxZoom + 2,
-    zoomSnap: .25, attributionControl: false,
+    zoomSnap: .25, attributionControl: false, preferCanvas: true, tap: true,
   });
   if (MAP.tiles) {
     L.tileLayer("/control-map/tiles/{z}/{x}/{y}", {
@@ -100,27 +111,166 @@ async function startMap(box) {
   // Drawn inside a tab that may have been hidden: size it again when it shows.
   window.addEventListener("hashchange", () => setTimeout(() => { map.invalidateSize(); map.fitBounds(bounds); }, 0));
 
-  const layer = L.layerGroup().addTo(map);
-  const clock = (at) => new Date(at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const layers = { dots: L.layerGroup().addTo(map), lines: L.layerGroup().addTo(map), heat: L.layerGroup(),
+    grid: L.layerGroup(), count: L.layerGroup().addTo(map) };
+  const clock = (at) => new Date(at * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const text = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const who = (name, id) => (id ? `<a href="/player/${encodeURIComponent(id)}">${text(name || "Unknown")}</a>` : text(name || "Unknown"));
+  const readout = panel.querySelector("[data-map-readout]");
+  const sub = panel.querySelector("[data-map-sub]");
+  const rangePick = panel.querySelector("[data-map-range]");
+  const serverPick = panel.querySelector("[data-map-server]");
+  const state = { lines: true, heat: false, grid: false, count: false, kills: [], radius: 250, spot: null };
+  let server = box.dataset.server;
 
-  async function draw() {
-    const res = await fetch(`/server/${encodeURIComponent(box.dataset.server)}/kills.json`, { credentials: "same-origin" });
-    if (!res.ok) return;
-    const { kills } = await res.json();
-    layer.clearLayers();
-    for (const k of kills) {
-      const kind = k.teamkill ? "t" : (k.ai || !k.killer ? "a" : "k");
-      const to = toLatLng(k.to[0], k.to[1]);
-      if (k.from) {
-        L.polyline([toLatLng(k.from[0], k.from[1]), to], { className: `ctl-shot ${kind}`, interactive: false }).addTo(layer);
-      }
-      L.circleMarker(to, { radius: 6, className: `ctl-kill ${kind}` })
-        .bindTooltip(`<b>${text(k.killer || "Unknown")}</b> → ${text(k.victim)}<br>${text(k.how)}`
-          + `${k.distance ? `, ${k.distance} m` : ""} · ${clock(k.at)}${k.teamkill ? " · <b>teamkill</b>" : ""}`)
-        .addTo(layer);
+  function drawGrid() {
+    layers.grid.clearLayers();
+    const style = { color: "#ffffff", weight: 1, opacity: .25, interactive: false };
+    for (let m = 0; m <= MAP.size[0]; m += 1000) L.polyline([toLatLng(m, 0), toLatLng(m, MAP.size[1])], style).addTo(layers.grid);
+    for (let m = 0; m <= MAP.size[1]; m += 1000) L.polyline([toLatLng(0, m), toLatLng(MAP.size[0], m)], style).addTo(layers.grid);
+  }
+
+  function drawHeat() {
+    layers.heat.clearLayers();
+    const label = map.getZoom() >= map.getMinZoom() + 1;
+    const cell = 500, counts = new Map();
+    for (const k of state.kills) {
+      const key = `${Math.floor(k.to[0] / cell)},${Math.floor(k.to[1] / cell)}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    const most = Math.max(1, ...counts.values());
+    for (const [key, n] of counts) {
+      const [x, y] = key.split(",").map(Number);
+      const square = L.rectangle([toLatLng(x * cell, y * cell), toLatLng((x + 1) * cell, (y + 1) * cell)], {
+        color: "#ff8a3d", weight: .5, opacity: .5, fillColor: "#ff5a1f", fillOpacity: .15 + .6 * (n / most),
+      }).bindTooltip(`${n} kill${n === 1 ? "" : "s"} in the 500 m square at ${grid(x * cell, y * cell)}`);
+      square.addTo(layers.heat);
+      if (label) L.tooltip({ permanent: true, direction: "center", className: "heat-n" })
+        .setLatLng(square.getBounds().getCenter()).setContent(String(n)).addTo(layers.heat);
     }
   }
-  draw();
-  setInterval(() => { if (!document.hidden) draw(); }, 30000);
+
+  function drawCount() {
+    layers.count.clearLayers();
+    if (!state.count || !state.spot) return;
+    const [e, n] = state.spot;
+    const near = state.kills.filter((k) => Math.hypot(k.to[0] - e, k.to[1] - n) <= state.radius);
+    const tks = near.filter((k) => k.teamkill).length, ai = near.filter((k) => k.ai).length;
+    const edge = toLatLng(e + state.radius, n);
+    const centre = toLatLng(e, n);
+    L.circle(centre, { radius: map.distance(centre, edge), color: "#ffd166", weight: 3, dashArray: "6 4",
+      fillColor: "#ffd166", fillOpacity: .12, interactive: false }).addTo(layers.count).bringToFront();
+    const ring = map.latLngToContainerPoint(edge).x - map.latLngToContainerPoint(centre).x;
+    if (state.zoomTo && ring < 40) map.fitBounds(L.latLngBounds(toLatLng(e - state.radius * 2.5, n - state.radius * 2.5),
+      toLatLng(e + state.radius * 2.5, n + state.radius * 2.5)));
+    state.zoomTo = false;
+    readout.innerHTML = `<b>${near.length} kill${near.length === 1 ? "" : "s"}</b> within `
+      + `<select data-map-radius aria-label="Radius">${[100, 250, 500, 1000].map((r) =>
+        `<option value="${r}" ${r === state.radius ? "selected" : ""}>${r} m</option>`).join("")}</select>`
+      + ` of ${grid(e, n)} · ${tks} TK${tks === 1 ? "" : "s"} · ${ai} AI`;
+  }
+
+  function draw() {
+    layers.dots.clearLayers();
+    layers.lines.clearLayers();
+    for (const k of state.kills) {
+      const kind = k.teamkill ? "t" : (k.ai || !k.killer ? "a" : "k");
+      const colour = KILL_COLOURS[kind];
+      const to = toLatLng(k.to[0], k.to[1]);
+      if (k.from) L.polyline([toLatLng(k.from[0], k.from[1]), to], { color: colour, weight: 1.5, dashArray: "4 4", interactive: false }).addTo(layers.lines);
+      const details = `<div class="kill-pop"><b class="${kind}">${k.teamkill ? "Teamkill" : kind === "a" ? "Killed by AI or nobody" : "Kill"}</b>`
+        + `<p>${k.ai ? text(k.killer || "AI") : who(k.killer, k.killer_id)} → ${who(k.victim, k.victim_id)}</p>`
+        + `<p>${text(k.how || "unknown")}${k.distance ? `, ${k.distance} m` : ""}</p>`
+        + `<p>${clock(k.at)} · grid ${grid(k.to[0], k.to[1])}</p></div>`;
+      L.circleMarker(to, { radius: touch ? 8 : 6, color: "#fff", weight: 1.5, fillColor: colour, fillOpacity: .95 })
+        .on("click", () => {
+          // While counting, a dot is just a spot to count around.
+          if (state.count) { state.spot = [...k.to]; state.zoomTo = true; drawCount(); return; }
+          L.popup({ maxWidth: 260 }).setLatLng(to).setContent(details).openOn(map);
+        })
+        .addTo(layers.dots);
+    }
+    if (state.heat) drawHeat();
+    drawCount();
+  }
+
+  async function load() {
+    if (map.getContainer().querySelector(".leaflet-popup")) return;    // don't pull a popup out from under someone
+    const range = rangePick ? rangePick.value : "30m";
+    const option = serverPick && serverPick.selectedOptions[0];
+    const other = option && option.dataset.mapName && !option.dataset.mapName.toLowerCase().includes(MAP.name.toLowerCase());
+    if (other) {
+      state.kills = [];
+      draw();
+      sub.textContent = `· ${option.textContent} is on ${option.dataset.mapName}; this map is ${MAP.name}`;
+      return;
+    }
+    const res = await fetch(`/server/${encodeURIComponent(server)}/kills.json?range=${range}`, { credentials: "same-origin" });
+    if (!res.ok) return;
+    const data = await res.json();
+    state.kills = data.kills;
+    draw();
+    sub.textContent = `· ${data.kills.length}${data.capped ? "+" : ""} kill${data.kills.length === 1 ? "" : "s"}`;
+    sub.title = RANGE_WORDS[range];
+  }
+
+  rangePick?.addEventListener("change", load);
+  serverPick?.addEventListener("change", () => { server = serverPick.value; load(); });
+  for (const button of panel.querySelectorAll("[data-map-toggle]")) {
+    button.addEventListener("click", () => {
+      const name = button.dataset.mapToggle;
+      state[name] = !state[name];
+      button.classList.toggle("on", state[name]);
+      button.setAttribute("aria-pressed", state[name]);
+      if (name === "lines" && !state.heat) state.lines ? layers.lines.addTo(map) : layers.lines.remove();
+      if (name === "heat") {
+        // Squares instead of dots: the dots would hide them.
+        if (state.heat) { drawHeat(); layers.heat.addTo(map); layers.dots.remove(); layers.lines.remove(); }
+        else { layers.heat.remove(); layers.dots.addTo(map); if (state.lines) layers.lines.addTo(map); }
+      }
+      if (name === "grid") { if (state.grid) { drawGrid(); layers.grid.addTo(map); } else layers.grid.remove(); }
+      if (name === "count") {
+        box.classList.toggle("counting", state.count);
+        state.spot = null;
+        drawCount();
+        readout.textContent = state.count ? (touch ? "Tap the map to count the kills around that spot." : "Click the map to count the kills around that spot.") : "";
+      }
+    });
+  }
+  readout.addEventListener("change", (event) => {
+    if (event.target.matches("[data-map-radius]")) { state.radius = Number(event.target.value); state.zoomTo = true; drawCount(); }
+  });
+  map.on("click", (event) => {
+    if (!state.count) return;
+    state.spot = toMetres(event.latlng);
+    state.zoomTo = true;
+    drawCount();
+  });
+  map.on("zoomend", () => { if (state.heat) drawHeat(); });
+  const layersButton = panel.querySelector("[data-map-layers]");
+  layersButton?.addEventListener("click", () => {
+    const open = panel.classList.toggle("map-tools-open");
+    layersButton.setAttribute("aria-expanded", open);
+  });
+  map.on("mousemove", (event) => {
+    if (state.count && state.spot) return;
+    const [e, n] = toMetres(event.latlng);
+    if (e < 0 || n < 0 || e > MAP.size[0] || n > MAP.size[1]) return;
+    readout.textContent = `Grid ${grid(e, n)}`;
+  });
+
+  const full = panel.querySelector("[data-map-full]");
+  full?.addEventListener("click", () => {
+    const on = panel.classList.toggle("map-full-on");
+    document.body.classList.toggle("map-open", on);
+    full.setAttribute("aria-label", on ? "Close full screen map" : "Full screen map");
+    setTimeout(() => { map.invalidateSize(); map.fitBounds(bounds); }, 0);
+  });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && panel.classList.contains("map-full-on")) full.click(); });
+
+  load();
+  setInterval(() => {
+    const range = rangePick ? rangePick.value : "30m";
+    if (!document.hidden && ["30m", "1h"].includes(range)) load();
+  }, 30000);
 }

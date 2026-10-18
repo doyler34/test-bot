@@ -28,8 +28,15 @@
 <p>Each chip looks back through the whole 7 days, so picking <b>Sus</b> or <b>TKs</b> still finds older ones on a busy server.</p>
 
 <h2>The kill map</h2>
-<p>The <b>Live Map</b> on the dashboard and on a server's Overview puts the last 30 minutes of kills where they happened. An orange dot is a kill, red a teamkill, purple a kill by AI or with nobody named, and the dashed line goes back to where the shot came from. <span class="only-desk">Hover over</span><span class="only-phone">Tap</span> a dot for the names, weapon, distance and time.</p>
-<p>Put the map next to the live feed (switch the box beside it to <b>Live feed</b>) and you can see a teamkill in the feed and where it happened at once. A cluster of purple dots nobody can explain is worth a look: that's how an explosion cheat shows.</p>
+<p>The <b>Live Map</b> on the dashboard and on a server's Overview puts kills where they happened. An orange dot is a kill, red a teamkill, purple a kill by AI or with nobody named, and the dashed line goes back to where the shot came from.</p>
+<ul>
+  <li><b>How far back</b>: the picker next to the title goes from the last 30 minutes to the last 30 days. The last 30 minutes and hour update on their own.</li>
+  <li><b>Details</b>: <span class="only-desk">click</span><span class="only-phone">tap</span> a dot for who killed who (both names open their player pages), how, from how far, when, and its grid reference.</li>
+  <li><b>Grid references</b>: <span class="only-desk">point at the map and the corner shows the grid reference under the pointer, the same 100 m squares as in game.</span><span class="only-phone">every dot's details give its grid reference, the same 100 m squares as in game.</span></li>
+  <li><b>Layers</b> on the map: pick another <b>server</b>, turn the killer-to-victim <b>Lines</b> off, show <b>Density</b> (each 500 m square shaded by how many died there, with the count), the 1 km <b>Grid</b>, or <b>Count</b>: <span class="only-desk">click</span><span class="only-phone">tap</span> anywhere and it counts the kills within 100 m to 1 km of that spot, with how many were teamkills or by AI.</li>
+  <li><b>⤢</b> opens the map full screen<span class="only-desk">; Esc closes it</span>.</li>
+</ul>
+<p>Put the map next to the live feed (switch the box beside it to <b>Live feed</b>) and you can see a teamkill in the feed and where it happened at once. A cluster of purple dots nobody can explain is worth a look: that's how an explosion cheat shows. The game's logs don't say which weapon was used, only the kind of damage.</p>
 {{ shot("map", "The kill map.") }}
 <p class="tip">The feed keeps the last 7 days. Sus flags are kept for 180 days. For anything older, every game is saved in full under <a href="/guide/history">History</a>.</p>
 {% endblock %}

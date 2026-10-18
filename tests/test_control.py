@@ -4,7 +4,7 @@ from unittest import mock
 
 from aiohttp.test_utils import TestClient, TestServer
 
-from panel import auth
+from panel import archive, auth
 from panel.config import PanelConfig, ServerConfig
 from panel.db import PanelDB, now
 from panel.servers import ServerManager
@@ -27,11 +27,16 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         one.players = [{"name": "Gaz", "identity": PERSON}]
         one.joined = {PERSON: now() - 5400}
         one.query = {"ok": True, "ms": 31.6, "map": "Everon", "players": 1, "slots": 128}
-        one.kill_spots.extend([
-            {"at": now() - 60, "kind": "teamkill", "killer_name": "Gaz", "victim_name": "Dave", "damage": "KINETIC",
-             "distance": 41.2, "killer_at": (4000.0, 5000.0), "victim_at": (4030.0, 5020.0), "by_ai": False},
-            {"at": now() - 3000, "kind": "kill", "killer_name": "Old", "victim_name": "News", "damage": "KINETIC",
-             "distance": 10, "killer_at": (1, 1), "victim_at": (2, 2), "by_ai": False}])
+        self.db.add_kills("one", archive.kill_rows([
+            {"at": now() - 60, "kind": "teamkill", "killer": PERSON, "killer_name": "Gaz", "victim": "d-1",
+             "victim_name": "Dave", "damage": "KINETIC", "distance": 41.2, "killer_at": (4000.0, 5000.0),
+             "victim_at": (4030.0, 5020.0)},
+            {"at": now() - 3000, "kind": "kill", "killer": "o-1", "killer_name": "Old", "victim": "n-1",
+             "victim_name": "News", "damage": "KINETIC", "distance": 10, "killer_at": (1, 1), "victim_at": (2, 2)},
+            {"at": now() - 5 * 86400, "kind": "kill", "killer": "", "victim": "n-1", "victim_name": "News",
+             "damage": "EXPLOSIVE", "by_ai": True, "victim_at": (3, 3)},
+            {"at": now() - 100, "kind": "kill", "killer": "o-1", "killer_name": "Old", "victim": "x-1",
+             "victim_name": "Nowhere", "damage": "KINETIC"}]))
         for i in range(10):
             self.db.add_server_sample("one", {"players": 1, "proc_cpu": 20 + i, "rss": 3 * 1024 ** 3}, at=now() - 600 + i * 15)
         self.app = create_app(config, self.db, self.manager, start_manager=False)
@@ -70,10 +75,24 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
     async def test_kills_from_the_last_half_hour(self):
         await self.login("mod")
         kills = (await (await self.client.get("/server/one/kills.json")).json())["kills"]
-        self.assertEqual(len(kills), 1)
-        self.assertEqual(kills[0]["killer"], "Gaz")
+        self.assertEqual(len(kills), 1)                  # the last half hour, and only kills with a place
+        self.assertEqual((kills[0]["killer"], kills[0]["killer_id"], kills[0]["victim_id"]), ("Gaz", PERSON, "d-1"))
         self.assertTrue(kills[0]["teamkill"])
-        self.assertEqual(kills[0]["to"], [4030.0, 5020.0])
+        self.assertEqual((kills[0]["from"], kills[0]["to"]), ([4000.0, 5000.0], [4030.0, 5020.0]))
+        week = (await (await self.client.get("/server/one/kills.json?range=7d")).json())["kills"]
+        self.assertEqual([k["victim"] for k in week], ["Dave", "News", "News"])
+        self.assertTrue(week[2]["ai"])
+        self.assertIsNone(week[2]["from"])
+
+    def test_kills_saved_before_places_were_kept_get_them_from_their_game(self):
+        old = (100, 5000, "kill", "k-1", "Kay", "v-1", "Vee", "KINETIC", 50.0, "Chest")
+        self.db.db.execute("INSERT INTO kills (server, game, at, kind, killer, killer_name, victim, victim_name, damage,"
+                           " distance, zone) VALUES ('two', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", old)
+        self.assertEqual(self.db.map_kills("two", 0), [])
+        self.db.add_kills("two", [(*old, 10.0, 20.0, 30.0, 40.0)], "logs_old")
+        spot = self.db.map_kills("two", 0)[0]
+        self.assertEqual((spot["victim_x"], spot["victim_y"], spot["killer_x"], spot["killer_y"]), (10.0, 20.0, 30.0, 40.0))
+        self.assertEqual(self.db.unread_place_games("two"), [])
 
     async def test_power_goes_through_amp_and_needs_permission(self):
         amp = mock.Mock()

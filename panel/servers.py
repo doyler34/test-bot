@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
 from . import alerts as alert_colours, archive, attacks, memory, monitor, netcheck
-from collections import Counter, deque
+from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
 from .db import PanelDB, now
@@ -94,13 +94,10 @@ class ServerState:
     found_pid: int = 0
     unreachable: int = 0
     query: dict = field(default_factory=dict)
-    # When each player now on was first seen, and the last half hour of kills with where they happened.
+    # When each player now on was first seen.
     joined: dict = field(default_factory=dict)
-    kill_spots: deque = field(default_factory=deque)
 
 
-# How long kills stay on the Control page's map.
-KILL_SPOTS_SECONDS = 1800
 # How often the Monitor page gets a reading.
 MONITOR_SECONDS = 15
 # Unanswered outside checks in a row before it counts as unreachable.
@@ -327,11 +324,6 @@ class ServerManager:
                 state.disconnects[event["reason"]] += 1
             elif event["kind"] == "error":
                 state.errors += 1
-            elif event["kind"] in ("kill", "teamkill") and event.get("victim_at"):
-                state.kill_spots.append({k: event.get(k) for k in (
-                    "at", "kind", "killer_name", "victim_name", "damage", "distance", "killer_at", "victim_at", "by_ai")})
-        while state.kill_spots and state.kill_spots[0]["at"] < now() - KILL_SPOTS_SECONDS:
-            state.kill_spots.popleft()
         if moved:
             self.db.add_connections(state.config.id, events, moved)
             self.db.add_kills(state.config.id, archive.kill_rows(events))
@@ -470,6 +462,16 @@ class ServerManager:
                                                info.st_mtime, ())
             except (OSError, tarfile.TarError, EOFError) as exc:
                 log.warning("Couldn't read %s for the kill log: %s", row["path"], exc)
+                game = {"kill_rows": []}
+            self.db.add_kills(state.config.id, game["kill_rows"], row["folder"])
+        # And where each of those kills happened, for games read before places were kept.
+        for row in self.db.unread_place_games(state.config.id):
+            try:
+                info = Path(row["path"]).stat()
+                game = await asyncio.to_thread(archive.read_game, row["path"], row["folder"], info.st_size,
+                                               info.st_mtime, ())
+            except (OSError, tarfile.TarError, EOFError) as exc:
+                log.warning("Couldn't read %s for kill places: %s", row["path"], exc)
                 game = {"kill_rows": []}
             self.db.add_kills(state.config.id, game["kill_rows"], row["folder"])
         # And who was on PC or console, with Steam IDs, in games saved before that was read.
