@@ -1653,6 +1653,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('id="tour"', await (await self.client.get("/players")).text())
         await self.client.post("/logout", data={"csrf": token})
 
+        self.db.write("UPDATE users SET toured = 1 WHERE username = 'boss'")      # took the first, shorter tour
         await self.login("boss", "boss-password")
         home = await (await self.client.get("/")).text()
         self.assertIn('data-chapters="Dashboard,Server page,Players,Bans,Data,Settings"', home)
