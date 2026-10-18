@@ -1343,7 +1343,7 @@ body.app .side-nav a, body.app .side-group summary, body.app .side-off { font-si
   animation: tour-pulse 1.8s ease-in-out infinite; }
 .tour-card { position: fixed; z-index: 902; width: min(380px, calc(100vw - 16px)); background: #15181d; color: #e9ebee;
   border: 1px solid #2a2f36; border-radius: 12px; padding: 14px 18px 12px; box-shadow: 0 18px 40px rgba(0, 0, 0, .5);
-  transition: top .3s ease, left .3s ease; }
+  transition: top .3s ease, left .3s ease; max-height: calc(100dvh - 16px); overflow-y: auto; }
 .tour-card.middle { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100vw - 32px)); transition: none; }
 .tour-card.splash { width: min(480px, calc(100vw - 32px)); padding: 24px 26px 16px; border-color: #3a2a1c;
   background: radial-gradient(circle at 50% 0, rgba(244, 123, 32, .14), transparent 60%), #15181d; }

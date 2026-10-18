@@ -1,12 +1,27 @@
 {% set tap = '<span class="only-desk">Click</span><span class="only-phone">Tap</span>' %}
-{% set last_page = "bans" if can("ban") else "players" %}
-<div id="tour" hidden data-chapters="Dashboard,Server page,Players{{ ',Bans' if can('ban') }}">
+{# The pages the tour walks through. Data and Settings only for whoever can use them. #}
+{% set chapters = [("/", "Dashboard"), ("/server/", "Server page"), ("/players", "Players"), ("/bans", "Bans")] %}
+{% if can("box") or can("ips") or can("audit") %}{% set _ = chapters.append(("/data", "Data")) %}{% endif %}
+{% if can("sus") or can("game_admins") or can("users") or can("cards") or can("website") %}{% set _ = chapters.append(("/settings", "Settings")) %}{% endif %}
+{% set ns = namespace(here=0) %}
+{% for url, _ in chapters %}{% if path == url or (url == "/server/" and path.startswith(url)) %}{% set ns.here = loop.index0 %}{% endif %}{% endfor %}
+{% set last = ns.here == chapters|length - 1 %}
+{% set coming = chapters[ns.here + 1] if not last else none %}
+{% set next_url = (("/server/" ~ chosen.id ~ "?tour=1#live") if coming[0] == "/server/" and chosen else
+                   "/players?tour=1" if coming[0] == "/server/" else coming[0] ~ "?tour=1") if coming else "" %}
+{% macro onward() %}{% if coming %} data-next="{{ next_url }}"{% endif %}{% endmacro %}
+{% macro hint() %}{% if coming %}<p class="tour-hint">Next: {{ coming[1] }}.</p>{% endif %}{% endmacro %}
+<div id="tour" hidden data-chapters="{{ chapters|map(attribute=1)|join(',') }}">
 {% if path == "/" %}
   <section data-step data-splash data-chapter="0">
     <img class="tour-logo" src="/static/oyb-mark.svg" alt="">
     <p class="tour-kicker">OYB Control</p>
     <h3>Welcome, {{ user.username }}</h3>
-    <p>You're {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b>. Here's what that lets you do:</p>
+    <p>You're {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b>.
+      {%- if user.role == "moderator" %} You keep an eye on the servers, sort players out and warn or kick when needed. Bans go to an admin.
+      {%- elif user.role == "admin" %} You keep the servers in order: you can do everything a moderator does, and ban.
+      {%- else %} You run the place: everything the staff can do, plus the servers themselves, settings and accounts.{% endif %}</p>
+    <p>Here's what you can do:</p>
     <ul class="tour-can">
       <li>Watch every server live: players, kills, teamkills and Sus flags</li>
       <li>Look anyone up, with their history and kill log</li>
@@ -15,9 +30,12 @@
       {% if can("ban") %}<li>Ban players on every server at once</li>{% endif %}
       {% if can("power") %}<li>Start, restart and stop servers</li>{% endif %}
       {% if can("ips") %}<li>See IPs and alt accounts</li>{% endif %}
+      {% if can("unban") %}<li>Unban and change any ban</li>{% endif %}
       {% if can("audit") %}<li>Read the audit log</li>{% endif %}
+      {% if can("box") %}<li>See the Box dashboard and run the network check</li>{% endif %}
+      {% if can("users") %}<li>Make accounts and choose what each person can do</li>{% endif %}
     </ul>
-    <p>The tour takes about two minutes and walks you through the pages you'll use most.</p>
+    <p>The tour takes about {{ chapters|length // 2 + 1 }} minutes and walks you through {{ chapters|length }} pages: {{ chapters|map(attribute=1)|join(", ") }}.</p>
   </section>
   <section data-step data-chapter="0" data-target=".ctl-cards">
     <h3>Every server</h3>
@@ -54,10 +72,10 @@
     <h3>Search</h3>
     <p>Type a player's name, an old name or their ID, and press Enter. A server's name takes you to that server.</p>
   </section>
-  <section data-step data-chapter="0" data-target="details.bell" data-next="{{ '/server/' ~ chosen.id ~ '?tour=1#live' if chosen else '/players?tour=1' }}">
+  <section data-step data-chapter="0" data-target="details.bell"{{ onward() }}>
     <h3>The bell</h3>
     <p>A red number means something needs someone: a server down, lots of players and no admin on, or Sus flags in the last hour. {{ tap|safe }} it for the list.</p>
-    <p class="tour-hint">Next we'll open a server's own page.</p>
+    {{ hint() }}
   </section>
 {% elif path.startswith("/server/") %}
   <section data-step data-chapter="1" data-target=".srv-head">
@@ -81,10 +99,10 @@
     <h3>Filter the feed</h3>
     <p>{{ tap|safe }} <b>TKs</b> for just the teamkills, or <b>Sus</b> for just the cheat flags. Each looks back through the whole week. <b>All</b> shows everything again.</p>
   </section>
-  <section data-step data-chapter="1" data-target="section.pane[data-filter] button.expand" data-next="/players?tour=1">
+  <section data-step data-chapter="1" data-target="section.pane[data-filter] button.expand"{{ onward() }}>
     <h3>Full screen</h3>
     <p>The <b>⤢</b> on any box fills the screen with it: handy for a busy feed.</p>
-    <p class="tour-hint">Next: finding a player.</p>
+    {{ hint() }}
   </section>
 {% elif path == "/players" %}
   <section data-step data-chapter="2" data-target="form.search">
@@ -95,23 +113,76 @@
     <h3>A player's page</h3>
     <p>{{ tap|safe }} a name for their record: time played, K/D and teamkills, every name they've used, admin notes, their full kill log and any incidents they were on for.</p>
   </section>
-  <section data-step data-chapter="2" data-target='a[href="/players/unusual"]'{% if last_page == "bans" %} data-next="/bans?tour=1"{% endif %}>
+  <section data-step data-chapter="2" data-target='a[href="/players/unusual"]'{{ onward() }}>
     <h3>Unusual players</h3>
     <p>Compares everyone's headshots, long kills, kills per hour and K/D over every saved game. Red is the top 5%. It's where to look, not who to ban: good players show up too.</p>
-    {% if last_page == "bans" %}<p class="tour-hint">Last stop: bans.</p>{% endif %}
+    {{ hint() }}
   </section>
 {% elif path == "/bans" %}
+  {% if can("ban") %}
   <section data-step data-chapter="3" data-target='form.card[action="/bans"]'>
     <h3>Banning</h3>
     <p>Type part of their name and pick them from the list, choose how long, pick or type a reason, and press <b>Ban on all servers</b>. It applies to every server at once, and they're told how to appeal.</p>
     {% if can("ips") %}<p><b>IP ban</b> also catches their alts and any new account from the same IP. People in the same house share an IP, so only tick it when you mean it.</p>{% endif %}
   </section>
-  <section data-step data-chapter="3" data-target="section.card">
+  {% endif %}
+  <section data-step data-chapter="3" data-target="section.card"{{ onward() }}>
     <h3>Every ban</h3>
-    <p>Who, why, how long is left, who did it, and whether each server has it yet.{% if not can("unban") %} Taking a ban off is for senior admins: ask one if a ban was a mistake.{% endif %}</p>
+    <p>Who, why, how long is left, who did it, and whether each server has it yet.
+      {%- if not can("ban") %} Banning is for admins: if someone needs one, kick them, leave a note saying why, and ask an admin.
+      {%- elif not can("unban") %} Taking a ban off is for senior admins: ask one if a ban was a mistake.
+      {%- else %} <b>Remove</b> unbans on every server, and <b>Edit</b> changes the reason or length.{% endif %}</p>
+    {{ hint() }}
+  </section>
+{% elif path == "/data" %}
+  <section data-step data-chapter="{{ ns.here }}" data-target="main h1">
+    <h3>Data</h3>
+    <p>The pages for looking into the panel, the box and who's been trying to get in.</p>
+  </section>
+  <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/audit"]'>
+    <h3>Audit log</h3>
+    <p>Every action in the panel with who did it and when: logins, kicks, bans, restarts and settings changes. The answer to "who did that?"</p>
+  </section>
+  <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/network"]'>
+    <h3>Box dashboard</h3>
+    <p>Everything the machine is doing, charted over up to a week. Its <b>Network check</b> tab is the first stop when players say it's laggy: it finds dropped packets and gives you the exact fix.</p>
+  </section>
+  <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/attacks"]'>
+    <h3>Login attacks</h3>
+    <p>Failed logins on SSH, AMP and this panel. Add your own address under <b>Admin IPs</b> so your typos are never flagged. <b>IP lookup</b> says who an address belongs to.</p>
+  </section>
+  <section data-step data-chapter="{{ ns.here }}" data-target="aside.side .side-nav" data-phone-target="nav.dock"{{ onward() }}>
+    <h3>Always here</h3>
+    <p>Data stays <span class="only-desk">in the menu on the left</span><span class="only-phone">under <b>More</b></span>.</p>
+    {{ hint() }}
+  </section>
+{% elif path == "/settings" %}
+  <section data-step data-chapter="{{ ns.here }}" data-target="main .cards">
+    <h3>Settings</h3>
+    <p>A card for each thing you can change. Each one goes in the audit log with your name.</p>
+  </section>
+  <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/settings/pictures"]'>
+    <h3>Server cards</h3>
+    <p>The picture, description and join address on each server's card. The join address is what gives everyone the copy and <b>Join</b> buttons.</p>
+  </section>
+  <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/sus-settings"]'>
+    <h3>Sus settings</h3>
+    <p>How touchy the cheat checks are. Higher numbers mean fewer flags; <b>Reset to defaults</b> puts them back.</p>
+  </section>
+  <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/game-admins"]'>
+    <h3>In-game admins</h3>
+    <p>Make players admin in game on each server, through AMP. It applies when the server next restarts.</p>
+  </section>
+  <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/users"]'>
+    <h3>Admins</h3>
+    <p>Panel accounts and roles. <b>Edit access</b> next to someone switches single things on or off just for them, like the Box dashboard for one moderator, without making them senior admin.</p>
+  </section>
+  <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/website"]'>
+    <h3>Website</h3>
+    <p>The public site's words, servers and rules. It changes the moment you save.</p>
   </section>
 {% endif %}
-{% if path == "/" ~ last_page %}
+{% if last %}
   <section data-step data-final>
     <img class="tour-logo" src="/static/oyb-mark.svg" alt="">
     <h3>You're set</h3>
@@ -119,6 +190,9 @@
       {% if can("notes") %}<li>Leave a note whenever you deal with someone, so the next admin knows</li>{% endif %}
       <li>Keep an eye on the bell and on <b>No admin on</b></li>
       <li>A Sus flag is a reason to look, not proof. The same name at several is.</li>
+      {% if not can("ban") %}<li>Someone needs a ban? Kick, note it, and ask an admin</li>{% endif %}
+      {% if can("power") %}<li>Restarts kick everyone: do them when it's quiet</li>{% endif %}
+      {% if can("users") %}<li>Give people the lowest role that does the job, then switch on extras with Edit access</li>{% endif %}
     </ul>
     <p>Everything's in the guide in more detail, with pictures, and you can take this tour again from there.</p>
     <p class="tour-links"><a class="button ghost small" href="/guide">Open the guide</a></p>

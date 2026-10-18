@@ -136,7 +136,7 @@ def _until(value):
 
 
 # The first-login tour starts on the dashboard and walks on through these pages.
-TOUR_PAGES = ("dashboard.html", "server.html", "players.html", "bans.html")
+TOUR_PAGES = ("dashboard.html", "server.html", "players.html", "bans.html", "data.html", "settings.html")
 
 
 def render(request, template, **context):
@@ -158,7 +158,7 @@ def render(request, template, **context):
     if user and not template.startswith("_"):
         context.setdefault("notices", attention(request, list(request.app[MANAGER].states.values())))
         context.setdefault("tour", template in TOUR_PAGES and (request.query.get("tour") == "1" or (
-            template == "dashboard.html" and user["role"] != "owner" and not user["toured"])))
+            template == "dashboard.html" and not user["toured"])))
     html = request.app[JINJA].get_template(template).render(**context)
     headers = {"Content-Security-Policy": context["csp"]} if context.get("csp") else None
     return web.Response(text=html, content_type="text/html", headers=headers)

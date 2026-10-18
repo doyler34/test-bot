@@ -1630,11 +1630,13 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(HAVOC, self.fake.bans)
         self.assertEqual([r["action"] for r in self.db.audit(limit=2)], ["unban", "ban"])
 
-    async def test_first_login_tour_once_for_staff_not_senior_admins(self):
+    async def test_first_login_tour_for_everyone_shaped_by_role(self):
         await self.login("mod", "mod-password")
         home = await (await self.client.get("/")).text()
         self.assertIn('id="tour"', home)
         self.assertIn("/static/tour.js", home)
+        self.assertIn('data-chapters="Dashboard,Server page,Players,Bans"', home)
+        self.assertIn("Bans go to an admin", home)
         token = await self.csrf("/")
         refused = await self.client.post("/tour/done")
         self.assertEqual(refused.status, 403)
@@ -1644,15 +1646,24 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('id="tour"', await (await self.client.get("/?tour=1")).text())
         server = await (await self.client.get("/server/server-1?tour=1")).text()
         self.assertIn('data-next="/players?tour=1"', server)
-        players = await (await self.client.get("/players?tour=1")).text()
-        self.assertIn("data-final", players)                       # moderators can't ban, so it ends here
-        self.assertNotIn("/bans?tour=1", players)
+        self.assertIn('data-next="/bans?tour=1"', await (await self.client.get("/players?tour=1")).text())
+        bans = await (await self.client.get("/bans?tour=1")).text()
+        self.assertIn("data-final", bans)
+        self.assertIn("Banning is for admins", bans)
         self.assertNotIn('id="tour"', await (await self.client.get("/players")).text())
         await self.client.post("/logout", data={"csrf": token})
+
         await self.login("boss", "boss-password")
-        self.assertNotIn('id="tour"', await (await self.client.get("/")).text())
-        self.assertIn('data-next="/bans?tour=1"', await (await self.client.get("/players?tour=1")).text())
-        self.assertIn("data-final", await (await self.client.get("/bans?tour=1")).text())
+        home = await (await self.client.get("/")).text()
+        self.assertIn('data-chapters="Dashboard,Server page,Players,Bans,Data,Settings"', home)
+        self.assertIn("You run the place", home)
+        bans = await (await self.client.get("/bans?tour=1")).text()
+        self.assertIn('data-next="/data?tour=1"', bans)
+        self.assertNotIn("data-final", bans)
+        self.assertIn('data-next="/settings?tour=1"', await (await self.client.get("/data?tour=1")).text())
+        settings = await (await self.client.get("/settings?tour=1")).text()
+        self.assertIn("data-final", settings)
+        self.assertIn("Edit access", settings)
 
     async def test_welcome_and_guide(self):
         await self.login("mod", "mod-password")
