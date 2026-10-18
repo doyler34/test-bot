@@ -1355,9 +1355,9 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(f'href="/users/{mo}/access"', await (await self.client.get("/users")).text())
         page = await (await self.client.get(f"/users/{mo}/access")).text()
         self.assertIn('value="discord:welcome"', page)
-        self.assertNotIn('value="kick"', page)
+        self.assertIn('value="kick" checked', page)
         await self.client.post(f"/users/{mo}", data={"csrf": token, "action": "grants",
-                                                     "grant": ["discord:welcome", "kick", "made-up"]})
+                                                     "grant": ["discord:welcome", "kick", "notes", "made-up"]})
         self.assertEqual(self.db.grants(mo), {"discord:welcome"})
         self.assertEqual(self.db.audit()[0]["action"], "changed access")
         await self.client.post("/logout", data={"csrf": token})
@@ -1393,8 +1393,27 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("boss", "boss-password")
         token = await self.csrf("/users")
         await self.client.post(f"/users/{adm}", data={"csrf": token, "action": "grants",
-                                                      "grant": ["discord", "discord:welcome", "ban"]})
+                                                      "grant": ["discord", "discord:welcome", "kick", "notes", "ban", "audit"]})
         self.assertEqual(self.db.grants(adm), {"discord"})
+
+    async def test_owners_can_take_one_thing_off_one_person(self):
+        self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
+        adm = self.db.user_by_name("adm")["id"]
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/users")
+        await self.client.post(f"/users/{adm}", data={"csrf": token, "action": "grants",
+                                                      "grant": ["kick", "notes", "audit", "box"]})
+        self.assertEqual(self.db.grants(adm), {"-ban", "box"})
+        self.assertIn("1 extra, 1 taken off", await (await self.client.get("/users")).text())
+        await self.client.post("/logout", data={"csrf": token})
+        await self.login("adm", "adm-password")
+        token = await self.csrf("/bans")
+        response = await self.client.post("/bans", data={"csrf": token, "identity": BUFORD, "reason": "x"},
+                                          allow_redirects=False)
+        self.assertEqual(response.status, 403)
+        self.assertEqual((await self.client.get("/network")).status, 200)
+        self.assertIn('href="/data"', await (await self.client.get("/players")).text())
+        self.assertEqual((await self.client.get("/settings/pictures")).status, 403)
 
     async def test_admins_ban_but_cannot_unban_or_see_ips(self):
         self.db.add_user("adm", auth.hash_password("adm-password"), "admin")

@@ -1572,7 +1572,7 @@ def attention(request, states):
 
 
 async def pictures_page(request):
-    require(request, "users")
+    require(request, "cards")
     folder = request.app[PICTURES]
     details = card_details(request.app[DB])
     rows = [{"id": "default", "name": "Every server (used when a server has no picture of its own)",
@@ -1591,7 +1591,7 @@ def picture_target(request):
 
 
 async def upload_picture(request):
-    require(request, "users")
+    require(request, "cards")
     target = picture_target(request)
     folder = request.app[PICTURES]
     folder.mkdir(parents=True, exist_ok=True)
@@ -1636,7 +1636,7 @@ ADDRESS = re.compile(r"[A-Za-z0-9.\-]{1,253}:\d{2,5}")
 
 
 async def save_card_details(request):
-    require(request, "users")
+    require(request, "cards")
     target = picture_target(request)
     if target == "default":
         raise web.HTTPNotFound()
@@ -1654,7 +1654,7 @@ async def save_card_details(request):
 
 
 async def remove_picture(request):
-    require(request, "users")
+    require(request, "cards")
     target = picture_target(request)
     old = picture_file(request.app[PICTURES], target)
     if old:
@@ -2074,13 +2074,13 @@ async def discord_home(request):
 
 
 async def bot_data_page(request):
-    require(request, "users")
+    require(request, "box")
     identity = request.query.get("player", "").strip().lower()
     report = request.app[STATS].health(identity if valid_identity(identity) else "")
     return render(request, "bot_data.html", report=report, identity=identity)
 
 
-SETTINGS_PERMISSIONS = ("sus", "game_admins", "users", "website", "mortar")
+SETTINGS_PERMISSIONS = ("sus", "game_admins", "users", "cards", "website", "mortar")
 
 
 async def settings_page(request):
@@ -2090,7 +2090,7 @@ async def settings_page(request):
 
 
 async def data_page(request):
-    if not (allowed(request, "users") or allowed(request, "ips") or allowed(request, "audit")):
+    if not any(allowed(request, p) for p in ("box", "ips", "audit")):
         raise web.HTTPForbidden(text="You do not have permission for that.")
     return render(request, "data.html")
 
@@ -2146,7 +2146,7 @@ def box_problems(box, servers):
 
 
 async def network_page(request):
-    require(request, "users")
+    require(request, "box")
     db, manager = request.app[DB], request.app[MANAGER]
     result = request.app[NETCHECK].get("last")
     if request.method == "POST":
@@ -2573,7 +2573,14 @@ async def audit_page(request):
 
 def users_view(request, created=None):
     db = request.app[DB]
-    return render(request, "users.html", rows=db.users(), roles=auth.ROLES, created=created, grants=db.all_grants())
+    return render(request, "users.html", rows=db.users(), roles=auth.ROLES, created=created, grants=db.all_grants(),
+                  access_summary=access_summary)
+
+
+def access_summary(grants):
+    taken = sum(g.startswith("-") for g in grants)
+    parts = [f"{len(grants) - taken} extra" if len(grants) > taken else "", f"{taken} taken off" if taken else ""]
+    return ", ".join(p for p in parts if p) or "Role only"
 
 
 def grant_keys():
@@ -2591,8 +2598,10 @@ async def access_page(request):
     target = db.user(int(request.match_info["user_id"]))
     if target is None or target["role"] == "owner":
         raise web.HTTPFound("/users")
-    return render(request, "user_access.html", target=target, mine=db.grants(target["id"]), grant_list=auth.GRANTS,
-                  discord_pages=DISCORD_PAGES, role_can=auth.can)
+    mine = db.grants(target["id"])
+    return render(request, "user_access.html", target=target, mine=mine, grant_list=auth.GRANTS,
+                  discord_pages=DISCORD_PAGES, role_can=auth.can,
+                  has=lambda key: auth.allows(target["role"], mine, key))
 
 
 async def add_user(request):
@@ -2636,8 +2645,9 @@ async def change_user(request):
             audit(request, "changed role", target=target["username"], detail=f"{target['role']} → {role}")
             flash(request, f"{target['username']} is now {role}.")
     elif action == "grants":
-        chosen = set(form.getall("grant", [])) & grant_keys()
-        chosen = {g for g in chosen if not auth.can(target["role"], g)}
+        ticked = set(form.getall("grant", []))
+        chosen = {g for g in grant_keys() if g in ticked and not auth.can(target["role"], g)}
+        chosen |= {f"-{g}" for g, _ in auth.GRANTS if g not in ticked and auth.can(target["role"], g)}
         if "discord" in chosen:
             chosen = {g for g in chosen if not g.startswith("discord:")}
         before = db.grants(target["id"])

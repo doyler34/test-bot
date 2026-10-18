@@ -42,8 +42,7 @@
     <td class="access" data-label="Access">
       {% if u.role == "owner" %}<span class="muted">Everything</span>
       {% else %}
-      {% set mine = grants.get(u.id, []) %}
-      {{ "Role only" if not mine else (mine|length) ~ " extra" }} · <a href="/users/{{ u.id }}/access">Edit access</a>
+      {{ access_summary(grants.get(u.id, ())) }} · <a href="/users/{{ u.id }}/access">Edit access</a>
       {% endif %}
     </td>
     <td class="actions">
