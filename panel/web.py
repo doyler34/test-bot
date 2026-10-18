@@ -41,7 +41,7 @@ log = logging.getLogger("panel.web")
 
 HERE = Path(__file__).parent
 ASSET_VERSION = str(int(max((HERE / "static" / n).stat().st_mtime
-                           for n in ("style.css", "app.js", "discord.js", "site.css", "site.js"))))
+                           for n in ("style.css", "app.js", "discord.js", "site.css", "site.js", "tour.js"))))
 BRAND = HERE.parent / "assets" / "rank-card"
 COOKIE = "oyb_panel"
 PUBLIC = ("/login", "/static/", "/brand/", "/drop/", "/survey.sh")
@@ -395,7 +395,15 @@ async def dashboard(request):
     if chosen:
         extra = {"chosen": next(c for c in states if c["id"] == chosen.config.id), **server_overview(request, chosen),
                  "csp": MAP_CSP}
-    return render(request, "dashboard.html", cards=states, welcome=welcome, amp=bool(request.app[AMP]), gb=GB, **extra)
+    user = request[USER]
+    tour = request.query.get("tour") == "1" or (user["role"] != "owner" and not user["toured"])
+    return render(request, "dashboard.html", cards=states, welcome=welcome, amp=bool(request.app[AMP]), gb=GB,
+                  tour=tour, **extra)
+
+
+async def tour_done(request):
+    request.app[DB].write("UPDATE users SET toured = 1 WHERE id = ?", request[USER]["id"])
+    return web.Response(status=204)
 
 
 GUIDE = [
@@ -2725,6 +2733,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/logout", logout)
     app.router.add_get("/account", account_page)
     app.router.add_post("/account", account)
+    app.router.add_post("/tour/done", tour_done)
     app.router.add_get("/", dashboard)
     app.router.add_get("/cards.part", dashboard_part)
     app.router.add_get("/guide", guide)

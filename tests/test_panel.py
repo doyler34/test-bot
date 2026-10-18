@@ -1630,6 +1630,22 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(HAVOC, self.fake.bans)
         self.assertEqual([r["action"] for r in self.db.audit(limit=2)], ["unban", "ban"])
 
+    async def test_first_login_tour_once_for_staff_not_senior_admins(self):
+        await self.login("mod", "mod-password")
+        home = await (await self.client.get("/")).text()
+        self.assertIn('id="tour"', home)
+        self.assertIn("/static/tour.js", home)
+        token = await self.csrf("/")
+        refused = await self.client.post("/tour/done")
+        self.assertEqual(refused.status, 403)
+        done = await self.client.post("/tour/done", headers={"X-CSRF": token})
+        self.assertEqual(done.status, 204)
+        self.assertNotIn('id="tour"', await (await self.client.get("/")).text())
+        self.assertIn('id="tour"', await (await self.client.get("/?tour=1")).text())
+        await self.client.post("/logout", data={"csrf": token})
+        await self.login("boss", "boss-password")
+        self.assertNotIn('id="tour"', await (await self.client.get("/")).text())
+
     async def test_welcome_and_guide(self):
         await self.login("mod", "mod-password")
         html = await (await self.client.get("/")).text()
