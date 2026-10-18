@@ -66,7 +66,8 @@ class NetCheckTests(unittest.TestCase):
                       "queries": {"one": {"tries": 10, "failed": 2, "avg": 40.0, "worst": 300.0, "best": 20.0, "jitter": 35.0}},
                       "internet": {"Cloudflare (1.1.1.1)": {"tries": 10, "failed": 0, "avg": 3.0, "worst": 4.0, "best": 2.0, "jitter": 0.5}},
                       "ethtool": {"enp4s0": {"rx_max": 4096, "rx_now": 256, "counters": {"rx_missed_errors": 250, "tx_timeout_count": 0,
-                                                                                         "rx_queue_0_csum_err": 80, "rx_queue_1_csum_err": 72}}}}
+                                                                                         "rx_queue_0_csum_err": 80, "rx_queue_1_csum_err": 72}}},
+                      "buffers": {"555": {"rb": 212992, "tb": 212992}}}
         rows = {(r["section"], r["label"]): r for r in netcheck.judge(before, after, [("one", "Classic", 4242, ("x", 1))], extras)}
         v = lambda section, label: rows[(section, label)]["verdict"]
         self.assertEqual(rows[("Network ports", "Default route")]["value"], "enp4s0 via 192.168.0.1")
@@ -90,9 +91,29 @@ class NetCheckTests(unittest.TestCase):
                          "87 dropped in 10 s (90 since it opened), 1024 bytes waiting")
         self.assertEqual(v("Server: Classic", "UDP port 2001"), "bad")
         self.assertEqual(v("Server: Classic", "Server browser check"), "bad")            # 2 of 10 unanswered
+        bufs = rows[("Server: Classic", "Buffers it's using")]
+        self.assertEqual((bufs["value"], bufs["verdict"]), ("receive 208 KB, send 208 KB", "warn"))
+        self.assertIn("Raise the buffers", bufs["fix"])
+        raised = dict(extras, sysctl={**extras["sysctl"], "rmem_default": 4194304, "wmem_default": 4194304})
+        later = {(r["section"], r["label"]): r for r in netcheck.judge(before, after, [("one", "Classic", 4242, ("x", 1))], raised)}
+        self.assertIn("next time it restarts", later[("Server: Classic", "Buffers it's using")]["why"])
+        bigger = dict(raised, buffers={"555": {"rb": 4194304, "tb": 4194304}})
+        done = {(r["section"], r["label"]): r for r in netcheck.judge(before, after, [("one", "Classic", 4242, ("x", 1))], bigger)}
+        self.assertEqual(done[("Server: Classic", "Buffers it's using")]["value"], "receive 4.0 MB, send 4.0 MB")
+        self.assertEqual(done[("Server: Classic", "Buffers it's using")]["verdict"], "ok")
         text = netcheck.report_text({"at": 0, "lines": list(rows.values()), "host": "box", "kernel": "6.1"})
         self.assertIn("[BAD ] UDP port 2001", text)
         self.assertIn("== Network ports ==", text)
+
+
+    def test_reads_each_sockets_buffers_from_ss(self):
+        text = ("State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n"
+                "UNCONN 0      0            0.0.0.0:2001      0.0.0.0:*     uid:1000 ino:555 sk:1 cgroup:/system.slice <->\n"
+                "\t skmem:(r0,rb4194304,t0,tb4194304,f4096,w0,o0,bl0,d2)\n"
+                "UNCONN 0      0            0.0.0.0:17777     0.0.0.0:*     uid:1000 ino:556 sk:2 <->\n"
+                "\t skmem:(r0,rb212992,t0,tb212992,f0,w0,o0,bl0,d0)\n")
+        self.assertEqual(netcheck.parse_ss(text), {"555": {"rb": 4194304, "tb": 4194304}, "556": {"rb": 212992, "tb": 212992}})
+        self.assertEqual(netcheck.parse_ss(""), {})
 
 
 if __name__ == "__main__":

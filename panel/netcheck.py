@@ -97,7 +97,7 @@ def snmp(proc_root="/proc"):
 
 def sysctls(proc_root="/proc"):
     keys = {"rmem_max": "net/core/rmem_max", "rmem_default": "net/core/rmem_default",
-            "wmem_max": "net/core/wmem_max", "backlog": "net/core/netdev_max_backlog",
+            "wmem_max": "net/core/wmem_max", "wmem_default": "net/core/wmem_default", "backlog": "net/core/netdev_max_backlog",
             "conntrack": "net/netfilter/nf_conntrack_count", "conntrack_max": "net/netfilter/nf_conntrack_max"}
     return {k: _int(_read(f"{proc_root}/sys/{path}")) for k, path in keys.items()}
 
@@ -229,6 +229,38 @@ async def ethtool(name):
                 counters[key] = int(value)
     return {"rx_max": _int(numbers[0]) if numbers else None, "rx_now": _int(numbers[1]) if len(numbers) > 1 else None,
             "counters": counters}
+
+
+def parse_ss(text):
+    """`ss -uanme`: each UDP socket's inode with the receive and send buffer the
+    kernel gave it (rb and tb in its skmem)."""
+    found, record = {}, ""
+    for row in text.splitlines() + [""]:
+        if row[:1].isspace():
+            record += " " + row.strip()
+            continue
+        inode = re.search(r"\bino:(\d+)", record)
+        mem = re.search(r"skmem:\(([^)]*)\)", record)
+        if inode and mem:
+            parts = dict(re.findall(r"([a-z]+)(\d+)", mem.group(1)))
+            if "rb" in parts and "tb" in parts:
+                found[inode.group(1)] = {"rb": int(parts["rb"]), "tb": int(parts["tb"])}
+        record = row
+    return found
+
+
+async def socket_buffers():
+    tool = shutil.which("ss")
+    if not tool:
+        return None
+    proc = await asyncio.create_subprocess_exec(tool, "-uanme", stdout=asyncio.subprocess.PIPE,
+                                                stderr=asyncio.subprocess.DEVNULL)
+    out, _ = await proc.communicate()
+    return parse_ss(out.decode(errors="replace"))
+
+
+def _size(n):
+    return f"{n / 1024 / 1024:.1f} MB" if n >= 1024 * 1024 else f"{n // 1024} KB"
 
 
 def snapshot(pids, proc_root="/proc", sys_root="/sys"):
@@ -503,6 +535,22 @@ def judge(before, after, servers, extras):
                                 "exactly what cuts radio and movement." if grew else
                                 "Some dropped earlier; none during the test." if sock["drops"] else
                                 "Listening on every address." if sock["any"] else ""))
+            buffers = extras.get("buffers")
+            sized = [buffers[x["inode"]] for x in socks if buffers and x["inode"] in buffers]
+            if sized:
+                rb, tb = min(b["rb"] for b in sized), min(b["tb"] for b in sized)
+                small = min(rb, tb) < 1024 * 1024
+                raised = min(k.get("rmem_default") or 0, k.get("wmem_default") or 0) >= 1024 * 1024
+                out.append(line(s, "Buffers it's using", f"receive {_size(rb)}, send {_size(tb)}", WARN if small else OK,
+                                ("The box allows bigger buffers now, but this server started before they were set: "
+                                 "it picks them up the next time it restarts." if raised else
+                                 "Small for a busy game server: a burst overflows it and radio and movement break up.")
+                                if small else "",
+                                "Restart this server when it's quiet." if small and raised else
+                                "Raise the buffers (the Kernel lines above), then restart this server." if small else ""))
+            elif buffers is None and socks:
+                out.append(line(s, "Buffers it's using", "couldn't read", INFO,
+                                "Install iproute2 (it has the ss command) to see each server's buffers."))
         result = extras["queries"].get(sid)
         if result is None:
             out.append(line(s, "Server browser check", "not set up", INFO,
@@ -554,12 +602,12 @@ async def run(servers, proc_root="/proc", sys_root="/sys", log_dirs=None):
         return {f"{label} ({host})": r for (label, host, _), r in zip(TARGETS, results)}
 
     started = time.monotonic()
-    found_queries, found_internet, tools = await asyncio.gather(
-        queries(), internet(), asyncio.gather(*(ethtool(n) for n in sorted(used))))
+    found_queries, found_internet, tools, buffers = await asyncio.gather(
+        queries(), internet(), asyncio.gather(*(ethtool(n) for n in sorted(used))), socket_buffers())
     await asyncio.sleep(max(WINDOW - (time.monotonic() - started), 0))
     after = await asyncio.to_thread(snapshot, pids, proc_root, sys_root)
     extras = {"routes": default_routes(proc_root), "sysctl": sysctls(proc_root), "queries": found_queries,
-              "internet": found_internet,
+              "internet": found_internet, "buffers": buffers,
               "ethtool": {n: t for n, t in zip(sorted(used), tools) if t}}
     lines = judge(before, after, servers, extras)
     spare = [g for g in games if g["pid"] not in pids.values()]
