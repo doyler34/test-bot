@@ -1304,7 +1304,10 @@ async def player_page(request):
             if other and other["discord"]:
                 linked_via = {"identity": alt["identity"], "name": alt["name"], "discord": other["discord"]}
                 break
-    return render(request, "player.html", identity=identity, player=db.player(identity),
+    fight = db.combat(identity)
+    fight.update(hit=body_map(fight["hit"]), hit_by=body_map(fight["hit_by"]))
+    return render(request, "player.html", identity=identity, player=db.player(identity), combat=fight,
+                  average=combat_average(db),
                   stats=stats, stats_here=oyb.available, linked_via=linked_via,
                   ips=db.ips(identity) if allowed(request, "ips") else [],
                   banned_ips=db.banned_ips() if allowed(request, "ips") else set(),
@@ -1718,6 +1721,36 @@ async def control_power(request):
           colour=RED if action == "stop" else GOLD)
     flash(request, f"{CONTROL_ACTIONS[action]} {state.config.name}. AMP takes a minute or two.")
     raise web.HTTPFound(back)
+
+
+# The log's hit zones, drawn as nine parts of a body and summed into four groups.
+BODY_PARTS = {"head": ("Head",), "neck": ("Neck",), "chest": ("Chest",), "abdomen": ("Abdomen",), "hips": ("Hips",),
+              "larm": ("LArm", "LForearm", "LHand"), "rarm": ("RArm", "RForearm", "RHand"),
+              "lleg": ("LThigh", "LCalf", "LFoot"), "rleg": ("RThigh", "RCalf", "RFoot")}
+BODY_GROUPS = (("Head", ("head", "neck")), ("Torso", ("chest", "abdomen", "hips")), ("Arms", ("larm", "rarm")),
+               ("Legs", ("lleg", "rleg")))
+
+
+def body_map(zones):
+    counts = {part: sum(zones.get(z, 0) for z in names) for part, names in BODY_PARTS.items()}
+    total = sum(counts.values())
+    if not total:
+        return None
+    top = max(counts.values())
+    return {"total": total, "share": {p: n / total for p, n in counts.items()},
+            "heat": {p: n / top for p, n in counts.items()},
+            "groups": [(label, sum(counts[p] for p in parts), sum(counts[p] for p in parts) / total)
+                       for label, parts in BODY_GROUPS]}
+
+
+_average = {"at": 0, "db": None, "value": None}
+
+
+def combat_average(db):
+    """Everyone's typical numbers, worked out at most every ten minutes."""
+    if now() - _average["at"] > 600 or _average["db"] is not db:
+        _average.update(at=now(), db=db, value=db.combat_average())
+    return _average["value"]
 
 
 # How far back the kill map can look, by the key its picker sends.

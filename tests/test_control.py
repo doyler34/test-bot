@@ -84,6 +84,20 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(week[2]["ai"])
         self.assertIsNone(week[2]["from"])
 
+    async def test_a_players_page_shows_where_their_bullets_land(self):
+        rows = [{"at": now() - n, "kind": "kill", "killer": PERSON, "killer_name": "Gaz", "victim": f"v-{n}",
+                 "victim_name": "Vee", "damage": "KINETIC", "distance": 100 + n, "zone": zone}
+                for n, zone in enumerate(["Head", "Head", "Neck", "Chest", "LThigh"], start=1)]
+        rows.append({"at": now() - 50, "kind": "kill", "killer": "x-1", "killer_name": "Ex", "victim": PERSON,
+                     "victim_name": "Gaz", "damage": "KINETIC", "zone": "RForearm"})
+        self.db.add_kills("two", archive.kill_rows(rows))
+        await self.login("boss")
+        page = await (await self.client.get(f"/player/{PERSON}")).text()
+        self.assertIn("Where they hit people", page)
+        self.assertIn("Head 60%, Torso 20%, Arms 0%, Legs 20%", page)      # the head group counts the neck too
+        self.assertIn("Where they get hit: Head 0%, Torso 0%, Arms 100%, Legs 0%", page)
+        self.assertIn("105 m", page)
+
     def test_kills_saved_before_places_were_kept_get_them_from_their_game(self):
         old = (100, 5000, "kill", "k-1", "Kay", "v-1", "Vee", "KINETIC", 50.0, "Chest")
         self.db.db.execute("INSERT INTO kills (server, game, at, kind, killer, killer_name, victim, victim_name, damage,"

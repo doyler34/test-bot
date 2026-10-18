@@ -952,6 +952,31 @@ class PanelDB:
                         " WHERE r.server = a.server AND r.folder = a.folder) ORDER BY started DESC LIMIT ?",
                         server, limit)
 
+    def combat(self, identity):
+        """A player's kills and deaths from every saved game: totals, longest
+        kill, and which body part took the killing bullet, both ways."""
+        mine = self.one("SELECT COUNT(*) AS kills, SUM(damage = 'KINETIC') AS bullets,"
+                        " SUM(damage = 'KINETIC' AND zone = 'Head') AS heads, MAX(distance) AS longest"
+                        " FROM kills WHERE killer = ? AND kind = 'kill'", identity)
+        deaths = self.one("SELECT COUNT(*) FROM kills WHERE victim = ?", identity)[0]
+        zones = lambda who: {r["zone"]: r["n"] for r in self.all(
+            f"SELECT zone, COUNT(*) AS n FROM kills WHERE {who} = ? AND damage = 'KINETIC' AND kind = 'kill'"
+            " GROUP BY zone", identity)}
+        return {"kills": mine["kills"], "bullets": mine["bullets"] or 0, "heads": mine["heads"] or 0,
+                "longest": mine["longest"], "deaths": deaths, "hit": zones("killer"), "hit_by": zones("victim")}
+
+    def combat_average(self, at_least=20):
+        """The typical K/D and headshot rate among players with a fair number of kills."""
+        rows = self.all("SELECT killer, COUNT(*) AS k, SUM(damage = 'KINETIC') AS b,"
+                        " SUM(damage = 'KINETIC' AND zone = 'Head') AS h FROM kills"
+                        " WHERE kind = 'kill' AND killer != '' GROUP BY killer HAVING k >= ?", at_least)
+        if not rows:
+            return None
+        died = {r["victim"]: r["n"] for r in self.all("SELECT victim, COUNT(*) AS n FROM kills GROUP BY victim")}
+        kd = [r["k"] / max(died.get(r["killer"], 0), 1) for r in rows]
+        hs = [r["h"] / r["b"] for r in rows if r["b"]]
+        return {"kd": sum(kd) / len(kd), "hs": sum(hs) / len(hs) if hs else None, "players": len(rows)}
+
     def unread_place_games(self, server, limit=20):
         return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM kill_places_read r"
                         " WHERE r.server = a.server AND r.folder = a.folder) ORDER BY started DESC LIMIT ?",

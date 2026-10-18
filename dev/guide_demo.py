@@ -283,6 +283,9 @@ def demo_kills(db, rng):
     """A week of kills with places, for the kill map: a busy town, a contested hill and scattered fights."""
     t = now()
     hot = [(5300, 6200), (7200, 7700), (6100, 4350)]
+    # Hit zones in the proportions a real night on our servers had.
+    zones = ["Chest"] * 16 + ["Head"] * 15 + ["Abdomen"] * 5 + ["Neck"] * 3 + ["Hips"] * 3 + ["LThigh", "RThigh", "LThigh",
+             "LCalf", "RCalf", "LArm", "RArm", "LForearm", "RForearm", "LFoot", "RHand"]
     events = []
     for n in range(420):
         at = t - int(rng.random() ** 2 * 7 * 86400) - 60
@@ -295,6 +298,7 @@ def demo_kills(db, rng):
                        "killer": "" if ai else killer[1], "killer_name": None if ai else killer[0], "by_ai": ai,
                        "victim": victim[1], "victim_name": victim[0], "damage": "EXPLOSIVE" if ai else "KINETIC",
                        "distance": None if ai else ((came[0] - went[0]) ** 2 + (came[1] - went[1]) ** 2) ** .5,
+                       "zone": "Hips" if ai else ("Head" if killer[0] == "Dreadful" and rng.random() < .5 else rng.choice(zones)),
                        "victim_at": went, "killer_at": came})
     db.add_kills("eu1", archive.kill_rows(events))
 

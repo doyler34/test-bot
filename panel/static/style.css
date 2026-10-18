@@ -1420,3 +1420,43 @@ body.map-open { overflow: hidden; }
   .map-tools { top: 48px; }
   .ctl-map-panel.map-full-on { padding: 8px; }
 }
+
+/* A player's combat card: numbers on the left, where bullets landed on the right. */
+.combat { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 4px 22px; align-items: start; }
+.combat > h2, .combat > .muted.small:last-child { grid-column: 1 / -1; }
+.combat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.combat-tiles div { background: #15181d; border: 1px solid #262b31; border-radius: 8px; padding: 10px 6px; text-align: center; }
+.combat-tiles div.hl { border-color: #f47b20; background: linear-gradient(180deg, rgba(244, 123, 32, .16), rgba(244, 123, 32, .04)); }
+.combat-tiles b { display: block; font-size: 1.35rem; line-height: 1.2; color: #eef0f2; }
+.combat-tiles b.good { color: #4ed07a; } .combat-tiles b.bad { color: #ff7b72; } .combat-tiles b.gold { color: #f0c24b; }
+.combat-tiles .hl b { color: #ff9a4d; }
+.combat-tiles span { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: #8b929b; }
+.combat-left { min-width: 0; }
+.combat-vs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; padding: 12px;
+  background: #15181d; border: 1px solid #262b31; border-radius: 8px; }
+.versus p { display: flex; justify-content: space-between; margin: 0 0 5px; font-size: .8rem; color: #c9ced4; }
+.versus em { font-style: normal; font-size: .72rem; } .versus em.up { color: #4ed07a; } .versus em.down { color: #ff9a4d; }
+.versus svg { display: block; width: 100%; height: 6px; }
+.versus .track, .body-groups .track { fill: #262b31; }
+.versus .fill { fill: #f47b20; } .versus .mark { fill: #fff; }
+.versus .ends { margin: 4px 0 0; font-size: .68rem; color: #6c737c; }
+.versus .ends b { color: #ff9a4d; font-size: .72rem; }
+.combat .muted.small { font-size: .75rem; margin: 6px 0 0; }
+.body-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.body-map { margin: 0; padding: 12px; background: #15181d; border: 1px solid #262b31; border-radius: 8px; }
+.body-map figcaption { font-size: .82rem; color: #e9ebee; margin-bottom: 8px; }
+.body-map > svg { display: block; width: 100%; max-width: 130px; height: auto; margin: 0 auto 8px; }
+.body-map .part { fill: #f47b20; stroke: rgba(255, 255, 255, .35); stroke-width: 1; }
+.body-map text { fill: #fff; font-size: 9px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: rgba(0, 0, 0, .7); stroke-width: 2.5px; }
+.body-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.body-groups li { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 8px; font-size: .78rem; color: #c9ced4; align-items: baseline; }
+.body-groups b { color: #eef0f2; } .body-groups em { font-style: normal; color: #8b929b; font-size: .72rem; }
+.body-groups .bar { grid-column: 1 / -1; width: 100%; height: 4px; }
+.body-groups .fill.head { fill: #e0443a; } .body-groups .fill.torso { fill: #f47b20; }
+.body-groups .fill.arms { fill: #4f8cff; } .body-groups .fill.legs { fill: #4ed07a; }
+@media (max-width: 900px) {
+  .combat { grid-template-columns: 1fr; }
+}
+@media (max-width: 420px) {
+  .combat-vs { grid-template-columns: 1fr; }
+}

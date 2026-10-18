@@ -16,6 +16,7 @@
 {{ shot("player", "A player's page.") }}
 <p>It's split into tabs:</p>
 <ul>
+  <li><b>Combat</b>, at the top: kills, deaths, K/D, headshots, their longest kill and headshot rate from every saved game, with how their K/D and headshot rate compare with everyone else's. Two body diagrams show where their killing bullets landed on people, and where they get hit. A headshot rate far above average on plenty of kills is worth a look.</li>
   <li><b>Overview</b>: their in-game record (time played, kills, deaths, K/D and teamkills) and the Discord account they linked, when they were first and last seen, the names they've used, a <b>Ban</b> button{% if not can("ban") %} (admins){% endif %}, and admin notes.</li>
   <li><b>Kill log</b>: pick a period (their last game, 24 hours, 7 or 30 days, or a single day) and press <b>Teamkills they did</b>, <b>Who teamkilled them</b> or <b>All their kills and deaths</b>. Every line has the date and log time, the server, what killed them and from how far, and a link to that game. A teamkill marked <b>Revenge?</b> happened within 10 minutes of the victim teamkilling them first. <b>Copy as text</b> gives you the lot as plain lines to paste anywhere.</li>
   {% if can("ips") %}<li><b>Connections</b>: their IPs and other accounts. See below.</li>{% endif %}

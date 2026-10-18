@@ -1,0 +1,72 @@
+{% macro body(b, title, words) %}
+<figure class="body-map">
+  <figcaption>{{ title }} <span class="muted">· {{ b.total if b else 0 }} {{ words }}</span></figcaption>
+  {% if b %}
+  <svg viewBox="0 0 120 262" role="img" aria-label="{{ title }}: {% for label, n, share in b.groups %}{{ label }} {{ (share * 100)|round|int }}%{{ ', ' if not loop.last }}{% endfor %}">
+    {% set h = b.heat %}
+    <circle class="part" cx="60" cy="20" r="15" fill-opacity="{{ '%.2f'|format(0.12 + 0.88 * h.head) }}"/>
+    <path class="part" d="M54 34 h12 v12 h-12 z" fill-opacity="{{ '%.2f'|format(0.12 + 0.88 * h.neck) }}"/>
+    <path class="part" d="M33 54 Q36 46 48 45 H72 Q84 46 87 54 L84 86 Q83 89 79 89 H41 Q37 89 36 86 Z" fill-opacity="{{ '%.2f'|format(0.12 + 0.88 * h.chest) }}"/>
+    <path class="part" d="M40 91 H80 L78 114 Q77 116 74 116 H46 Q43 116 42 114 Z" fill-opacity="{{ '%.2f'|format(0.12 + 0.88 * h.abdomen) }}"/>
+    <path class="part" d="M42 118 H78 Q83 122 83 132 L81 138 H39 L37 132 Q37 122 42 118 Z" fill-opacity="{{ '%.2f'|format(0.12 + 0.88 * h.hips) }}"/>
+    <path class="part" d="M30 50 Q22 52 21 62 L14 118 Q13 128 16 136 L22 137 Q25 128 25 120 L33 70 Z" fill-opacity="{{ '%.2f'|format(0.12 + 0.88 * h.rarm) }}"/>
+    <path class="part" d="M90 50 Q98 52 99 62 L106 118 Q107 128 104 136 L98 137 Q95 128 95 120 L87 70 Z" fill-opacity="{{ '%.2f'|format(0.12 + 0.88 * h.larm) }}"/>
+    <path class="part" d="M39 140 H58 L56 200 L54 248 Q54 256 47 256 H42 Q38 256 39 248 L40 200 Q37 170 39 140 Z" fill-opacity="{{ '%.2f'|format(0.12 + 0.88 * h.rleg) }}"/>
+    <path class="part" d="M62 140 H81 Q83 170 80 200 L81 248 Q82 256 78 256 H73 Q66 256 66 248 L64 200 Z" fill-opacity="{{ '%.2f'|format(0.12 + 0.88 * h.lleg) }}"/>
+    {% set s = b.share %}
+    {% for part, x, y in (("head", 60, 24), ("chest", 60, 71), ("abdomen", 60, 106), ("hips", 60, 131), ("rarm", 22, 98), ("larm", 98, 98), ("rleg", 48, 200), ("lleg", 72, 200)) %}
+    {% if s[part] >= 0.005 %}<text x="{{ x }}" y="{{ y }}">{{ (s[part] * 100)|round|int }}%</text>{% endif %}
+    {% endfor %}
+  </svg>
+  <ul class="body-groups">
+    {% for label, n, share in b.groups %}
+    <li><span>{{ label }}</span><b>{{ n }}</b><em>{{ (share * 100)|round|int }}%</em>
+      <svg class="bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect width="100" height="4" rx="2" class="track"/><rect width="{{ '%.1f'|format(share * 100) }}" height="4" rx="2" class="fill {{ label|lower }}"/></svg></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No bullet {{ words }} saved yet.</p>
+  {% endif %}
+</figure>
+{% endmacro %}
+
+{% macro versus(label, value, avg, top, text, avg_text) %}
+<div class="versus">
+  <p><span>{{ label }}</span>{% if avg is not none %}<em class="{{ 'up' if value > avg else 'down' }}">{{ "↑" if value > avg else "↓" }} average {{ avg_text }}</em>{% endif %}</p>
+  <svg viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+    <rect width="100" height="6" rx="3" class="track"/>
+    <rect width="{{ '%.1f'|format([value / top * 100, 100]|min) }}" height="6" rx="3" class="fill"/>
+    {% if avg is not none %}<rect x="{{ '%.1f'|format([avg / top * 100, 99.5]|min) }}" width="1" height="6" class="mark"/>{% endif %}
+  </svg>
+  <p class="ends"><span>0</span><b>{{ text }}</b><span>{{ top|round|int if top > 1 else "100%" }}</span></p>
+</div>
+{% endmacro %}
+
+<section class="card combat">
+  <h2>Combat <span class="muted">· every saved game, all servers</span></h2>
+  {% set c = combat %}
+  {% set kd = c.kills / c.deaths if c.deaths else c.kills %}
+  {% set hs = c.heads / c.bullets if c.bullets else 0 %}
+  <div class="combat-left">
+  <div class="combat-tiles">
+    <div><b class="good">{{ c.kills }}</b><span>Kills</span></div>
+    <div><b class="bad">{{ c.deaths }}</b><span>Deaths</span></div>
+    <div class="hl"><b>{{ "%.2f"|format(kd) }}</b><span>K/D</span></div>
+    <div><b class="gold">{{ c.heads }}</b><span>Headshots</span></div>
+    <div><b>{{ c.longest|round|int if c.longest else "—" }}{{ " m" if c.longest }}</b><span>Longest kill</span></div>
+    <div><b>{{ (hs * 100)|round|int }}%</b><span>Headshot rate</span></div>
+  </div>
+  {% if c.kills %}
+  <div class="combat-vs">
+    {{ versus("K/D", kd, average.kd if average else none, [4, (average.kd * 2.5) if average else 4, kd]|max, "%.2f"|format(kd), "%.2f"|format(average.kd) if average else "") }}
+    {{ versus("Headshot rate", hs, average.hs if average else none, 1, (hs * 100)|round|int ~ "%", ((average.hs or 0) * 100)|round|int ~ "%" if average else "") }}
+  </div>
+  {% if average %}<p class="muted small">Average of the {{ average.players }} players with 20 or more kills.</p>{% endif %}
+  {% endif %}
+  </div>
+  <div class="body-pair">
+    {{ body(c.hit, "Where they hit people", "kills") }}
+    {{ body(c.hit_by, "Where they get hit", "deaths") }}
+  </div>
+  <p class="muted small">From the body part the killing bullet hit, as the server logged it. Explosions and vehicles aren't counted here.</p>
+</section>
