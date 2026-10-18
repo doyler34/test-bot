@@ -14,15 +14,19 @@
 <h2>Memory</h2>
 <p>Reforger servers slowly take more memory the longer they run, and some games leave memory behind when a new mission starts. Too much and the server gets laggy or crashes.</p>
 <ul>
-  <li>A few minutes after a full <b>Restart server</b>, the panel notes what a clean server uses. That's the dashed line on the graph.</li>
+  <li>A few minutes after a full <b>Restart</b>, the panel notes what a clean server uses. That's the dashed line on the graph.</li>
   <li>The graph shows the last 24 hours. Memory stepping up a bit when a mission loads is normal.</li>
-  <li>After you press <b>Restart mission</b>, the panel checks again once the new mission has loaded. If memory is still well above a clean start (over 512 MB more), it warns: the old mission's memory wasn't let go.</li>
+  <li>After a mission restart (a new game starting without the server restarting), the panel checks again once the new mission has loaded. If memory is still well above a clean start (over 512 MB more), it warns: the old mission's memory wasn't let go.</li>
 </ul>
 
 <h2>When to do a full restart</h2>
 <ol class="steps">
-  <li>If you see "Memory didn't clear" on the server page, press <b>Restart server</b> when it's quiet (it disconnects everyone for a minute or two).</li>
+  <li>If you see "Memory didn't clear" on the server page or in the bell, press <b>Restart</b> when it's quiet (it disconnects everyone for a minute or two).</li>
   <li>If memory climbs higher after every mission restart, that's a leak: restart the server.</li>
   <li>Either way, a full restart every 6–12 hours keeps things smooth.</li>
 </ol>
+
+<h2>The Monitor</h2>
+<p>The <b>Monitor</b> tab on a server's page takes a reading every 15 seconds and keeps a week: players, server FPS, the game's CPU, the box's CPU and memory, lost packets, and whether the server answered a check from outside. Pick a period at the top. <b>What stands out</b> lists anything that went wrong in that time, with when, so when players say "it was lagging at 9", look there first.</p>
+{{ shot("monitor", "The Monitor.") }}
 {% endblock %}

@@ -264,6 +264,13 @@ form.inline input[type=date] { display: inline-block; width: auto; margin: 0; pa
 .shot { margin: 14px 0 22px; }
 .shot img { display: block; max-width: 100%; border: 1px solid var(--line); }
 .shot figcaption { color: var(--muted); font-size: .88rem; margin-top: 6px; }
+/* The guide says "tap" on a phone and "click" on a computer, and shows that screen's pictures. */
+.only-phone { display: none; }
+@media (max-width: 720px) {
+  .only-desk { display: none; }
+  .only-phone { display: revert; }
+  .shot.has-phone img { max-width: min(100%, 360px); margin: 0 auto; border-radius: 10px; }
+}
 .tip { border-left: 3px solid var(--gold); background: var(--panel); padding: 10px 14px; margin: 14px 0; }
 .tip.danger { border-left-color: var(--red); }
 .guide-next { display: flex; justify-content: space-between; gap: 16px; margin-top: 36px; }
@@ -1265,6 +1272,7 @@ body.app main { max-width: none; margin: 0; padding: 0 calc(var(--u) * 1.15) cal
   .dash .ctl-stats { flex-wrap: wrap; }
   .me-menu .name { display: none; }
   body.app .bell { margin-left: 0; }
+  .top-pop .pop { position: fixed; left: 8px; right: 8px; top: 56px; width: auto; }
 }
 /* pass 2: density to fit the reference's 683px height */
 body.app .side-nav a, body.app .side-group summary, body.app .side-off { padding-top: calc(var(--u) * .66); padding-bottom: calc(var(--u) * .66); }

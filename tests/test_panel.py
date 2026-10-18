@@ -1640,13 +1640,18 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Welcome to OYB Control", guide)
         self.assertIn('href="/guide/cheaters"', guide)
         self.assertNotIn('href="/guide/admins"', guide)
-        for slug in ("getting-started", "servers", "live-feed", "cheaters", "players", "kicking", "banning",
+        for slug in ("getting-started", "dashboard", "servers", "live-feed", "cheaters", "players", "kicking", "banning",
                      "history", "health", "discord"):
             response = await self.client.get(f"/guide/{slug}")
             self.assertEqual(response.status, 200, slug)
             page = await response.text()
             for image in re.findall(r'src="/static/guide/([\w-]+)\.jpg', page):
                 self.assertTrue(Path("panel/static/guide", image + ".jpg").is_file(), image)
+            for image in re.findall(r'srcset="/static/guide/phone/([\w-]+)\.jpg', page):
+                self.assertTrue(Path("panel/static/guide/phone", image + ".jpg").is_file(), image)
+        self.assertIn('srcset="/static/guide/phone/dashboard.jpg', await (await self.client.get("/guide/dashboard")).text())
+        self.assertEqual((await self.client.get("/guide/data")).status, 404)
+        self.assertEqual((await self.client.get("/guide/settings")).status, 404)
         self.assertIn("Banning needs an admin", await (await self.client.get("/guide/banning")).text())
         self.assertEqual((await self.client.get("/guide/admins")).status, 404)
         self.assertEqual((await self.client.get("/guide/nope")).status, 404)
@@ -1654,7 +1659,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
     async def test_owner_guide_pages(self):
         await self.login("boss", "boss-password")
         self.assertIn('<span class="role">senior admin</span>', await (await self.client.get("/")).text())
-        for slug in ("console-audit", "discord-messages", "admins"):
+        for slug in ("data", "settings", "discord-messages", "admins"):
             self.assertEqual((await self.client.get(f"/guide/{slug}")).status, 200)
         banning = await (await self.client.get("/guide/banning")).text()
         self.assertNotIn("Banning needs an admin", banning)

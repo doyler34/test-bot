@@ -1,7 +1,7 @@
 {% extends "guide/_page.html" %}
 {% from "guide/_macros.html" import shot with context %}
 {% block guide %}
-<p>The live feed on a server's Overview tab shows what's happening in game, newest at the top. It updates every 5 seconds on its own.</p>
+<p>The live feed shows what's happening in game, newest at the top, and updates on its own every few seconds. It's in two places: the <b>Live feed</b> side of the box next to the map on the dashboard, and the <b>Live feed</b> tab on a server's own page.</p>
 {{ shot("feed", "The live feed.") }}
 
 <h2>What's in it</h2>
@@ -20,11 +20,16 @@
 
 <h2>Filtering</h2>
 <ol class="steps">
-  <li>Press a chip at the top of the feed: <b>Joins</b>, <b>Kills</b>, <b>TKs</b>, <b>Sus</b>, <b>Admin</b> or <b>RCON</b>. <b>TKs</b> is just the teamkills; <b>Kills</b> has them mixed in with everything else.</li>
+  <li><span class="only-desk">Click</span><span class="only-phone">Tap</span> a chip at the top of the feed: <b>Joins</b>, <b>Kills</b>, <b>TKs</b>, <b>Sus</b>, <b>Admin</b> or <b>RCON</b>. <b>TKs</b> is just the teamkills; <b>Kills</b> has them mixed in with everything else.</li>
   <li>Only those rows stay. The chip you picked is lit up.</li>
-  <li>Press <b>All</b> to see everything again.</li>
+  <li><b>All</b> shows everything again.</li>
 </ol>
 {{ shot("feed-sus", "Filtered to Sus: just the flags.") }}
 <p>Each chip looks back through the whole 7 days, so picking <b>Sus</b> or <b>TKs</b> still finds older ones on a busy server.</p>
+
+<h2>The kill map</h2>
+<p>The <b>Live Map</b> on the dashboard and on a server's Overview puts the last 30 minutes of kills where they happened. An orange dot is a kill, red a teamkill, purple a kill by AI or with nobody named, and the dashed line goes back to where the shot came from. <span class="only-desk">Hover over</span><span class="only-phone">Tap</span> a dot for the names, weapon, distance and time.</p>
+<p>Put the map next to the live feed (switch the box beside it to <b>Live feed</b>) and you can see a teamkill in the feed and where it happened at once. A cluster of purple dots nobody can explain is worth a look: that's how an explosion cheat shows.</p>
+{{ shot("map", "The kill map.") }}
 <p class="tip">The feed keeps the last 7 days. Sus flags are kept for 180 days. For anything older, every game is saved in full under <a href="/guide/history">History</a>.</p>
 {% endblock %}

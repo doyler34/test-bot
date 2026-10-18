@@ -1,0 +1,36 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p><b>Data</b> <span class="only-desk">in the menu on the left</span><span class="only-phone">under <b>More</b></span> has the pages for looking into the panel, the box and who's been trying to get in. You only see the ones you have access to.</p>
+
+{% if can("audit") %}
+<h2>Audit log</h2>
+<p>Every action in the panel: logins (and failed ones), kicks, bans, restarts, log downloads, settings and account changes, with who, when, and the details. Search it to find out who did something.</p>
+{{ shot("audit", "The audit log.") }}
+{% endif %}
+
+{% if can("box") %}
+<h2>Box dashboard</h2>
+<p>Everything the machine the servers run on is doing: CPU, load, memory, disk, temperature, network in and out, and lost packets, charted over the last hour up to 7 days. Pick the period at the top.</p>
+<ul>
+  <li><b>Overview</b>: the numbers now, and what stands out.</li>
+  <li><b>Box</b> and <b>Servers</b>: the charts, for the whole box and for each game server.</li>
+  <li><b>Network check</b>: runs a full check of the box's network and gives you a report to send the host when players complain about lag.</li>
+</ul>
+{{ shot("box", "The Box dashboard.") }}
+<p><b>Bot data</b> shows what's in the bot's stats files, for when time played or kills look wrong.</p>
+{% endif %}
+
+{% if can("ips") %}
+<h2>Login attacks</h2>
+<p>Every failed login on the box's SSH, its AMP panels and this panel, read every 30 seconds. An address with lots of failures in a few minutes is posted to the staff channel in Discord, and shows in the bell.</p>
+<ul>
+  <li><b>Admin IPs</b>: add your own address (it's filled in for you) so your typos are never counted or posted. A range like <span class="mono">86.40.0.0/16</span> covers a home connection whose address changes.</li>
+  <li><b>How well the box is guarded</b>, the <b>ports open to the internet</b>, and <b>who's been trying</b> this week.</li>
+</ul>
+{{ shot("attacks", "Login attacks, with the Admin IPs list at the top.") }}
+
+<h2>IP lookup</h2>
+<p>Type an IP address to see who it's registered to (the internet provider and country) and every account the panel has seen on it.</p>
+{% endif %}
+{% endblock %}

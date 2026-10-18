@@ -1,7 +1,7 @@
 {% extends "guide/_page.html" %}
 {% from "guide/_macros.html" import shot with context %}
 {% block guide %}
-<p>Senior admins manage who can log in, from <b>Admins</b> in the top menu.</p>
+<p>Senior admins manage who can log in from <b>Settings → Admins</b>.</p>
 {{ shot("users", "The Admins page.") }}
 
 <h2>Adding someone</h2>
@@ -18,14 +18,17 @@
   <li><b>Disable</b>: stops them logging in, without losing their history in the audit log.</li>
 </ul>
 
-<h2>Extra access for one person</h2>
-<p>Sometimes one person needs one thing their role doesn't give, like editing the Start here message without being a senior admin. In the <b>Access</b> column (it says <b>Role only</b> until they have something extra):</p>
+<h2>Choosing what one person can do</h2>
+<p>A role is a starting point. For each person you can switch any single thing on or off, so nobody needs to be made senior admin just to do one job: say Blitz should see the Box dashboard but not unban, or an admin who shouldn't ban.</p>
 <ol class="steps">
-  <li>Press <b>Edit access</b> next to their name.</li>
-  <li>Tick what they should have: banning, unbanning, IPs, the audit log, server power, the website, every Discord page, or only some Discord pages.</li>
+  <li>Press <b>Edit access</b> next to their name, in the <b>Access</b> column.</li>
+  <li>Everything they can do is ticked. What comes with their role is marked <b>comes with admin</b> (or moderator).</li>
+  <li>Tick anything extra, or untick something to take it off them, even if their role normally has it.</li>
   <li>Press <b>Save access</b>. It applies on their next page load.</li>
 </ol>
-<p>Their menu and this guide change to match: they only see the pages they can use, and the guide pages that explain them. Senior admins always have everything, and only senior admins can change anyone's access.</p>
+{{ shot("access", "One person's access: what they can do is ticked.") }}
+<p>The things you can switch: kicking, notes, banning, unbanning, changing any ban, IPs and login attacks, the audit log, starting and stopping servers, the Box dashboard and bot data, the server cards, the website, in-game admins, the Sus settings, the mortar calculator, and every Discord page or just some of them.</p>
+<p>The Access column then says what's different for them, like <b>1 extra, 1 taken off</b>, or <b>Role only</b>. Their menu and this guide change to match: they only see the pages they can use. Making accounts stays with senior admins, and senior admins always have everything.</p>
 
-<p class="tip">Give people the lowest role that does the job, and add single things with Access rather than making them senior admin. Start new staff as moderators.</p>
+<p class="tip">Give people the lowest role that does the job, then switch on the odd extra. Start new staff as moderators.</p>
 {% endblock %}

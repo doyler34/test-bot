@@ -1,53 +1,48 @@
 {% extends "guide/_page.html" %}
 {% from "guide/_macros.html" import shot with context %}
 {% block guide %}
-<p>Click a server on the home page to open it. Everything about that one server is on this page.</p>
-{{ shot("server-overview", "A server page: controls, the summary strip, then the Overview tab.") }}
+<p>Every server has its own page with everything about it. Open it with <b>Full page →</b> on the dashboard, or <b>Players</b> there to land straight on its live feed.</p>
+{{ shot("server-page", "A server's own page.") }}
 
-<h2>The controls</h2>
-<p>The buttons along the top act on the whole server, so they affect everyone playing. Each one asks you to confirm first.</p>
-{{ shot("server-top", "The controls (outlined) and the summary strip under them.") }}
+<h2>The power buttons</h2>
+<p>At the top, next to how fast the server's answering:</p>
 <div class="scroll"><table>
   <thead><tr><th>Button</th><th>What it does</th><th>When to use it</th></tr></thead>
   <tbody>
-    <tr><td>Restart mission</td><td>Ends the current game and loads a fresh one, without restarting the server program. Quick, and nobody has to reconnect to the server.</td><td>End of a round, or the game has got into a bad state.</td></tr>
-    <tr><td>Shut down (RCON)</td><td>Tells the game to shut itself down.</td><td>Rarely. Stop server is usually better.</td></tr>
-    <tr><td>Start server</td><td>Starts the server program when it's off.</td><td>After a Stop, or if it crashed and didn't come back.</td></tr>
-    <tr><td>Stop server</td><td>Stops the server program. It stays off until someone starts it.</td><td>Maintenance.</td></tr>
-    <tr><td>Restart server</td><td>Stops and starts the whole server program. Everyone is disconnected for a minute or two.</td><td>Memory didn't clear after a mission restart, or every 6–12 hours to keep things fresh.</td></tr>
+    <tr><td>Start</td><td>Starts the server when it's off.</td><td>After a Stop, or if it crashed and didn't come back.</td></tr>
+    <tr><td>Restart</td><td>Stops and starts the whole server. Everyone is disconnected for a minute or two.</td><td>Memory didn't clear, the server's laggy, or every 6–12 hours to keep things fresh.</td></tr>
+    <tr><td>Stop</td><td>Stops the server. It stays off until someone starts it.</td><td>Maintenance.</td></tr>
+    <tr><td>Update</td><td>Has AMP stop the server and update the game.</td><td>After a Reforger update, when players can't join on the new version.</td></tr>
   </tbody>
 </table></div>
-<p class="tip">The controls are for admins and senior admins. Moderators don't see them.</p>
+<p class="tip">{% if can("power") %}Restart, Stop and Update ask you to confirm, and go in the audit log and the staff Discord channel with your name. They work once the panel is connected to AMP.{% else %}The power buttons are for senior admins, or anyone a senior admin gives the start and stop permission. For everyone else they're greyed out.{% endif %}</p>
 
-<h2>The summary strip</h2>
-<p>Updated every 10 seconds:</p>
-<ul>
-  <li><b>Players on</b>, right now.</li>
-  <li><b>Admins on</b>: how many admins are in game on this server, with their names underneath. Red 0 means nobody's watching. The panel counts players listed as admins in the server's own config, and anyone a senior admin marked with <b>Mark as admin</b> on their player page. The same shows on each server card on the home page.</li>
-  <li><b>Ping (RCON)</b>: how fast the server answers the panel. A big number means the server is struggling.</li>
-  <li><b>Server FPS</b>: how smoothly the server is running. Below 20 turns red and players will feel lag.</li>
-  <li><b>Memory</b> the server program is using.</li>
-  <li><b>Up, last 24h</b>: how much of the last day it was online.</li>
-  <li><b>Running for</b>: time since the server program last started.</li>
-</ul>
+<h2>The summary bars</h2>
+<p>Under the name: players on (and slots), CPU and memory with a bar each, and how long it's been up.</p>
 
 <h2>Tabs</h2>
-{{ shot("server-tabs", "The three tabs.") }}
+{{ shot("server-tabs", "The tabs.") }}
 <ul>
-  <li><b>Overview</b>: the players on now, the <a href="/guide/live-feed">live feed</a>, and recent admin actions on this server.</li>
-  <li><b>Health</b>: uptime, crashes and memory. See <a href="/guide/health">Health and memory</a>.</li>
+  <li><b>Overview</b>: the same panel as on the dashboard: information, live map, players and charts.</li>
+  <li><b>Live feed</b>: the full-size player list (with <b>Kick</b>{% if can("ban") %} and <b>Ban</b>{% endif %}), the <a href="/guide/live-feed">live feed</a>, and recent admin actions on this server. This is the tab for dealing with people.</li>
   <li><b>History</b>: every past game. See <a href="/guide/history">Past games</a>.</li>
+  <li><b>Health</b>: uptime, crashes and memory. See <a href="/guide/health">Health and memory</a>.</li>
+  <li><b>Monitor</b>: a reading every 15 seconds for a week, for working out lag.</li>
 </ul>
 
-<h2>The player list</h2>
-<p>The <b>Players</b> box on the Overview tab lists everyone on the server now, A to Z, with how long they've been on.</p>
+<h2>The Live feed tab</h2>
+<p>The strip at the top updates every 10 seconds:</p>
 <ul>
-  <li>Type in <b>Search players</b> at the top of the box to cut the list down as you type. It stays filtered while the list refreshes.</li>
-  <li>An <b>Admin</b> tag marks anyone the panel counts as an admin.</li>
-  <li><b>Kick</b>{% if can("ban") %} and <b>Ban</b> are{% else %} is{% endif %} on each row. See <a href="/guide/kicking">Kicking</a>{% if can("ban") %} and <a href="/guide/banning">Banning</a>{% endif %}.</li>
+  <li><b>Players on</b>, right now.</li>
+  <li><b>Admins on</b>, with their names. Red 0 means nobody's watching. The panel counts players listed as admins in the server's own config, and anyone a senior admin marked with <b>Mark as admin</b> on their player page.</li>
+  <li><b>Ping (RCON)</b>: how fast the server answers the panel. A big number means it's struggling.</li>
+  <li><b>Server FPS</b>: below 20 turns red and players will feel lag.</li>
+  <li><b>Memory</b>, <b>Up, last 24h</b> and <b>Running for</b>.</li>
 </ul>
+<p>The <b>Players</b> box lists everyone on now, A to Z. Type in <b>Search players</b> to cut the list down; an <b>Admin</b> tag marks admins.</p>
+{{ shot("players-pane", "The player list, with the Kick button outlined.") }}
 
 <h2>Full screen</h2>
-<p>Every box has a <b>⤢</b> button in its top right corner. Press it to blow the box up to fill the screen, which is handy for reading a busy live feed. Press <b>Esc</b> or the button again to put it back.</p>
+<p>Each box on the Live feed tab has a <b>⤢</b> button in its corner. <span class="only-desk">Press it to fill the screen with that box, handy for a busy feed. Press <b>Esc</b> or the button again to put it back.</span><span class="only-phone">Tap it to fill the screen with that box, and again to put it back.</span></p>
 {{ shot("fullscreen", "The live feed in full screen.") }}
 {% endblock %}

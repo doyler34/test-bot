@@ -5,20 +5,21 @@
 
 <h2>Finding a player</h2>
 <ol class="steps">
-  <li>Click <b>Players</b> in the top menu.</li>
+  <li><span class="only-desk">Click <b>Players</b> in the menu on the left, or type in the search box at the top.</span><span class="only-phone">Tap <b>Players</b> in the bar at the bottom, or type in the search box at the top.</span></li>
   <li>Type part of their name. Old names work too, and so does their identity ID{% if can("ips") %} or an IP address{% endif %}.</li>
-  <li>Click their name to open their page.</li>
+  <li><span class="only-desk">Click</span><span class="only-phone">Tap</span> their name to open their page.</li>
 </ol>
 {{ shot("players-search", "Searching for \"rook\" finds both of his accounts.") }}
-<p>You can also click any name in a server's player list or in History.</p>
+<p>Any name in a server's player list, the live feed or History opens their page too.</p>
 
 <h2>A player's page</h2>
 {{ shot("player", "A player's page.") }}
+<p>It's split into tabs:</p>
 <ul>
-  <li><b>In-game record</b>: time played, kills, deaths, K/D and teamkills, and the Discord account they linked.</li>
+  <li><b>Overview</b>: their in-game record (time played, kills, deaths, K/D and teamkills) and the Discord account they linked, when they were first and last seen, the names they've used, a <b>Ban</b> button{% if not can("ban") %} (admins){% endif %}, and admin notes.</li>
   <li><b>Kill log</b>: pick a period (their last game, 24 hours, 7 or 30 days, or a single day) and press <b>Teamkills they did</b>, <b>Who teamkilled them</b> or <b>All their kills and deaths</b>. Every line has the date and log time, the server, what killed them and from how far, and a link to that game. A teamkill marked <b>Revenge?</b> happened within 10 minutes of the victim teamkilling them first. <b>Copy as text</b> gives you the lot as plain lines to paste anywhere.</li>
-  <li><b>History</b>: first and last seen, and a <b>Ban</b> button{% if not can("ban") %} (admins){% endif %}.</li>
-  <li><b>Admin notes</b>, the names they've used, their ban history, and any suspicious incidents they were online for.</li>
+  {% if can("ips") %}<li><b>Connections</b>: their IPs and other accounts. See below.</li>{% endif %}
+  <li><b>Bans &amp; incidents</b>, when they have any: their ban history, and every suspicious incident they were online for.</li>
 </ul>
 
 <h2>Notes</h2>
@@ -38,7 +39,7 @@
 {% if can("ips") %}
 <h2>Alt accounts and ban evaders</h2>
 <p>Players on PC, PlayStation and Xbox get a different ID on each, and anyone can make a second account. What ties them together is the IP address they connect from.</p>
-<p>The <b>Connections</b> box on a player's page lists every IP they've played from, their BattlEye GUID, and every other account seen on the same IP, with a <b>Banned</b> tag on any that are banned.</p>
+<p>The <b>Connections</b> tab on a player's page lists every IP they've played from, their BattlEye GUID, and every other account seen on the same IP, with a <b>Banned</b> tag on any that are banned.</p>
 {{ shot("player-connections", "Pte Rook and his PlayStation account, Rook_PS5, on the same IP.") }}
 <p>In a server's player list, a pill next to a name shows how many other accounts they have. It's red if one of them is banned: that's very likely someone dodging a ban.</p>
 <p class="tip">People in the same house share an IP too. Two accounts on one IP isn't proof they're the same person. Check the names, times and notes first.</p>

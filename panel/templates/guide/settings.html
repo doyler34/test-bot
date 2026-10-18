@@ -1,0 +1,30 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p><b>Settings</b> <span class="only-desk">in the menu on the left</span><span class="only-phone">under <b>More</b></span> has a card for each thing you can change.</p>
+{{ shot("settings", "Settings.") }}
+
+{% if can("cards") %}
+<h2>Server cards</h2>
+<p>What each server's card on the dashboard shows.</p>
+<ol class="steps">
+  <li>Open <b>Settings → Server cards</b>.</li>
+  <li>To change a picture, choose a file next to that server (JPG, PNG or WebP, up to 5 MB; wide like 1280×720 works best) and press <b>Upload</b> or <b>Change</b>. The top row, <b>Every server</b>, is the picture for any server without its own.</li>
+  <li>Type a short <b>Description</b> (like "Milsim / Daily Ops") and the <b>Join address</b> players use (like <span class="mono">185.123.45.67:2001</span>), and press <b>Save</b>. The address gives everyone the copy and <b>Join</b> buttons on the dashboard.</li>
+  <li><b>Remove</b> takes a picture off, back to the default.</li>
+</ol>
+{{ shot("pictures", "Server cards: a picture, description and join address for each.") }}
+{% endif %}
+
+{% if can("sus") %}
+<h2>Sus settings</h2>
+<p>When a kill pattern is flagged as suspicious, and when it's posted to Discord: how many explosions, headshots, long shots or teamkills in how long. Higher numbers mean fewer flags. Changes apply straight away to every server, and <b>Reset to defaults</b> puts them all back. What each flag means is in <a href="/guide/cheaters">Spotting cheaters</a>.</p>
+{% endif %}
+
+{% set others = [] %}
+{% if can("game_admins") %}{% set _ = others.append('<a href="/guide/game-admins">In-game admins</a>') %}{% endif %}
+{% if can("users") %}{% set _ = others.append('<a href="/guide/admins">Admins</a>') %}{% endif %}
+{% if can("website") %}{% set _ = others.append('<a href="/guide/website">Website</a>') %}{% endif %}
+{% if others %}<p>The other cards have their own guide pages: {{ others|join(", ")|safe }}.</p>{% endif %}
+{% if can("mortar") %}<p><b>Mortar</b> opens the mortar calculator and its map. It's still being tested before it goes in Discord.</p>{% endif %}
+{% endblock %}

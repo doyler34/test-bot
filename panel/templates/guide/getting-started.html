@@ -1,7 +1,7 @@
 {% extends "guide/_page.html" %}
 {% from "guide/_macros.html" import shot with context %}
 {% block guide %}
-<p>OYB Control runs in your web browser, on a phone or a computer. There's nothing to install.</p>
+<p>OYB Control runs in your web browser, on a phone or a computer. There's nothing to install. This guide shows the <span class="only-desk">computer</span><span class="only-phone">phone</span> version because that's what you're reading it on; open it on the other and it changes to match.</p>
 
 <h2>Logging in</h2>
 <ol class="steps">
@@ -11,30 +11,51 @@
 </ol>
 {{ shot("login", "The login page.") }}
 <p class="tip">Five wrong passwords in a row locks that account for 15 minutes. If you've forgotten yours, ask a senior admin to reset it rather than guessing.</p>
+<p class="only-phone tip">Add it to your home screen (Share → Add to Home Screen on iPhone, ⋮ → Add to Home screen on Android) and it opens like an app.</p>
 
-<h2>The home page</h2>
-<p>After logging in you land on the home page. The top shows who you're logged in as and four numbers at a glance: how many servers are up, how many players are on, active bans, and any Sus flags from the last day. Red there means something is worth a look.</p>
-<p>Below that is a card for every server: online or not, players on, server FPS, memory, how long it's been up, and which admins are in game ("No admin on" if nobody is). "No data" means the server hasn't reported that number yet. The buttons under each card open that server's players and live feed, its health, or its past games.</p>
-<p>On a phone, Servers, Players, Bans and More (everything else) sit in a bar along the bottom of the screen.</p>
-{{ shot("home", "The home page, with the welcome box and a card for each server.") }}
+<h2>Finding your way round</h2>
+<div class="only-desk">
+<p>The menu down the left side has everything:</p>
+<ul>
+  <li><b>Dashboard</b>: every server at a glance. See <a href="/guide/dashboard">The dashboard</a>.</li>
+  <li><b>Servers</b>: each server by name, with a green dot when it's up. Click one to open it on the dashboard.</li>
+  <li><b>Players</b> and <b>Bans</b>.</li>
+  <li><b>Data</b>, <b>Discord</b> and <b>Settings</b>, if you have access to any of them.</li>
+  <li><b>Support</b>: this guide.</li>
+</ul>
+{{ shot("sidebar", "The menu on the left.") }}
+</div>
+<div class="only-phone">
+<p>The bar along the bottom of the screen has <b>Dashboard</b>, <b>Players</b> and <b>Bans</b>. Tap <b>More</b> for everything else: Data, Discord and Settings if you have access to them, this guide, your account and Log out.</p>
+{{ shot("dock", "The bar at the bottom, with More open.") }}
+</div>
+<p>You only ever see what you're allowed to use. If you need something that isn't there, ask a senior admin: they can switch single things on for you.</p>
+
+<h2>The top bar</h2>
+<ul>
+  <li><b>Search</b>: type a player's name, an old name or an ID and press Enter to find them. Type a server's name to jump to that server.</li>
+  <li><b>The bell</b>: a red number means something needs someone now: a server offline or not reachable from outside, lots of players and no admin on, memory that didn't clear, Sus flags in the last hour{% if can("ips") %}, or a login attack{% endif %}. <span class="only-desk">Click</span><span class="only-phone">Tap</span> it to see the list, and a line to go straight there.</li>
+  <li><b>Your name</b>: your account (change your password here), the guide, and <b>Log out</b>.</li>
+</ul>
+{{ shot("topbar", "Search, the bell with two things to look at, and your name.") }}
 
 <h2>Your role</h2>
-<p>Everyone has their own login, and every action is written to the audit log with your name on it. What you can do depends on your role:</p>
+<p>Everyone has their own login, and every action is written to the audit log with your name on it. What you can do starts from your role:</p>
 <div class="scroll"><table>
   <thead><tr><th>Role</th><th>Can</th></tr></thead>
   <tbody>
-    <tr><td>Moderator</td><td>See the servers and players (kill logs included), kick, and leave notes on players.</td></tr>
+    <tr><td>Moderator</td><td>See the servers and players (live feed, kill map and kill logs included), kick, and leave notes on players.</td></tr>
     <tr><td>Admin</td><td>Everything a moderator can, plus ban, and read the audit log.</td></tr>
-    <tr><td>Senior admin</td><td>Everything: unbanning, IPs and alt accounts, server power, game log uploads, Discord, the website and admin accounts.</td></tr>
+    <tr><td>Senior admin</td><td>Everything: unbanning, IPs and alt accounts, starting and stopping servers, the Box dashboard, Discord, the website, settings and admin accounts.</td></tr>
   </tbody>
 </table></div>
-<p>You're {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b>. A senior admin can also give you single extras on top of your role. This guide only shows you the pages for what you can do.</p>
+<p>A senior admin can also switch single things on or off for one person, like letting a moderator see the Box dashboard, or an admin who doesn't ban. You're {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b>. This guide only shows you the pages for what you can do.</p>
 
 <h2>Your password</h2>
 <ol class="steps">
-  <li>Click your name in the top right.</li>
+  <li><span class="only-desk">Click your name in the top right, then <b>Account</b>.</span><span class="only-phone">Tap <b>More</b>, then <b>Account</b>.</span></li>
   <li>Type your current password, then the new one twice, and save.</li>
 </ol>
 {{ shot("account", "Changing your password.") }}
-<p>Always log out on a shared computer: <b>Log out</b> is in the top right.</p>
+<p>Always log out on a shared computer or phone: <span class="only-desk">it's under your name in the top right.</span><span class="only-phone">it's at the bottom of <b>More</b>.</span></p>
 {% endblock %}

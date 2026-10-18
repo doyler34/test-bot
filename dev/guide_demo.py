@@ -245,6 +245,56 @@ def seed_numbers(db, rng):
         db.add_game_players("eu1", f"logs_demo_{game}", started, players)
 
 
+def seed_charts(db, rng):
+    """A day of readings, so the charts and the Monitor have lines on them."""
+    t = now()
+    for at in range(t - 86400, t, 60):
+        hour = (at % 86400) / 3600
+        busy = max(0.0, min(1.0, (hour - 14) / 6)) if hour < 22 else 0.4
+        db.add_box_sample({"cpu": 30 + 35 * busy + rng.uniform(-4, 4), "load1": 2 + 3 * busy, "mem_used": int((9 + 4 * busy) * GB),
+                           "mem_total": 32 * GB, "rx_mbps": 8 + 30 * busy + rng.uniform(0, 4), "tx_mbps": 12 + 50 * busy,
+                           "udp_sndbuf": 0}, at=at)
+        for server, scale in (("eu1", 1.0), ("eu2", 0.4)):
+            db.add_server_sample(server, {"players": round(40 * busy * scale + rng.uniform(0, 3)), "proc_cpu": 40 + 50 * busy * scale,
+                                          "rss": int((1.3 + 0.4 * busy * scale) * GB), "fps": 58 - 14 * busy * scale + rng.uniform(-2, 2),
+                                          "query_ok": 1, "query_ms": 35 + rng.uniform(0, 8)}, at=at)
+
+
+def stand_in_map(root):
+    """The real Everon tiles are a big download; the guide's pictures use a plain island instead."""
+    from PIL import Image, ImageDraw
+    size = 2048
+    im = Image.new("RGB", (size, size), (28, 52, 70))
+    d = ImageDraw.Draw(im)
+    d.polygon([(420, 300), (900, 180), (1500, 330), (1760, 760), (1700, 1350), (1380, 1800), (800, 1850), (380, 1500),
+               (260, 900)], fill=(62, 84, 48))
+    d.polygon([(700, 600), (1100, 520), (1350, 800), (1250, 1150), (850, 1200), (640, 950)], fill=(78, 98, 56))
+    for a, b in (((500, 700), (1600, 900)), ((900, 300), (1000, 1800)), ((420, 1400), (1500, 1500))):
+        d.line([a, b], fill=(150, 140, 110), width=6)
+    for n in range(0, size, 160):
+        d.line([(n, 0), (n, size)], fill=(255, 255, 255, 30), width=1)
+        d.line([(0, n), (size, n)], fill=(255, 255, 255, 30), width=1)
+    path = root / "stand-in-map.png"
+    im.save(path)
+    return path
+
+
+def demo_kills(state):
+    """Kills in the last half hour where the map can show them."""
+    t = now()
+    rows = [(PLAYERS[0], PLAYERS[3], "kill", "KINETIC", (5200, 6100), (5420, 6260)),
+            (PLAYERS[4], PLAYERS[5], "kill", "KINETIC", (7300, 7900), (7180, 7650)),
+            (PLAYERS[1], PLAYERS[5], "teamkill", "KINETIC", (6100, 4300), (6150, 4360)),
+            (None, PLAYERS[0], "kill", "EXPLOSIVE", None, (4800, 8200)),
+            (None, PLAYERS[1], "kill", "EXPLOSIVE", None, (4830, 8170)),
+            (PLAYERS[7], PLAYERS[0], "kill", "KINETIC", (3900, 5600), (4420, 5900))]
+    for n, (killer, victim, kind, damage, came, went) in enumerate(rows):
+        state.kill_spots.append({"at": t - 1500 + n * 240, "kind": kind, "killer_name": killer and killer[0],
+                                 "victim_name": victim[0], "damage": damage, "by_ai": killer is None,
+                                 "distance": ((came[0] - went[0]) ** 2 + (came[1] - went[1]) ** 2) ** .5 if came else None,
+                                 "killer_at": came, "victim_at": went})
+
+
 async def main(port):
     rng = random.Random(7)
     root = Path(tempfile.mkdtemp(prefix="oyb-guide-"))
@@ -269,12 +319,26 @@ async def main(port):
     db = PanelDB(config.database)
     seed_panel(db, config)
     seed_numbers(db, rng)
+    seed_charts(db, rng)
+    db.publish_discord_doc("cards", json.dumps({
+        "eu1": {"description": "Conflict · Everon", "address": "203.0.113.10:2001"},
+        "eu2": {"description": "Conflict · Arland", "address": "203.0.113.10:2002"},
+        "eu3": {"description": "Training ground", "address": "203.0.113.10:2003"}}), "gazlagom")
+    from bot.mortar import calibration
+    import panel.web
+    entry = json.loads(Path(calibration.CONFIG).read_text(encoding="utf-8"))
+    entry.pop("tiles")
+    entry["max_zoom"] = 3
+    entry["image"] = {"path": str(stand_in_map(root))}
+    demo_map = calibration.read(entry)
+    panel.web.mortar_map = lambda: demo_map
 
     async def sampler(unit):
         pid = 4242 if unit == "reforger-eu1" else 4343
         return {"pid": pid, "rss": int(1.45 * GB), "age": now() - (now() - 2 * 3600)}
 
     manager = ServerManager(config, db, sampler=sampler)
+    demo_kills(manager.states["eu1"])
     runner = web.AppRunner(create_app(config, db, manager))
     await runner.setup()
     await web.TCPSite(runner, "127.0.0.1", port).start()

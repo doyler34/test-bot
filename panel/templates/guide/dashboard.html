@@ -1,0 +1,43 @@
+{% extends "guide/_page.html" %}
+{% from "guide/_macros.html" import shot with context %}
+{% block guide %}
+<p>The dashboard is the first thing you see after logging in. The top has a card for every server; under them is one server opened up, with its information, a live map of kills, who's on and its charts.</p>
+{{ shot("dashboard", "The dashboard: the server cards, then OYB #1 opened up under them.") }}
+
+<h2>The server cards</h2>
+{{ shot("cards", "A server's card.") }}
+<ul>
+  <li><b>Online</b> or <b>Offline</b>, and a red <b>No admin on</b> when no admin is in game on it.</li>
+  <li>Its name, number of slots and a short description, over its picture. Senior admins set those on <a href="/guide/settings">Settings → Server cards</a>.</li>
+  <li>Players on, the map, and how fast the server answers (ping).</li>
+  <li>The <b>★</b> makes it a favourite: favourites go first. It's saved on this <span class="only-desk">computer</span><span class="only-phone">phone</span>, so everyone can have their own.</li>
+  <li><b>Start</b>, <b>Restart</b> and <b>Stop</b>.{% if can("power") %} Restart and Stop ask you to confirm first, because they kick everyone off. They work once the panel is connected to AMP.{% else %} They're greyed out unless a senior admin has given you the start and stop permission.{% endif %}</li>
+</ul>
+<p><span class="only-desk">Click</span><span class="only-phone">Tap</span> a card to open that server underneath. The cards refresh on their own.</p>
+
+<h2>The server panel</h2>
+<p>Under the cards, the server you picked:</p>
+<ul>
+  <li>The top line has its name and, once a senior admin has added it, the join address. <span class="only-desk">Click</span><span class="only-phone">Tap</span> the copy button to copy the address, or <b>Join</b> to open it in Steam.</li>
+  <li><b>Players</b> opens the server's own page on its live feed{% if can("game_admins") %}, <b>Settings</b> its in-game admins,{% endif %} and <b>Full page →</b> the server's own page. See <a href="/guide/servers">A server's own page</a>.</li>
+</ul>
+
+<h3>Server information</h3>
+<p>Status, how long it's been up, which admins are on (red <b>None</b> when nobody is), the game, map, players, game version, CPU, memory and disk.</p>
+
+<h3>Live map</h3>
+<p>Every kill on the server in the last 30 minutes, on the map: an orange dot is a kill, red a teamkill, purple a kill by AI or nobody, with a line back to where the shot came from. <span class="only-desk">Hover over</span><span class="only-phone">Tap</span> a dot for who killed who, with what, from how far and when. It updates every 30 seconds. More in <a href="/guide/live-feed">The live feed and kill map</a>.</p>
+{{ shot("map", "The live map, with a teamkill picked out.") }}
+
+<h3>Player list and live feed</h3>
+<p>The box on the right switches between two views. Your pick is remembered.</p>
+<ul>
+  <li><b>Player List</b>: everyone on now and how long they've been on. Type in the search box to find someone; <span class="only-desk">click</span><span class="only-phone">tap</span> a name to open their player page.</li>
+  <li><b>Live feed</b>: kills, teamkills, joins and Sus flags as they happen, with the same filters as the server page. Handy next to the map.</li>
+</ul>
+{{ shot("side-feed", "The same box switched to the live feed.") }}
+
+<h3>Charts</h3>
+<p>CPU, memory, players and network for the last hour, with the latest number in the corner. For longer, and for working out lag, open the <a href="/guide/health">Monitor</a>.</p>
+{{ shot("charts", "The four charts.") }}
+{% endblock %}

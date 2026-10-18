@@ -399,28 +399,36 @@ async def dashboard(request):
 
 
 GUIDE = [
-    ("getting-started", "Getting started", "Logging in, the home page, roles and your password.", None),
-    ("servers", "Running a server", "The server page, its controls, the summary strip and tabs.", None),
-    ("live-feed", "The live feed", "Everything happening in game as it happens, and how to filter it.", None),
-    ("cheaters", "Spotting cheaters", "What the Sus flags mean and what to do about one.", None),
+    ("getting-started", "Getting started", "Logging in, finding your way round, roles and your password.", None),
+    ("dashboard", "The dashboard", "Every server's card, the server panel, its live map, players and charts.", None),
+    ("servers", "A server's own page", "Power buttons, the summary bars and the tabs.", None),
+    ("live-feed", "The live feed and kill map", "Everything happening in game as it happens, and how to filter it.", None),
+    ("cheaters", "Spotting cheaters", "What the Sus flags mean, unusual players, and what to do about one.", None),
     ("players", "Looking players up", "Searching, player pages, alt accounts and notes.", None),
     ("kicking", "Kicking", "Getting someone off a server for now.", None),
     ("banning", "Banning", "Bans on every server, IP bans and unbanning.", None),
     ("history", "Past games", "Pulling up any day's games, and downloading or uploading logs.", None),
-    ("health", "Health and memory", "Uptime, crashes, and when a server needs a full restart.", None),
+    ("health", "Health and memory", "Uptime, crashes, the Monitor, and when a server needs a restart.", None),
     ("discord", "Discord", "What gets posted for staff, teamkill alerts, and linked accounts.", None),
-    ("console-audit", "Audit log", "The record of who did what in the panel.", "audit"),
+    ("data", "Data", "The audit log, the Box dashboard, login attacks and IP lookups.", ("audit", "box", "ips")),
+    ("settings", "Settings", "Server cards and their pictures, and the Sus check settings.", ("cards", "sus")),
     ("discord-messages", "Discord messages", "Every Discord page: what the bot posts, where, and staff alerts.", "discord"),
     ("discord-tutorial", "Discord tutorial", "Every Discord page step by step, with pictures. Also as a PDF.", "discord"),
     ("website", "The website", "The public site: its words, servers and rules.", "website"),
     ("game-admins", "In-game admins", "Making players admin in game on each server, through AMP.", "game_admins"),
-    ("admins", "Admin accounts", "Making accounts, roles and password resets.", "users"),
+    ("admins", "Admin accounts", "Making accounts, roles, and choosing what each person can do.", "users"),
 ]
+GUIDE_SHOTS = HERE / "static" / "guide"
 
 
 def guide_pages(request):
-    return [{"slug": slug, "title": title, "summary": summary} for slug, title, summary, need in GUIDE
-            if need is None or allowed(request, need)]
+    def may(need):
+        return need is None or any(allowed(request, n) for n in ((need,) if isinstance(need, str) else need))
+    return [{"slug": slug, "title": title, "summary": summary} for slug, title, summary, need in GUIDE if may(need)]
+
+
+def phone_shots():
+    return {p.stem for p in (GUIDE_SHOTS / "phone").glob("*.jpg")}
 
 
 async def guide(request):
@@ -434,7 +442,7 @@ async def guide_page(request):
     if slug not in slugs:
         raise web.HTTPNotFound(text="No such guide page.")
     at = slugs.index(slug)
-    return render(request, f"guide/{slug}.html", pages=pages, page=pages[at], number=at + 1,
+    return render(request, f"guide/{slug}.html", pages=pages, page=pages[at], number=at + 1, phone_shots=phone_shots(),
                   prev=pages[at - 1] if at else None, next=pages[at + 1] if at + 1 < len(pages) else None)
 
 
