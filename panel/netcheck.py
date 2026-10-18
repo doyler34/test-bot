@@ -452,13 +452,19 @@ def judge(before, after, servers, extras):
                  else "the game's own packets to players were thrown away before they left the box")
         fix = ("sysctl -w net.core.rmem_max=16777216 net.core.rmem_default=4194304" if way == "in"
                else "sysctl -w net.core.wmem_max=16777216 net.core.wmem_default=4194304")
+        raised = (extras["sysctl"].get("rmem_default" if way == "in" else "wmem_default") or 0) >= 1024 * 1024
+        if raised:
+            fix = ("The box already allows bigger buffers: restart the game servers so they use them. Each server's "
+                   "\"Buffers it's using\" line shows which still need it.")
         full = udp_b.get("RcvbufErrors", 0) if way == "in" else ever
         reason = f" ({full:,} because the buffer was full)" if way == "in" and full else ""
         out.append(line(s, text, f"{grew:,} in 10 s, {ever:,} since boot{reason}",
-                        BAD if grew else WARN if ever > 1000 else OK,
+                        BAD if grew else WARN if ever > 1000 and not raised else OK,
                         f"Right now, {where}: players feel this as lag, rubber-banding and radio cutting out." if grew else
+                        f"None during the test. The {ever:,} are counted since boot, so they include the time before the "
+                        "buffers were raised." if ever > 1000 and raised else
                         f"Not during the test, but {ever:,} times since boot {where}. It happens in bursts, and voice "
-                        "is the first thing to break up." if ever > 1000 else "", fix if grew or ever > 1000 else ""))
+                        "is the first thing to break up." if ever > 1000 else "", fix if grew or (ever > 1000 and not raised) else ""))
     tcp_a, tcp_b = before["snmp"].get("Tcp", {}), after["snmp"].get("Tcp", {})
     sent = tcp_b.get("OutSegs", 0) - tcp_a.get("OutSegs", 0)
     resent = tcp_b.get("RetransSegs", 0) - tcp_a.get("RetransSegs", 0)

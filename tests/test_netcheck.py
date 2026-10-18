@@ -97,6 +97,7 @@ class NetCheckTests(unittest.TestCase):
         raised = dict(extras, sysctl={**extras["sysctl"], "rmem_default": 4194304, "wmem_default": 4194304})
         later = {(r["section"], r["label"]): r for r in netcheck.judge(before, after, [("one", "Classic", 4242, ("x", 1))], raised)}
         self.assertIn("next time it restarts", later[("Server: Classic", "Buffers it's using")]["why"])
+        self.assertIn("restart the game servers", later[("Kernel", "Incoming UDP packets thrown away")]["fix"])
         bigger = dict(raised, buffers={"555": {"rb": 4194304, "tb": 4194304}})
         done = {(r["section"], r["label"]): r for r in netcheck.judge(before, after, [("one", "Classic", 4242, ("x", 1))], bigger)}
         self.assertEqual(done[("Server: Classic", "Buffers it's using")]["value"], "receive 4.0 MB, send 4.0 MB")
