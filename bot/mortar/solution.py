@@ -211,12 +211,19 @@ def rings(weapon, distance, climb=0.0):
     """
     if weapon is None:
         return []
+    # The tube won't come down past 45 degrees (800 mils on the M252, 750 on
+    # the 2B14), so a ring whose answer lands below that, or above the steepest
+    # the tables ever ask for, can't be fired and isn't offered.
+    lowest = weapon.mils / 8
+    highest = max(row[1] for _, _, rows in weapon.rings for row in rows)
     found = []
     for ring, dispersion, rows in weapon.rings:
         elevation = between(rows, distance, 1)
         if elevation is None:
             continue
         correction = -climb * (between(rows, distance, 3) or 0.0) / 100
+        if not lowest <= elevation + correction <= highest:
+            continue
         found.append(Ring(ring, elevation + correction, between(rows, distance, 2),
                           dispersion, correction))
     return found

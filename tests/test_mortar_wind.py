@@ -379,3 +379,14 @@ class ApiTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ReachableElevationTests(unittest.TestCase):
+    def test_never_asks_for_an_elevation_the_tube_cannot_reach(self):
+        # 2,287 m, target 14 m up, 2 m/s headwind: ring 3 would want 796 mils,
+        # under the M252's 800 floor, so ring 4 is the answer.
+        gun = profile("m252:he")
+        fired = apply_wind(gun, 2287, 9.7, Wind(2, 0), 14)
+        self.assertEqual(fired.final.ring, "4")
+        self.assertTrue(all(800 <= r.elevation for r in fired.every))
+        self.assertEqual(solution(gun, 2287, 14)[0].ring, "3")      # still air, ring 3 is fine at 811
