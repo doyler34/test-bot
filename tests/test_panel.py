@@ -1906,10 +1906,10 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.db.discord_doc("post:ba11e700"))
         await self.client.post("/discord/posts/guide", data={"csrf": token, "channel": "300"})
         docs = [json.loads(self.db.discord_doc(f"post:{p}")["published"]) for p in ballistics.POST_IDS]
-        self.assertEqual([d["title"] for d in docs], ["Bullet drop guide", "Rifles", "Machine guns and marksman rifles",
-                                                      "Heavy machine guns", "Pistols", "Launchers"])
+        self.assertEqual([d["title"] for d in docs], ["📏 Bullet drop guide", "🔫 Rifles", "🎯 Machine guns & marksman rifles",
+                                                      "💥 Heavy machine guns", "🔫 Pistols", "🚀 Launchers"])
         self.assertTrue(all(d["channel_id"] == 300 for d in docs))
-        self.assertIn("5.56 M855 · M16A2, M249", welcome_doc.description(docs[1]))
+        self.assertIn("**5.56 M855**  ·  M16A2, M249", welcome_doc.description(docs[1]))
         self.assertTrue(all(len(welcome_doc.description(d)) <= welcome_doc.TEXT_MAX for d in docs))
         listing = await (await self.client.get("/discord/posts")).text()
         self.assertIn("Update the guide", listing)
