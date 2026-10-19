@@ -9,6 +9,7 @@ modded class SCR_MortarShellGadgetComponent
 	override void OnPostInit(IEntity owner)
 	{
 		super.OnPostInit(owner);
+		OYB_ManualDump.Run();
 		World world = GetGame().GetWorld();
 		if (!world)
 			return;

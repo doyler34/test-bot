@@ -43,3 +43,15 @@ Send a screenshot of the Log Console straight after firing. As a fallback the
 tracker can be put on a round by hand: search `M821` in the Resource Browser,
 right-click → **Override in OYB_MortarTest**, open the copy, **Add Component**
 → **OYB_ShotTrackerComponent**, Ctrl+S.
+
+## Sending the game's own mortar data
+
+The first time a mortar round appears in the game (place an ammo box with
+rounds, or the mortar), the mod copies every mortar data file it can find in
+the game into `Documents\My Games\ArmaReforgerWorkbench\profile\OYB_Manual`.
+Zip that folder and send it over: it's what the in-game ballistic manual is
+built from, every ring of every round. The Log Console lists each file with
+`OYB_MANUAL` in front, and ends with how many were copied.
+
+If Workbench ever shows a red error about `OYB_ManualDump`, delete
+`Scripts/Game/OYB/OYB_ManualDump.c`: the shot tracking works without it.
