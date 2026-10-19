@@ -15,7 +15,8 @@ class OYB_ShotTracker
 
 	protected vector m_vPrevious;
 	protected vector m_vLaunch;
-	protected vector m_vFirstStep;
+	protected vector m_vEarly;
+	protected bool m_bEarly;
 	protected vector m_vLast;
 	protected float m_fFlight;
 	protected bool m_bStarted;
@@ -38,7 +39,7 @@ class OYB_ShotTracker
 			{
 				m_bFlying = true;
 				m_vLaunch = m_vPrevious;
-				m_vFirstStep = now;
+				m_bEarly = false;
 				m_fFlight = timeSlice;
 			}
 		}
@@ -47,6 +48,12 @@ class OYB_ShotTracker
 			m_fFlight += timeSlice;
 			if (m_fFlight < 1 && speed < SETTLED_SPEED)
 				m_bFlying = false;
+			// A quarter of a second out it has cleared the tube and is on its real path.
+			if (!m_bEarly && m_fFlight >= 0.25)
+			{
+				m_bEarly = true;
+				m_vEarly = now;
+			}
 		}
 		m_vPrevious = now;
 		m_vLast = now;
@@ -65,8 +72,10 @@ class OYB_ShotTracker
 		if (bearing < 0)
 			bearing += 360;
 
-		// The angle it left the tube at, from its first step in the air.
-		vector step = m_vFirstStep - m_vLaunch;
+		// The angle it left the tube at, from where it was a quarter of a second out.
+		vector step = m_vEarly - m_vLaunch;
+		if (!m_bEarly)
+			step = m_vLast - m_vLaunch;
 		float flat = Math.Sqrt(step[0] * step[0] + step[2] * step[2]);
 		float launch = Math.Atan2(step[1], flat) * Math.RAD2DEG;
 
