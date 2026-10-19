@@ -538,6 +538,8 @@ function wire() {
   from.addEventListener('change', windChanged);
 
   el('showShots').addEventListener('click', showShots);
+  // Pasting the mod's lines draws them straight away; the button is there for typing.
+  el('shotText').addEventListener('paste', () => setTimeout(showShots, 0));
   el('clearShots').addEventListener('click', () => {
     shots.clearLayers();
     el('shotList').innerHTML = '';
