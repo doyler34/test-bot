@@ -506,7 +506,7 @@ class NotificationBot(TimerBot):
                 if guild:
                     await cleanup_legacy_layout(self, guild)
                 cleaned = time.monotonic()
-            if time.monotonic() - swept >= 6 * 3600:
+            if time.monotonic() - swept >= 3600:
                 from bot.discord.link_review import prune_handled
                 guild = self.get_guild(self.config.guild_id)
                 if guild:
