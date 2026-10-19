@@ -23,7 +23,7 @@ from bot.storage.account_links import AccountLinks
 from bot.storage.combat_store import migrate as migrate_combat, record as record_kill
 from bot.tracking.combat_parser import KillEvent
 from bot.discord import welcome_doc
-from panel import auth, memory
+from panel import auth, ballistics, memory
 from panel.alerts import Alerts
 from panel.connections import LogReader
 from panel.oyb_stats import OybStats
@@ -1897,6 +1897,25 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.db.discord_doc("post:" + response.headers["Location"].rsplit("/", 1)[1]))
         self.assertEqual((await self.client.get("/discord/posts/nothere1")).status, 404)
         self.assertEqual((await self.client.get("/discord/post")).status, 404)
+
+    async def test_bullet_drop_guide(self):
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/discord/posts")
+        self.assertIn("Post the guide", await (await self.client.get("/discord/posts")).text())
+        await self.client.post("/discord/posts/guide", data={"csrf": token, "channel": ""})
+        self.assertIsNone(self.db.discord_doc("post:ba11e700"))
+        await self.client.post("/discord/posts/guide", data={"csrf": token, "channel": "300"})
+        docs = [json.loads(self.db.discord_doc(f"post:{p}")["published"]) for p in ballistics.POST_IDS]
+        self.assertEqual([d["title"] for d in docs], ["Bullet drop guide", "Rifles", "Machine guns and marksman rifles",
+                                                      "Heavy machine guns", "Pistols", "Launchers"])
+        self.assertTrue(all(d["channel_id"] == 300 for d in docs))
+        self.assertIn("5.56 M855 · M16A2, M249", welcome_doc.description(docs[1]))
+        self.assertTrue(all(len(welcome_doc.description(d)) <= welcome_doc.TEXT_MAX for d in docs))
+        listing = await (await self.client.get("/discord/posts")).text()
+        self.assertIn("Update the guide", listing)
+        # Posting again edits the same messages rather than adding more.
+        await self.client.post("/discord/posts/guide", data={"csrf": token, "channel": "300"})
+        self.assertEqual(self.db.discord_doc("post:ba11e700")["version"], 2)
 
     async def test_match_alerts(self):
         await self.login("boss", "boss-password")

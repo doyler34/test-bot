@@ -32,4 +32,20 @@
   <p class="muted">No posts yet. Press <b>+ New post</b> to write one.</p>
   {% endif %}
 </section>
+<section class="card">
+  <h2>Bullet drop guide</h2>
+  <p class="muted">How high to aim and how long the round flies, for every main rifle, machine gun, pistol and launcher, taken from the game's own data. It goes up as a few messages in the channel you pick. Press it again to move it or bring it up to date.</p>
+  {% if guide_channel %}<p><span class="pill on">Live</span> In #{{ guide_channel_name or guide_channel }}.</p>{% endif %}
+  <form method="post" action="/discord/posts/guide" class="dc-pick">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Channel
+      <select name="channel" required>
+        <option value="">Pick a channel</option>
+        {% for group in bridge.get("channels", [])|groupby("category") %}
+        <optgroup label="{{ group.grouper or 'No category' }}">{% for c in group.list %}<option value="{{ c.id }}" {% if c.id == guide_channel %}selected{% endif %}>#{{ c.name }}</option>{% endfor %}</optgroup>
+        {% endfor %}
+      </select></label>
+    <button class="small">{{ "Update the guide" if guide_channel else "Post the guide" }}</button>
+  </form>
+</section>
 {% endblock %}

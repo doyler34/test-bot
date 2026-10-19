@@ -23,7 +23,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, attacks, auth, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
+from . import archive, attacks, auth, ballistics, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -2527,7 +2527,30 @@ def posts_page(request):
                       "channel": channels.get(str(doc.get("channel_id")), ""), "live": bool(live), "draft": bool(row["draft"]),
                       "row": row, "problems": state.get("problems", []) if state.get("version") == row["version"] else [],
                       "confirmed": state.get("version") == row["version"] and live is not None})
-    return render(request, "discord_posts.html", posts=posts, bridge=report, **discord_context("posts"))
+    guide = db.discord_doc(f"post:{ballistics.POST_IDS[0]}")
+    guide = json.loads(guide["published"]) if guide and guide["published"] else None
+    guide_channel = str(guide["channel_id"]) if guide and not guide.get("deleted") else ""
+    return render(request, "discord_posts.html", posts=posts, bridge=report, guide_channel=guide_channel,
+                  guide_channel_name=channels.get(guide_channel, ""), **discord_context("posts"))
+
+
+async def post_guide(request):
+    """Post the bullet drop guide to one channel, or update it where it is."""
+    require(request, "discord:posts")
+    form = await request.post()
+    channel = form.get("channel", "").strip()
+    if not channel.isdigit():
+        flash(request, "Pick a channel for the guide.")
+        raise web.HTTPFound("/discord/posts")
+    db, by = request.app[DB], request[USER]["username"]
+    for post_id, doc in ballistics.posts(int(channel)):
+        clean, problems = welcome_doc.check_post(doc)
+        if problems:
+            raise web.HTTPInternalServerError(text=" ".join(problems))
+        db.publish_discord_doc(f"post:{post_id}", json.dumps(clean), by)
+    audit(request, "post bullet drop guide", detail=channel)
+    flash(request, "Done. The bot posts the guide within a minute.")
+    raise web.HTTPFound("/discord/posts")
 
 
 async def new_post(request):
@@ -2882,6 +2905,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/bot/data", bot_data_page)
     app.router.add_get("/ip-lookup", ip_lookup_page)
     app.router.add_post("/discord/posts/new", new_post)
+    app.router.add_post("/discord/posts/guide", post_guide)
     app.router.add_get("/discord/posts/{post}", post_page)
     app.router.add_post("/discord/posts/{post}", post_save)
     app.router.add_post("/discord/{page}/channel", set_page_channel)
