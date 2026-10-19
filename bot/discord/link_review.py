@@ -436,9 +436,10 @@ async def post_request_alert(bot, guild, token):
 
 
 async def prune_handled(bot, guild, older_than=86400):
-    """Delete finished request alerts, automatic-link notices and pin notices
-    once they're a day old, so the staff channel doesn't fill up. Requests still
-    waiting and the admin panel stay; every link is kept in the database anyway."""
+    """Delete finished request alerts and automatic-link notices once they're a
+    day old, so the staff channel doesn't fill up. Requests still waiting, the
+    pinned admin panel and anything else pinned always stay; every link is kept
+    in the database anyway."""
     cfg = bot.account_links.review_settings(guild.id)
     channel = guild.get_channel(cfg["channel"]) if cfg["channel"] else None
     if not isinstance(channel, discord.TextChannel):
@@ -447,10 +448,9 @@ async def prune_handled(bot, guild, older_than=86400):
     removed = 0
     try:
         async for message in channel.history(limit=None, before=cutoff):
-            if message.author.id != bot.user.id or message.id == cfg["control"]:
+            if message.author.id != bot.user.id or message.id == cfg["control"] or message.pinned:
                 continue
-            done = any(e.footer and e.footer.text in (HANDLED_MARKER, AUTO_LINK_MARKER) for e in message.embeds)
-            if done or message.type == discord.MessageType.pins_add:
+            if any(e.footer and e.footer.text in (HANDLED_MARKER, AUTO_LINK_MARKER) for e in message.embeds):
                 try:
                     await message.delete()
                     removed += 1
