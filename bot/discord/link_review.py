@@ -435,9 +435,9 @@ async def post_request_alert(bot, guild, token):
                                                  roles=[role] if role else False, replied_user=False))
 
 
-async def prune_handled(bot, guild, older_than=86400):
-    """Delete finished request alerts and automatic-link notices once they're a
-    day old, so the staff channel doesn't fill up. Requests still waiting, the
+async def prune_handled(bot, guild, older_than=3 * 3600):
+    """Delete finished request alerts and automatic-link notices once they're three
+    hours old, so the staff channel doesn't fill up. Requests still waiting, the
     pinned admin panel and anything else pinned always stay; every link is kept
     in the database anyway."""
     cfg = bot.account_links.review_settings(guild.id)
