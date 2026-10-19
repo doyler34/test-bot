@@ -1,13 +1,15 @@
 // Copies the game's own mortar data - the configs the ballistic manual and the
 // wind tables are built from - out of its packed files into the profile folder,
-// so the whole lot can be sent over as plain text. Runs once, the first time a
-// mortar round appears. Every file it finds is also named in the log with
-// OYB_MANUAL in front, in case a copy fails.
+// so the whole lot can be sent over as plain text. Every weapon prefab goes into
+// a second folder too (guns, rounds, magazines, suppressors), for the bullet
+// drop guide. Runs once, the first time a mortar round appears. Every file it
+// finds is also named in the log with OYB_MANUAL in front, in case a copy fails.
 //
 // If this file ever stops the mod loading, delete it: the shot tracking doesn't use it.
 class OYB_ManualDump
 {
 	protected static const string TARGET = "$profile:OYB_Manual";
+	protected static const string WEAPONS = "$profile:OYB_Weapons";
 	protected static bool s_bDone;
 	protected static ref map<string, bool> s_mFound;
 	protected static ref map<string, bool> s_mSearched;
@@ -19,9 +21,17 @@ class OYB_ManualDump
 		s_bDone = true;
 		s_mFound = new map<string, bool>();
 		s_mSearched = new map<string, bool>();
-		FileIO.MakeDirectory(TARGET);
 		FileIO.FindFiles(Found, "$ArmaReforger:Configs", "");
+		Copy(TARGET);
 
+		s_mFound = new map<string, bool>();
+		FileIO.FindFiles(FoundWeapon, "$ArmaReforger:Prefabs/Weapons", "");
+		Copy(WEAPONS);
+	}
+
+	protected static void Copy(string target)
+	{
+		FileIO.MakeDirectory(target);
 		int copied = 0;
 		foreach (string path, bool unused : s_mFound)
 		{
@@ -29,12 +39,29 @@ class OYB_ManualDump
 			flat.Replace("$ArmaReforger:", "");
 			flat.Replace("/", "_");
 			flat.Replace("\\", "_");
-			bool ok = FileIO.CopyFile(path, TARGET + "/" + flat);
+			bool ok = FileIO.CopyFile(path, target + "/" + flat);
 			if (ok)
 				copied++;
 			PrintFormat("OYB_MANUAL %1 %2", path, ok);
 		}
-		PrintFormat("OYB_MANUAL done: %1 of %2 files copied to %3", copied, s_mFound.Count(), TARGET);
+		PrintFormat("OYB_MANUAL done: %1 of %2 files copied to %3", copied, s_mFound.Count(), target);
+	}
+
+	protected static void FoundWeapon(string fileName, FileAttribute attributes = 0, string filesystem = "")
+	{
+		if (attributes & FileAttribute.DIRECTORY)
+		{
+			if (!s_mSearched.Contains(fileName))
+			{
+				s_mSearched.Insert(fileName, true);
+				FileIO.FindFiles(FoundWeapon, fileName, "");
+			}
+			return;
+		}
+		string lower = fileName;
+		lower.ToLower();
+		if (lower.Contains(".et") || lower.Contains(".conf"))
+			s_mFound.Insert(fileName, true);
 	}
 
 	protected static void Found(string fileName, FileAttribute attributes = 0, string filesystem = "")

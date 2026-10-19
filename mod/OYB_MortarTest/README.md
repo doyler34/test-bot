@@ -50,8 +50,10 @@ The first time a mortar round appears in the game (place an ammo box with
 rounds, or the mortar), the mod copies every mortar data file it can find in
 the game into `Documents\My Games\ArmaReforgerWorkbench\profile\OYB_Manual`.
 Zip that folder and send it over: it's what the in-game ballistic manual is
-built from, every ring of every round. The Log Console lists each file with
-`OYB_MANUAL` in front, and ends with how many were copied.
+built from, every ring of every round. Every weapon file (guns, rounds,
+magazines, suppressors) goes into `OYB_Weapons` next to it, for the bullet drop
+guide. The Log Console lists each file with `OYB_MANUAL` in front, and ends
+with how many were copied.
 
 If Workbench ever shows a red error about `OYB_ManualDump`, delete
 `Scripts/Game/OYB/OYB_ManualDump.c`: the shot tracking works without it.
