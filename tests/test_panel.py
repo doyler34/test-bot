@@ -1393,7 +1393,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("boss", "boss-password")
         token = await self.csrf("/users")
         await self.client.post(f"/users/{adm}", data={"csrf": token, "action": "grants",
-                                                      "grant": ["discord", "discord:welcome", "kick", "notes", "ban", "audit"]})
+                                                      "grant": ["discord", "discord:welcome", "kick", "notes", "ban"]})
         self.assertEqual(self.db.grants(adm), {"discord"})
 
     async def test_owners_can_take_one_thing_off_one_person(self):
@@ -1402,7 +1402,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("boss", "boss-password")
         token = await self.csrf("/users")
         await self.client.post(f"/users/{adm}", data={"csrf": token, "action": "grants",
-                                                      "grant": ["kick", "notes", "audit", "box"]})
+                                                      "grant": ["kick", "notes", "box"]})
         self.assertEqual(self.db.grants(adm), {"-ban", "box"})
         self.assertIn("1 extra, 1 taken off", await (await self.client.get("/users")).text())
         await self.client.post("/logout", data={"csrf": token})

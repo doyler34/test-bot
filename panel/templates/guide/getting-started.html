@@ -46,8 +46,9 @@
   <thead><tr><th>Role</th><th>Can</th></tr></thead>
   <tbody>
     <tr><td>Moderator</td><td>See the servers and players (live feed, kill map and kill logs included), kick, and leave notes on players.</td></tr>
-    <tr><td>Admin</td><td>Everything a moderator can, plus ban, and read the audit log.</td></tr>
-    <tr><td>Senior admin</td><td>Everything: unbanning, IPs and alt accounts, starting and stopping servers, the Box dashboard, Discord, the website, settings and admin accounts.</td></tr>
+    <tr><td>Admin</td><td>Everything a moderator can, plus ban.</td></tr>
+    <tr><td>Senior admin</td><td>Unbanning, IPs and alt accounts, starting and stopping servers, the Box dashboard, Discord, the website, settings and admin accounts.</td></tr>
+    <tr><td>Manager</td><td>Everything a senior admin can, plus the Server manager and the audit log.</td></tr>
   </tbody>
 </table></div>
 <p>A senior admin can also switch single things on or off for one person, like letting a moderator see the Box dashboard, or an admin who doesn't ban. You're {{ "an" if user.role == "admin" else "a" }} <b>{{ user.role|rolename }}</b>. This guide only shows you the pages for what you can do.</p>

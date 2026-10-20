@@ -23,7 +23,7 @@ PERMISSIONS = {
     "edit_bans": "owner",
     "ips": "owner",
     "power": "owner",
-    "audit": "admin",
+    "audit": "manager",
     "users": "owner",
     "discord": "owner",
     "website": "owner",
