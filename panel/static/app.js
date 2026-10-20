@@ -33,8 +33,7 @@ for (const box of document.querySelectorAll("[data-refresh]")) {
 }
 
 function closeFull() {
-  const open = document.querySelector(".pane.full");
-  if (open) open.classList.remove("full");
+  for (const open of document.querySelectorAll(".pane.full, .card.full")) open.classList.remove("full");
   document.body.classList.remove("has-full");
 }
 
@@ -43,6 +42,7 @@ for (const pane of document.querySelectorAll("[data-expand]")) {
   button.type = "button";
   button.className = "expand";
   button.title = "Full screen";
+  button.setAttribute("aria-label", "Full screen");
   button.textContent = "⤢";
   button.addEventListener("click", () => {
     const opening = !pane.classList.contains("full");
@@ -50,14 +50,32 @@ for (const pane of document.querySelectorAll("[data-expand]")) {
     if (opening) {
       pane.classList.add("full");
       document.body.classList.add("has-full");
+      button.textContent = "✕";
+      button.title = "Close";
+      button.setAttribute("aria-label", "Close full screen");
     }
   });
   pane.prepend(button);
 }
 
+// Phones have no Escape key: the ✕ button, a tap outside the panel, or the
+// back button all leave full screen, so the page never stays locked.
+document.addEventListener("click", (event) => {
+  if (!document.body.classList.contains("has-full")) return;
+  if (event.target.closest(".pane.full, .card.full")) return;
+  closeFull();
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeFull();
 });
+window.addEventListener("popstate", closeFull);
+function resetExpandButtons() {
+  for (const pane of document.querySelectorAll(".expand")) {
+    const open = pane.parentElement.classList.contains("full");
+    pane.textContent = open ? "✕" : "⤢";
+  }
+}
+document.addEventListener("click", () => setTimeout(resetExpandButtons, 0));
 
 document.addEventListener("click", (event) => {
   const chip = event.target.closest("[data-show]");

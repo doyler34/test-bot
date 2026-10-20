@@ -177,7 +177,9 @@ label.check input { width: auto; margin: 3px 0 0; }
 .pane { display: flex; flex-direction: column; height: 460px; padding-top: 14px; }
 .pane > h2, .pane > .row { flex: none; padding-right: 36px; }
 .pane > .body { flex: 1; overflow: auto; min-height: 0; }
-.pane.full { position: fixed; inset: 12px; height: auto; z-index: 50; }
+.pane.full, .card.full { position: fixed; inset: 12px; height: auto; max-height: calc(100dvh - 24px); overflow: auto;
+  z-index: 50; margin: 0; }
+.pane.full > .body, .card.full > .body { overflow: auto; }
 body.has-full { overflow: hidden; }
 body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(0, 0, 0, .6); z-index: 40; }
 .expand { position: absolute; top: 10px; right: 14px; padding: 0 8px; background: var(--line); color: var(--ink);
@@ -1639,3 +1641,22 @@ body.map-open { overflow: hidden; }
 .faction-limits input { margin-top: 4px; }
 .new-wizard details summary { cursor: pointer; }
 .new-wizard details textarea { margin-top: 10px; width: 100%; font-size: .8rem; }
+
+/* Phones: no fixed-height panels, so the page scrolls as one piece. */
+@media (max-width: 720px) {
+  .pane { height: auto; min-height: 0; }
+  .pane > .body { overflow: visible; }
+  .pane > .body:empty { display: none; }
+  .pane.full > .body { overflow: auto; }
+  .console-run, .card[data-expand] { min-width: 0; }
+}
+
+/* Full screen for the console and the file editor: the text fills the whole screen. */
+.card.full .console-out, .card.full .files-editor { max-height: none; height: calc(100dvh - 120px); min-height: 0; }
+.card.full .files-editor { width: 100%; }
+.console-live .console-out { max-height: 60vh; }
+.files-edit .expand, .console-run .expand, .console-live .expand { top: 8px; right: 8px; }
+@media (max-width: 720px) {
+  .console-out { white-space: pre-wrap; word-break: break-word; }
+  .card.full .console-out, .card.full .files-editor { height: calc(100dvh - 110px); }
+}

@@ -22,7 +22,7 @@
 </div>
 
 {% for r in runs %}
-<section class="card console-run">
+<section class="card console-run" data-expand>
   <div class="row">
     <code class="console-cmd">$ {{ r.command }}</code>
     <span class="muted">{{ r.at|ago }} · {{ r.seconds }}s ·

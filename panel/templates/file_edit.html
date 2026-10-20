@@ -6,7 +6,7 @@
 <p class="files-path mono"><a href="/files/{{ inst }}">{{ inst }}</a>{% for part, url in crumbs %} / <a href="{{ url }}">{{ part }}</a>{% endfor %} · {{ size|filesize }}</p>
 
 {% if text is not none %}
-<form method="post" action="{{ here }}?do=save&amp;csrf={{ csrf }}" enctype="multipart/form-data" class="card">
+<form method="post" action="{{ here }}?do=save&amp;csrf={{ csrf }}" enctype="multipart/form-data" class="card files-edit" data-expand>
   <textarea name="text" class="mono files-editor" spellcheck="false" autocapitalize="off" autocorrect="off">{{ text }}</textarea>
   <div class="row-actions">
     <button>Save</button>

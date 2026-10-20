@@ -4,7 +4,9 @@
 {% block body %}
 {% include "_manage_tabs.html" %}
 <p class="muted">The game's live console{% if path %} (<span class="mono">{{ path }}</span>){% endif %}, newest at the bottom. It refreshes every few seconds.</p>
-<pre class="console-out manage-console" data-live="/manage/{{ inst }}/console.txt">{{ text or "Nothing logged yet." }}</pre>
+<section class="card console-live" data-expand>
+  <pre class="console-out manage-console" data-live="/manage/{{ inst }}/console.txt">{{ text or "Nothing logged yet." }}</pre>
+</section>
 {% if running %}
 <form class="card console-form" method="post" action="/manage/{{ inst }}/console">
   <input type="hidden" name="csrf" value="{{ csrf }}">
