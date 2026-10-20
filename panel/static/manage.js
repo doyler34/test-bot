@@ -40,7 +40,10 @@ if (form) {
 
   const count = form.querySelector("[data-set-count]");
   const fields = [...form.querySelectorAll("[data-was]")];
-  const changed = (f) => f.type === "checkbox" ? String(f.checked) !== f.dataset.was : f.value !== f.dataset.was;
+  // Compared with what the page showed when it loaded, so the browser's own tidying
+  // of values (a textarea drops its first newline, say) never looks like a change.
+  const shown = new Map(fields.map((f) => [f, f.type === "checkbox" ? f.checked : f.value]));
+  const changed = (f) => (f.type === "checkbox" ? f.checked : f.value) !== shown.get(f);
   const update = () => {
     let n = 0;
     for (const f of fields) {
