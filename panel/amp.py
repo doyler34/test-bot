@@ -4,6 +4,7 @@ The list is AMP's "Admins" setting (game.admins in serverconfig.json). AMP write
 serverconfig.json itself when the server starts, so changing the file directly
 would be undone; the change has to go through AMP and needs a restart to apply.
 """
+import asyncio
 import json
 import re
 
@@ -119,14 +120,12 @@ class Amp:
 
     async def configs(self, inst, nodes) -> list[dict]:
         """Each setting by node, read in one login; ones AMP doesn't know are left out."""
-        found = []
         async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
             base, session = await self._instance(http, inst)
-            for node in nodes:
-                setting = await self._call(http, base, session, "Core/GetConfig", {"node": node})
-                if isinstance(setting, dict) and setting.get("Name"):
-                    found.append({**setting, "Node": setting.get("Node") or node})
-        return found
+            replies = await asyncio.gather(*(self._call(http, base, session, "Core/GetConfig", {"node": node})
+                                             for node in nodes), return_exceptions=True)
+        return [{**setting, "Node": setting.get("Node") or node} for node, setting in zip(nodes, replies)
+                if isinstance(setting, dict) and setting.get("Name")]
 
     async def set_config(self, inst, node, value):
         result = await self.ask(inst, "Core/SetConfig", {"node": node, "value": value})

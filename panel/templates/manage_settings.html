@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ inst }} settings · OYB Control{% endblock %}
+{% block head %}<script src="/static/manage.js?v={{ asset_version }}" defer></script>{% endblock %}
 {% block body %}
 {% include "_manage_tabs.html" %}
 {% if not running %}
@@ -7,36 +8,53 @@
 {% elif error %}
 <div class="flash error">{{ error }}</div>
 {% else %}
-<p class="muted">Every setting AMP has for {{ inst }}. Only what you change is saved, and each change goes in the audit log. Most take effect when the server next restarts.</p>
-<nav class="manage-cats">{% for name in names %}<a href="?cat={{ name|urlencode }}" {% if name == chosen %}class="on"{% endif %}>{{ name }}</a>{% endfor %}</nav>
-<form method="post" action="/manage/{{ inst }}/settings?cat={{ chosen|urlencode }}" class="card manage-form">
+<div class="set-top">
+  <input type="search" class="set-search" placeholder="Search settings…" aria-label="Search settings" data-set-search>
+  <nav class="manage-cats">{% for title, items in groups %}<a href="#{{ slug(title) }}">{{ title }}</a>{% endfor %}</nav>
+</div>
+
+<form method="post" action="/manage/{{ inst }}/settings" class="set-form" data-set-form>
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <h2>{{ chosen }}</h2>
-  {% for s in settings %}
-  {% set kind = (s.InputType or "text")|lower %}
-  {% set field = "n:" ~ s.Node %}
-  <div class="manage-setting">
-    {% if kind == "checkbox" %}
-    <label class="check"><input type="hidden" name="{{ field }}" value="false"><input type="checkbox" name="{{ field }}" value="true" {% if value(s) == "true" %}checked{% endif %} {% if s.ReadOnly %}disabled{% endif %}> {{ s.Name }}</label>
-    {% else %}
-    <label>{{ s.Name }}
-      {% if s.EnumValues %}
-      <select name="{{ field }}" {% if s.ReadOnly %}disabled{% endif %}>{% for key, label in s.EnumValues.items() %}<option value="{{ key }}" {% if key|string == value(s) %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-      {% elif kind == "textarea" %}
-      <textarea name="{{ field }}" class="mono" rows="5" spellcheck="false" {% if s.ReadOnly %}readonly{% endif %}>{{ value(s) }}</textarea>
-      {% elif kind == "password" %}
-      <input type="password" name="{{ field }}" placeholder="Unchanged — type a new one to change it" autocomplete="new-password" {% if s.ReadOnly %}readonly{% endif %}>
+  {% for title, items in groups %}
+  <section class="card set-section" id="{{ slug(title) }}">
+    <h2>{{ title }}</h2>
+    {% if title == "Admins & access" %}<p class="muted small">To add or remove admins by name, use <a href="/game-admins">In-game admins</a>.</p>{% endif %}
+    {% if title == "Mods" %}<p class="muted small">To pick mods from a list, use the <a href="/mods/{{ inst }}">Mods</a> tab.</p>{% endif %}
+    <div class="set-grid">
+    {% for s in items %}
+    {% set kind = (s.InputType or "text")|lower %}
+    {% set field = "n:" ~ s.Node %}
+    {% set long = kind == "textarea" or (value(s)|length > 60) %}
+    <div class="set-row{{ ' set-wide' if long }}" data-set-row data-words="{{ (s.Name ~ ' ' ~ (s.Description or ''))|lower }}">
+      {% if kind == "checkbox" %}
+      <label class="switch">
+        <input type="hidden" name="{{ field }}" value="false">
+        <input type="checkbox" name="{{ field }}" value="true" data-was="{{ value(s) }}" {% if value(s) == "true" %}checked{% endif %} {% if s.ReadOnly %}disabled{% endif %}>
+        <span class="switch-track"></span><b>{{ s.Name }}</b>
+      </label>
       {% else %}
-      <input name="{{ field }}" value="{{ value(s) }}" {% if kind == "number" %}inputmode="decimal"{% endif %} {% if s.ReadOnly %}readonly{% endif %}>
+      <label for="f-{{ loop.index }}-{{ slug(title) }}"><b>{{ s.Name }}</b></label>
+      {% if s.EnumValues %}
+      <select id="f-{{ loop.index }}-{{ slug(title) }}" name="{{ field }}" data-was="{{ value(s) }}" {% if s.ReadOnly %}disabled{% endif %}>{% for key, label in s.EnumValues.items() %}<option value="{{ key }}" {% if key|string == value(s) %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      {% elif long %}
+      <textarea id="f-{{ loop.index }}-{{ slug(title) }}" name="{{ field }}" class="mono" rows="{{ 12 if value(s).count('\n') > 10 else 4 }}" spellcheck="false" data-was="{{ value(s) }}" {% if s.ReadOnly %}readonly{% endif %}>{{ value(s) }}</textarea>
+      {% elif kind == "password" %}
+      <input id="f-{{ loop.index }}-{{ slug(title) }}" type="password" name="{{ field }}" placeholder="Unchanged · type a new one to change it" autocomplete="new-password" data-was="" {% if s.ReadOnly %}readonly{% endif %}>
+      {% else %}
+      <input id="f-{{ loop.index }}-{{ slug(title) }}" name="{{ field }}" value="{{ value(s) }}" data-was="{{ value(s) }}" {% if kind == "number" %}inputmode="decimal"{% endif %} {% if s.ReadOnly %}readonly{% endif %}>
       {% endif %}
-    </label>
-    {% endif %}
-    {% if s.Description %}<p class="muted small">{{ s.Description }}</p>{% endif %}
-  </div>
-  {% else %}
-  <p class="muted">Nothing in this group.</p>
+      {% endif %}
+      {% if s.Description %}<p class="set-help">{{ s.Description|replace("[", "")|replace("]", " ")|truncate(240) }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    </div>
+  </section>
   {% endfor %}
-  {% if settings %}<div class="dc-actions"><button>Save {{ chosen }}</button></div>{% endif %}
+  <p class="muted set-empty" hidden data-set-empty>No settings match that.</p>
+  <div class="dc-actions set-save">
+    <span class="muted" data-set-count>No changes yet</span>
+    <button>Save changes</button>
+  </div>
 </form>
 {% endif %}
 {% endblock %}

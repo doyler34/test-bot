@@ -2360,23 +2360,55 @@ async def manage_console(request):
                   running=files.amp_running(base), tabs=manage_tabs(request, inst, "console"))
 
 
+# The game's own settings, sorted into sections by their field name. First match wins.
+SETTING_SECTIONS = (
+    ("Basics", ("name", "scenarioid", "custommission", "visible", "crossplatform", "password", "maxusers", "maxsize")),
+    ("Admins & access", ("admins", "adminpassword", "maxclients", "rconpermission", "battleye")),
+    ("Mods", ("mods", "addonsverify", "addonsrepair", "modsrequiredbydefault")),
+    ("Gameplay", ("missionheader", "disablethirdperson", "vondisable", "voncan")),
+    ("Performance", ("maxfps", "viewdistance", "grass", "navmesh", "ailimit", "disableai", "fastvalidation", "freezecheck")),
+    ("Saves", ("autosave", "saveretention", "sessionsave", "playersavetime", "hiveid", "persistence")),
+    ("Network", ("gameport", "queryport", "rconport", "ipbinding", "publicaddress", "publicip", "lobbyplayer",
+                 "slotreservation")),
+)
+
+
+def setting_section(node):
+    field = node.rsplit(".", 1)[-1].lower().lstrip("$")
+    for title, keys in SETTING_SECTIONS:
+        if field in keys:
+            return title
+    for title, keys in SETTING_SECTIONS:
+        if any(len(key) > 4 and key in field for key in keys):
+            return title
+    return "Advanced"
+
+
 def amp_settings_list(game, spec):
-    """[(group, [setting, ...])]: the game's own settings by AMP's sub-sections
-    (Server, Game, Mods...), then AMP's other groups. Hidden ones are left out."""
+    """[(section, [setting, ...])]: the game's own settings in sections, then AMP's
+    other groups. Hidden ones and repeats (AMP lists some twice) are left out."""
     def shown(setting):
         return (isinstance(setting, dict) and setting.get("Node") and not setting.get("Hidden")
                 and str(setting.get("InputType", "")).lower() not in ("hidden", "none"))
 
-    groups, seen = {}, set()
+    groups = {title: [] for title, _ in SETTING_SECTIONS}
+    groups["Advanced"] = []
+    names, nodes = set(), set()
     for setting in filter(shown, game):
-        name = str(setting.get("Subcategory") or setting.get("Category") or "Game").split(":")[0]
-        groups.setdefault(name, []).append(setting)
-        seen.add(setting["Node"])
+        if setting.get("Name") in names:
+            continue
+        groups[setting_section(setting["Node"])].append(setting)
+        names.add(setting.get("Name"))
+        nodes.add(setting["Node"])
     for category, settings in spec.items():
-        rest = [s for s in settings or [] if shown(s) and s["Node"] not in seen]
+        rest = []
+        for setting in settings or []:
+            if shown(setting) and setting["Node"] not in nodes and setting.get("Name") not in names:
+                rest.append(setting)
+                names.add(setting.get("Name"))
         if rest:
-            groups.setdefault(str(category).split(":")[0], []).extend(rest)
-    return list(groups.items())
+            groups.setdefault("AMP: " + str(category).split(":")[0], []).extend(rest)
+    return [(title, items) for title, items in groups.items() if items]
 
 
 def setting_text(setting):
@@ -2398,8 +2430,6 @@ async def manage_settings(request):
             groups = amp_settings_list(game, await request.app[AMP].settings_spec(instance))
         except AmpError as exc:
             error = str(exc)
-    names = [name for name, _ in groups]
-    chosen = request.query.get("cat") if request.query.get("cat") in names else (names[0] if names else "")
     if request.method == "POST":
         form = await request.post()
         current = {s["Node"]: s for _, settings in groups for s in settings}
@@ -2424,9 +2454,10 @@ async def manage_settings(request):
             flash(request, f"Saved {', '.join(changed)}. Most take effect when the server next restarts.")
         elif not error:
             flash(request, "Nothing was changed.")
-        raise web.HTTPFound(f"/manage/{inst}/settings?cat={quote(chosen)}")
-    return render(request, "manage_settings.html", inst=inst, running=running, error=error, names=names, chosen=chosen,
-                  settings=dict(groups).get(chosen, []), value=setting_text, tabs=manage_tabs(request, inst, "settings"))
+        raise web.HTTPFound(f"/manage/{inst}/settings")
+    return render(request, "manage_settings.html", inst=inst, running=running, error=error, groups=groups,
+                  value=setting_text, slug=lambda title: re.sub(r"[^a-z]+", "-", title.lower()).strip("-"),
+                  tabs=manage_tabs(request, inst, "settings"))
 
 
 async def file_browser(request):
