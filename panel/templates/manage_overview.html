@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ inst }} · OYB Control{% endblock %}
+{% block body %}
+{% include "_manage_tabs.html" %}
+
+{% if not running %}
+<section class="card">
+  <p><span class="pill">AMP off</span> {{ inst }}'s AMP isn't running, so its game server can't run either.</p>
+  {% if has_amp %}
+  <form method="post" action="/instances/{{ inst }}/start">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button>Start AMP</button>
+  </form>
+  {% else %}<p class="muted">Add the AMP login under <a href="/settings/amp">Settings → AMP login</a> to start it from here.</p>{% endif %}
+</section>
+{% else %}
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+<section class="card">
+  <div class="row">
+    <h2>Game server {% if state %}<span class="pill {{ 'on' if state == 'Running' else ('down' if state in ('Failed', 'Stopped') else 'gold') }}">{{ state }}</span>{% endif %}</h2>
+    {% if uptime %}<span class="muted">Up {{ uptime }}</span>{% endif %}
+  </div>
+  {% if metrics %}
+  <div class="tiles manage-metrics">
+    {% for m in metrics %}
+    <div class="tile"><b>{{ m.RawValue }}{% if m.MaxValue %}<span class="muted"> / {{ m.MaxValue }}</span>{% endif %}{{ " " ~ m.Units if m.Units and m.Units != "%" else ("%" if m.Units == "%" else "") }}</b><span>{{ m.name }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="row-actions manage-power">
+    {% for action, label, confirm in [("start", "Start", ""), ("restart", "Restart", "Restart " ~ inst ~ "? Everyone on it gets kicked."), ("stop", "Stop", "Stop " ~ inst ~ "? Everyone on it gets kicked."), ("update", "Update", "Update " ~ inst ~ "? It stops while the game updates.")] %}
+    <form method="post" action="/manage/{{ inst }}/power/{{ action }}" class="inline" {% if confirm %}data-confirm="{{ confirm }}"{% endif %}>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="small {{ 'danger' if action == 'stop' else ('' if action == 'start' else 'ghost') }}">{{ label }}</button>
+    </form>
+    {% endfor %}
+  </div>
+</section>
+<section class="card">
+  <h2>AMP</h2>
+  <p class="muted">Stopping {{ inst }}'s AMP stops its game server too. Only needed when AMP itself is stuck.</p>
+  <form method="post" action="/instances/{{ inst }}/stop" data-confirm="Stop {{ inst }}'s AMP? Its game server stops with it.">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="small danger">Stop AMP</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

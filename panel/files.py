@@ -192,6 +192,21 @@ def amp_running(base, proc="/proc"):
     return False
 
 
+def latest_console(base, tail=64 * 1024):
+    """(path, last lines) of the game's newest console.log, or (None, "")."""
+    logs = list(base.glob("*/*/*/logs/logs_*/console.log"))
+    if not logs:
+        return None, ""
+    path = max(logs, key=lambda p: p.stat().st_mtime)
+    with open(path, "rb") as f:
+        f.seek(max(0, path.stat().st_size - tail))
+        data = f.read()
+    text = data.decode("utf-8", "replace")
+    if len(data) == tail:
+        text = text.split("\n", 1)[-1]
+    return path, text
+
+
 KVP = "GenericModule.kvp"
 SETTINGS_LINE = "App.AppSettings="
 

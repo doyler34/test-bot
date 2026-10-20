@@ -43,7 +43,7 @@ log = logging.getLogger("panel.web")
 
 HERE = Path(__file__).parent
 ASSET_VERSION = str(int(max((HERE / "static" / n).stat().st_mtime
-                           for n in ("style.css", "app.js", "discord.js", "site.css", "site.js", "tour.js"))))
+                           for n in ("style.css", "app.js", "discord.js", "site.css", "site.js", "tour.js", "manage.js"))))
 BRAND = HERE.parent / "assets" / "rank-card"
 COOKIE = "oyb_panel"
 PUBLIC = ("/login", "/static/", "/brand/", "/drop/", "/survey.sh")
@@ -2276,13 +2276,146 @@ def file_url(inst, rel=""):
     return "/files/" + inst + ("/" + quote(rel) if rel else "")
 
 
+AMP_STATES = {0: "Stopped", 5: "Getting ready", 7: "Configuring", 10: "Starting", 20: "Running", 30: "Restarting",
+              40: "Stopping", 45: "Going to sleep", 50: "Asleep", 60: "Waiting", 70: "Installing", 75: "Updating",
+              80: "Waiting for input", 100: "Failed", 200: "Suspended", 250: "Maintenance"}
+MANAGE_TABS = (("overview", "Overview", "power"), ("console", "Console", "console"), ("settings", "Settings", "amp_settings"),
+               ("mods", "Mods", "mods"), ("files", "Files", "files"))
+
+
+def manage_tabs(request, inst, current):
+    """The sub-tabs along the top of one server's pages, only the ones this person can open."""
+    urls = {"overview": f"/manage/{inst}", "console": f"/manage/{inst}/console", "settings": f"/manage/{inst}/settings",
+            "mods": f"/mods/{inst}", "files": f"/files/{inst}"}
+    return [{"key": key, "label": label, "url": urls[key], "on": key == current}
+            for key, label, perm in MANAGE_TABS if allowed(request, perm)]
+
+
 async def files_index(request):
-    """Every AMP server folder, with its files and mods."""
-    if not (allowed(request, "files") or allowed(request, "mods")):
-        raise web.HTTPForbidden(text="You do not have permission for that.")
+    raise web.HTTPFound("/manage")
+
+
+async def manage_index(request):
+    """Every AMP server on the box, like AMP's Instances page."""
+    require(request, "files")
     root = request.app[FILES_ROOT]
     folders = [{"name": name, "running": files.amp_running(root / name)} for name in files.instances(root)]
-    return render(request, "files_index.html", folders=folders, root=root, has_amp=bool(request.app[AMP]))
+    return render(request, "manage_index.html", folders=folders, root=root, has_amp=bool(request.app[AMP]))
+
+
+async def manage_overview(request):
+    require(request, "power")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    running, status, error = files.amp_running(base), {}, ""
+    if running:
+        try:
+            status = await request.app[AMP].status(await amp_instance(request, inst))
+        except AmpError as exc:
+            error = str(exc)
+    metrics = [{"name": name, **m} for name, m in (status.get("Metrics") or {}).items() if isinstance(m, dict)]
+    return render(request, "manage_overview.html", inst=inst, running=running, error=error, metrics=metrics,
+                  state=AMP_STATES.get(status.get("State"), "Unknown") if status else "", uptime=status.get("Uptime", ""),
+                  has_amp=bool(request.app[AMP]), tabs=manage_tabs(request, inst, "overview"))
+
+
+async def manage_power(request):
+    """The game server's own power buttons, through that server's AMP."""
+    require(request, "power")
+    inst, action = request.match_info["inst"], request.match_info["action"]
+    server_folder(request)
+    if action not in ("start", "stop", "restart", "update"):
+        raise web.HTTPNotFound()
+    try:
+        await request.app[AMP].power(await amp_instance(request, inst), action)
+    except AmpError as exc:
+        audit(request, f"{action} through AMP", inst, detail=str(exc), ok=False)
+        flash(request, str(exc), "error")
+        raise web.HTTPFound(f"/manage/{inst}")
+    audit(request, f"{action} through AMP", inst)
+    flash(request, {"start": "Starting", "stop": "Stopping", "restart": "Restarting", "update": "Updating"}[action]
+          + f" {inst}'s game server.")
+    raise web.HTTPFound(f"/manage/{inst}")
+
+
+async def manage_console(request):
+    require(request, "console")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    if request.method == "POST":
+        form = await request.post()
+        message = form.get("message", "").strip()
+        if message:
+            try:
+                await request.app[AMP].send_console(await amp_instance(request, inst), message)
+                audit(request, "game console", inst, detail=message[:500])
+            except AmpError as exc:
+                audit(request, "game console", inst, detail=f"{message[:200]}: {exc}", ok=False)
+                flash(request, str(exc), "error")
+        raise web.HTTPFound(f"/manage/{inst}/console")
+    path, text = files.latest_console(base)
+    if request.path.endswith(".txt"):
+        return web.Response(text=text, headers={"Cache-Control": "no-store"})
+    return render(request, "manage_console.html", inst=inst, text=text, path=path and files.relative(base, path),
+                  running=files.amp_running(base), tabs=manage_tabs(request, inst, "console"))
+
+
+def amp_settings_list(spec):
+    """[(category, [setting, ...])] the way AMP groups them, hidden ones left out."""
+    groups = []
+    for category, settings in spec.items():
+        shown = [s for s in settings or [] if isinstance(s, dict) and s.get("Node") and not s.get("Hidden")]
+        if shown:
+            groups.append((str(category).split(":")[0], shown))
+    return groups
+
+
+def setting_text(setting):
+    value = setting.get("CurrentValue")
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return "" if value is None else str(value)
+
+
+async def manage_settings(request):
+    require(request, "amp_settings")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    running, groups, error = files.amp_running(base), [], ""
+    if running:
+        try:
+            groups = amp_settings_list(await request.app[AMP].settings_spec(await amp_instance(request, inst)))
+        except AmpError as exc:
+            error = str(exc)
+    names = [name for name, _ in groups]
+    chosen = request.query.get("cat") if request.query.get("cat") in names else (names[0] if names else "")
+    if request.method == "POST":
+        form = await request.post()
+        current = {s["Node"]: s for _, settings in groups for s in settings}
+        changed = []
+        try:
+            instance = await amp_instance(request, inst)
+            for node, setting in current.items():
+                sent = form.getall(f"n:{node}", [])
+                if not sent or setting.get("ReadOnly"):
+                    continue
+                value = sent[-1]
+                if str(setting.get("InputType", "")).lower() == "password" and not value:
+                    continue
+                if value != setting_text(setting):
+                    await request.app[AMP].set_config(instance, node, value)
+                    changed.append(setting.get("Name") or node)
+                    shown = "(hidden)" if str(setting.get("InputType", "")).lower() == "password" else value[:200]
+                    audit(request, "changed AMP setting", inst, node, shown)
+        except AmpError as exc:
+            flash(request, str(exc), "error")
+        if changed:
+            flash(request, f"Saved {', '.join(changed)}. Most take effect when the server next restarts.")
+        elif not error:
+            flash(request, "Nothing was changed.")
+        raise web.HTTPFound(f"/manage/{inst}/settings?cat={quote(chosen)}")
+    return render(request, "manage_settings.html", inst=inst, running=running, error=error, names=names, chosen=chosen,
+                  settings=dict(groups).get(chosen, []), value=setting_text, tabs=manage_tabs(request, inst, "settings"))
 
 
 async def file_browser(request):
@@ -2298,11 +2431,13 @@ async def file_browser(request):
         crumbs.append((part, file_url(inst, walked)))
     if path.is_dir():
         return render(request, "files.html", inst=inst, rel=rel, crumbs=crumbs, entries=files.listing(path),
+                      tabs=manage_tabs(request, inst, "files"),
                       here=file_url(inst, rel), up=file_url(inst, rel.rpartition("/")[0]) if rel else "/files",
                       join=lambda name: file_url(inst, f"{rel}/{name}" if rel else name))
     if request.query.get("download"):
         return web.FileResponse(path, headers={"Content-Disposition": f'attachment; filename="{path.name}"'})
     return render(request, "file_edit.html", inst=inst, rel=rel, crumbs=crumbs, name=path.name,
+                  tabs=manage_tabs(request, inst, "files"),
                   size=path.stat().st_size, text=files.read_text(path), here=file_url(inst, rel),
                   up=file_url(inst, rel.rpartition("/")[0]), max_edit=files.MAX_EDIT)
 
@@ -2438,7 +2573,7 @@ async def mods_page(request):
     spare = sorted(((mod_id, info) for mod_id, info in on_disk.items() if mod_id not in using),
                    key=lambda item: item[1]["name"].lower())
     return render(request, "mods.html", inst=inst, mods=mods, on_disk=on_disk, spare=spare, error=error,
-                  running=running, can_files=allowed(request, "files"))
+                  running=running, can_files=allowed(request, "files"), tabs=manage_tabs(request, inst, "mods"))
 
 
 async def mods_change(request):
@@ -2498,10 +2633,10 @@ async def instance_power(request):
     except AmpError as exc:
         audit(request, f"{action} AMP instance", inst, detail=str(exc), ok=False)
         flash(request, str(exc), "error")
-        raise web.HTTPFound("/files")
+        raise web.HTTPFound(request.headers.get("Referer", "/manage") if "/manage" in request.headers.get("Referer", "") else "/manage")
     audit(request, f"{action} AMP instance", inst)
     flash(request, f"{'Starting' if action == 'start' else 'Stopping'} {inst}'s AMP. Give it a few seconds, then reload.")
-    raise web.HTTPFound("/files")
+    raise web.HTTPFound(request.headers.get("Referer", "/manage") if "/manage" in request.headers.get("Referer", "") else "/manage")
 
 
 async def network_page(request):
@@ -3184,6 +3319,14 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/attacks/untrust", untrust_ip)
     app.router.add_route("GET", "/settings/amp", amp_login_page)
     app.router.add_post("/settings/amp", amp_login_page)
+    app.router.add_get("/manage", manage_index)
+    app.router.add_get("/manage/{inst}", manage_overview)
+    app.router.add_post("/manage/{inst}/power/{action}", manage_power)
+    app.router.add_route("GET", "/manage/{inst}/console", manage_console)
+    app.router.add_get("/manage/{inst}/console.txt", manage_console)
+    app.router.add_post("/manage/{inst}/console", manage_console)
+    app.router.add_route("GET", "/manage/{inst}/settings", manage_settings)
+    app.router.add_post("/manage/{inst}/settings", manage_settings)
     app.router.add_get("/files", files_index)
     app.router.add_get("/files/{inst}", file_browser)
     app.router.add_post("/files/{inst}", file_action)

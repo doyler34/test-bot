@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ name }} · OYB Control{% endblock %}
 {% block body %}
-<p class="kicker"><a href="{{ up }}">← Back</a></p>
-<h1>{{ name }}</h1>
+{% include "_manage_tabs.html" %}
+<h2><a href="{{ up }}">←</a> {{ name }}</h2>
 <p class="files-path mono"><a href="/files/{{ inst }}">{{ inst }}</a>{% for part, url in crumbs %} / <a href="{{ url }}">{{ part }}</a>{% endfor %} · {{ size|filesize }}</p>
 
 {% if text is not none %}

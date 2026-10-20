@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ inst }} settings · OYB Control{% endblock %}
+{% block body %}
+{% include "_manage_tabs.html" %}
+{% if not running %}
+<p class="muted">{{ inst }}'s AMP is off, so its settings can't be read. Start it from <a href="/manage/{{ inst }}">Overview</a>.</p>
+{% elif error %}
+<div class="flash error">{{ error }}</div>
+{% else %}
+<p class="muted">Every setting AMP has for {{ inst }}. Only what you change is saved, and each change goes in the audit log. Most take effect when the server next restarts.</p>
+<nav class="manage-cats">{% for name in names %}<a href="?cat={{ name|urlencode }}" {% if name == chosen %}class="on"{% endif %}>{{ name }}</a>{% endfor %}</nav>
+<form method="post" action="/manage/{{ inst }}/settings?cat={{ chosen|urlencode }}" class="card manage-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h2>{{ chosen }}</h2>
+  {% for s in settings %}
+  {% set kind = (s.InputType or "text")|lower %}
+  {% set field = "n:" ~ s.Node %}
+  <div class="manage-setting">
+    {% if kind == "checkbox" %}
+    <label class="check"><input type="hidden" name="{{ field }}" value="false"><input type="checkbox" name="{{ field }}" value="true" {% if value(s) == "true" %}checked{% endif %} {% if s.ReadOnly %}disabled{% endif %}> {{ s.Name }}</label>
+    {% else %}
+    <label>{{ s.Name }}
+      {% if s.EnumValues %}
+      <select name="{{ field }}" {% if s.ReadOnly %}disabled{% endif %}>{% for key, label in s.EnumValues.items() %}<option value="{{ key }}" {% if key|string == value(s) %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      {% elif kind == "textarea" %}
+      <textarea name="{{ field }}" class="mono" rows="5" spellcheck="false" {% if s.ReadOnly %}readonly{% endif %}>{{ value(s) }}</textarea>
+      {% elif kind == "password" %}
+      <input type="password" name="{{ field }}" placeholder="Unchanged — type a new one to change it" autocomplete="new-password" {% if s.ReadOnly %}readonly{% endif %}>
+      {% else %}
+      <input name="{{ field }}" value="{{ value(s) }}" {% if kind == "number" %}inputmode="decimal"{% endif %} {% if s.ReadOnly %}readonly{% endif %}>
+      {% endif %}
+    </label>
+    {% endif %}
+    {% if s.Description %}<p class="muted small">{{ s.Description }}</p>{% endif %}
+  </div>
+  {% else %}
+  <p class="muted">Nothing in this group.</p>
+  {% endfor %}
+  {% if settings %}<div class="dc-actions"><button>Save {{ chosen }}</button></div>{% endif %}
+</form>
+{% endif %}
+{% endblock %}

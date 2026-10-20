@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ inst }} files · OYB Control{% endblock %}
 {% block body %}
-<p class="kicker"><a href="{{ up }}">← Back</a></p>
-<h1>{{ inst }}</h1>
+{% include "_manage_tabs.html" %}
 <p class="files-path mono"><a href="/files/{{ inst }}">{{ inst }}</a>{% for name, url in crumbs %} / <a href="{{ url }}">{{ name }}</a>{% endfor %}</p>
 
 <div class="files-tools">

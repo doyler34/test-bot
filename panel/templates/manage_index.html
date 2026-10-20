@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Server manager · OYB Control{% endblock %}
+{% block body %}
+<h1>Server manager</h1>
+<p class="muted">Every server AMP runs on this box, run from here instead of AMP: power, console, settings, mods and files. <b>AMP on/off</b> is that server's AMP manager; the game server only runs while it's on.</p>
+{% if not has_amp %}<div class="flash error">The panel has no AMP login yet, so only Files and Mods work. Add it under <a href="/settings/amp">Settings → AMP login</a>.</div>{% endif %}
+{% if folders %}
+<div class="cards">
+  {% for f in folders %}
+  <section class="card files-server">
+    <h2><a href="/manage/{{ f.name }}">{{ f.name }}</a> <span class="pill {{ 'on' if f.running else '' }}">AMP {{ "on" if f.running else "off" }}</span></h2>
+    <div class="row-actions">
+      <a class="button small" href="/manage/{{ f.name }}">Open</a>
+      {% if can("power") and has_amp %}
+      <form method="post" action="/instances/{{ f.name }}/{{ 'stop' if f.running else 'start' }}" class="inline"
+            {% if f.running %}data-confirm="Stop {{ f.name }}'s AMP? Its game server stops with it."{% endif %}>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="small {{ 'danger' if f.running else 'ghost' }}">{{ "Stop AMP" if f.running else "Start AMP" }}</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No server folders found in <code>{{ root }}</code>.</p>
+{% endif %}
+{% endblock %}

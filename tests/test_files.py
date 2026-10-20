@@ -117,10 +117,18 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         actions = {r["action"] for r in self.db.all("SELECT action FROM audit")}
         self.assertTrue({"edited file", "uploaded file", "made folder", "renamed file", "deleted file"} <= actions)
 
-    async def test_senior_admins_get_mods_but_not_files(self):
+    async def test_the_server_manager_is_for_managers(self):
         await self.login("boss")
         self.assertEqual((await self.client.get("/files/Plus01")).status, 403)
-        self.assertIn("Plus01", await (await self.client.get("/files")).text())
+        self.assertEqual((await self.client.get("/manage")).status, 403)
+        self.assertNotIn('href="/manage"', await (await self.client.get("/settings")).text())
+        await self.login("chief")
+        page = await (await self.client.get("/manage")).text()
+        self.assertIn("Plus01", page)
+        self.assertIn('href="/manage"', page)
+        tabs = await (await self.client.get("/files/Plus01")).text()
+        for tab in ("Overview", "Console", "Settings", "Mods", "Files"):
+            self.assertIn(f">{tab}</a>", tabs)
 
     async def test_mod_list_changes_go_through_amp(self):
         stored = {"value": '{"modId": "60C4CE4888FF4621", "name": "ACE Core"}'}
@@ -169,9 +177,9 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         amp = mock.Mock()
         amp.instance_power = mock.AsyncMock()
         self.app[AMP] = amp
-        token = await self.login("boss")
+        token = await self.login("chief")
         with mock.patch("panel.files.amp_running", return_value=False):
-            page = await (await self.client.get("/files")).text()
+            page = await (await self.client.get("/manage")).text()
         self.assertIn('action="/instances/Plus01/start"', page)
         await self.client.post("/instances/Plus01/start", data={"csrf": token})
         amp.instance_power.assert_awaited_once_with("Plus01", "start")
@@ -185,6 +193,50 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         os.symlink("/usr/bin/python3", proc / "456" / "exe")
         self.assertTrue(files.amp_running(self.root / "Plus01", proc))
         self.assertFalse(files.amp_running(self.root / "Other", proc))
+
+
+    async def test_overview_console_and_settings_go_through_that_servers_amp(self):
+        logs = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "logs" / "logs_2026-10-20"
+        logs.mkdir(parents=True)
+        (logs / "console.log").write_text("12:00:00 Game started\n12:00:05 Player joined\n")
+        amp = mock.Mock()
+        amp.instances = mock.AsyncMock(return_value={"Plus01": {"InstanceID": "p", "InstanceName": "Plus01"}})
+        amp.status = mock.AsyncMock(return_value={"State": 20, "Uptime": "02:10:00",
+                                                  "Metrics": {"Active Users": {"RawValue": 34, "MaxValue": 128}}})
+        amp.power = mock.AsyncMock()
+        amp.send_console = mock.AsyncMock()
+        amp.set_config = mock.AsyncMock()
+        amp.settings_spec = mock.AsyncMock(return_value={"Server Settings:icon": [
+            {"Name": "Server name", "Node": "Game.Name", "InputType": "text", "CurrentValue": "OYB Plus"},
+            {"Name": "Visible", "Node": "Game.Visible", "InputType": "checkbox", "CurrentValue": True},
+            {"Name": "Admin password", "Node": "Game.AdminPassword", "InputType": "password", "CurrentValue": "secret"},
+            {"Name": "Secret", "Node": "Game.Hidden", "Hidden": True, "CurrentValue": "x"}]})
+        self.app[AMP] = amp
+        running = mock.patch("panel.files.amp_running", return_value=True)
+        running.start()
+        self.addCleanup(running.stop)
+        token = await self.login("chief")
+        overview = await (await self.client.get("/manage/Plus01")).text()
+        self.assertIn("Running", overview)
+        self.assertIn("Active Users", overview)
+        await self.client.post("/manage/Plus01/power/restart", data={"csrf": token})
+        amp.power.assert_awaited_once_with({"InstanceID": "p", "InstanceName": "Plus01"}, "restart")
+
+        console = await (await self.client.get("/manage/Plus01/console")).text()
+        self.assertIn("Player joined", console)
+        self.assertIn("Player joined", await (await self.client.get("/manage/Plus01/console.txt")).text())
+        await self.client.post("/manage/Plus01/console", data={"csrf": token, "message": "#players"})
+        amp.send_console.assert_awaited_once_with({"InstanceID": "p", "InstanceName": "Plus01"}, "#players")
+
+        settings = await (await self.client.get("/manage/Plus01/settings")).text()
+        self.assertIn("OYB Plus", settings)
+        self.assertNotIn("secret", settings)
+        self.assertNotIn("Game.Hidden", settings)
+        await self.client.post("/manage/Plus01/settings", data=[("csrf", token), ("n:Game.Name", "OYB Plus 2"),
+                                                                ("n:Game.Visible", "false"), ("n:Game.Visible", "true"),
+                                                                ("n:Game.AdminPassword", "")])
+        amp.set_config.assert_awaited_once_with({"InstanceID": "p", "InstanceName": "Plus01"}, "Game.Name", "OYB Plus 2")
+        self.assertEqual(self.db.one("SELECT detail FROM audit WHERE action = 'changed AMP setting'")[0], "OYB Plus 2")
 
 
 class AmpLoginTests(unittest.IsolatedAsyncioTestCase):

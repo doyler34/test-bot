@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ inst }} console · OYB Control{% endblock %}
+{% block head %}<script src="/static/manage.js?v={{ asset_version }}" defer></script>{% endblock %}
+{% block body %}
+{% include "_manage_tabs.html" %}
+<p class="muted">The game's live console{% if path %} (<span class="mono">{{ path }}</span>){% endif %}, newest at the bottom. It refreshes every few seconds.</p>
+<pre class="console-out manage-console" data-live="/manage/{{ inst }}/console.txt">{{ text or "Nothing logged yet." }}</pre>
+{% if running %}
+<form class="card console-form" method="post" action="/manage/{{ inst }}/console">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Send to the server <input name="message" class="mono" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="#players" required></label>
+  <button>Send</button>
+</form>
+<p class="muted">Sent through AMP, like typing in its console. Every command goes in the audit log.</p>
+{% else %}
+<p class="muted">{{ inst }}'s AMP is off, so nothing can be sent to it.</p>
+{% endif %}
+{% endblock %}

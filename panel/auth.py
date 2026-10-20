@@ -34,6 +34,7 @@ PERMISSIONS = {
     # Runs commands on the box itself, or changes its files.
     "console": "manager",
     "files": "manager",
+    "amp_settings": "manager",
 }
 
 # Everything an owner can switch on or off for one person, whatever their role.

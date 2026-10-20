@@ -99,6 +99,29 @@ class Amp:
                     found[inst["InstanceName"]] = inst
         return found
 
+    async def ask(self, inst, endpoint, args=None):
+        """One call to one instance's own API, logged in fresh."""
+        async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
+            base, session = await self._instance(http, inst)
+            return await self._call(http, base, session, endpoint, args)
+
+    async def status(self, inst) -> dict:
+        found = await self.ask(inst, "Core/GetStatus")
+        return found if isinstance(found, dict) else {}
+
+    async def settings_spec(self, inst) -> dict:
+        """Every setting AMP shows for this instance, by category."""
+        found = await self.ask(inst, "Core/GetSettingsSpec")
+        return found if isinstance(found, dict) else {}
+
+    async def set_config(self, inst, node, value):
+        result = await self.ask(inst, "Core/SetConfig", {"node": node, "value": value})
+        if isinstance(result, dict) and result.get("Status") is False:
+            raise AmpError(f"AMP didn't save {node}: {result.get('Reason') or 'no reason given'}")
+
+    async def send_console(self, inst, message):
+        await self.ask(inst, "Core/SendConsoleMessage", {"message": message})
+
     async def instance_power(self, name, action):
         """Start or stop a whole AMP instance (its manager, not just the game) through ADS."""
         endpoint = {"start": "ADSModule/StartInstance", "stop": "ADSModule/StopInstance"}[action]
