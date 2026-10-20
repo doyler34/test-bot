@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}AMP login · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/settings">← Settings</a></p>
+<h1>AMP login</h1>
+<p class="muted">The panel uses this to start, stop and restart servers, change in-game admins and change mods. Use an AMP account that can manage every server. It's checked before it's saved, and the password is never shown again.</p>
+
+<section class="card">
+  {% if amp and not error %}
+  <p><span class="pill on">Connected</span> as <b>{{ amp.username }}</b>. Servers it can see: {{ seen|join(", ") or "none" }}.</p>
+  {% elif amp %}
+  <p><span class="pill down">Not working</span> {{ error }}</p>
+  {% else %}
+  <p><span class="pill">Not set up</span> The panel has no AMP login yet.</p>
+  {% endif %}
+</section>
+
+<form class="card" method="post" action="/settings/amp" autocomplete="off">
+  <h2>{{ "Change the login" if amp else "Add the login" }}</h2>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="grid">
+    <label>AMP username <input name="username" value="{{ amp.username if amp else '' }}" autocapitalize="off" required></label>
+    <label>AMP password <input name="password" type="password" autocomplete="new-password" required></label>
+    <label>AMP address <span class="muted">(leave as it is)</span> <input name="url" value="{{ amp.url if amp else 'http://127.0.0.1:8080' }}"></label>
+  </div>
+  <button>Check and save</button>
+</form>
+{% endblock %}

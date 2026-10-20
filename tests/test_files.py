@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import tempfile
@@ -9,6 +10,7 @@ from aiohttp import FormData
 from aiohttp.test_utils import TestClient, TestServer
 
 from panel import auth, files
+from panel.amp import AmpError
 from panel.config import PanelConfig, ServerConfig
 from panel.db import PanelDB
 from panel.servers import ServerManager
@@ -143,3 +145,42 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([m["modId"] for m in files.parse_mods(stored["value"])], ["5DBD560C5148E1DA"])
         await self.client.post("/mods/Plus01", data={"csrf": token, "action": "add", "mod_id": "nope"})
         self.assertEqual(len(files.parse_mods(stored["value"])), 1)
+
+
+class AmpLoginTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.path = Path(tempfile.mkdtemp()) / "panel.local.json"
+        self.path.write_text('{"servers": []}\n')
+        patcher = mock.patch.dict(os.environ, {"PANEL_CONFIG": str(self.path)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.db = PanelDB(":memory:")
+        self.db.add_user("chief", auth.hash_password("chief-password"), "manager")
+        self.db.add_user("boss", auth.hash_password("boss-password"), "owner")
+        config = PanelConfig(database=":memory:", cookie_secure=False, servers=[])
+        self.app = create_app(config, self.db, ServerManager(config, self.db), start_manager=False)
+        self.client = TestClient(TestServer(self.app))
+        await self.client.start_server()
+        self.addAsyncCleanup(self.client.close)
+
+    async def test_a_manager_adds_the_amp_login_from_the_panel(self):
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+        self.assertEqual((await self.client.get("/settings/amp")).status, 403)
+        await self.client.post("/login", data={"username": "chief", "password": "chief-password"})
+        page = await (await self.client.get("/settings/amp")).text()
+        self.assertIn("Not set up", page)
+        token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+        refused = mock.AsyncMock(side_effect=AmpError("AMP refused the login."))
+        with mock.patch("panel.web.Amp.instances", refused):
+            await self.client.post("/settings/amp", data={"csrf": token, "username": "gaz", "password": "wrong"})
+        self.assertNotIn("amp", self.path.read_text())
+        with mock.patch("panel.web.Amp.instances", mock.AsyncMock(return_value={"Plus01": {}, "A3x01": {}})):
+            await self.client.post("/settings/amp", data={"csrf": token, "username": "gaz", "password": "right-one"})
+            page = await (await self.client.get("/settings/amp")).text()
+        self.assertEqual(json.loads(self.path.read_text())["amp"],
+                         {"url": "http://127.0.0.1:8080", "username": "gaz", "password": "right-one"})
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+        self.assertIn("Connected", page)
+        self.assertIn("A3x01, Plus01", page)
+        self.assertNotIn("right-one", page)
+        self.assertNotIn("right-one", str(self.db.all("SELECT detail FROM audit")))

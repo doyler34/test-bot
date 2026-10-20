@@ -39,6 +39,12 @@
     <p class="muted">Which mods each server loads, and every server's folder to browse, edit and upload to, like AMP's File Manager.</p>
   </a>
   {% endif %}
+  {% if can("console") %}
+  <a class="card" href="/settings/amp">
+    <h2>AMP login</h2>
+    <p class="muted">The AMP account the panel uses for power buttons, in-game admins and mods.</p>
+  </a>
+  {% endif %}
   {% if can("mortar") %}
   <a class="card" href="/mortar">
     <h2>Mortar</h2>

@@ -10,6 +10,7 @@ import secrets
 import shutil
 import sys
 import time
+import warnings
 from pathlib import Path
 from urllib.parse import quote
 
@@ -2372,13 +2373,50 @@ async def file_action(request):
     raise web.HTTPFound(back)
 
 
+async def amp_login_page(request):
+    """Give the panel its AMP login from here, so nobody needs a shell on the box for it."""
+    require(request, "console")
+    amp, seen, error = request.app[AMP], [], ""
+    if request.method == "POST":
+        form = await request.post()
+        url = form.get("url", "").strip() or "http://127.0.0.1:8080"
+        username, password = form.get("username", "").strip(), form.get("password", "")
+        if not url.startswith(("http://", "https://")) or not username or not password:
+            flash(request, "Fill in the AMP username and password.", "error")
+            raise web.HTTPFound("/settings/amp")
+        trial = Amp(url, username, password)
+        try:
+            seen = sorted(await trial.instances())
+        except AmpError as exc:
+            audit(request, "set AMP login", detail=f"{username}: {exc}", ok=False)
+            flash(request, f"Not saved: {exc}", "error")
+            raise web.HTTPFound("/settings/amp")
+        path = Path(os.getenv("PANEL_CONFIG", "panel.local.json"))
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        saved["amp"] = {"url": url, "username": username, "password": password}
+        path.write_text(json.dumps(saved, indent=2) + "\n", encoding="utf-8")
+        path.chmod(0o600)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            request.app[AMP] = trial
+        audit(request, "set AMP login", detail=username)
+        flash(request, f"Saved. The panel is logged into AMP as {username} and can see: {', '.join(seen) or 'no servers'}.")
+        raise web.HTTPFound("/settings/amp")
+    if amp:
+        try:
+            seen = sorted(await amp.instances())
+        except AmpError as exc:
+            error = str(exc)
+    return render(request, "amp_login.html", amp=amp, seen=seen, error=error)
+
+
 async def mods_page(request):
     require(request, "mods")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     on_disk, mods, error = files.downloaded_mods(base), [], ""
     if not request.app[AMP]:
-        error = "The panel isn't connected to AMP, so it can't read or change the mod list."
+        error = "The panel isn't connected to AMP yet, so it can't read or change the mod list. A manager adds the login under Settings → AMP login."
     else:
         try:
             instance = (await request.app[AMP].instances()).get(inst)
@@ -3113,6 +3151,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/attacks", attacks_page)
     app.router.add_post("/attacks/trust", trust_ip)
     app.router.add_post("/attacks/untrust", untrust_ip)
+    app.router.add_route("GET", "/settings/amp", amp_login_page)
+    app.router.add_post("/settings/amp", amp_login_page)
     app.router.add_get("/files", files_index)
     app.router.add_get("/files/{inst}", file_browser)
     app.router.add_post("/files/{inst}", file_action)
