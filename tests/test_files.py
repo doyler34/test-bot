@@ -418,6 +418,23 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse([n for n in names if "/addons/" in n or n.endswith("/addons")])
         self.assertTrue(self.db.one("SELECT 1 FROM audit WHERE action = 'backed up server'"))
 
+    async def test_a_new_manager_gets_the_walkthrough_once(self):
+        self.db.add_user("newmgr", auth.hash_password("newmgr-password"), "manager")
+        await self.client.post("/login", data={"username": "newmgr", "password": "newmgr-password"})
+        first = await (await self.client.get("/manage")).text()
+        self.assertIn('data-done="/tour/manage/done"', first)
+        self.assertIn("Welcome, newmgr", first)
+        self.assertIn("/tour/manage/done", await (await self.client.get("/manage")).text())
+        token = re.search(r'name="csrf" value="([^"]+)"', first).group(1)
+        await self.client.post("/tour/manage/done", data={"csrf": token})
+        again = await (await self.client.get("/manage")).text()
+        self.assertNotIn('id="tour"', again)
+        # A senior admin is not a manager, so it never shows for them.
+        await self.client.post("/logout", data={"csrf": token})
+        self.db.add_user("senior", auth.hash_password("senior-password"), "owner")
+        await self.client.post("/login", data={"username": "senior", "password": "senior-password"})
+        self.assertNotIn('id="tour"', await (await self.client.get("/mods/Plus01")).text())
+
 
 class AmpLoginTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

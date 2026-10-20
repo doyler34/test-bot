@@ -1,0 +1,106 @@
+{# The Server manager walkthrough, for managers the first time they open it. #}
+{% set inst = tour_inst or "" %}
+{% set names = ["Server list", "Overview", "Console", "Settings", "Mods", "Files", "New server"] %}
+{% set urls = ["/manage", "/manage/" ~ inst, "/manage/" ~ inst ~ "/console", "/manage/" ~ inst ~ "/settings",
+               "/mods/" ~ inst, "/files/" ~ inst, "/manage/new"] %}
+{% set ns = namespace(here=0) %}
+{% for url in urls %}{% if path == url %}{% set ns.here = loop.index0 %}{% endif %}{% endfor %}
+{% set here = ns.here %}
+{% set last = here == names|length - 1 %}
+{% macro onward() %}{% if not last %} data-next="{{ urls[here + 1] }}?tour=1"{% endif %}{% endmacro %}
+{% macro hint() %}{% if not last %}<p class="tour-hint">Next: {{ names[here + 1] }}.</p>{% endif %}{% endmacro %}
+
+<div id="tour" hidden data-chapters="{{ names|join(',') }}" data-done="/tour/manage/done">
+{% if here == 0 %}
+  <section data-step data-splash data-chapter="0">
+    <img class="tour-logo" src="/static/oyb-mark.svg" alt="">
+    <p class="tour-kicker">Server manager</p>
+    <h3>Welcome, {{ user.username }}</h3>
+    <p>As a <b>manager</b> you run the servers from here instead of AMP. This short walk-through shows you round. It only appears once, and you can take it again any time from <b>Guide</b>.</p>
+  </section>
+  <section data-step data-chapter="0" data-target=".mgr-totals">
+    <h3>The summary</h3>
+    <p>The top row counts the servers running, the players on, and the memory in use across the whole box.</p>
+  </section>
+  <section data-step data-chapter="0" data-target=".mgr-grid" {{ onward() }}>
+    <h3>One card per server</h3>
+    <p>Each card shows whether the game is <b>Running</b>, <b>Stopped</b> or <b>AMP off</b>, plus its players, map, memory, mods and admins. <b>Open</b> goes to that server's own tabs. Press <b>Start AMP</b> first if its AMP is off.</p>
+    {{ hint() }}
+  </section>
+{% elif here == 1 %}
+  <section data-step data-chapter="1" data-target=".manage-power">
+    <h3>Start, restart, stop, update</h3>
+    <p>These run the game server itself. Restart and Stop kick everyone on it, so they ask you first. Update stops the game while it downloads the latest version.</p>
+  </section>
+  <section data-step data-chapter="1" data-target=".manage-metrics">
+    <h3>The numbers</h3>
+    <p>CPU, memory and players, read live from AMP while the game runs.</p>
+  </section>
+  <section data-step data-chapter="1" data-target=".danger-zone" {{ onward() }}>
+    <h3>AMP itself</h3>
+    <p>AMP on or off is the server's manager, not the game. Only stop AMP when AMP is stuck: it stops the game too. Deleting a whole server is at the bottom, for the panel's owners only.</p>
+    {{ hint() }}
+  </section>
+{% elif here == 2 %}
+  <section data-step data-chapter="2" data-target=".console-live">
+    <h3>The live console</h3>
+    <p>This is the game's own log, newest at the bottom. It refreshes every few seconds, and you can scroll back up to read it.</p>
+  </section>
+  <section data-step data-chapter="2" data-target=".console-live .expand">
+    <h3>Full screen</h3>
+    <p>Tap <b>⤢</b> for the whole screen. Tap <b>✕</b> or outside the box to come back.</p>
+  </section>
+  <section data-step data-chapter="2" data-target=".console-form" {{ onward() }}>
+    <h3>Send a command</h3>
+    <p>Type anything the game understands, like <code>#players</code>, and press Send. It goes through AMP and into the audit log.</p>
+    {{ hint() }}
+  </section>
+{% elif here == 3 %}
+  <section data-step data-chapter="3" data-target=".set-top">
+    <h3>Every setting, in sections</h3>
+    <p>Basics, Admins, Mods, Gameplay, Performance, Saves, Network, then AMP's own. Jump to one with the buttons at the top, or type in the search box, for example <b>view</b> or <b>save</b>.</p>
+  </section>
+  <section data-step data-chapter="3" data-target=".set-row">
+    <h3>Change a value</h3>
+    <p>Type a new value, or flip a switch. The row is marked as you change it, and the counter at the bottom says how many changes are waiting.</p>
+  </section>
+  <section data-step data-chapter="3" data-target=".adm-list">
+    <h3>In-game admins</h3>
+    <p>Each admin shows by name. <b>Remove</b> takes one off. <b>Add</b> takes a name you type, or one tap for anyone marked as admin in the panel. They don't need the admin password.</p>
+  </section>
+  <section data-step data-chapter="3" data-target=".set-save" {{ onward() }}>
+    <h3>Save</h3>
+    <p>Press <b>Save changes</b> to write them to AMP. Most take effect when the server next restarts. Passwords are never shown: type a new one to change it.</p>
+    {{ hint() }}
+  </section>
+{% elif here == 4 %}
+  <section data-step data-chapter="4" data-target="section.card">
+    <h3>The mods a server loads</h3>
+    <p>Each one is listed with its ID. Downloaded but not loaded means it's on the box and can be put back with one tap.</p>
+  </section>
+  <section data-step data-chapter="4" data-target="form.card" {{ onward() }}>
+    <h3>Add or remove a mod</h3>
+    <p>Paste the mod's 16-character ID from its Workshop page and press Add. Remove takes it off the list. Changes apply when the server next starts.</p>
+    {{ hint() }}
+  </section>
+{% elif here == 5 %}
+  <section data-step data-chapter="5" data-target=".files-shortcuts">
+    <h3>Shortcuts</h3>
+    <p>The config, the mods folder and the game logs are one tap away.</p>
+  </section>
+  <section data-step data-chapter="5" data-target=".files-tools">
+    <h3>Upload, make and tidy</h3>
+    <p>Upload files into the folder you're in, or make a new folder or file. Tap a file to open it, edit, and press <b>Save</b>.</p>
+  </section>
+  <section data-step data-chapter="5" data-target=".files-edit" {{ onward() }}>
+    <h3>Careful with serverconfig.json</h3>
+    <p>AMP writes that file from its settings every time the server starts, so change those values in <b>Settings</b> instead.</p>
+    {{ hint() }}
+  </section>
+{% elif here == 6 %}
+  <section data-step data-chapter="6" data-target=".new-wizard" data-final>
+    <h3>Make a new server</h3>
+    <p>Work down the seven steps. Pick a server to copy from and everything fills in with its values. Tick <b>Start it when ready</b> to have it run by itself once the game has downloaded. Its progress shows on the Server manager.</p>
+  </section>
+{% endif %}
+</div>

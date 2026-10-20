@@ -106,7 +106,7 @@ function startTour(box) {
 
   function finish() {
     const csrf = document.querySelector("input[name=csrf]");
-    fetch("/tour/done", { method: "POST", credentials: "same-origin", headers: { "X-CSRF": csrf ? csrf.value : "" } });
+    fetch(box.dataset.done || "/tour/done", { method: "POST", credentials: "same-origin", headers: { "X-CSRF": csrf ? csrf.value : "" } });
     close();
     if (location.search.includes("tour=1")) history.replaceState(null, "", location.pathname + location.hash);
   }

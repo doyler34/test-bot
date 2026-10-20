@@ -8,7 +8,7 @@ FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"),
               "rcon": ("rcon", "server"), "admin": ()}
 
 # Columns added after their table first shipped: older databases get them on start.
-ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"),
+ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
                  *(("kills", c, "REAL") for c in ("victim_x", "victim_y", "killer_x", "killer_y")),
                  *(("box_samples", c, "REAL") for c in ("disk_pct", "disk_read", "disk_write", "temp", "conntrack",
                                                         "tcp_retrans", "softnet_drop", "nic_errors")))

@@ -1,0 +1,34 @@
+{% extends "guide/_page.html" %}
+{% block guide %}
+<p>Managers run the game servers from the <b>Server manager</b> in the sidebar, so nobody has to open AMP. Each server gets its own tabs.</p>
+
+<h2>The server list</h2>
+<p>The top row shows how many servers are running, the players on, and the memory in use. Each card shows the server's state (<b>Running</b>, <b>Stopped</b> or <b>AMP off</b>), its players, map, memory, mods and admins. <b>Open</b> goes to its tabs.</p>
+
+<h2>Overview</h2>
+<ul>
+  <li><b>Start, Restart, Stop, Update</b> control the game. Restart and Stop kick everyone on it, so they ask first.</li>
+  <li><b>Stop AMP</b> is only for when AMP itself is stuck: it stops the game too.</li>
+  <li><b>Danger zone</b> at the bottom deletes a whole server. Only the panel's owners can do it. It backs everything up first.</li>
+</ul>
+
+<h2>Console</h2>
+<p>The game's live log, newest at the bottom. Tap <b>⤢</b> for full screen. Type a command like <code>#players</code> and press Send. Every command goes in the audit log.</p>
+
+<h2>Settings</h2>
+<ol class="steps">
+  <li>Use the buttons at the top to jump to a section, or type in the search box.</li>
+  <li>Change a value or flip a switch. Changed rows are marked, and the counter at the bottom counts them.</li>
+  <li>Press <b>Save changes</b>. Most take effect when the server next restarts.</li>
+</ol>
+<p>Passwords are never shown: type a new one to change it. The <b>Admins</b> list lets you remove people, or add someone by name. Anyone on it is admin and GM in game.</p>
+
+<h2>Mods</h2>
+<p>Paste a mod's 16-character ID from its Workshop page and press <b>Add</b>. Remove takes one off. Mods that are already on the box but not loaded can be put back with one tap. Changes apply when the server next starts.</p>
+
+<h2>Files</h2>
+<p>Browse the server's folder, open a text file to edit it, and press <b>Save</b>. The shortcuts jump straight to the config, the mods folder and the logs. AMP rewrites <code>serverconfig.json</code> every time the server starts, so change those values in <b>Settings</b> instead.</p>
+
+<h2>Making a new server</h2>
+<p>Press <b>+ New server</b> and work down the steps. Pick a server to copy from and everything fills in with its values. Tick <b>Start it as soon as the game has downloaded</b> to have it run on its own. Its progress shows on the Server manager.</p>
+{% endblock %}

@@ -168,8 +168,13 @@ def render(request, template, **context):
     )
     if user and not template.startswith("_"):
         context.setdefault("notices", attention(request, list(request.app[MANAGER].states.values())))
-        context.setdefault("tour", template in TOUR_PAGES and (request.query.get("tour") == "1" or (
-            template == "dashboard.html" and user["toured"] < TOUR_VERSION)))
+        if template in MANAGE_TOUR_PAGES and user["role"] == "manager" and (
+                request.query.get("tour") == "1" or not user["manage_toured"]):
+            context.setdefault("tour", "manage")
+            context.setdefault("tour_inst", request.match_info.get("inst") or first_instance(request))
+        else:
+            context.setdefault("tour", template in TOUR_PAGES and (request.query.get("tour") == "1" or (
+                template == "dashboard.html" and user["toured"] < TOUR_VERSION)))
     html = request.app[JINJA].get_template(template).render(**context)
     headers = {"Content-Security-Policy": context["csp"]} if context.get("csp") else None
     return web.Response(text=html, content_type="text/html", headers=headers)
@@ -429,8 +434,23 @@ async def tour_done(request):
     return web.Response(status=204)
 
 
+async def manage_tour_done(request):
+    request.app[DB].write("UPDATE users SET manage_toured = 1 WHERE id = ?", request[USER]["id"])
+    return web.Response(status=204)
+
+
+MANAGE_TOUR_PAGES = ("manage_index.html", "manage_overview.html", "manage_console.html", "manage_settings.html",
+                     "mods.html", "files.html", "file_edit.html", "manage_new.html")
+
+
+def first_instance(request):
+    names = files.instances(request.app[FILES_ROOT])
+    return names[0] if names else ""
+
+
 GUIDE = [
     ("getting-started", "Getting started", "Logging in, finding your way round, roles and your password.", None),
+    ("server-manager", "The Server manager", "Running servers from the panel: power, console, settings, mods, files and new servers.", None),
     ("dashboard", "The dashboard", "Every server's card, the server panel, its live map, players and charts.", None),
     ("servers", "A server's own page", "Power buttons, the summary bars and the tabs.", None),
     ("live-feed", "The live feed and kill map", "Everything happening in game as it happens, and how to filter it.", None),
@@ -3602,6 +3622,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/account", account_page)
     app.router.add_post("/account", account)
     app.router.add_post("/tour/done", tour_done)
+    app.router.add_post("/tour/manage/done", manage_tour_done)
     app.router.add_get("/", dashboard)
     app.router.add_get("/cards.part", dashboard_part)
     app.router.add_get("/guide", guide)
