@@ -1660,3 +1660,21 @@ body.map-open { overflow: hidden; }
   .console-out { white-space: pre-wrap; word-break: break-word; }
   .card.full .console-out, .card.full .files-editor { height: calc(100dvh - 110px); }
 }
+
+/* Phone pass from the layout audit. */
+@media (max-width: 720px) {
+  table.stack td { white-space: normal; overflow-wrap: anywhere; }
+  td.detail, td.wrap { min-width: 0; overflow-wrap: anywhere; }
+  .feed li > span { min-width: 0; overflow-wrap: anywhere; }
+  .files-editor, .copy-box textarea { white-space: pre-wrap; }
+  .set-top { top: 56px; }
+  .srv-tabs, .tabs.dash-tabs, .manage-tabs { flex-wrap: wrap; overflow: visible; }
+  .chip, .expand, .fav, .icon-btn, .dash .ctl-btn { min-width: 36px; min-height: 36px; }
+  .ctl-switch button { min-height: 36px; }
+  input, select, textarea { font-size: 16px; }
+  .dash .ctl-players, .ctl-feed-body { max-height: none; overflow: visible; }
+  h2 { overflow-wrap: anywhere; }
+  .players-table td:first-child { white-space: normal; }
+  .kick-pick form { position: fixed; left: 8px; right: 8px; bottom: 70px; top: auto; width: auto; }
+}
+.console-live .console-out, .files-edit .files-editor { margin-top: 28px; }
