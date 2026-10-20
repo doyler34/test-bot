@@ -1693,3 +1693,9 @@ body.map-open { overflow: hidden; }
   .cards.menu-cards > a.card p { font-size: .8rem; line-height: 1.35; margin: 6px 0 0;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 }
+
+/* Phones: the last thing on every page clears the bottom menu (it's 64px tall). */
+@media (max-width: 720px) {
+  body.app main { padding-bottom: 104px; }
+  .dc-actions, .set-save { bottom: 64px; }
+}
