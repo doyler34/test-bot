@@ -248,6 +248,9 @@ select option { background: var(--card); }
   .pick b { font-size: 16px; }
   .pick { gap: 8px; padding-left: 10px; }
   .pick .icon { width: 22px; height: 22px; }
+  /* More map, and the hint kept clear of the zoom buttons on the right. */
+  #mapbox { height: clamp(300px, 58dvh, 560px); }
+  #hint { left: 10px; transform: none; max-width: calc(100% - 68px); white-space: normal; font-size: 13px; padding: 6px 10px; }
 }
 
 /* --- desktop: map left, solution right ------------------------------ */
