@@ -11,6 +11,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 import jinja2
 from aiohttp import web
@@ -23,7 +24,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, attacks, auth, ballistics, console, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
+from . import archive, attacks, auth, ballistics, console, files, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -117,6 +118,13 @@ def _clock(value):
     if time.strftime("%Y%m%d", time.localtime(value)) == time.strftime("%Y%m%d"):
         return time.strftime("%H:%M:%S", time.localtime(value))
     return time.strftime("%d %b %H:%M", time.localtime(value))
+
+
+def _filesize(size):
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
 
 
 def _hms(value):
@@ -282,7 +290,8 @@ async def session(request, handler):
         if request.path.startswith("/api/") or request.path.endswith((".part", ".json")):
             raise web.HTTPUnauthorized(text="Log in again.")
         raise web.HTTPFound("/login")
-    if request.method == "POST" and request.path.endswith(("/history/upload", "/picture/upload")):
+    if request.method == "POST" and (request.path.endswith(("/history/upload", "/picture/upload"))
+                                     or (request.path.startswith("/files/") and "do" in request.query)):
         # Streamed straight to disk, so the token rides in the URL instead of the form.
         if not csrf or request.query.get("csrf") != csrf:
             raise web.HTTPForbidden(text="This form expired. Go back, reload the page and try again.")
@@ -2252,6 +2261,180 @@ async def console_page(request):
                   timeout=console.TIMEOUT, keep=console.KEEP)
 
 
+FILES_ROOT = web.AppKey("files_root", Path)
+
+
+def server_folder(request, rel=""):
+    try:
+        return files.resolve(request.app[FILES_ROOT], request.match_info["inst"], rel)
+    except files.FileError as exc:
+        raise web.HTTPNotFound(text=str(exc))
+
+
+def file_url(inst, rel=""):
+    return "/files/" + inst + ("/" + quote(rel) if rel else "")
+
+
+async def files_index(request):
+    """Every AMP server folder, with its files and mods."""
+    if not (allowed(request, "files") or allowed(request, "mods")):
+        raise web.HTTPForbidden(text="You do not have permission for that.")
+    root = request.app[FILES_ROOT]
+    return render(request, "files_index.html", folders=files.instances(root), root=root)
+
+
+async def file_browser(request):
+    require(request, "files")
+    inst = request.match_info["inst"]
+    base, path = server_folder(request, request.match_info.get("rel", ""))
+    if not path.exists():
+        raise web.HTTPNotFound(text="That file or folder isn't there any more.")
+    rel = files.relative(base, path)
+    crumbs, walked = [], ""
+    for part in [p for p in rel.split("/") if p]:
+        walked = f"{walked}/{part}" if walked else part
+        crumbs.append((part, file_url(inst, walked)))
+    if path.is_dir():
+        return render(request, "files.html", inst=inst, rel=rel, crumbs=crumbs, entries=files.listing(path),
+                      here=file_url(inst, rel), up=file_url(inst, rel.rpartition("/")[0]) if rel else "/files",
+                      join=lambda name: file_url(inst, f"{rel}/{name}" if rel else name))
+    if request.query.get("download"):
+        return web.FileResponse(path, headers={"Content-Disposition": f'attachment; filename="{path.name}"'})
+    return render(request, "file_edit.html", inst=inst, rel=rel, crumbs=crumbs, name=path.name,
+                  size=path.stat().st_size, text=files.read_text(path), here=file_url(inst, rel),
+                  up=file_url(inst, rel.rpartition("/")[0]), max_edit=files.MAX_EDIT)
+
+
+async def file_action(request):
+    require(request, "files")
+    inst = request.match_info["inst"]
+    base, path = server_folder(request, request.match_info.get("rel", ""))
+    rel = files.relative(base, path)
+    back = file_url(inst, rel)
+    action = request.query.get("do", "")
+    try:
+        if action == "upload":
+            if not path.is_dir():
+                raise files.FileError("Uploads go into a folder.")
+            reader = await request.multipart()
+            done = []
+            while (part := await reader.next()) is not None:
+                if part.filename:
+                    size = await files.save_upload(path, Path(part.filename).name, part_chunks(part))
+                    done.append(part.filename)
+                    audit(request, "uploaded file", inst, f"{rel}/{part.filename}".lstrip("/"), f"{size // 1024} KB")
+            flash(request, f"Uploaded {', '.join(done)}." if done else "Choose a file to upload.",
+                  "ok" if done else "error")
+        elif action == "save":
+            if not path.is_file():
+                raise files.FileError("Only a file can be saved.")
+            text = None
+            if request.content_type.startswith("multipart/"):
+                reader = await request.multipart()
+                while (part := await reader.next()) is not None:
+                    if part.name == "text":
+                        text = await part.text()
+            else:
+                text = (await request.post()).get("text")
+            if text is None or len(text.encode()) > files.MAX_EDIT:
+                raise files.FileError("That's too big to save from here.")
+            files.write_text(path, text)
+            audit(request, "edited file", inst, rel)
+            flash(request, f"Saved {path.name}.")
+        else:
+            form = await request.post()
+            kind, name = form.get("action", ""), form.get("name", "").strip()
+            if kind in ("folder", "file"):
+                if not path.is_dir() or not name or "/" in name or name in (".", ".."):
+                    raise files.FileError("Pick a name without slashes.")
+                target = path / name
+                if kind == "folder":
+                    files.make_folder(target)
+                else:
+                    if target.exists():
+                        raise files.FileError(f"{name} already exists.")
+                    files.write_text(target, "")
+                audit(request, f"made {kind}", inst, files.relative(base, target))
+                back = file_url(inst, files.relative(base, target))
+            elif kind == "rename":
+                target = files.rename(path, name)
+                audit(request, "renamed file", inst, rel, files.relative(base, target))
+                back = file_url(inst, files.relative(base, target.parent))
+            elif kind == "delete":
+                files.delete(base, path)
+                audit(request, "deleted file", inst, rel)
+                flash(request, f"Deleted {path.name}.")
+                back = file_url(inst, rel.rpartition("/")[0])
+            else:
+                raise web.HTTPBadRequest(text="Unknown action.")
+    except (files.FileError, OSError) as exc:
+        flash(request, str(exc), "error")
+    raise web.HTTPFound(back)
+
+
+async def mods_page(request):
+    require(request, "mods")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    on_disk, mods, error = files.downloaded_mods(base), [], ""
+    if not request.app[AMP]:
+        error = "The panel isn't connected to AMP, so it can't read or change the mod list."
+    else:
+        try:
+            instance = (await request.app[AMP].instances()).get(inst)
+            if not instance:
+                raise AmpError(f"AMP has no instance called {inst}.")
+            mods = files.parse_mods(await request.app[AMP].setting(instance, "mods"))
+        except AmpError as exc:
+            error = str(exc)
+    using = {m["modId"] for m in mods}
+    spare = sorted(((mod_id, info) for mod_id, info in on_disk.items() if mod_id not in using),
+                   key=lambda item: item[1]["name"].lower())
+    return render(request, "mods.html", inst=inst, mods=mods, on_disk=on_disk, spare=spare, error=error,
+                  can_files=allowed(request, "files"))
+
+
+async def mods_change(request):
+    require(request, "mods")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    form = await request.post()
+    action = form.get("action", "")
+    mod_id = form.get("mod_id", "").strip().upper()
+    name = form.get("name", "").strip()
+    version = form.get("version", "").strip()
+    back = f"/mods/{inst}"
+    if not files.MOD_ID.match(mod_id):
+        flash(request, "A mod ID is 16 letters and numbers, like 60C4CE4888FF4621. It's on the mod's Workshop page.", "error")
+        raise web.HTTPFound(back)
+    if action == "add" and not name:
+        name = files.downloaded_mods(base).get(mod_id, {}).get("name", mod_id)
+
+    def change(value):
+        mods = [m for m in files.parse_mods(value) if m["modId"] != mod_id]
+        if action == "add":
+            mod = {"modId": mod_id, "name": name}
+            if version:
+                mod["version"] = version
+            mods.append(mod)
+        return files.format_mods(mods)
+
+    if action not in ("add", "remove") or not request.app[AMP]:
+        raise web.HTTPBadRequest(text="Unknown action.")
+    try:
+        instance = (await request.app[AMP].instances()).get(inst)
+        if not instance:
+            raise AmpError(f"AMP has no instance called {inst}.")
+        await request.app[AMP].change_setting(instance, "mods", change)
+    except AmpError as exc:
+        audit(request, f"{action} mod", inst, mod_id, str(exc), ok=False)
+        flash(request, str(exc), "error")
+        raise web.HTTPFound(back)
+    audit(request, f"{action} mod", inst, mod_id, name)
+    flash(request, f"{'Added' if action == 'add' else 'Removed'} {name or mod_id}. It applies when {inst} next restarts.")
+    raise web.HTTPFound(back)
+
+
 async def network_page(request):
     require(request, "box")
     db, manager = request.app[DB], request.app[MANAGER]
@@ -2828,6 +3011,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[STATS] = OybStats(config.oyb_data)
     app[NETCHECK] = {}
     app[CONSOLE] = {}
+    app[FILES_ROOT] = files.instances_root(config.servers)
     app[PICTURES] = Path(config.database).resolve().parent / "server-pictures"
     app[BM] = BanSync(app[DB], config.battlemetrics_token, config.battlemetrics_ban_list) \
         if config.battlemetrics_token else None
@@ -2835,7 +3019,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
     env.filters.update(axis=_axis, rolename=lambda role: auth.ROLE_NAMES.get(role, role), ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb,
-                       part=lambda zone: body_part(zone) if zone else "")
+                       part=lambda zone: body_part(zone) if zone else "", filesize=_filesize)
     env.globals.update(ban_reasons=reason_options(BAN_REASONS), kick_reasons=reason_options(KICK_REASONS))
     app[JINJA] = env
 
@@ -2929,6 +3113,13 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/attacks", attacks_page)
     app.router.add_post("/attacks/trust", trust_ip)
     app.router.add_post("/attacks/untrust", untrust_ip)
+    app.router.add_get("/files", files_index)
+    app.router.add_get("/files/{inst}", file_browser)
+    app.router.add_post("/files/{inst}", file_action)
+    app.router.add_get("/files/{inst}/{rel:.*}", file_browser)
+    app.router.add_post("/files/{inst}/{rel:.*}", file_action)
+    app.router.add_get("/mods/{inst}", mods_page)
+    app.router.add_post("/mods/{inst}", mods_change)
     app.router.add_route("GET", "/console", console_page)
     app.router.add_post("/console", console_page)
     app.router.add_route("GET", "/network", network_page)

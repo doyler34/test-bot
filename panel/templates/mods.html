@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ inst }} mods · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/files">← Server files & mods</a></p>
+<h1>{{ inst }} mods</h1>
+<p class="muted">The mods this server loads, saved into AMP. Changes apply when the server next restarts; the game downloads any it doesn't have yet.{% if can_files %} <a href="/files/{{ inst }}">Open its files</a>.{% endif %}</p>
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+<section class="card">
+  <h2>Loaded ({{ mods|length }})</h2>
+  {% if mods %}
+  <div class="scroll"><table class="stack">
+    <thead><tr><th>Mod</th><th>ID</th><th>On disk</th><th></th></tr></thead>
+    <tbody>
+    {% for m in mods %}
+    <tr>
+      <td class="strong">{{ m.name or "(no name)" }}{% if m.version %} <span class="muted">v{{ m.version }}</span>{% endif %}</td>
+      <td class="mono" data-label="ID">{{ m.modId }}</td>
+      <td data-label="On disk">{{ "Yes" if m.modId in on_disk else "Not yet" }}</td>
+      <td>
+        <form method="post" action="/mods/{{ inst }}" data-confirm="Take {{ m.name or m.modId }} off {{ inst }}?">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="remove">
+          <input type="hidden" name="mod_id" value="{{ m.modId }}"><input type="hidden" name="name" value="{{ m.name }}">
+          <button class="small ghost">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% elif not error %}
+  <p class="muted">No mods: this server runs vanilla.</p>
+  {% endif %}
+</section>
+
+<form class="card" method="post" action="/mods/{{ inst }}">
+  <h2>Add a mod</h2>
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add">
+  <div class="grid">
+    <label>Mod ID <input name="mod_id" class="mono" placeholder="60C4CE4888FF4621" maxlength="16" required autocapitalize="characters" autocomplete="off"></label>
+    <label>Name <input name="name" placeholder="ACE Core"></label>
+    <label>Version <span class="muted">(blank = latest)</span> <input name="version" placeholder=""></label>
+  </div>
+  <button>Add mod</button>
+</form>
+
+{% if spare %}
+<section class="card">
+  <h2>Downloaded but not loaded ({{ spare|length }})</h2>
+  <p class="muted">Already on this server's disk from before, so they start straight away. Add puts one back on the list.</p>
+  <div class="scroll"><table class="stack">
+    <tbody>
+    {% for mod_id, info in spare %}
+    <tr>
+      <td class="strong">{{ info.name }}</td>
+      <td class="mono" data-label="ID">{{ mod_id }}</td>
+      <td>
+        <form method="post" action="/mods/{{ inst }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add">
+          <input type="hidden" name="mod_id" value="{{ mod_id }}"><input type="hidden" name="name" value="{{ info.name }}">
+          <button class="small">Add</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

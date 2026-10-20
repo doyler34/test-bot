@@ -30,8 +30,10 @@ PERMISSIONS = {
     "mortar": "owner",
     "box": "owner",
     "cards": "owner",
-    # Runs commands on the box itself.
+    "mods": "owner",
+    # Runs commands on the box itself, or changes its files.
     "console": "manager",
+    "files": "manager",
 }
 
 # Everything an owner can switch on or off for one person, whatever their role.
@@ -52,6 +54,7 @@ GRANTS = (
     ("game_admins", "Make players admin in game (through AMP)"),
     ("sus", "Change the Sus check settings"),
     ("mortar", "Use the mortar calculator (being tested)"),
+    ("mods", "Change which mods each server runs"),
     ("discord", "Every Discord page"),
 )
 

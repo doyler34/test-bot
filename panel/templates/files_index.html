@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Server files & mods · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/settings">← Settings</a></p>
+<h1>Server files & mods</h1>
+<p class="muted">Every server AMP runs on this box. <b>Mods</b> is the list of mods that server loads; <b>Files</b> is its whole folder, like AMP's File Manager. Mod changes apply when that server next restarts.</p>
+{% if folders %}
+<div class="cards">
+  {% for f in folders %}
+  <section class="card files-server">
+    <h2>{{ f }}</h2>
+    <div class="row-actions">
+      {% if can("mods") %}<a class="button small" href="/mods/{{ f }}">Mods</a>{% endif %}
+      {% if can("files") %}<a class="button small ghost" href="/files/{{ f }}">Files</a>{% endif %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No server folders found in <code>{{ root }}</code>.</p>
+{% endif %}
+{% endblock %}

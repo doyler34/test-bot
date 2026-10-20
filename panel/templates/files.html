@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ inst }} files · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="{{ up }}">← Back</a></p>
+<h1>{{ inst }}</h1>
+<p class="files-path mono"><a href="/files/{{ inst }}">{{ inst }}</a>{% for name, url in crumbs %} / <a href="{{ url }}">{{ name }}</a>{% endfor %}</p>
+
+<div class="files-tools">
+  <form method="post" action="{{ here }}?do=upload&amp;csrf={{ csrf }}" enctype="multipart/form-data" class="files-upload">
+    <input type="file" name="file" multiple required>
+    <button class="small">Upload here</button>
+  </form>
+  <form method="post" action="{{ here }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="name" placeholder="New name" required>
+    <button class="small ghost" name="action" value="folder">New folder</button>
+    <button class="small ghost" name="action" value="file">New file</button>
+  </form>
+</div>
+
+<div class="scroll"><table class="files-list">
+  <thead><tr><th>Name</th><th>Size</th><th>Changed</th></tr></thead>
+  <tbody>
+  {% for e in entries %}
+  <tr>
+    <td><a href="{{ join(e.name) }}">{{ "📁 " if e.dir else "" }}{{ e.name }}</a></td>
+    <td class="muted">{{ "" if e.dir else e.size|filesize }}</td>
+    <td class="muted" title="{{ e.modified|ts }}">{{ e.modified|ago }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="3" class="muted">Empty folder.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+{% if rel %}
+<details class="card files-danger">
+  <summary>Rename or delete this folder</summary>
+  <form method="post" action="{{ here }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="name" value="{{ crumbs[-1][0] }}" required>
+    <button class="small ghost" name="action" value="rename">Rename</button>
+  </form>
+  <form method="post" action="{{ here }}" data-confirm="Delete the folder {{ crumbs[-1][0] }} and everything in it? This can't be undone.">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="small danger" name="action" value="delete">Delete folder</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

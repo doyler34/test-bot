@@ -127,6 +127,39 @@ class Amp:
         self.nodes[inst["InstanceID"]] = matches[0]
         return matches[0]
 
+    async def _setting_node(self, http, base, session, inst, key):
+        cached = self.nodes.get((inst["InstanceID"], key))
+        if cached:
+            return cached
+        spec = await self._call(http, base, session, "Core/GetSettingsSpec")
+        settings = [s for group in (spec.values() if isinstance(spec, dict) else []) for s in group or []
+                    if isinstance(s, dict) and s.get("Node")]
+        matches = [s["Node"] for s in settings if s["Node"].lower().split(".")[-1] == key.lower()]
+        if len(matches) != 1:
+            raise AmpError(f"Couldn't find the {key} setting in AMP for {inst.get('FriendlyName') or inst['InstanceName']}.")
+        self.nodes[(inst["InstanceID"], key)] = matches[0]
+        return matches[0]
+
+    async def setting(self, inst, key) -> str:
+        async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
+            base, session = await self._instance(http, inst)
+            node = await self._setting_node(http, base, session, inst, key)
+            found = await self._call(http, base, session, "Core/GetConfig", {"node": node})
+        return str(found.get("CurrentValue") or "") if isinstance(found, dict) else ""
+
+    async def change_setting(self, inst, key, change):
+        """Reads the value fresh, runs change() on it and writes the result back,
+        so an edit made in AMP in the meantime isn't lost."""
+        async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
+            base, session = await self._instance(http, inst)
+            node = await self._setting_node(http, base, session, inst, key)
+            found = await self._call(http, base, session, "Core/GetConfig", {"node": node})
+            value = change(str(found.get("CurrentValue") or "") if isinstance(found, dict) else "")
+            result = await self._call(http, base, session, "Core/SetConfig", {"node": node, "value": value})
+            if isinstance(result, dict) and result.get("Status") is False:
+                raise AmpError(f"AMP didn't save it: {result.get('Reason') or 'no reason given'}")
+        return value
+
     async def admins(self, inst) -> list[str]:
         async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
             base, session = await self._instance(http, inst)

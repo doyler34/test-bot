@@ -1511,3 +1511,20 @@ body.map-open { overflow: hidden; }
   .console-form { flex-direction: column; align-items: stretch; }
   .console-out { font-size: .72rem; }
 }
+
+/* server files & mods */
+.files-server h2 { margin: 0 0 10px; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.files-path { font-size: .85rem; color: var(--muted); word-break: break-all; margin: 0 0 14px; }
+.files-tools { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 14px; }
+.files-tools form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
+.files-tools input[name=name] { width: 12em; }
+.files-list td:first-child { word-break: break-all; }
+.files-list td:not(:first-child) { white-space: nowrap; }
+.files-editor { width: 100%; min-height: 60vh; font-size: .82rem; line-height: 1.45; tab-size: 4; white-space: pre; }
+.files-danger summary { cursor: pointer; color: var(--muted); }
+.files-danger form { margin-top: 10px; }
+@media (max-width: 720px) {
+  .files-tools input[name=name] { width: 100%; }
+  .files-editor { min-height: 50vh; font-size: .75rem; }
+}
