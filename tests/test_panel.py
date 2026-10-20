@@ -1928,12 +1928,15 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         db.first_manager("gazlagom")
         self.assertEqual(db.user_by_name("Gazlagom")["role"], "owner")
 
-    async def test_console_is_for_managers(self):
+    async def test_console_is_only_for_the_named_accounts(self):
         await self.login("boss", "boss-password")
         self.assertEqual((await self.client.get("/console")).status, 403)
         self.assertNotIn('href="/console"', await (await self.client.get("/data")).text())
         self.db.add_user("chief", auth.hash_password("chief-password"), "manager")
         await self.login("chief", "chief-password")
+        self.assertEqual((await self.client.get("/console")).status, 403)        # a manager, but not named
+        self.db.add_user("Gazlagom", auth.hash_password("gaz-password-1"), "moderator")
+        await self.login("Gazlagom", "gaz-password-1")
         token = await self.csrf("/console")
         await self.client.post("/console", data={"csrf": token, "command": "echo hello-from-the-box; exit 3"})
         page = await (await self.client.get("/console")).text()

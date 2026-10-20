@@ -180,6 +180,9 @@ def flash(request, message, kind="ok"):
 
 
 def allowed(request, permission):
+    if permission == "console":
+        # Commands on the box are named people only, not a role.
+        return request[USER]["username"].lower() in request.app[CONFIG].console_users
     return auth.allows(request[USER]["role"], request.get(GRANTS, set()), permission)
 
 
@@ -2279,7 +2282,7 @@ def file_url(inst, rel=""):
 AMP_STATES = {0: "Stopped", 5: "Getting ready", 7: "Configuring", 10: "Starting", 20: "Running", 30: "Restarting",
               40: "Stopping", 45: "Going to sleep", 50: "Asleep", 60: "Waiting", 70: "Installing", 75: "Updating",
               80: "Waiting for input", 100: "Failed", 200: "Suspended", 250: "Maintenance"}
-MANAGE_TABS = (("overview", "Overview", "power"), ("console", "Console", "console"), ("settings", "Settings", "amp_settings"),
+MANAGE_TABS = (("overview", "Overview", "power"), ("console", "Console", "files"), ("settings", "Settings", "amp_settings"),
                ("mods", "Mods", "mods"), ("files", "Files", "files"))
 
 
@@ -2339,7 +2342,7 @@ async def manage_power(request):
 
 
 async def manage_console(request):
-    require(request, "console")
+    require(request, "files")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     if request.method == "POST":

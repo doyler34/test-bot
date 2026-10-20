@@ -54,6 +54,8 @@ class PanelConfig:
     battlemetrics_token: str = ""
     battlemetrics_ban_list: str = ""
     amp: dict = field(default_factory=dict)
+    # The only panel accounts that get the box console, whatever their role.
+    console_users: tuple[str, ...] = ("gazlagom", "burd")
     servers: list[ServerConfig] = field(default_factory=list)
 
     def server(self, server_id: str) -> ServerConfig | None:
@@ -137,5 +139,6 @@ def load_config(path: str | os.PathLike | None = None) -> PanelConfig:
         battlemetrics_ban_list=str(raw.get("battlemetrics_ban_list") or "").strip(),
         amp={"url": amp.get("url", "").strip() or "http://127.0.0.1:8080", "username": amp["username"].strip(),
              "password": amp.get("password", "")} if amp.get("username") else {},
+        console_users=tuple(str(u).strip().lower() for u in raw.get("console_users", ("gazlagom", "burd")) if str(u).strip()),
         servers=servers,
     )

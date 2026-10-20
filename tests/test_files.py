@@ -295,7 +295,7 @@ class AmpLoginTests(unittest.IsolatedAsyncioTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.db = PanelDB(":memory:")
-        self.db.add_user("chief", auth.hash_password("chief-password"), "manager")
+        self.db.add_user("burd", auth.hash_password("burd-password"), "manager")
         self.db.add_user("boss", auth.hash_password("boss-password"), "owner")
         config = PanelConfig(database=":memory:", cookie_secure=False, servers=[])
         self.app = create_app(config, self.db, ServerManager(config, self.db), start_manager=False)
@@ -306,7 +306,7 @@ class AmpLoginTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_manager_adds_the_amp_login_from_the_panel(self):
         await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
         self.assertEqual((await self.client.get("/settings/amp")).status, 403)
-        await self.client.post("/login", data={"username": "chief", "password": "chief-password"})
+        await self.client.post("/login", data={"username": "burd", "password": "burd-password"})
         page = await (await self.client.get("/settings/amp")).text()
         self.assertIn("Not set up", page)
         token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
