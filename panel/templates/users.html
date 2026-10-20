@@ -20,7 +20,7 @@
     </label>
   </div>
   <button>Create account</button>
-  <p class="muted"><b>Moderator</b>: watch the servers, look players up (kill logs included), kick, add notes. <b>Admin</b>: also ban, and see the audit log. <b>Senior admin</b>: everything else: unbanning, IPs and other accounts on the same IP, restarts, uploads, Discord, the website and admin accounts. <b>Manager</b>: all of that, plus the console that runs commands on the box. Only a manager can make another manager.</p>
+  <p class="muted"><b>Moderator</b>: watch the servers, look players up (kill logs included), kick, add notes. <b>Admin</b>: also ban, and see the audit log. <b>Senior admin</b>: everything else: unbanning, IPs and other accounts on the same IP, restarts, uploads, Discord, the website and admin accounts. <b>Manager</b>: all of that plus the Server manager; the box console and deleting servers are ticked per person under <b>Edit access</b>. Only the panel's owners can make or change managers.</p>
   <p class="muted">Need someone to have just one extra thing, like the Start here message in Discord? Give them the role, then use <b>Edit access</b> next to their name.</p>
 </form>
 
@@ -28,7 +28,7 @@
   <thead><tr><th>Username</th><th>Role</th><th>Last login</th><th>Access</th><th></th></tr></thead>
   <tbody>
   {% for u in rows %}
-  {% set locked = u.role == "manager" and user.role != "manager" %}
+  {% set locked = (u.role == "manager" or u.id in owners) and not i_own %}
   <tr class="{{ 'bad' if u.disabled else '' }}">
     <td>{{ u.username }}{% if u.disabled %} <span class="muted">(disabled)</span>{% endif %}</td>
     <td data-label="Role">
@@ -43,7 +43,9 @@
     </td>
     <td data-label="Last login">{{ u.last_login|ago }}</td>
     <td class="access" data-label="Access">
-      {% if u.role in ("owner", "manager") %}<span class="muted">Everything{{ ", plus the console" if u.role == "manager" }}</span>
+      {% if u.id in owners %}<span class="muted">Everything · panel owner</span>
+      {% elif u.role == "owner" %}<span class="muted">Everything</span>
+      {% elif locked %}{{ access_summary(grants.get(u.id, ())) }}
       {% else %}
       {{ access_summary(grants.get(u.id, ())) }} · <a href="/users/{{ u.id }}/access">Edit access</a>
       {% endif %}

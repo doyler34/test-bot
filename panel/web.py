@@ -179,10 +179,15 @@ def flash(request, message, kind="ok"):
     request.app[FLASH].setdefault(request[USER]["id"], []).append((kind, message))
 
 
+def named(request, user=None):
+    """The panel's own owners (console_users in the config): they always have everything,
+    and they're the only ones who can manage manager accounts."""
+    return (user or request[USER])["username"].lower() in request.app[CONFIG].console_users
+
+
 def allowed(request, permission):
-    if permission == "console":
-        # Commands on the box are named people only, not a role.
-        return request[USER]["username"].lower() in request.app[CONFIG].console_users
+    if named(request):
+        return True
     return auth.allows(request[USER]["role"], request.get(GRANTS, set()), permission)
 
 
@@ -2338,7 +2343,7 @@ async def manage_create(request):
 async def manage_delete(request):
     """Delete a whole server, carefully: named accounts only, its name typed out,
     stopped first and backed up before AMP removes it."""
-    require(request, "console")
+    require(request, "delete_servers")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     form = await request.post()
@@ -2384,7 +2389,7 @@ async def manage_overview(request):
     metrics = [{"name": name, **m} for name, m in (status.get("Metrics") or {}).items() if isinstance(m, dict)]
     return render(request, "manage_overview.html", inst=inst, running=running, error=error, metrics=metrics,
                   state=AMP_STATES.get(status.get("State"), "Unknown") if status else "", uptime=status.get("Uptime", ""),
-                  has_amp=bool(request.app[AMP]), can_delete=allowed(request, "console"),
+                  has_amp=bool(request.app[AMP]), can_delete=allowed(request, "delete_servers"),
                   tabs=manage_tabs(request, inst, "overview"))
 
 
@@ -3252,14 +3257,14 @@ async def audit_page(request):
 
 def users_view(request, created=None):
     db = request.app[DB]
+    owners = {u["id"] for u in db.users() if named(request, u)}
     return render(request, "users.html", rows=db.users(), roles=assignable_roles(request), created=created,
-                  grants=db.all_grants(), access_summary=access_summary)
+                  grants=db.all_grants(), access_summary=access_summary, owners=owners, i_own=named(request))
 
 
 def assignable_roles(request):
-    """Only a manager can make a manager."""
-    manager = request[USER]["role"] == "manager"
-    return [r for r in auth.ROLES if manager or r != "manager"]
+    """Only the panel's owners can make a manager."""
+    return [r for r in auth.ROLES if named(request) or r != "manager"]
 
 
 def access_summary(grants):
@@ -3281,8 +3286,10 @@ async def access_page(request):
     require(request, "users")
     db = request.app[DB]
     target = db.user(int(request.match_info["user_id"]))
-    if target is None or target["role"] in auth.TOP:
+    if target is None or target["role"] == "owner" or named(request, target):
         raise web.HTTPFound("/users")
+    if target["role"] == "manager" and not named(request):
+        raise web.HTTPForbidden(text="Only the panel's owners can change a manager's access.")
     mine = db.grants(target["id"])
     return render(request, "user_access.html", target=target, mine=mine, grant_list=auth.GRANTS,
                   discord_pages=DISCORD_PAGES, role_can=auth.can,
@@ -3315,8 +3322,8 @@ async def change_user(request):
     target = db.user(int(request.match_info["user_id"]))
     if target is None:
         raise web.HTTPNotFound(text="No such account.")
-    if target["role"] == "manager" and request[USER]["role"] != "manager":
-        raise web.HTTPForbidden(text="Only a manager can change a manager's account.")
+    if (target["role"] == "manager" or named(request, target)) and not named(request):
+        raise web.HTTPForbidden(text="Only the panel's owners can change a manager's account.")
     form = await request.post()
     action = form.get("action", "")
     is_owner = target["role"] in auth.TOP and not target["disabled"]

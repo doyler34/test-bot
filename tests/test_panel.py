@@ -1898,35 +1898,39 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.client.get("/discord/posts/nothere1")).status, 404)
         self.assertEqual((await self.client.get("/discord/post")).status, 404)
 
-    async def test_only_a_manager_makes_a_manager(self):
+    async def test_only_the_panel_owners_make_or_change_managers(self):
         self.assertTrue(auth.allows("manager", set(), "unban"))
-        self.assertTrue(auth.allows("manager", {"-unban"}, "unban"))
-        self.assertFalse(auth.allows("owner", set(), "console"))
+        self.assertFalse(auth.allows("manager", {"-unban"}, "unban"))      # a manager's access can be trimmed
+        self.assertTrue(auth.allows("owner", {"-unban"}, "unban"))         # a senior admin's can't
+        for role in auth.ROLES:
+            self.assertFalse(auth.allows(role, set(), "console"))         # only ever ticked per person
+            self.assertFalse(auth.allows(role, set(), "delete_servers"))
+        self.assertTrue(auth.allows("manager", {"console"}, "console"))
         boss = self.db.user_by_name("boss")["id"]
         chief = self.db.add_user("chief", auth.hash_password("chief-password"), "manager")
         await self.login("boss", "boss-password")
         token = await self.csrf("/users")
-        page = await (await self.client.get("/users")).text()
-        self.assertNotIn('<option value="manager"', page)
+        self.assertNotIn('<option value="manager"', await (await self.client.get("/users")).text())
         response = await self.client.post(f"/users/{boss}", data={"csrf": token, "action": "role", "role": "manager"})
         self.assertEqual(response.status, 400)
         response = await self.client.post(f"/users/{chief}", data={"csrf": token, "action": "disable"})
         self.assertEqual(response.status, 403)
+        self.assertEqual((await self.client.get(f"/users/{chief}/access")).status, 403)
         self.assertEqual(self.db.user(chief)["role"], "manager")
-        # With a manager about, the senior admin isn't the last one at the top.
         self.assertEqual(self.db.owner_count(), 2)
 
-    def test_gazlagom_is_the_first_manager(self):
-        db = PanelDB(":memory:")
-        db.add_user("Gazlagom", auth.hash_password("gaz-password-1"), "owner")
-        db.add_user("other", auth.hash_password("other-password"), "owner")
-        db.first_manager("gazlagom")
-        self.assertEqual(db.user_by_name("Gazlagom")["role"], "manager")
-        # Only ever the first time: once there's a manager it's theirs to hand out.
-        db.write("UPDATE users SET role = 'owner' WHERE username = 'Gazlagom'")
-        db.write("UPDATE users SET role = 'manager' WHERE username = 'other'")
-        db.first_manager("gazlagom")
-        self.assertEqual(db.user_by_name("Gazlagom")["role"], "owner")
+        # A panel owner ticks the box console on for that manager.
+        self.db.add_user("Gazlagom", auth.hash_password("gaz-password-1"), "owner")
+        await self.login("Gazlagom", "gaz-password-1")
+        token = await self.csrf("/users")
+        page = await (await self.client.get(f"/users/{chief}/access")).text()
+        self.assertIn("Box console", page)
+        ticked = [g for g, _ in auth.GRANTS if auth.can("manager", g)] + ["console"]
+        await self.client.post(f"/users/{chief}", data=[("csrf", token), ("action", "grants")]
+                               + [("grant", g) for g in ticked])
+        self.assertEqual(self.db.grants(chief), {"console"})
+        await self.login("chief", "chief-password")
+        self.assertEqual((await self.client.get("/console")).status, 200)
 
     async def test_console_is_only_for_the_named_accounts(self):
         await self.login("boss", "boss-password")

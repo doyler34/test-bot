@@ -279,8 +279,10 @@ Locked out? On the box:
 cd ~/Arma-bot && .venv/bin/python -m panel passwd YOURNAME
 ```
 
-The manager role (everything, plus the Console that runs commands on the box)
-can only be given by another manager, or on the box:
+The manager role (everything plus the Server manager) can only be given or
+changed by the panel's owners (`console_users` in panel.local.json, gazlagom and
+burd by default), who also tick the box console and deleting servers on per
+person under Edit access. On the box:
 
 ```
 cd ~/Arma-bot && .venv/bin/python -m panel role YOURNAME manager

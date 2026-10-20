@@ -8,8 +8,10 @@ from .db import PanelDB, now
 ROLES = ("moderator", "admin", "owner", "manager")
 # What each role is called on screen; the stored names stay as they are.
 ROLE_NAMES = {"moderator": "moderator", "admin": "admin", "owner": "senior admin", "manager": "manager"}
-# Roles that have everything and can't have it taken off them.
+# The top roles: there must always be one of these, and they can't be given "extra" access.
 TOP = ("owner", "manager")
+# Only given to one person at a time from Edit access, never by a role.
+GRANT_ONLY = "nobody"
 
 PERMISSIONS = {
     "view": "moderator",
@@ -31,10 +33,11 @@ PERMISSIONS = {
     "box": "owner",
     "cards": "owner",
     "mods": "owner",
-    # Runs commands on the box itself, or changes its files.
-    "console": "manager",
     "files": "manager",
     "amp_settings": "manager",
+    # Commands on the box, and deleting a whole server: ticked per person.
+    "console": GRANT_ONLY,
+    "delete_servers": GRANT_ONLY,
 }
 
 # Everything an owner can switch on or off for one person, whatever their role.
@@ -56,6 +59,10 @@ GRANTS = (
     ("sus", "Change the Sus check settings"),
     ("mortar", "Use the mortar calculator (being tested)"),
     ("mods", "Change which mods each server runs"),
+    ("files", "Server manager: start and stop servers' AMP, files, game console"),
+    ("amp_settings", "Server manager: change AMP settings"),
+    ("console", "Box console: run commands on the machine"),
+    ("delete_servers", "Delete whole servers in the Server manager"),
     ("discord", "Every Discord page"),
 )
 
@@ -65,7 +72,7 @@ MIN_PASSWORD = 10
 
 def can(role: str, permission: str) -> bool:
     need = PERMISSIONS[permission.split(":")[0]]
-    return role in ROLES and ROLES.index(role) >= ROLES.index(need)
+    return role in ROLES and need in ROLES and ROLES.index(role) >= ROLES.index(need)
 
 
 def allows(role: str, grants, permission: str) -> bool:
@@ -73,7 +80,8 @@ def allows(role: str, grants, permission: str) -> bool:
     minus anything taken off them ("-ban"). Plain "discord" asks whether they may
     open any Discord page at all."""
     base = permission.split(":")[0]
-    if role not in TOP and (f"-{base}" in grants or f"-{permission}" in grants):
+    # Senior admins have everything; a manager's access can be trimmed like anyone's.
+    if role != "owner" and (f"-{base}" in grants or f"-{permission}" in grants):
         return False
     if can(role, permission) or base in grants or permission in grants:
         return True
