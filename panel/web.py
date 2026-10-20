@@ -2821,6 +2821,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app = web.Application(middlewares=[security, public_site, session], client_max_size=64 * 1024)
     app[CONFIG] = config
     app[DB] = db or PanelDB(config.database)
+    app[DB].first_manager("gazlagom")
     app[MANAGER] = manager or ServerManager(config, app[DB])
     app[THROTTLE] = auth.LoginThrottle()
     app[FLASH] = {}

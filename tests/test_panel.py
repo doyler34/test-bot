@@ -1916,6 +1916,18 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         # With a manager about, the senior admin isn't the last one at the top.
         self.assertEqual(self.db.owner_count(), 2)
 
+    def test_gazlagom_is_the_first_manager(self):
+        db = PanelDB(":memory:")
+        db.add_user("Gazlagom", auth.hash_password("gaz-password-1"), "owner")
+        db.add_user("other", auth.hash_password("other-password"), "owner")
+        db.first_manager("gazlagom")
+        self.assertEqual(db.user_by_name("Gazlagom")["role"], "manager")
+        # Only ever the first time: once there's a manager it's theirs to hand out.
+        db.write("UPDATE users SET role = 'owner' WHERE username = 'Gazlagom'")
+        db.write("UPDATE users SET role = 'manager' WHERE username = 'other'")
+        db.first_manager("gazlagom")
+        self.assertEqual(db.user_by_name("Gazlagom")["role"], "owner")
+
     async def test_console_is_for_managers(self):
         await self.login("boss", "boss-password")
         self.assertEqual((await self.client.get("/console")).status, 403)

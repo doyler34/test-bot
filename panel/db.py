@@ -355,6 +355,11 @@ class PanelDB:
     def user_by_name(self, username: str):
         return self.one("SELECT * FROM users WHERE username = ?", username)
 
+    def first_manager(self, username):
+        """Make this senior admin the manager, until there's one already."""
+        if not self.one("SELECT COUNT(*) FROM users WHERE role = 'manager'")[0]:
+            self.write("UPDATE users SET role = 'manager' WHERE username = ? COLLATE NOCASE AND role = 'owner'", username)
+
     def grants(self, user_id) -> set[str]:
         return {r["grant_key"] for r in self.all("SELECT grant_key FROM user_grants WHERE user_id = ?", user_id)}
 
