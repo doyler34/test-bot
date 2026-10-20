@@ -76,9 +76,13 @@ function startTour(box) {
       "splash" in step.dataset ? "Welcome" : "final" in step.dataset ? "All done" : chapters[chapter] || "";
     card.querySelector(".tour-dots").innerHTML = chapters.map((_, i) =>
       `<i class="${i < chapter || "final" in step.dataset ? "done" : i === chapter ? "on" : ""}"></i>`).join("");
-    card.querySelector(".tour-count").textContent = chapter >= 0 && !("splash" in step.dataset)
-      ? `${mine.indexOf(step) + 1 - mine.filter((s) => "splash" in s.dataset).length} of ${mine.length - mine.filter((s) => "splash" in s.dataset).length}`
-      : "";
+    // A page's steps are only part of the walk-through, so a count per page reads wrong.
+    // Where the walk-through is in sections ("Part 2 of 7") says where you really are.
+    const counted = steps.filter((s) => !("splash" in s.dataset));
+    const place = counted.indexOf(step);
+    card.querySelector(".tour-count").textContent = box.dataset.countSections !== undefined
+      ? (chapter >= 0 && !("splash" in step.dataset) ? `Part ${chapter + 1} of ${chapters.length}` : "")
+      : place >= 0 && counted.length > 1 ? `${place + 1} of ${counted.length}` : "";
     const body = card.querySelector(".tour-body");
     body.innerHTML = step.innerHTML;
     body.classList.remove("in");

@@ -36,7 +36,7 @@
     {% endfor %}
   </div>
 </section>
-<section class="card">
+<section class="card" data-amp-card>
   <h2>AMP</h2>
   <p class="muted">Stopping {{ inst }}'s AMP stops its game server too. Only needed when AMP itself is stuck.</p>
   <form method="post" action="/instances/{{ inst }}/stop" data-confirm="Stop {{ inst }}'s AMP? Its game server stops with it.">

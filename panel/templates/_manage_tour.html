@@ -10,7 +10,7 @@
 {% macro onward() %}{% if not last %} data-next="{{ urls[here + 1] }}?tour=1"{% endif %}{% endmacro %}
 {% macro hint() %}{% if not last %}<p class="tour-hint">Next: {{ names[here + 1] }}.</p>{% endif %}{% endmacro %}
 
-<div id="tour" hidden data-chapters="{{ names|join(',') }}" data-done="/tour/manage/done">
+<div id="tour" hidden data-chapters="{{ names|join(',') }}" data-done="/tour/manage/done" data-count-sections>
 {% if here == 0 %}
   <section data-step data-splash data-chapter="0">
     <img class="tour-logo" src="/static/oyb-mark.svg" alt="">
@@ -36,7 +36,7 @@
     <h3>The numbers</h3>
     <p>CPU, memory and players, read live from AMP while the game runs.</p>
   </section>
-  <section data-step data-chapter="1" data-target=".danger-zone" {{ onward() }}>
+  <section data-step data-chapter="1" data-target="[data-amp-card]" {{ onward() }}>
     <h3>AMP itself</h3>
     <p>AMP on or off is the server's manager, not the game. Only stop AMP when AMP is stuck: it stops the game too. Deleting a whole server is at the bottom, for the panel's owners only.</p>
     {{ hint() }}
