@@ -46,6 +46,9 @@ def instance_name(log_dir: str) -> str:
     return ""
 
 
+GAME_NODE = "Meta.GenericModule."
+
+
 class Amp:
     def __init__(self, url: str, username: str, password: str):
         self.url = url.rstrip("/")
@@ -114,6 +117,17 @@ class Amp:
         found = await self.ask(inst, "Core/GetSettingsSpec")
         return found if isinstance(found, dict) else {}
 
+    async def configs(self, inst, nodes) -> list[dict]:
+        """Each setting by node, read in one login; ones AMP doesn't know are left out."""
+        found = []
+        async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
+            base, session = await self._instance(http, inst)
+            for node in nodes:
+                setting = await self._call(http, base, session, "Core/GetConfig", {"node": node})
+                if isinstance(setting, dict) and setting.get("Name"):
+                    found.append({**setting, "Node": setting.get("Node") or node})
+        return found
+
     async def set_config(self, inst, node, value):
         result = await self.ask(inst, "Core/SetConfig", {"node": node, "value": value})
         if isinstance(result, dict) and result.get("Status") is False:
@@ -153,11 +167,19 @@ class Amp:
         settings = [s for group in (spec.values() if isinstance(spec, dict) else []) for s in group or []
                     if isinstance(s, dict) and s.get("Node")]
         matches = [s["Node"] for s in settings if s["Node"].lower().split(".")[-1] == "admins"] or \
-                  [s["Node"] for s in settings if str(s.get("Name", "")).strip().lower() == "admins"]
+                  [s["Node"] for s in settings if str(s.get("Name", "")).strip().lower() == "admins"] or \
+                  await self._named_node(http, base, session, "admins")
         if len(matches) != 1:
             raise AmpError(f"Couldn't find the Admins setting in AMP for {inst.get('FriendlyName') or inst['InstanceName']}.")
         self.nodes[inst["InstanceID"]] = matches[0]
         return matches[0]
+
+    async def _named_node(self, http, base, session, key):
+        """AMP leaves most of a game's own settings out of its settings list, but
+        answers for them by name, as Meta.GenericModule.<field>."""
+        node = f"{GAME_NODE}{key}"
+        found = await self._call(http, base, session, "Core/GetConfig", {"node": node})
+        return [node] if isinstance(found, dict) and found.get("Name") else []
 
     async def _setting_node(self, http, base, session, inst, key):
         cached = self.nodes.get((inst["InstanceID"], key))
@@ -166,7 +188,8 @@ class Amp:
         spec = await self._call(http, base, session, "Core/GetSettingsSpec")
         settings = [s for group in (spec.values() if isinstance(spec, dict) else []) for s in group or []
                     if isinstance(s, dict) and s.get("Node")]
-        matches = [s["Node"] for s in settings if s["Node"].lower().split(".")[-1] == key.lower()]
+        matches = [s["Node"] for s in settings if s["Node"].lower().split(".")[-1] == key.lower()] or \
+                  await self._named_node(http, base, session, key)
         if len(matches) != 1:
             raise AmpError(f"Couldn't find the {key} setting in AMP for {inst.get('FriendlyName') or inst['InstanceName']}.")
         self.nodes[(inst["InstanceID"], key)] = matches[0]

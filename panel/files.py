@@ -213,7 +213,18 @@ def latest_console(base, tail=64 * 1024):
 
 
 KVP = "GenericModule.kvp"
+MANIFEST = "configmanifest.json"
 SETTINGS_LINE = "App.AppSettings="
+
+
+def game_fields(base):
+    """Every game setting the instance has, by field name, from its own manifest."""
+    try:
+        found = json.loads((base / MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [f["FieldName"] for f in found if isinstance(f, dict) and f.get("FieldName")
+            and str(f.get("InputType", "")).lower() != "hidden"]
 
 
 def kvp_mods(base):

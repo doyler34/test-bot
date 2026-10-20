@@ -26,7 +26,7 @@ from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, p
 from bot.mortar.wind import Wind
 
 from . import archive, attacks, auth, ballistics, console, files, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
-from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
+from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
 from .connections import LogReader, folder_start
@@ -2360,14 +2360,23 @@ async def manage_console(request):
                   running=files.amp_running(base), tabs=manage_tabs(request, inst, "console"))
 
 
-def amp_settings_list(spec):
-    """[(category, [setting, ...])] the way AMP groups them, hidden ones left out."""
-    groups = []
+def amp_settings_list(game, spec):
+    """[(group, [setting, ...])]: the game's own settings by AMP's sub-sections
+    (Server, Game, Mods...), then AMP's other groups. Hidden ones are left out."""
+    def shown(setting):
+        return (isinstance(setting, dict) and setting.get("Node") and not setting.get("Hidden")
+                and str(setting.get("InputType", "")).lower() not in ("hidden", "none"))
+
+    groups, seen = {}, set()
+    for setting in filter(shown, game):
+        name = str(setting.get("Subcategory") or setting.get("Category") or "Game").split(":")[0]
+        groups.setdefault(name, []).append(setting)
+        seen.add(setting["Node"])
     for category, settings in spec.items():
-        shown = [s for s in settings or [] if isinstance(s, dict) and s.get("Node") and not s.get("Hidden")]
-        if shown:
-            groups.append((str(category).split(":")[0], shown))
-    return groups
+        rest = [s for s in settings or [] if shown(s) and s["Node"] not in seen]
+        if rest:
+            groups.setdefault(str(category).split(":")[0], []).extend(rest)
+    return list(groups.items())
 
 
 def setting_text(setting):
@@ -2384,7 +2393,9 @@ async def manage_settings(request):
     running, groups, error = files.amp_running(base), [], ""
     if running:
         try:
-            groups = amp_settings_list(await request.app[AMP].settings_spec(await amp_instance(request, inst)))
+            instance = await amp_instance(request, inst)
+            game = await request.app[AMP].configs(instance, [GAME_NODE + f for f in files.game_fields(base)])
+            groups = amp_settings_list(game, await request.app[AMP].settings_spec(instance))
         except AmpError as exc:
             error = str(exc)
     names = [name for name, _ in groups]
