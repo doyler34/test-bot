@@ -4,6 +4,9 @@
 {% include "_manage_tabs.html" %}
 <p class="files-path mono"><a href="/files/{{ inst }}">{{ inst }}</a>{% for name, url in crumbs %} / <a href="{{ url }}">{{ name }}</a>{% endfor %}</p>
 
+{% if shortcuts %}
+<div class="files-shortcuts">{% for label, url in shortcuts %}<a class="button small ghost" href="{{ url }}">{{ label }}</a>{% endfor %}</div>
+{% endif %}
 <div class="files-tools">
   <form method="post" action="{{ here }}?do=upload&amp;csrf={{ csrf }}" enctype="multipart/form-data" class="files-upload">
     <input type="file" name="file" multiple required>

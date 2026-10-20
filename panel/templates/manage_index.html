@@ -13,7 +13,7 @@
       <a class="button small" href="/manage/{{ f.name }}">Open</a>
       {% if can("power") and has_amp %}
       <form method="post" action="/instances/{{ f.name }}/{{ 'stop' if f.running else 'start' }}" class="inline"
-            {% if f.running %}data-confirm="Stop {{ f.name }}'s AMP? Its game server stops with it."{% endif %}>
+            data-confirm="{{ ('Stop ' ~ f.name ~ '\'s AMP? Its game server stops with it.') if f.running else ('Start ' ~ f.name ~ '\'s AMP?') }}">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <button class="small {{ 'danger' if f.running else 'ghost' }}">{{ "Stop AMP" if f.running else "Start AMP" }}</button>
       </form>

@@ -1585,3 +1585,4 @@ body.map-open { overflow: hidden; }
 .adm-add .chosen { flex-basis: 100%; margin: 0; }
 .adm-add .suggest { position: absolute; top: 100%; left: 0; right: 0; z-index: 6; }
 .adm-ready { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.files-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }

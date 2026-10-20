@@ -243,12 +243,28 @@ class Amp:
     async def restart(self, inst):
         await self.power(inst, "restart")
 
-    async def power(self, inst, action):
-        """Start, stop, restart or update the game server in one instance."""
+    async def power(self, inst, action, wait=90, pause=3):
+        """Start, stop, restart or update the game server in one instance. Starting
+        one whose AMP is off switches that AMP on first and waits for it to answer."""
         endpoint = {"start": "Core/Start", "stop": "Core/Stop", "restart": "Core/Restart",
                     "update": "Core/UpdateApplication"}[action]
         async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
-            base, session = await self._instance(http, inst)
+            try:
+                base, session = await self._instance(http, inst)
+            except AmpError:
+                if action != "start" or inst.get("Running"):
+                    raise
+                await self.instance_power(inst["InstanceName"], "start")
+                for _ in range(max(1, int(wait / max(pause, 0.01)))):
+                    await asyncio.sleep(pause)
+                    try:
+                        base, session = await self._instance(http, inst)
+                        break
+                    except AmpError:
+                        continue
+                else:
+                    raise AmpError(f"{inst['InstanceName']}'s AMP was switched on but didn't answer within "
+                                   f"{wait} seconds. Try Start again in a minute.") from None
             result = await self._call(http, base, session, endpoint)
         if isinstance(result, dict) and result.get("Status") is False:
             raise AmpError(f"AMP didn't {action} it: {result.get('Reason') or 'no reason given'}")

@@ -7,7 +7,7 @@
 <section class="card">
   <p><span class="pill">AMP off</span> {{ inst }}'s AMP isn't running, so its game server can't run either.</p>
   {% if has_amp %}
-  <form method="post" action="/instances/{{ inst }}/start">
+  <form method="post" action="/instances/{{ inst }}/start" data-confirm="Start {{ inst }}'s AMP?">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <button>Start AMP</button>
   </form>
@@ -28,7 +28,7 @@
   </div>
   {% endif %}
   <div class="row-actions manage-power">
-    {% for action, label, confirm in [("start", "Start", ""), ("restart", "Restart", "Restart " ~ inst ~ "? Everyone on it gets kicked."), ("stop", "Stop", "Stop " ~ inst ~ "? Everyone on it gets kicked."), ("update", "Update", "Update " ~ inst ~ "? It stops while the game updates.")] %}
+    {% for action, label, confirm in [("start", "Start", "Start " ~ inst ~ "?"), ("restart", "Restart", "Restart " ~ inst ~ "? Everyone on it gets kicked."), ("stop", "Stop", "Stop " ~ inst ~ "? Everyone on it gets kicked."), ("update", "Update", "Update " ~ inst ~ "? It stops while the game updates.")] %}
     <form method="post" action="/manage/{{ inst }}/power/{{ action }}" class="inline" {% if confirm %}data-confirm="{{ confirm }}"{% endif %}>
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="small {{ 'danger' if action == 'stop' else ('' if action == 'start' else 'ghost') }}">{{ label }}</button>

@@ -197,6 +197,21 @@ def amp_running(base, proc="/proc"):
     return False
 
 
+def shortcuts(base):
+    """[(label, path)] to the files people open most, where this server has them."""
+    found = []
+    for label, pattern in (("Server config (serverconfig.json)", "*/*/Configs/serverconfig.json"),
+                           ("Downloaded mods", "*/*/*/addons"), ("Game logs", "*/*/*/logs"),
+                           ("AMP's settings for this server", "GenericModule.kvp")):
+        hits = sorted(base.glob(pattern))
+        if hits:
+            found.append((label, relative(base, hits[0])))
+    logs = list(base.glob("*/*/*/logs/logs_*"))
+    if logs:
+        found.insert(3, ("Newest game log folder", relative(base, max(logs, key=lambda p: p.stat().st_mtime))))
+    return found
+
+
 def latest_console(base, tail=64 * 1024):
     """(path, last lines) of the game's newest console.log, or (None, "")."""
     logs = list(base.glob("*/*/*/logs/logs_*/console.log"))

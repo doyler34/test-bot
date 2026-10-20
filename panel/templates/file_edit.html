@@ -12,6 +12,7 @@
     <button>Save</button>
     <a class="button ghost" href="{{ here }}?download=1">Download</a>
   </div>
+  {% if name == "serverconfig.json" %}<p class="warn">AMP writes this file from its settings every time the server starts, so changes made here get replaced. Change these in the <a href="/manage/{{ inst }}/settings">Settings</a> tab instead.</p>{% endif %}
   <p class="muted">Saving changes the file straight away. Most server settings only take effect when that server restarts, and AMP may write over files it manages (like the .kvp ones) while it's running.</p>
 </form>
 {% else %}

@@ -2482,6 +2482,7 @@ async def file_browser(request):
         crumbs.append((part, file_url(inst, walked)))
     if path.is_dir():
         return render(request, "files.html", inst=inst, rel=rel, crumbs=crumbs, entries=files.listing(path),
+                      shortcuts=[] if rel else [(label, file_url(inst, target)) for label, target in files.shortcuts(base)],
                       tabs=manage_tabs(request, inst, "files"),
                       here=file_url(inst, rel), up=file_url(inst, rel.rpartition("/")[0]) if rel else "/files",
                       join=lambda name: file_url(inst, f"{rel}/{name}" if rel else name))

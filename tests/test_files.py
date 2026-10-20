@@ -88,8 +88,14 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
     async def test_managers_browse_edit_upload_and_delete(self):
         token = await self.login("chief")
         self.assertIn("Plus01", await (await self.client.get("/files")).text())
+        cfg = self.root / "Plus01" / "arma-reforger" / "1874900" / "Configs"
+        cfg.mkdir(parents=True)
+        (cfg / "serverconfig.json").write_text("{}")
         folder = await (await self.client.get("/files/Plus01")).text()
         self.assertIn("Configs", folder)
+        self.assertIn('href="/files/Plus01/arma-reforger/1874900/Configs/serverconfig.json"', folder)
+        self.assertIn("AMP writes this file", await (await self.client.get(
+            "/files/Plus01/arma-reforger/1874900/Configs/serverconfig.json")).text())
         self.assertIn("data.bin", folder)
         editor = await (await self.client.get("/files/Plus01/Configs/serverconfig.json")).text()
         self.assertIn("&#34;a&#34;: 1", editor)
@@ -342,3 +348,29 @@ class AmpNodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await amp._setting_node(None, "b", "s", inst, "admins"), "Meta.GenericModule.admins")
         with self.assertRaises(AmpError):
             await amp._setting_node(None, "b", "s", inst, "nothing")
+
+
+class AmpStartTests(unittest.IsolatedAsyncioTestCase):
+    async def test_starting_a_server_whose_amp_is_off_switches_it_on_first(self):
+        from panel.amp import Amp
+        amp = Amp("http://amp", "gaz", "pw")
+        tries = {"n": 0}
+
+        async def instance(http, inst):
+            tries["n"] += 1
+            if tries["n"] < 3:
+                raise AmpError("Couldn't reach AMP at http://127.0.0.1:8080: Cannot connect to host 127.0.0.1:8084")
+            return "base", "session"
+        amp._instance = instance
+        amp.instance_power = mock.AsyncMock()
+        amp._call = mock.AsyncMock(return_value={"Status": True})
+        inst = {"InstanceID": "p", "InstanceName": "Plus01", "Running": False}
+        await amp.power(inst, "start", pause=0)
+        amp.instance_power.assert_awaited_once_with("Plus01", "start")
+        amp._call.assert_awaited_once_with(mock.ANY, "base", "session", "Core/Start")
+        # Stopping one that's off is just an error, nothing gets switched on.
+        tries["n"] = 0
+        amp.instance_power.reset_mock()
+        with self.assertRaises(AmpError):
+            await amp.power(inst, "stop", pause=0)
+        amp.instance_power.assert_not_awaited()
