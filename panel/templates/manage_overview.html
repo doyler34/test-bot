@@ -45,4 +45,16 @@
   </form>
 </section>
 {% endif %}
+
+{% if can_delete and has_amp %}
+<details class="card danger-zone">
+  <summary><b>Danger zone</b></summary>
+  <p>Deleting {{ inst }} removes the whole server from AMP. First it's stopped, then its settings, configs, saves and logs are backed up (the game itself and downloaded mods aren't, they download again). Only then is it deleted.</p>
+  <form method="post" action="/manage/{{ inst }}/delete" data-confirm="Really delete {{ inst }}? This can't be undone from the panel.">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Type <b class="mono">{{ inst }}</b> to confirm <input name="confirm" autocomplete="off" autocapitalize="off" required></label>
+    <button class="danger">Delete {{ inst }}</button>
+  </form>
+</details>
+{% endif %}
 {% endblock %}

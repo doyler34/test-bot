@@ -65,7 +65,9 @@ class FolderTests(unittest.TestCase):
 
 class FileManagerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.root = Path(tempfile.mkdtemp())
+        # Backups of deleted servers go next to the instances folder, so give it a parent of its own.
+        self.root = Path(tempfile.mkdtemp()) / "instances"
+        self.root.mkdir()
         (self.root / "Plus01" / "Configs").mkdir(parents=True)
         (self.root / "Plus01" / "GenericModule.kvp").write_text('App.AppSettings={"mods":""}')
         (self.root / "Plus01" / "Configs" / "serverconfig.json").write_text('{"a": 1}\n')
@@ -291,6 +293,59 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         amp.change_admins.assert_awaited_with(instance, add=[gaz], remove=[])
         await self.client.post("/manage/Plus01/admins", data={"csrf": token, "remove": gaz})
         amp.change_admins.assert_awaited_with(instance, add=[], remove=[gaz])
+
+
+    async def test_making_a_new_server_copies_the_game_template(self):
+        (self.root / "Plus01" / "GenericModule.kvp").write_text(
+            "Meta.DisplayName=Arma Reforger\nMeta.ConfigManifest=arma-reforgerconfig.json\n"
+            "Meta.MetaConfigManifest=arma-reforgermetaconfig.json\nMeta.ConfigRoot=arma-reforger.kvp\n"
+            "Meta.Author=Greelan\nApp.AppSettings={}")
+        (self.root / "Plus01" / "AMPConfig.conf").write_text("Webserver.Port=8084\n")
+        amp = mock.Mock()
+        amp.create_instance = mock.AsyncMock()
+        self.app[AMP] = amp
+        token = await self.login("chief")
+        await self.client.post("/manage/new", data={"csrf": token, "name": "bad name", "copy_from": "Plus01"})
+        amp.create_instance.assert_not_awaited()
+        await self.client.post("/manage/new", data={"csrf": token, "name": "Plus01", "copy_from": "Plus01"})
+        amp.create_instance.assert_not_awaited()                     # already exists
+        await self.client.post("/manage/new", data={"csrf": token, "name": "Arland02", "friendly": "Arland 2",
+                                                     "copy_from": "Plus01"})
+        amp.create_instance.assert_awaited_once_with("Arland02", "Arland 2", 8085, {
+            "GenericModule.Meta.DisplayName": "Arma Reforger", "GenericModule.Meta.ConfigManifest": "arma-reforgerconfig.json",
+            "GenericModule.Meta.MetaConfigManifest": "arma-reforgermetaconfig.json",
+            "GenericModule.Meta.ConfigRoot": "arma-reforger.kvp"})
+
+    async def test_deleting_a_server_is_named_people_only_typed_out_and_backed_up_first(self):
+        game = self.root / "Plus01" / "arma-reforger" / "1874900"
+        (game / "addons" / "data").mkdir(parents=True)
+        (game / "addons" / "data" / "game.pak").write_bytes(b"x" * 1000)
+        (game / "AReforgerMaster" / "addons" / "SomeMod_0123456789ABCDEF").mkdir(parents=True)
+        (game / "AReforgerMaster" / "profile.txt").write_text("keep me")
+        amp = mock.Mock()
+        amp.instance_power = mock.AsyncMock()
+        amp.delete_instance = mock.AsyncMock()
+        self.app[AMP] = amp
+        token = await self.login("chief")                            # a manager, but not one of the named accounts
+        reply = await self.client.post("/manage/Plus01/delete", data={"csrf": token, "confirm": "Plus01"})
+        self.assertEqual(reply.status, 403)
+        self.db.add_user("burd", auth.hash_password("burd-password"), "manager")
+        token = await self.login("burd")
+        await self.client.post("/manage/Plus01/delete", data={"csrf": token, "confirm": "plus01"})
+        amp.delete_instance.assert_not_awaited()                     # has to be typed exactly
+        with mock.patch("panel.files.amp_running", side_effect=[True, False]):
+            await self.client.post("/manage/Plus01/delete", data={"csrf": token, "confirm": "Plus01"})
+        amp.instance_power.assert_awaited_once_with("Plus01", "stop")
+        amp.delete_instance.assert_awaited_once_with("Plus01")
+        saved = list((self.root.parent / files.BACKUPS).glob("Plus01-*.tar.gz"))
+        self.assertEqual(len(saved), 1)
+        import tarfile
+        with tarfile.open(saved[0]) as tar:
+            names = tar.getnames()
+        self.assertIn("Plus01/arma-reforger/1874900/AReforgerMaster/profile.txt", names)
+        self.assertIn("Plus01/GenericModule.kvp", names)
+        self.assertFalse([n for n in names if "/addons/" in n or n.endswith("/addons")])
+        self.assertTrue(self.db.one("SELECT 1 FROM audit WHERE action = 'backed up server'"))
 
 
 class AmpLoginTests(unittest.IsolatedAsyncioTestCase):

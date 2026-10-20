@@ -1586,3 +1586,8 @@ body.map-open { overflow: hidden; }
 .adm-add .suggest { position: absolute; top: 100%; left: 0; right: 0; z-index: 6; }
 .adm-ready { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .files-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.new-server summary, .danger-zone summary { cursor: pointer; }
+.new-server form, .danger-zone form { margin-top: 12px; }
+.danger-zone { border-color: rgba(220, 70, 60, .5); }
+.danger-zone summary b { color: var(--red); }
+.danger-zone label { max-width: 360px; margin-bottom: 10px; }

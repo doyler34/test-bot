@@ -7,6 +7,8 @@ would be undone; the change has to go through AMP and needs a restart to apply.
 import asyncio
 import json
 import re
+import secrets
+import uuid
 
 import aiohttp
 
@@ -102,6 +104,32 @@ class Amp:
                 if inst.get("InstanceName") and inst.get("Module") != "ADS":
                     found[inst["InstanceName"]] = inst
         return found
+
+    async def _ads(self, endpoint, args=None):
+        async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
+            session = await self._login(http, self.url)
+            return await self._call(http, self.url, session, endpoint, args)
+
+    async def create_instance(self, name, friendly, port, provision):
+        """A new instance on this box's ADS, the way AMP's own Create Instance does it.
+        AMP picks the game ports itself and downloads the game afterwards."""
+        targets = await self._ads("ADSModule/GetInstances", {"ForceIncludeSelf": True})
+        target = next((t.get("InstanceId") for t in targets if isinstance(t, dict) and t.get("InstanceId")), None) \
+            if isinstance(targets, list) else None
+        if not target:
+            raise AmpError("AMP didn't say which machine to create the server on.")
+        result = await self._ads("ADSModule/CreateInstance", {
+            "TargetADSInstance": target, "NewInstanceId": str(uuid.uuid4()), "Module": "GenericModule",
+            "InstanceName": name, "FriendlyName": friendly, "IPBinding": "0.0.0.0", "PortNumber": port,
+            "AdminUsername": "admin", "AdminPassword": secrets.token_urlsafe(24), "ProvisionSettings": provision,
+            "AutoConfigure": True, "PostCreate": 1, "StartOnBoot": True, "DisplayImageSource": "", "TargetDatastore": -1})
+        if isinstance(result, dict) and result.get("Status") is False:
+            raise AmpError(f"AMP didn't create {name}: {result.get('Reason') or 'no reason given'}")
+
+    async def delete_instance(self, name):
+        result = await self._ads("ADSModule/DeleteInstance", {"InstanceName": name})
+        if isinstance(result, dict) and result.get("Status") is False:
+            raise AmpError(f"AMP didn't delete {name}: {result.get('Reason') or 'no reason given'}")
 
     async def ask(self, inst, endpoint, args=None):
         """One call to one instance's own API, logged in fresh."""

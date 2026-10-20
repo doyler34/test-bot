@@ -197,6 +197,63 @@ def amp_running(base, proc="/proc"):
     return False
 
 
+def provision_from(base):
+    """How a server was made (its game template), read from its settings file, so a
+    new one can be made the same way."""
+    keep = ("ConfigManifest", "MetaConfigManifest", "ConfigRoot", "AppConfigId", "DisplayName",
+            "DisplayImageSource", "OriginalSource")
+    found = {}
+    for line in (base / KVP).read_text(encoding="utf-8").splitlines():
+        key, _, value = line.partition("=")
+        if key.startswith("Meta.") and key[5:] in keep and value:
+            found[f"GenericModule.{key}"] = value
+    if "GenericModule.Meta.ConfigManifest" not in found:
+        raise FileError(f"{base.name} doesn't say which game template it uses.")
+    return found
+
+
+def used_ports(root):
+    """AMP web ports the instances already have, from each one's AMPConfig.conf."""
+    ports = set()
+    for conf in Path(root).glob("*/AMPConfig.conf"):
+        try:
+            for line in conf.read_text(encoding="utf-8", errors="replace").splitlines():
+                if line.startswith("Webserver.Port="):
+                    ports.add(int(line.split("=", 1)[1]))
+        except (OSError, ValueError):
+            continue
+    return ports
+
+
+INSTANCE_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9]{2,30}$")
+BACKUPS = "deleted-servers"
+# What a deleted server's backup leaves out: the game itself and downloaded mods,
+# which come back by downloading them again.
+SKIP_IN_BACKUP = ("arma-reforger/1874900/addons", "AReforgerMaster/addons", "steamapps")
+
+
+def backup(root, base):
+    """Pack up everything worth keeping from a server before it's deleted.
+    Returns the backup's path and size."""
+    import tarfile
+    folder = Path(root).parent / BACKUPS
+    folder.mkdir(exist_ok=True)
+    target = folder / f"{base.name}-{time.strftime('%Y-%m-%d_%H-%M-%S')}.tar.gz"
+
+    def keep(info):
+        rel = info.name.split("/", 1)[1] if "/" in info.name else ""
+        if any(rel == s or rel.startswith(s + "/") or f"/{s}/" in f"/{rel}/" for s in SKIP_IN_BACKUP):
+            return None
+        if info.isfile() and info.size > 512 * 1024 * 1024:
+            return None
+        return info
+
+    with tarfile.open(target, "w:gz") as tar:
+        tar.add(base, arcname=base.name, filter=keep)
+    hand_over(target)
+    return target, target.stat().st_size
+
+
 def shortcuts(base):
     """[(label, path)] to the files people open most, where this server has them."""
     found = []
