@@ -15,11 +15,13 @@ MAX_OUTPUT = 200_000
 KEEP = 20
 
 QUICK = [
-    ("Game servers' CPU", "top -b -n 1 | grep -iE 'PID|reforger'"),
+    # top cuts the name off when it isn't on a screen, so ps it is.
+    ("Game servers' CPU", "ps -o pid,%cpu,%mem,etime,args -p \"$(pgrep -d, ArmaReforgerSer)\""
+                          " | sed -E 's#/home/amp/.ampdata/instances/([^/]+)/.*#\\1#'"),
     ("Memory", "free -h"),
     ("Disk", "df -h /"),
     ("Uptime and load", "uptime"),
-    ("Busiest programs", "top -b -n 1 -o %CPU | head -n 20"),
+    ("Busiest programs", "ps -eo pid,user,%cpu,%mem,etime,comm --sort=-%cpu | head -n 15"),
     ("UDP drops", "netstat -su | grep -iE 'errors|buffer'"),
 ]
 
