@@ -1634,3 +1634,8 @@ body.map-open { overflow: hidden; }
   .mgr-totals b { font-size: 1.2rem; }
   .mgr-grid { grid-template-columns: minmax(0, 1fr); }
 }
+.faction-limits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.faction-limits label { margin: 0; font-size: .8rem; color: var(--muted); }
+.faction-limits input { margin-top: 4px; }
+.new-wizard details summary { cursor: pointer; }
+.new-wizard details textarea { margin-top: 10px; width: 100%; font-size: .8rem; }
