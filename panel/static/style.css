@@ -1684,3 +1684,12 @@ body.map-open { overflow: hidden; }
   .srv-tabs, .manage-tabs { flex-wrap: nowrap; overflow: visible; gap: 0; }
   .srv-tabs a, .manage-tabs a { padding: 8px 9px; font-size: .86rem; white-space: nowrap; }
 }
+
+/* Menu pages (Settings, Data): two short tiles across on phones, not one long column. */
+@media (max-width: 720px) {
+  .cards.menu-cards { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .cards.menu-cards > a.card { padding: 12px; min-height: 0; }
+  .cards.menu-cards > a.card h2 { font-size: .98rem; line-height: 1.2; }
+  .cards.menu-cards > a.card p { font-size: .8rem; line-height: 1.35; margin: 6px 0 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}
