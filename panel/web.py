@@ -26,7 +26,7 @@ from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, p
 from bot.mortar.wind import Wind
 
 from . import archive, attacks, auth, ballistics, console, files, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
-from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
+from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
 from .connections import LogReader, folder_start
@@ -2455,7 +2455,13 @@ async def manage_settings(request):
         elif not error:
             flash(request, "Nothing was changed.")
         raise web.HTTPFound(f"/manage/{inst}/settings")
+    admins_setting = next((st for _, items in groups for st in items if st["Node"].lower().endswith(".admins")), None)
+    staff = request.app[DB].staff_ids()
+    admins = admin_list(request.app[DB], setting_text(admins_setting)) if admins_setting else None
+    listed = {a["id"] for a in admins or []}
+    ready = [{"id": i, "name": (request.app[DB].player(i) or {"name": i})["name"]} for i in sorted(staff - listed)]
     return render(request, "manage_settings.html", inst=inst, running=running, error=error, groups=groups,
+                  admins=admins, ready=ready, max_admins=MAX_ADMINS, can_admins=allowed(request, "game_admins"),
                   value=setting_text, slug=lambda title: re.sub(r"[^a-z]+", "-", title.lower()).strip("-"),
                   tabs=manage_tabs(request, inst, "settings"))
 
@@ -2596,6 +2602,49 @@ async def amp_instance(request, inst):
     if not instance:
         raise AmpError(f"AMP has no instance called {inst}.")
     return instance
+
+
+def admin_list(db, value):
+    """The admins in an AMP Admins value, with the names the panel knows them by."""
+    ids = parse_ids(value)
+    return [{"id": i, "name": (db.player(i) or {"name": ""})["name"] if valid_identity(i) else "",
+             "steam": not valid_identity(i)} for i in ids]
+
+
+async def manage_admins(request):
+    """Add or take off one in-game admin on one server, from its Settings tab."""
+    require(request, "game_admins")
+    inst = request.match_info["inst"]
+    server_folder(request)
+    form = await request.post()
+    db = request.app[DB]
+    back = f"/manage/{inst}/settings#admins-access"
+    remove = form.get("remove", "").strip().lower()
+    # The picker's own box and a one-tap button both send an identity; whichever is filled in wins.
+    identity = next((i.strip().lower() for i in form.getall("identity", []) if i.strip()), "")
+    typed = clean(form.get("player", ""), 64)
+    if not remove:
+        if valid_identity(typed.lower()):
+            identity = typed.lower()
+        elif not valid_identity(identity):
+            found = db.by_name(typed) if typed else []
+            if len(found) != 1:
+                flash(request, "Pick the player from the list as you type, or paste their identity ID." if not found else
+                      f"{len(found)} players have gone by {typed}. Pick the right one from the list.", "error")
+                raise web.HTTPFound(back)
+            identity = found[0]["identity"]
+    target = remove or identity
+    name = (db.player(target) or {"name": target})["name"]
+    try:
+        await request.app[AMP].change_admins(await amp_instance(request, inst),
+                                             add=[] if remove else [identity], remove=[remove] if remove else [])
+    except AmpError as exc:
+        audit(request, "removed game admin" if remove else "made game admin", inst, name, str(exc), ok=False)
+        flash(request, str(exc), "error")
+        raise web.HTTPFound(back)
+    audit(request, "removed game admin" if remove else "made game admin", inst, name, target)
+    flash(request, f"{name} is {'off' if remove else 'on'} {inst}'s admin list. It applies when the server restarts.")
+    raise web.HTTPFound(back)
 
 
 async def mods_page(request):
@@ -3368,6 +3417,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/manage/{inst}/console.txt", manage_console)
     app.router.add_post("/manage/{inst}/console", manage_console)
     app.router.add_route("GET", "/manage/{inst}/settings", manage_settings)
+    app.router.add_post("/manage/{inst}/admins", manage_admins)
     app.router.add_post("/manage/{inst}/settings", manage_settings)
     app.router.add_get("/files", files_index)
     app.router.add_get("/files/{inst}", file_browser)

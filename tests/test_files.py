@@ -254,6 +254,39 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.one("SELECT detail FROM audit WHERE action = 'changed AMP setting'")[0], "OYB Plus 2")
 
 
+    async def test_admins_are_a_list_of_names_on_the_settings_tab(self):
+        gaz, rook = "5f1c2a90-8b1e-4a57-9a3e-2d4b6c8e0f11", "a0b1c2d3-e4f5-4a6b-8c7d-9e0f1a2b3c4d"
+        self.db.write("INSERT INTO players (identity, name, first_seen, last_seen) VALUES (?, 'Gaz', 1, 1)", gaz)
+        self.db.write("INSERT INTO players (identity, name, first_seen, last_seen) VALUES (?, 'Rook', 1, 1)", rook)
+        self.db.set_staff(rook, "chief")
+        (self.root / "Plus01" / "configmanifest.json").write_text(json.dumps([{"FieldName": "admins", "InputType": "text"}]))
+        amp = mock.Mock()
+        amp.instances = mock.AsyncMock(return_value={"Plus01": {"InstanceID": "p", "InstanceName": "Plus01"}})
+        amp.configs = mock.AsyncMock(return_value=[{"Name": "Admins", "Node": "Meta.GenericModule.admins",
+                                                    "InputType": "text", "CurrentValue": f'"{gaz}","76561198000000000"'}])
+        amp.settings_spec = mock.AsyncMock(return_value={})
+        amp.change_admins = mock.AsyncMock()
+        self.app[AMP] = amp
+        running = mock.patch("panel.files.amp_running", return_value=True)
+        running.start()
+        self.addCleanup(running.stop)
+        token = await self.login("chief")
+        page = await (await self.client.get("/manage/Plus01/settings")).text()
+        self.assertIn(">Gaz</a>", page)
+        self.assertIn("Steam ID", page)
+        self.assertIn("2 / 20", page)
+        self.assertIn("+ Rook", page)                     # marked as admin in the panel, not on this server yet
+        self.assertNotIn('name="n:Meta.GenericModule.admins"', page)
+        instance = {"InstanceID": "p", "InstanceName": "Plus01"}
+        await self.client.post("/manage/Plus01/admins", data=[("csrf", token), ("player", ""), ("identity", ""),
+                                                              ("identity", rook)])
+        amp.change_admins.assert_awaited_with(instance, add=[rook], remove=[])
+        await self.client.post("/manage/Plus01/admins", data={"csrf": token, "player": "Gaz", "identity": ""})
+        amp.change_admins.assert_awaited_with(instance, add=[gaz], remove=[])
+        await self.client.post("/manage/Plus01/admins", data={"csrf": token, "remove": gaz})
+        amp.change_admins.assert_awaited_with(instance, add=[], remove=[gaz])
+
+
 class AmpLoginTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.path = Path(tempfile.mkdtemp()) / "panel.local.json"

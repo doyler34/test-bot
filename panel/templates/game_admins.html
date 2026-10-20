@@ -7,9 +7,7 @@
 {% if setup %}
 <div class="card">
   <h2>Not connected to AMP yet</h2>
-  <p>The panel needs an AMP login to read and change the admin lists. On the box, run this and type the AMP username and password when it asks:</p>
-  <p class="mono">cd /root/oyb-panel && bash deploy/amp_login.sh</p>
-  <p class="muted">Best to make an AMP user just for the panel, with access to the Arma servers' settings and restarts.</p>
+  <p>The panel needs an AMP login to read and change the admin lists. A manager adds it under <a href="/settings/amp">Settings → AMP login</a>.</p>
 </div>
 {% elif error %}
 <p class="warn">Couldn't talk to AMP: {{ error }}</p>

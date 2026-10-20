@@ -18,10 +18,39 @@
   {% for title, items in groups %}
   <section class="card set-section" id="{{ slug(title) }}">
     <h2>{{ title }}</h2>
-    {% if title == "Admins & access" %}<p class="muted small">To add or remove admins by name, use <a href="/game-admins">In-game admins</a>.</p>{% endif %}
     {% if title == "Mods" %}<p class="muted small">To pick mods from a list, use the <a href="/mods/{{ inst }}">Mods</a> tab.</p>{% endif %}
     <div class="set-grid">
     {% for s in items %}
+    {% if s.Node.lower().endswith(".admins") and admins is not none %}
+    <div class="set-row set-wide" data-set-row data-words="admins admin list in-game gm {{ admins|map(attribute='name')|join(' ')|lower }}">
+      <label><b>Admins</b> <span class="muted">{{ admins|length }} / {{ max_admins }}</span></label>
+      <p class="set-help">Admin and GM in game, without the admin password. Changes apply when the server restarts.</p>
+      {% if admins %}
+      <ul class="adm-list">
+        {% for a in admins %}
+        <li>
+          <span>{% if a.steam %}<span class="muted">Steam ID</span>{% elif a.name %}<a href="/player/{{ a.id }}">{{ a.name }}</a>{% else %}<span class="muted">Not seen by the panel yet</span>{% endif %}
+            <small class="mono muted">{{ a.id }}</small></span>
+          {% if can_admins %}<button class="small ghost" form="adm-form" name="remove" value="{{ a.id }}" data-confirm="Take {{ a.name or a.id }} off {{ inst }}'s admin list?">Remove</button>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">Nobody yet.</p>{% endif %}
+      {% if can_admins and admins|length < max_admins %}
+      <div class="adm-add picker">
+        <input form="adm-form" name="player" placeholder="Add someone: start typing their in-game name" autocomplete="off" data-player-search>
+        <input form="adm-form" type="hidden" name="identity" value="">
+        <button class="small" form="adm-form">Add</button>
+        <p class="muted mono chosen"></p>
+        <ul class="suggest" hidden></ul>
+      </div>
+      {% if ready %}
+      <p class="set-help">Marked as admin in the panel but not on this server:</p>
+      <div class="adm-ready">{% for r in ready %}<button class="small ghost" form="adm-form" name="identity" value="{{ r.id }}">+ {{ r.name }}</button>{% endfor %}</div>
+      {% endif %}
+      {% endif %}
+    </div>
+    {% else %}
     {% set kind = (s.InputType or "text")|lower %}
     {% set field = "n:" ~ s.Node %}
     {% set long = kind == "textarea" or (value(s)|length > 60) %}
@@ -46,6 +75,7 @@
       {% endif %}
       {% if s.Description %}<p class="set-help">{{ s.Description|replace("[", "")|replace("]", " ")|truncate(240) }}</p>{% endif %}
     </div>
+    {% endif %}
     {% endfor %}
     </div>
   </section>
@@ -56,5 +86,6 @@
     <button>Save changes</button>
   </div>
 </form>
+<form id="adm-form" method="post" action="/manage/{{ inst }}/admins"><input type="hidden" name="csrf" value="{{ csrf }}"></form>
 {% endif %}
 {% endblock %}
