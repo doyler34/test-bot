@@ -5,9 +5,11 @@ import time
 
 from .db import PanelDB, now
 
-ROLES = ("moderator", "admin", "owner")
+ROLES = ("moderator", "admin", "owner", "manager")
 # What each role is called on screen; the stored names stay as they are.
-ROLE_NAMES = {"moderator": "moderator", "admin": "admin", "owner": "senior admin"}
+ROLE_NAMES = {"moderator": "moderator", "admin": "admin", "owner": "senior admin", "manager": "manager"}
+# Roles that have everything and can't have it taken off them.
+TOP = ("owner", "manager")
 
 PERMISSIONS = {
     "view": "moderator",
@@ -28,6 +30,8 @@ PERMISSIONS = {
     "mortar": "owner",
     "box": "owner",
     "cards": "owner",
+    # Runs commands on the box itself.
+    "console": "manager",
 }
 
 # Everything an owner can switch on or off for one person, whatever their role.
@@ -65,7 +69,7 @@ def allows(role: str, grants, permission: str) -> bool:
     minus anything taken off them ("-ban"). Plain "discord" asks whether they may
     open any Discord page at all."""
     base = permission.split(":")[0]
-    if role != "owner" and (f"-{base}" in grants or f"-{permission}" in grants):
+    if role not in TOP and (f"-{base}" in grants or f"-{permission}" in grants):
         return False
     if can(role, permission) or base in grants or permission in grants:
         return True

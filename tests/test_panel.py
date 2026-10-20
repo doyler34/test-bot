@@ -23,7 +23,7 @@ from bot.storage.account_links import AccountLinks
 from bot.storage.combat_store import migrate as migrate_combat, record as record_kill
 from bot.tracking.combat_parser import KillEvent
 from bot.discord import welcome_doc
-from panel import auth, ballistics, memory
+from panel import auth, ballistics, console, memory
 from panel.alerts import Alerts
 from panel.connections import LogReader
 from panel.oyb_stats import OybStats
@@ -1897,6 +1897,40 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.db.discord_doc("post:" + response.headers["Location"].rsplit("/", 1)[1]))
         self.assertEqual((await self.client.get("/discord/posts/nothere1")).status, 404)
         self.assertEqual((await self.client.get("/discord/post")).status, 404)
+
+    async def test_only_a_manager_makes_a_manager(self):
+        self.assertTrue(auth.allows("manager", set(), "unban"))
+        self.assertTrue(auth.allows("manager", {"-unban"}, "unban"))
+        self.assertFalse(auth.allows("owner", set(), "console"))
+        boss = self.db.user_by_name("boss")["id"]
+        chief = self.db.add_user("chief", auth.hash_password("chief-password"), "manager")
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/users")
+        page = await (await self.client.get("/users")).text()
+        self.assertNotIn('<option value="manager"', page)
+        response = await self.client.post(f"/users/{boss}", data={"csrf": token, "action": "role", "role": "manager"})
+        self.assertEqual(response.status, 400)
+        response = await self.client.post(f"/users/{chief}", data={"csrf": token, "action": "disable"})
+        self.assertEqual(response.status, 403)
+        self.assertEqual(self.db.user(chief)["role"], "manager")
+        # With a manager about, the senior admin isn't the last one at the top.
+        self.assertEqual(self.db.owner_count(), 2)
+
+    async def test_console_is_for_managers(self):
+        await self.login("boss", "boss-password")
+        self.assertEqual((await self.client.get("/console")).status, 403)
+        self.assertNotIn('href="/console"', await (await self.client.get("/data")).text())
+        self.db.add_user("chief", auth.hash_password("chief-password"), "manager")
+        await self.login("chief", "chief-password")
+        token = await self.csrf("/console")
+        await self.client.post("/console", data={"csrf": token, "command": "echo hello-from-the-box; exit 3"})
+        page = await (await self.client.get("/console")).text()
+        self.assertIn("hello-from-the-box", page)
+        self.assertIn("exit 3", page)
+        self.assertEqual(self.db.one("SELECT detail FROM audit WHERE action = 'console'")[0],
+                         "echo hello-from-the-box; exit 3")
+        result = await console.run("sleep 5", timeout=0.3)
+        self.assertTrue(result["cut"])
 
     async def test_bullet_drop_guide(self):
         await self.login("boss", "boss-password")

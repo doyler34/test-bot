@@ -379,7 +379,7 @@ class PanelDB:
             username, password_hash, role, int(must_change), now())
 
     def owner_count(self) -> int:
-        return self.one("SELECT COUNT(*) FROM users WHERE role = 'owner' AND disabled = 0")[0]
+        return self.one("SELECT COUNT(*) FROM users WHERE role IN ('owner', 'manager') AND disabled = 0")[0]
 
     # audit
 

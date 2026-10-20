@@ -23,6 +23,12 @@
     <p class="muted">What's in the bot's stats files: for when time played or kills look wrong.</p>
   </a>
   {% endif %}
+  {% if can("console") %}
+  <a class="card" href="/console">
+    <h2>Console</h2>
+    <p class="muted">Type a command and run it on the box, like you would over SSH. Managers only.</p>
+  </a>
+  {% endif %}
   {% if can("audit") %}
   <a class="card" href="/audit">
     <h2>Audit log</h2>

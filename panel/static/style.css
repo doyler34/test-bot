@@ -1497,3 +1497,17 @@ body.map-open { overflow: hidden; }
   form.search { flex-wrap: wrap; }
   form.search input[name=q] { flex: 1 1 100%; }
 }
+
+/* console */
+.console-form { display: flex; gap: 10px; align-items: flex-end; }
+.console-form label { flex: 1; margin: 0; }
+.console-form input { font-family: ui-monospace, monospace; }
+.console-quick { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.console-run .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; align-items: center; margin-bottom: 8px; }
+.console-cmd { font-size: .9rem; word-break: break-all; color: var(--ink); }
+.console-out { margin: 0; max-height: 60vh; overflow: auto; padding: 10px 12px; background: #0b0d10; border: 1px solid var(--line-soft);
+  border-radius: 6px; font-size: .8rem; line-height: 1.45; white-space: pre; }
+@media (max-width: 720px) {
+  .console-form { flex-direction: column; align-items: stretch; }
+  .console-out { font-size: .72rem; }
+}

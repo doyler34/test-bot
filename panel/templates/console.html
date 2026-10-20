@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Console · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/data">← Data</a></p>
+<h1>Console</h1>
+<p class="muted">Runs a command on the box, the same as typing it over SSH. Each one runs on its own and is stopped after {{ timeout }} seconds; anything that waits for you to type (a password, y/n) won't work. Every command goes in the audit log.</p>
+
+<form class="card console-form" method="post" action="/console">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Command <input name="command" class="mono" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. top -b -n 1 | grep -i reforger" autofocus required></label>
+  <button>Run</button>
+</form>
+
+<div class="console-quick">
+  {% for label, command in quick %}
+  <form method="post" action="/console">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="command" value="{{ command }}">
+    <button class="small ghost" title="{{ command }}">{{ label }}</button>
+  </form>
+  {% endfor %}
+</div>
+
+{% for r in runs %}
+<section class="card console-run">
+  <div class="row">
+    <code class="console-cmd">$ {{ r.command }}</code>
+    <span class="muted">{{ r.at|ago }} · {{ r.seconds }}s ·
+      {% if r.cut %}<span class="pill down">stopped after {{ timeout }}s</span>
+      {% elif r.code == 0 %}<span class="pill on">ok</span>
+      {% else %}<span class="pill down">exit {{ r.code }}</span>{% endif %}</span>
+  </div>
+  <pre class="console-out">{{ r.output or "(nothing printed)" }}</pre>
+</section>
+{% else %}
+<p class="muted">Nothing run yet. Your last {{ keep }} commands show here until the panel restarts.</p>
+{% endfor %}
+{% endblock %}

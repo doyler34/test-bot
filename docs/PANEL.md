@@ -279,6 +279,13 @@ Locked out? On the box:
 cd ~/Arma-bot && .venv/bin/python -m panel passwd YOURNAME
 ```
 
+The manager role (everything, plus the Console that runs commands on the box)
+can only be given by another manager, or on the box:
+
+```
+cd ~/Arma-bot && .venv/bin/python -m panel role YOURNAME manager
+```
+
 ## Day to day
 
 ```

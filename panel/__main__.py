@@ -32,6 +32,9 @@ def main(argv=None):
     add.add_argument("--role", choices=auth.ROLES, default="owner")
     reset = sub.add_parser("passwd", help="set a new password for an account")
     reset.add_argument("username")
+    promote = sub.add_parser("role", help="change an account's role (the only way to make a manager)")
+    promote.add_argument("username")
+    promote.add_argument("role", choices=auth.ROLES)
     args = parser.parse_args(argv)
 
     try:
@@ -61,6 +64,12 @@ def main(argv=None):
         auth.end_all_sessions(db, user["id"])
         db.log("console", "reset password", target=user["username"])
         print(f"New password set for {user['username']}.")
+    elif args.cmd == "role":
+        if not user:
+            sys.exit(f"No account called {args.username}.")
+        db.write("UPDATE users SET role = ? WHERE id = ?", args.role, user["id"])
+        db.log("console", "changed role", target=user["username"], detail=f"{user['role']} → {args.role}")
+        print(f"{user['username']} is now {auth.ROLE_NAMES[args.role]}.")
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, attacks, auth, ballistics, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
+from . import archive, attacks, auth, ballistics, console, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
 from .amp import MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -2232,6 +2232,26 @@ async def network_tune(request):
     raise web.HTTPFound("/network#check")
 
 
+CONSOLE = web.AppKey("console", dict)
+
+
+async def console_page(request):
+    """Run a command on the box and show what it printed. Managers only."""
+    require(request, "console")
+    history = request.app[CONSOLE]
+    user = request[USER]
+    if request.method == "POST":
+        form = await request.post()
+        command = form.get("command", "").strip()
+        if command:
+            result = await console.run(command)
+            console.remember(history, user["id"], result)
+            audit(request, "console", detail=command[:500], ok=result["code"] == 0)
+        raise web.HTTPFound("/console")
+    return render(request, "console.html", runs=history.get(user["id"], []), quick=console.QUICK,
+                  timeout=console.TIMEOUT, keep=console.KEEP)
+
+
 async def network_page(request):
     require(request, "box")
     db, manager = request.app[DB], request.app[MANAGER]
@@ -2684,8 +2704,14 @@ async def audit_page(request):
 
 def users_view(request, created=None):
     db = request.app[DB]
-    return render(request, "users.html", rows=db.users(), roles=auth.ROLES, created=created, grants=db.all_grants(),
-                  access_summary=access_summary)
+    return render(request, "users.html", rows=db.users(), roles=assignable_roles(request), created=created,
+                  grants=db.all_grants(), access_summary=access_summary)
+
+
+def assignable_roles(request):
+    """Only a manager can make a manager."""
+    manager = request[USER]["role"] == "manager"
+    return [r for r in auth.ROLES if manager or r != "manager"]
 
 
 def access_summary(grants):
@@ -2707,7 +2733,7 @@ async def access_page(request):
     require(request, "users")
     db = request.app[DB]
     target = db.user(int(request.match_info["user_id"]))
-    if target is None or target["role"] == "owner":
+    if target is None or target["role"] in auth.TOP:
         raise web.HTTPFound("/users")
     mine = db.grants(target["id"])
     return render(request, "user_access.html", target=target, mine=mine, grant_list=auth.GRANTS,
@@ -2724,7 +2750,7 @@ async def add_user(request):
     if not username or len(username) > 32 or not username.replace("_", "").replace("-", "").isalnum():
         flash(request, "Usernames use letters, numbers, - and _ (32 max).", "error")
         raise web.HTTPFound("/users")
-    if role not in auth.ROLES:
+    if role not in assignable_roles(request):
         raise web.HTTPBadRequest(text="Unknown role.")
     if db.user_by_name(username):
         flash(request, "That username is taken.", "error")
@@ -2741,20 +2767,22 @@ async def change_user(request):
     target = db.user(int(request.match_info["user_id"]))
     if target is None:
         raise web.HTTPNotFound(text="No such account.")
+    if target["role"] == "manager" and request[USER]["role"] != "manager":
+        raise web.HTTPForbidden(text="Only a manager can change a manager's account.")
     form = await request.post()
     action = form.get("action", "")
-    is_owner = target["role"] == "owner" and not target["disabled"]
+    is_owner = target["role"] in auth.TOP and not target["disabled"]
     last_owner = is_owner and db.owner_count() <= 1
     if action == "role":
         role = form.get("role", "")
-        if role not in auth.ROLES:
+        if role not in assignable_roles(request):
             raise web.HTTPBadRequest(text="Unknown role.")
-        if last_owner and role != "owner":
+        if last_owner and role not in auth.TOP:
             flash(request, "There has to be at least one senior admin.", "error")
         else:
             db.write("UPDATE users SET role = ? WHERE id = ?", role, target["id"])
             audit(request, "changed role", target=target["username"], detail=f"{target['role']} → {role}")
-            flash(request, f"{target['username']} is now {role}.")
+            flash(request, f"{target['username']} is now {auth.ROLE_NAMES[role]}.")
     elif action == "grants":
         ticked = set(form.getall("grant", []))
         chosen = {g for g in grant_keys() if g in ticked and not auth.can(target["role"], g)}
@@ -2798,6 +2826,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[FLASH] = {}
     app[STATS] = OybStats(config.oyb_data)
     app[NETCHECK] = {}
+    app[CONSOLE] = {}
     app[PICTURES] = Path(config.database).resolve().parent / "server-pictures"
     app[BM] = BanSync(app[DB], config.battlemetrics_token, config.battlemetrics_ban_list) \
         if config.battlemetrics_token else None
@@ -2899,6 +2928,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/attacks", attacks_page)
     app.router.add_post("/attacks/trust", trust_ip)
     app.router.add_post("/attacks/untrust", untrust_ip)
+    app.router.add_route("GET", "/console", console_page)
+    app.router.add_post("/console", console_page)
     app.router.add_route("GET", "/network", network_page)
     app.router.add_post("/network", network_page)
     app.router.add_post("/network/tune", network_tune)
