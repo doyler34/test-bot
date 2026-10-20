@@ -21,7 +21,10 @@ class FolderTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
         (self.root / "Plus01" / "logs").mkdir(parents=True)
+        (self.root / "Plus01" / "GenericModule.kvp").write_text("")
         (self.root / "Other").mkdir()
+        (self.root / "Other" / "GenericModule.kvp").write_text("")
+        (self.root / "ADS01").mkdir()
         (self.root / "Other" / "secret.txt").write_text("not yours")
         os.symlink(self.root / "Other", self.root / "Plus01" / "sneaky")
 
@@ -41,7 +44,10 @@ class FolderTests(unittest.TestCase):
         servers = [ServerConfig("one", "One", log_dir="/home/amp/.ampdata/instances/A3x01/arma-reforger/x/logs")]
         self.assertEqual(files.instances_root(servers), Path("/home/amp/.ampdata/instances"))
         self.assertEqual(files.instances_root([]), Path(files.DEFAULT_ROOT))
+        # AMP's own controller has no game, so it isn't a server here.
         self.assertEqual(files.instances(self.root), ["Other", "Plus01"])
+        with self.assertRaises(files.FileError):
+            files.resolve(self.root, "ADS01")
 
     def test_mod_lists_read_and_write_the_way_amp_keeps_them(self):
         value = '{"modId": "60C4CE4888FF4621", "name": "ACE Core"},\n{"modId":"5DBD560C5148E1DA","name":"ACE Carrying","version":"1.2"}, junk'
@@ -61,6 +67,7 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.root = Path(tempfile.mkdtemp())
         (self.root / "Plus01" / "Configs").mkdir(parents=True)
+        (self.root / "Plus01" / "GenericModule.kvp").write_text('App.AppSettings={"mods":""}')
         (self.root / "Plus01" / "Configs" / "serverconfig.json").write_text('{"a": 1}\n')
         (self.root / "Plus01" / "data.bin").write_bytes(b"\0\1\2")
         self.db = PanelDB(":memory:")
