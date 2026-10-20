@@ -2281,7 +2281,8 @@ async def files_index(request):
     if not (allowed(request, "files") or allowed(request, "mods")):
         raise web.HTTPForbidden(text="You do not have permission for that.")
     root = request.app[FILES_ROOT]
-    return render(request, "files_index.html", folders=files.instances(root), root=root)
+    folders = [{"name": name, "running": files.amp_running(root / name)} for name in files.instances(root)]
+    return render(request, "files_index.html", folders=folders, root=root, has_amp=bool(request.app[AMP]))
 
 
 async def file_browser(request):
@@ -2410,26 +2411,34 @@ async def amp_login_page(request):
     return render(request, "amp_login.html", amp=amp, seen=seen, error=error)
 
 
+async def amp_instance(request, inst):
+    if not request.app[AMP]:
+        raise AmpError(f"{inst}'s AMP is running, so changes have to go through it, and the panel has no AMP login yet. "
+                       "A manager adds it under Settings → AMP login.")
+    instance = (await request.app[AMP].instances()).get(inst)
+    if not instance:
+        raise AmpError(f"AMP has no instance called {inst}.")
+    return instance
+
+
 async def mods_page(request):
     require(request, "mods")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     on_disk, mods, error = files.downloaded_mods(base), [], ""
-    if not request.app[AMP]:
-        error = "The panel isn't connected to AMP yet, so it can't read or change the mod list. A manager adds the login under Settings → AMP login."
-    else:
-        try:
-            instance = (await request.app[AMP].instances()).get(inst)
-            if not instance:
-                raise AmpError(f"AMP has no instance called {inst}.")
-            mods = files.parse_mods(await request.app[AMP].setting(instance, "mods"))
-        except AmpError as exc:
-            error = str(exc)
+    running = files.amp_running(base)
+    try:
+        if running:
+            mods = files.parse_mods(await request.app[AMP].setting(await amp_instance(request, inst), "mods"))
+        else:
+            mods = files.parse_mods(files.kvp_mods(base))
+    except (AmpError, files.FileError, OSError, ValueError) as exc:
+        error = str(exc)
     using = {m["modId"] for m in mods}
     spare = sorted(((mod_id, info) for mod_id, info in on_disk.items() if mod_id not in using),
                    key=lambda item: item[1]["name"].lower())
     return render(request, "mods.html", inst=inst, mods=mods, on_disk=on_disk, spare=spare, error=error,
-                  can_files=allowed(request, "files"))
+                  running=running, can_files=allowed(request, "files"))
 
 
 async def mods_change(request):
@@ -2442,6 +2451,8 @@ async def mods_change(request):
     name = form.get("name", "").strip()
     version = form.get("version", "").strip()
     back = f"/mods/{inst}"
+    if action not in ("add", "remove"):
+        raise web.HTTPBadRequest(text="Unknown action.")
     if not files.MOD_ID.match(mod_id):
         flash(request, "A mod ID is 16 letters and numbers, like 60C4CE4888FF4621. It's on the mod's Workshop page.", "error")
         raise web.HTTPFound(back)
@@ -2457,20 +2468,40 @@ async def mods_change(request):
             mods.append(mod)
         return files.format_mods(mods)
 
-    if action not in ("add", "remove") or not request.app[AMP]:
-        raise web.HTTPBadRequest(text="Unknown action.")
     try:
-        instance = (await request.app[AMP].instances()).get(inst)
-        if not instance:
-            raise AmpError(f"AMP has no instance called {inst}.")
-        await request.app[AMP].change_setting(instance, "mods", change)
-    except AmpError as exc:
+        # A running AMP keeps its own copy of the settings, so it has to make the
+        # change; a stopped one only has the file.
+        if files.amp_running(base):
+            await request.app[AMP].change_setting(await amp_instance(request, inst), "mods", change)
+        else:
+            files.set_kvp_mods(base, change)
+    except (AmpError, files.FileError, OSError, ValueError) as exc:
         audit(request, f"{action} mod", inst, mod_id, str(exc), ok=False)
         flash(request, str(exc), "error")
         raise web.HTTPFound(back)
     audit(request, f"{action} mod", inst, mod_id, name)
-    flash(request, f"{'Added' if action == 'add' else 'Removed'} {name or mod_id}. It applies when {inst} next restarts.")
+    flash(request, f"{'Added' if action == 'add' else 'Removed'} {name or mod_id}. It applies when {inst} next starts.")
     raise web.HTTPFound(back)
+
+
+async def instance_power(request):
+    """Start or stop a whole AMP instance from the panel."""
+    require(request, "power")
+    inst, action = request.match_info["inst"], request.match_info["action"]
+    server_folder(request)
+    if action not in ("start", "stop"):
+        raise web.HTTPNotFound()
+    try:
+        if not request.app[AMP]:
+            raise AmpError("The panel has no AMP login yet. A manager adds it under Settings → AMP login.")
+        await request.app[AMP].instance_power(inst, action)
+    except AmpError as exc:
+        audit(request, f"{action} AMP instance", inst, detail=str(exc), ok=False)
+        flash(request, str(exc), "error")
+        raise web.HTTPFound("/files")
+    audit(request, f"{action} AMP instance", inst)
+    flash(request, f"{'Starting' if action == 'start' else 'Stopping'} {inst}'s AMP. Give it a few seconds, then reload.")
+    raise web.HTTPFound("/files")
 
 
 async def network_page(request):
@@ -3158,6 +3189,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/files/{inst}", file_action)
     app.router.add_get("/files/{inst}/{rel:.*}", file_browser)
     app.router.add_post("/files/{inst}/{rel:.*}", file_action)
+    app.router.add_post("/instances/{inst}/{action}", instance_power)
     app.router.add_get("/mods/{inst}", mods_page)
     app.router.add_post("/mods/{inst}", mods_change)
     app.router.add_route("GET", "/console", console_page)

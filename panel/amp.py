@@ -99,6 +99,15 @@ class Amp:
                     found[inst["InstanceName"]] = inst
         return found
 
+    async def instance_power(self, name, action):
+        """Start or stop a whole AMP instance (its manager, not just the game) through ADS."""
+        endpoint = {"start": "ADSModule/StartInstance", "stop": "ADSModule/StopInstance"}[action]
+        async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
+            session = await self._login(http, self.url)
+            result = await self._call(http, self.url, session, endpoint, {"InstanceName": name})
+        if isinstance(result, dict) and result.get("Status") is False:
+            raise AmpError(f"AMP didn't {action} {name}: {result.get('Reason') or 'no reason given'}")
+
     async def _instance(self, http, inst):
         """A logged-in way to reach one instance: through ADS first, straight to its own port if that fails."""
         routes = [f"{self.url}/API/ADSModule/Servers/{inst['InstanceID']}"]

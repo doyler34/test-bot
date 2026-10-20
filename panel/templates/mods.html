@@ -5,6 +5,7 @@
 <h1>{{ inst }} mods</h1>
 <p class="muted">The mods this server loads, saved into AMP. Changes apply when the server next restarts; the game downloads any it doesn't have yet.{% if can_files %} <a href="/files/{{ inst }}">Open its files</a>.{% endif %}</p>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+{% if not running %}<p class="muted">{{ inst }}'s AMP is off, so changes are saved straight into its settings file and used when it's started.</p>{% endif %}
 
 <section class="card">
   <h2>Loaded ({{ mods|length }})</h2>

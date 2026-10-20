@@ -178,6 +178,47 @@ def format_mods(mods):
     return ",\n".join(json.dumps(m) for m in mods)
 
 
+def amp_running(base, proc="/proc"):
+    """Whether this instance's own AMP is running: a program started from inside its folder."""
+    for entry in Path(proc).iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            exe = os.readlink(entry / "exe")
+        except OSError:
+            continue
+        if exe.startswith(f"{base}/") and Path(exe).name.startswith("AMP_"):
+            return True
+    return False
+
+
+KVP = "GenericModule.kvp"
+SETTINGS_LINE = "App.AppSettings="
+
+
+def kvp_mods(base):
+    """The mod list straight from the instance's settings file, for when its AMP is off."""
+    for line in (base / KVP).read_text(encoding="utf-8").splitlines():
+        if line.startswith(SETTINGS_LINE):
+            return str(json.loads(line[len(SETTINGS_LINE):]).get("mods") or "")
+    raise FileError(f"No game settings in {KVP}.")
+
+
+def set_kvp_mods(base, change):
+    """Change the mod list in the settings file. Only safe while that instance's AMP
+    is stopped: a running one keeps its own copy and writes it back."""
+    path = base / KVP
+    lines = path.read_text(encoding="utf-8").split("\n")
+    for n, line in enumerate(lines):
+        if line.startswith(SETTINGS_LINE):
+            settings = json.loads(line[len(SETTINGS_LINE):])
+            settings["mods"] = change(str(settings.get("mods") or ""))
+            lines[n] = SETTINGS_LINE + json.dumps(settings, separators=(",", ":"), ensure_ascii=False)
+            write_text(path, "\n".join(lines))
+            return settings["mods"]
+    raise FileError(f"No game settings in {KVP}.")
+
+
 def downloaded_mods(base):
     """Mods already on disk for this server: {mod ID: folder name}."""
     found = {}

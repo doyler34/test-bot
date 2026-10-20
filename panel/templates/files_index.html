@@ -3,15 +3,22 @@
 {% block body %}
 <p class="kicker"><a href="/settings">← Settings</a></p>
 <h1>Server files & mods</h1>
-<p class="muted">Every server AMP runs on this box. <b>Mods</b> is the list of mods that server loads; <b>Files</b> is its whole folder, like AMP's File Manager. Mod changes apply when that server next restarts.</p>
+<p class="muted">Every server AMP runs on this box. <b>Mods</b> is the list of mods that server loads; <b>Files</b> is its whole folder, like AMP's File Manager. Mod changes apply when that server next starts. <b>AMP on/off</b> is that server's AMP manager; with it off, the game server can't run, but its mods can still be changed here.</p>
 {% if folders %}
 <div class="cards">
   {% for f in folders %}
   <section class="card files-server">
-    <h2>{{ f }}</h2>
+    <h2>{{ f.name }} <span class="pill {{ 'on' if f.running else '' }}">AMP {{ "on" if f.running else "off" }}</span></h2>
     <div class="row-actions">
-      {% if can("mods") %}<a class="button small" href="/mods/{{ f }}">Mods</a>{% endif %}
-      {% if can("files") %}<a class="button small ghost" href="/files/{{ f }}">Files</a>{% endif %}
+      {% if can("mods") %}<a class="button small" href="/mods/{{ f.name }}">Mods</a>{% endif %}
+      {% if can("files") %}<a class="button small ghost" href="/files/{{ f.name }}">Files</a>{% endif %}
+      {% if can("power") and has_amp %}
+      <form method="post" action="/instances/{{ f.name }}/{{ 'stop' if f.running else 'start' }}" class="inline"
+            {% if f.running %}data-confirm="Stop {{ f.name }}'s AMP? Its game server stops with it."{% endif %}>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="small {{ 'danger' if f.running else '' }}">{{ "Stop AMP" if f.running else "Start AMP" }}</button>
+      </form>
+      {% endif %}
     </div>
   </section>
   {% endfor %}

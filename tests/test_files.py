@@ -136,6 +136,9 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         addons = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "addons"
         (addons / "ACECarrying_5DBD560C5148E1DA").mkdir(parents=True)
         token = await self.login("boss")
+        running = mock.patch("panel.files.amp_running", return_value=True)
+        running.start()
+        self.addCleanup(running.stop)
         page = await (await self.client.get("/mods/Plus01")).text()
         self.assertIn("ACE Core", page)
         self.assertIn("Downloaded but not loaded (1)", page)
@@ -145,6 +148,43 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([m["modId"] for m in files.parse_mods(stored["value"])], ["5DBD560C5148E1DA"])
         await self.client.post("/mods/Plus01", data={"csrf": token, "action": "add", "mod_id": "nope"})
         self.assertEqual(len(files.parse_mods(stored["value"])), 1)
+
+
+    async def test_with_amp_off_mods_go_straight_into_its_settings_file(self):
+        kvp = self.root / "Plus01" / "GenericModule.kvp"
+        kvp.write_text('App.ExitTimeout=5\nApp.AppSettings={"name":"OYB Plus","mods":"","maxFPS":"120"}\nApp.Other=1')
+        token = await self.login("boss")
+        with mock.patch("panel.files.amp_running", return_value=False):
+            page = await (await self.client.get("/mods/Plus01")).text()
+            self.assertIn("AMP is off", page)
+            await self.client.post("/mods/Plus01", data={"csrf": token, "action": "add", "mod_id": "60C4CE4888FF4621",
+                                                         "name": "ACE Core"})
+        lines = kvp.read_text().split("\n")
+        self.assertEqual((lines[0], lines[2]), ("App.ExitTimeout=5", "App.Other=1"))
+        settings = json.loads(lines[1].split("=", 1)[1])
+        self.assertEqual((settings["name"], settings["maxFPS"]), ("OYB Plus", "120"))
+        self.assertEqual(files.parse_mods(settings["mods"]), [{"modId": "60C4CE4888FF4621", "name": "ACE Core"}])
+
+    async def test_amp_instances_start_and_stop_from_the_panel(self):
+        amp = mock.Mock()
+        amp.instance_power = mock.AsyncMock()
+        self.app[AMP] = amp
+        token = await self.login("boss")
+        with mock.patch("panel.files.amp_running", return_value=False):
+            page = await (await self.client.get("/files")).text()
+        self.assertIn('action="/instances/Plus01/start"', page)
+        await self.client.post("/instances/Plus01/start", data={"csrf": token})
+        amp.instance_power.assert_awaited_once_with("Plus01", "start")
+        self.assertEqual((await self.client.post("/instances/..%2fx/start", data={"csrf": token})).status, 404)
+
+    def test_amp_counts_as_running_when_its_program_is_in_the_folder(self):
+        proc = Path(tempfile.mkdtemp())
+        (proc / "123").mkdir()
+        os.symlink(f"{self.root}/Plus01/AMP_Linux_x86_64", proc / "123" / "exe")
+        (proc / "456").mkdir()
+        os.symlink("/usr/bin/python3", proc / "456" / "exe")
+        self.assertTrue(files.amp_running(self.root / "Plus01", proc))
+        self.assertFalse(files.amp_running(self.root / "Other", proc))
 
 
 class AmpLoginTests(unittest.IsolatedAsyncioTestCase):
