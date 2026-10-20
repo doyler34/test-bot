@@ -1,9 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Server manager · OYB Control{% endblock %}
+{% block head %}<script src="/static/manage.js?v={{ asset_version }}" defer></script>{% endblock %}
 {% block body %}
 <h1>Server manager</h1>
 <p class="muted">Every server AMP runs on this box, run from here instead of AMP: power, console, settings, mods and files. <b>AMP on/off</b> is that server's AMP manager; the game server only runs while it's on.</p>
 {% if not has_amp %}<div class="flash error">The panel has no AMP login yet, so only Files and Mods work. Add it under <a href="/settings/amp">Settings → AMP login</a>.</div>{% endif %}
+{% for name, p in setups %}
+<section class="card setup-progress {{ 'bad' if p.error else ('done' if p.done else '') }}">
+  <div class="row"><h2>Setting up {{ name }}</h2><span class="muted">{{ p.at|ago }} · by {{ p.by }}</span></div>
+  <p>{% if not p.done %}<span class="spinner" aria-hidden="true"></span>{% endif %}{{ p.step }}</p>
+  {% if p.error %}<p class="warn">{{ p.error }}</p>{% endif %}
+</section>
+{% endfor %}
 {% if folders %}
 <div class="cards">
   {% for f in folders %}
@@ -26,20 +34,5 @@
 <p class="muted">No server folders found in <code>{{ root }}</code>.</p>
 {% endif %}
 
-{% if has_amp and folders %}
-<details class="card new-server">
-  <summary><b>+ New server</b></summary>
-  <form method="post" action="/manage/new" data-confirm="Make a new server? AMP sets it up and downloads the game, which takes a few minutes.">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <div class="grid">
-      <label>Name <span class="muted">(no spaces, e.g. Arland02)</span>
-        <input name="name" required pattern="[A-Za-z][A-Za-z0-9]{2,30}" maxlength="31" autocomplete="off" autocapitalize="off"></label>
-      <label>Display name <span class="muted">(shown in AMP)</span> <input name="friendly" maxlength="60" placeholder="Arland 2"></label>
-      <label>Same game as <select name="copy_from">{% for f in folders %}<option>{{ f.name }}</option>{% endfor %}</select></label>
-    </div>
-    <p class="muted">It's made from the same game template as the server you pick, with its own ports. Its settings start empty, so set its name, scenario and the rest in its Settings tab before starting it.</p>
-    <button>Make server</button>
-  </form>
-</details>
-{% endif %}
+{% if has_amp and folders %}<p><a class="button" href="/manage/new">+ New server</a></p>{% endif %}
 {% endblock %}

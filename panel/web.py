@@ -2309,35 +2309,132 @@ async def manage_index(request):
     root = request.app[FILES_ROOT]
     folders = [{"name": name, "running": files.amp_running(root / name)} for name in files.instances(root)]
     return render(request, "manage_index.html", folders=folders, root=root, has_amp=bool(request.app[AMP]),
-                  name_rule=files.INSTANCE_NAME.pattern)
+                  setups=sorted(request.app[SETUPS].items(), key=lambda item: -item[1]["at"]))
+
+
+SETUPS = web.AppKey("setups", dict)
+# What a new server copies from the one it's based on is everything in its game
+# settings except these, which are this server's own.
+OWN_SETTINGS = ("name", "password", "adminPassword", "publicAddress", "ManualPublicIP")
+
+
+async def manage_new_page(request):
+    require(request, "files")
+    root = request.app[FILES_ROOT]
+    folders = files.instances(root)
+    if not folders:
+        raise web.HTTPFound("/manage")
+    source = request.query.get("from") if request.query.get("from") in folders else folders[0]
+    base, _ = files.resolve(root, source)
+    current = files.game_settings(base)
+    return render(request, "manage_new.html", folders=folders, source=source, current=current,
+                  scenarios=files.scenarios(base), admin_password=secrets.token_urlsafe(12).replace("-", "x").replace("_", "y"),
+                  has_amp=bool(request.app[AMP]))
+
+
+def new_server_settings(source_settings, form):
+    """The game settings a new server is given: its source's, then what was typed in."""
+    settings = {k: v for k, v in source_settings.items() if k not in OWN_SETTINGS} if form.get("copy") else {}
+    if form.get("copy") and not form.get("copy_mods"):
+        settings["mods"] = ""
+    if form.get("copy") and not form.get("copy_admins"):
+        settings["admins"] = ""
+    typed = {"name": form.get("server_name", "").strip()[:100], "scenarioId": form.get("scenario", ""),
+             "$MaxUsers": form.get("players", "").strip(), "password": form.get("password", ""),
+             "adminPassword": form.get("admin_password", "")}
+    settings.update({k: v for k, v in typed.items() if v})
+    for key in ("crossPlatform", "visible"):
+        settings[key] = "true" if form.get(key) else "false"
+    return settings
 
 
 async def manage_create(request):
-    """A new game server, made from the same game template as one that already exists."""
+    """A new game server: made from an existing one's game template, then given its
+    settings and (if asked) started, in the background, with progress on the list."""
     require(request, "files")
     root = request.app[FILES_ROOT]
     form = await request.post()
-    name, friendly = form.get("name", "").strip(), form.get("friendly", "").strip() or form.get("name", "").strip()
+    name = form.get("name", "").strip()
+    friendly = form.get("friendly", "").strip() or name
     source = form.get("copy_from", "")
+    back = f"/manage/new?from={quote(source)}"
     try:
         if not request.app[AMP]:
             raise AmpError("The panel has no AMP login yet. Add it under Settings → AMP login.")
         if not files.INSTANCE_NAME.match(name):
             raise files.FileError("Server names are 3 to 31 letters and numbers, starting with a letter, like Arland02.")
-        if (root / name).exists():
+        if (root / name).exists() or name in request.app[SETUPS]:
             raise files.FileError(f"There's already a server called {name}.")
+        if not form.get("server_name", "").strip():
+            raise files.FileError("Give it a server name for the in-game browser.")
+        admin_password = form.get("admin_password", "")
+        if admin_password and not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", admin_password):
+            raise files.FileError("The admin password can only use letters, numbers, - and _ (32 at most).")
+        if form.get("password") and not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", form.get("password")):
+            raise files.FileError("The server password can only use letters, numbers, - and _.")
         base, _ = files.resolve(root, source)
         provision = files.provision_from(base)
+        settings = new_server_settings(files.game_settings(base), form)
         port = max(files.used_ports(root) | {8080}) + 1
         await request.app[AMP].create_instance(name, friendly[:60], port, provision)
-    except (AmpError, files.FileError, OSError) as exc:
+    except (AmpError, files.FileError, OSError, ValueError) as exc:
         audit(request, "create server", name, detail=str(exc), ok=False)
         flash(request, f"{name or 'The server'} wasn't made: {exc}", "error")
-        raise web.HTTPFound("/manage")
+        raise web.HTTPFound(back)
     audit(request, "create server", name, detail=f"like {source}, AMP port {port}")
-    flash(request, f"Making {name}. AMP is setting it up and downloading Arma Reforger, which takes a few minutes. "
-                   "Its settings start empty: fill them in under its Settings tab.")
+    request.app[SETUPS][name] = {"step": "Created in AMP, waiting for it to start up", "done": False, "error": "",
+                                 "at": now(), "by": request[USER]["username"]}
+    task = asyncio.create_task(finish_setup(request.app, name, settings, bool(form.get("start"))))
+    request.app[SETUP_TASKS].add(task)
+    task.add_done_callback(request.app[SETUP_TASKS].discard)
+    flash(request, f"Making {name}. Its progress shows below; you can leave this page.")
     raise web.HTTPFound("/manage")
+
+
+SETUP_TASKS = web.AppKey("setup_tasks", set)
+BUSY_STATES = (5, 7, 10, 70, 75)
+
+
+async def finish_setup(app, name, settings, start, pause=5, patience=600, download=3600):
+    """Wait for the new instance to answer, give it its settings, wait out the game
+    download and start it. Every step is written where the Server manager shows it."""
+    progress = app[SETUPS][name]
+    amp = app[AMP]
+
+    def step(text, **extra):
+        progress.update(step=text, at=now(), **extra)
+
+    try:
+        instance = None
+        for _ in range(int(patience / pause)):
+            instance = (await amp.instances()).get(name)
+            if instance:
+                try:
+                    await amp.status(instance)
+                    break
+                except AmpError:
+                    pass
+            await asyncio.sleep(pause)
+        else:
+            raise AmpError("AMP made it but it never answered. Check it in AMP.")
+        step("Applying its settings")
+        refused = await amp.set_configs(instance, {GAME_NODE + k: v for k, v in settings.items()})
+        if refused:
+            step("Settings applied, except " + ", ".join(n.rsplit(".", 1)[-1] for n in refused))
+        if not start:
+            step("Ready. Press Start on its page when you want it running.", done=True)
+            return
+        step("Downloading Arma Reforger (this takes a while)")
+        for _ in range(int(download / (pause * 4))):
+            state = (await amp.status(instance)).get("State")
+            if state not in BUSY_STATES:
+                break
+            await asyncio.sleep(pause * 4)
+        step("Starting the game server")
+        await amp.power(instance, "start")
+        step("Started", done=True)
+    except (AmpError, OSError) as exc:
+        step("Stopped", done=True, error=str(exc))
 
 
 async def manage_delete(request):
@@ -3383,6 +3480,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[STATS] = OybStats(config.oyb_data)
     app[NETCHECK] = {}
     app[CONSOLE] = {}
+    app[SETUPS] = {}
+    app[SETUP_TASKS] = set()
     app[FILES_ROOT] = files.instances_root(config.servers)
     app[PICTURES] = Path(config.database).resolve().parent / "server-pictures"
     app[BM] = BanSync(app[DB], config.battlemetrics_token, config.battlemetrics_ban_list) \
@@ -3488,6 +3587,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_route("GET", "/settings/amp", amp_login_page)
     app.router.add_post("/settings/amp", amp_login_page)
     app.router.add_get("/manage", manage_index)
+    app.router.add_get("/manage/new", manage_new_page)
     app.router.add_post("/manage/new", manage_create)
     app.router.add_get("/manage/{inst}", manage_overview)
     app.router.add_post("/manage/{inst}/delete", manage_delete)

@@ -299,6 +299,26 @@ def game_fields(base):
             and str(f.get("InputType", "")).lower() != "hidden"]
 
 
+def game_settings(base):
+    """Every game setting this server has saved, by field name, from its settings file."""
+    for line in (base / KVP).read_text(encoding="utf-8").splitlines():
+        if line.startswith(SETTINGS_LINE):
+            found = json.loads(line[len(SETTINGS_LINE):])
+            return {str(k): v if isinstance(v, str) else json.dumps(v) for k, v in found.items()}
+    return {}
+
+
+def scenarios(base):
+    """{id: name} for the scenario dropdown, from the server's manifest."""
+    try:
+        for field in json.loads((base / MANIFEST).read_text(encoding="utf-8")):
+            if isinstance(field, dict) and field.get("FieldName") == "scenarioId":
+                return {str(k): str(v) for k, v in (field.get("EnumValues") or {}).items()}
+    except (OSError, ValueError):
+        pass
+    return {}
+
+
 def kvp_mods(base):
     """The mod list straight from the instance's settings file, for when its AMP is off."""
     for line in (base / KVP).read_text(encoding="utf-8").splitlines():

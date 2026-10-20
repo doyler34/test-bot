@@ -58,3 +58,10 @@ if (form) {
   });
   form.addEventListener("submit", () => { form.dataset.sending = "1"; });
 }
+
+// New server: picking another server to copy from reloads its scenario and player limit.
+const from = document.querySelector("[data-reload-from]");
+from?.addEventListener("change", () => { location.href = "/manage/new?from=" + encodeURIComponent(from.value); });
+
+// Server manager list: while a new server is being set up, check on it every few seconds.
+if (document.querySelector(".setup-progress .spinner")) setTimeout(() => location.reload(), 8000);

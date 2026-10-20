@@ -155,6 +155,21 @@ class Amp:
         return [{**setting, "Node": setting.get("Node") or node} for node, setting in zip(nodes, replies)
                 if isinstance(setting, dict) and setting.get("Name")]
 
+    async def set_configs(self, inst, values):
+        """Several settings ({node: value}) in one login; the nodes AMP refused, by reason."""
+        refused = {}
+        async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
+            base, session = await self._instance(http, inst)
+            for node, value in values.items():
+                try:
+                    result = await self._call(http, base, session, "Core/SetConfig", {"node": node, "value": value})
+                except AmpError as exc:
+                    refused[node] = str(exc)
+                    continue
+                if isinstance(result, dict) and result.get("Status") is False:
+                    refused[node] = result.get("Reason") or "refused"
+        return refused
+
     async def set_config(self, inst, node, value):
         result = await self.ask(inst, "Core/SetConfig", {"node": node, "value": value})
         if isinstance(result, dict) and result.get("Status") is False:

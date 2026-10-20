@@ -1591,3 +1591,12 @@ body.map-open { overflow: hidden; }
 .danger-zone { border-color: rgba(220, 70, 60, .5); }
 .danger-zone summary b { color: var(--red); }
 .danger-zone label { max-width: 360px; margin-bottom: 10px; }
+.new-wizard .switch { margin: 6px 0; }
+.new-wizard h2 { display: flex; align-items: center; gap: 10px; }
+.step { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--gold);
+  color: #111; font-size: .85rem; font-weight: 700; }
+.setup-progress.done { border-color: rgba(60, 207, 94, .45); }
+.setup-progress.bad { border-color: rgba(220, 70, 60, .5); }
+.spinner { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border: 2px solid var(--line);
+  border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; }
+@keyframes spin { to { transform: rotate(360deg); } }

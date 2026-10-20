@@ -14,6 +14,9 @@ from panel.amp import AmpError
 from panel.config import PanelConfig, ServerConfig
 from panel.db import PanelDB
 from panel.servers import ServerManager
+import asyncio
+
+from panel import web as web_module
 from panel.web import AMP, FILES_ROOT, create_app
 
 
@@ -295,26 +298,61 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         amp.change_admins.assert_awaited_with(instance, add=[], remove=[gaz])
 
 
-    async def test_making_a_new_server_copies_the_game_template(self):
+    async def test_making_a_new_server_copies_the_template_and_settings_then_finishes_in_the_background(self):
         (self.root / "Plus01" / "GenericModule.kvp").write_text(
             "Meta.DisplayName=Arma Reforger\nMeta.ConfigManifest=arma-reforgerconfig.json\n"
             "Meta.MetaConfigManifest=arma-reforgermetaconfig.json\nMeta.ConfigRoot=arma-reforger.kvp\n"
-            "Meta.Author=Greelan\nApp.AppSettings={}")
+            "Meta.Author=Greelan\n"
+            'App.AppSettings={"name":"OYB Plus","scenarioId":"{ECC}","password":"old","adminPassword":"old",'
+            '"$MaxUsers":"64","mods":"{\\"modId\\":\\"60C4CE4888FF4621\\"}","admins":"\\"a\\"","maxFPS":"120"}')
+        (self.root / "Plus01" / "configmanifest.json").write_text(json.dumps([
+            {"FieldName": "scenarioId", "EnumValues": {"{ECC}": "Conflict - Everon", "{ARL}": "Conflict - Arland"}}]))
         (self.root / "Plus01" / "AMPConfig.conf").write_text("Webserver.Port=8084\n")
+        instance = {"InstanceID": "n", "InstanceName": "Arland02"}
         amp = mock.Mock()
         amp.create_instance = mock.AsyncMock()
+        amp.instances = mock.AsyncMock(return_value={"Arland02": instance})
+        amp.status = mock.AsyncMock(side_effect=[{"State": 0}, {"State": 75}, {"State": 0}])
+        amp.set_configs = mock.AsyncMock(return_value={})
+        amp.power = mock.AsyncMock()
         self.app[AMP] = amp
         token = await self.login("chief")
-        await self.client.post("/manage/new", data={"csrf": token, "name": "bad name", "copy_from": "Plus01"})
+        page = await (await self.client.get("/manage/new")).text()
+        self.assertIn("Conflict - Arland", page)
+        self.assertIn('value="64"', page)
+        await self.client.post("/manage/new", data={"csrf": token, "name": "bad name", "copy_from": "Plus01",
+                                                     "server_name": "X"})
         amp.create_instance.assert_not_awaited()
-        await self.client.post("/manage/new", data={"csrf": token, "name": "Plus01", "copy_from": "Plus01"})
-        amp.create_instance.assert_not_awaited()                     # already exists
-        await self.client.post("/manage/new", data={"csrf": token, "name": "Arland02", "friendly": "Arland 2",
-                                                     "copy_from": "Plus01"})
+        real = web_module.finish_setup
+        with mock.patch("panel.web.finish_setup", new=lambda app, name, settings, start: real(
+                app, name, settings, start, pause=0.001)):
+            await self.client.post("/manage/new", data={
+                "csrf": token, "name": "Arland02", "friendly": "Arland 2", "copy_from": "Plus01", "copy": "1",
+                "copy_mods": "1", "server_name": "OYB Arland", "scenario": "{ARL}", "players": "100",
+                "admin_password": "newadmin1", "visible": "1", "start": "1"})
+            for _ in range(200):
+                if self.app[web_module.SETUPS]["Arland02"]["done"]:
+                    break
+                await asyncio.sleep(0.01)
         amp.create_instance.assert_awaited_once_with("Arland02", "Arland 2", 8085, {
             "GenericModule.Meta.DisplayName": "Arma Reforger", "GenericModule.Meta.ConfigManifest": "arma-reforgerconfig.json",
             "GenericModule.Meta.MetaConfigManifest": "arma-reforgermetaconfig.json",
             "GenericModule.Meta.ConfigRoot": "arma-reforger.kvp"})
+        self.assertTrue(self.app[web_module.SETUPS]["Arland02"]["done"], self.app[web_module.SETUPS]["Arland02"])
+        applied = amp.set_configs.await_args.args[1]
+        self.assertEqual(applied["Meta.GenericModule.name"], "OYB Arland")
+        self.assertEqual(applied["Meta.GenericModule.scenarioId"], "{ARL}")
+        self.assertEqual(applied["Meta.GenericModule.$MaxUsers"], "100")
+        self.assertEqual(applied["Meta.GenericModule.maxFPS"], "120")                 # copied
+        self.assertEqual(applied["Meta.GenericModule.adminPassword"], "newadmin1")
+        self.assertNotIn("Meta.GenericModule.password", applied)                       # never copied
+        self.assertEqual(applied["Meta.GenericModule.admins"], "")                     # admins not ticked
+        self.assertIn("60C4CE4888FF4621", applied["Meta.GenericModule.mods"])
+        self.assertEqual((applied["Meta.GenericModule.visible"], applied["Meta.GenericModule.crossPlatform"]),
+                         ("true", "false"))
+        amp.power.assert_awaited_once_with(instance, "start")
+        self.assertEqual(self.app[web_module.SETUPS]["Arland02"]["step"], "Started")
+        self.assertIn("Setting up Arland02", await (await self.client.get("/manage")).text())
 
     async def test_deleting_a_server_is_named_people_only_typed_out_and_backed_up_first(self):
         game = self.root / "Plus01" / "arma-reforger" / "1874900"
