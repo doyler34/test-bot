@@ -1467,3 +1467,33 @@ body.map-open { overflow: hidden; }
 @media (max-width: 420px) {
   .combat-vs { grid-template-columns: 1fr; }
 }
+
+/* ==== phones, second pass: less padding, bigger targets, nothing hidden under the bars ==== */
+@media (max-width: 720px) {
+  main > h1, main > .kicker:first-child { margin-top: 8px; }
+  h1 + .muted { margin-top: 6px; }
+  .card { padding: 14px; margin-bottom: 12px; }
+  .cards { gap: 10px; }
+  .cards > a.card { padding: 12px 14px; }
+  .cards > a.card h2 { margin: 0; font-size: 1.05rem; }
+  .cards > a.card p { margin: 4px 0 0; }
+  .guide-cards { gap: 10px; }
+  .guide-card { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; padding: 12px 14px; }
+  .guide-card .num { grid-row: span 2; font-size: 1.2rem; line-height: 1.4; }
+  .guide-card h2 { margin: 0 0 2px; font-size: 1.05rem; }
+  .guide td, .guide th { white-space: normal; }
+  button.small, .button.small, a.button.small { min-height: 36px; }
+  input[type=checkbox], input[type=radio] { width: 20px; height: 20px; flex: none; }
+  input[type=number] { max-width: 10em; }
+  label + label, input + label, select + label, textarea + label { margin-top: 12px; }
+  textarea { min-height: 7em; }
+  .legend { flex-wrap: wrap; gap: 2px 10px; }
+  .legend > span:nth-child(2) { order: 3; flex-basis: 100%; }
+  .dc-actions { padding: 8px 14px; gap: 8px; }
+  .dc-pick button { width: 100%; }
+  .dc-status { padding: 10px 14px; }
+  table.stack td.none { display: none; }
+  table.stack td.inline { display: inline; width: auto; margin-right: 10px; }
+  form.search { flex-wrap: wrap; }
+  form.search input[name=q] { flex: 1 1 100%; }
+}

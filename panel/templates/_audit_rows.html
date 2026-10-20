@@ -4,11 +4,11 @@
   <tbody>
   {% for r in recent %}
   <tr class="{{ '' if r.ok else 'bad' }}">
-    <td title="{{ r.at|ts }}" class="muted">{{ r.at|ago }}</td>
-    <td data-label="By">{{ r.username }}</td>
+    <td title="{{ r.at|ts }}" class="muted inline">{{ r.at|ago }}</td>
+    <td data-label="By" class="inline">{{ r.username }}</td>
     <td class="strong">{{ r.action }}</td>
-    <td data-label="Server">{{ r.server or "—" }}</td>
-    <td data-label="Target">{{ r.target or "—" }}</td>
+    <td data-label="Server"{% if not r.server %} class="none"{% endif %}>{{ r.server or "—" }}</td>
+    <td data-label="Target"{% if not r.target %} class="none"{% endif %}>{{ r.target or "—" }}</td>
     <td class="wrap detail">{{ r.detail }}</td>
   </tr>
   {% endfor %}
