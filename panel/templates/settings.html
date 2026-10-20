@@ -33,7 +33,7 @@
     <p class="muted">The public site's words, servers and rules.</p>
   </a>
   {% endif %}
-  {% if can("console") %}
+  {% if is_owner %}
   <a class="card" href="/settings/amp">
     <h2>AMP login</h2>
     <p class="muted">The AMP account the panel uses for power buttons, in-game admins and mods.</p>

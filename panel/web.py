@@ -2164,7 +2164,7 @@ SETTINGS_PERMISSIONS = ("sus", "game_admins", "users", "cards", "website", "mort
 async def settings_page(request):
     if not any(allowed(request, p) for p in SETTINGS_PERMISSIONS):
         raise web.HTTPForbidden(text="You do not have permission for that.")
-    return render(request, "settings.html")
+    return render(request, "settings.html", is_owner=named(request))
 
 
 async def data_page(request):
@@ -2814,8 +2814,9 @@ async def file_action(request):
 
 
 async def amp_login_page(request):
-    """Give the panel its AMP login from here, so nobody needs a shell on the box for it."""
-    require(request, "console")
+    """Give the panel its AMP login from here. Only the panel's owners: it's the key to all of AMP."""
+    if not named(request):
+        raise web.HTTPForbidden(text="Only the panel's owners can change the AMP login.")
     amp, seen, error = request.app[AMP], [], ""
     if request.method == "POST":
         form = await request.post()
