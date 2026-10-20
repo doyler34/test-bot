@@ -2303,13 +2303,41 @@ async def files_index(request):
     raise web.HTTPFound("/manage")
 
 
+def manage_card(request, root, name, amp_info, panel_states):
+    """What one server's card on the Server manager shows, all read from the box."""
+    base = root / name
+    try:
+        settings = files.game_settings(base)
+    except (OSError, ValueError):
+        settings = {}
+    game = files.game_process(base)
+    live = panel_states.get(name)
+    info = amp_info.get(name) or {}
+    return {"name": name, "running": files.amp_running(base), "game": game,
+            "friendly": info.get("FriendlyName") or "", "server_name": settings.get("name", ""),
+            "mods": len(files.parse_mods(settings.get("mods", ""))), "admins": len(parse_ids(settings.get("admins", ""))),
+            "max": settings.get("$MaxUsers", ""), "players": len(live.players) if live and live.online else None,
+            "map": (live.query.get("map") if live and live.online else "") or "",
+            "panel_id": live.config.id if live else ""}
+
+
 async def manage_index(request):
     """Every AMP server on the box, like AMP's Instances page."""
     require(request, "files")
     root = request.app[FILES_ROOT]
-    folders = [{"name": name, "running": files.amp_running(root / name)} for name in files.instances(root)]
+    amp_info = {}
+    if request.app[AMP]:
+        try:
+            amp_info = await request.app[AMP].instances()
+        except AmpError:
+            pass
+    panel_states = {(st.config.amp_instance or amp_instance_name(st.config.log_dir)): st
+                    for st in request.app[MANAGER].states.values()}
+    folders = [manage_card(request, root, name, amp_info, panel_states) for name in files.instances(root)]
+    totals = {"running": sum(1 for f in folders if f["game"]), "players": sum(f["players"] or 0 for f in folders),
+              "memory": sum(f["game"]["memory"] for f in folders if f["game"])}
     return render(request, "manage_index.html", folders=folders, root=root, has_amp=bool(request.app[AMP]),
-                  setups=sorted(request.app[SETUPS].items(), key=lambda item: -item[1]["at"]))
+                  totals=totals, setups=sorted(request.app[SETUPS].items(), key=lambda item: -item[1]["at"]))
 
 
 SETUPS = web.AppKey("setups", dict)

@@ -194,14 +194,35 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
     async def test_amp_instances_start_and_stop_from_the_panel(self):
         amp = mock.Mock()
         amp.instance_power = mock.AsyncMock()
+        amp.instances = mock.AsyncMock(return_value={"Plus01": {"FriendlyName": "OYB Plus"}})
         self.app[AMP] = amp
+        (self.root / "Plus01" / "GenericModule.kvp").write_text(
+            'App.AppSettings={"name":"[OYB] Plus | Modded","$MaxUsers":"64","mods":"{\\"modId\\":\\"60C4CE4888FF4621\\"}",'
+            '"admins":"\\"a0b1c2d3-e4f5-4a6b-8c7d-9e0f1a2b3c4d\\""}')
         token = await self.login("chief")
         with mock.patch("panel.files.amp_running", return_value=False):
             page = await (await self.client.get("/manage")).text()
         self.assertIn('action="/instances/Plus01/start"', page)
+        for words in (">OYB Plus</a>", "[OYB] Plus | Modded", "<span> / 64</span>", "AMP off", "Servers running"):
+            self.assertIn(words, page)
         await self.client.post("/instances/Plus01/start", data={"csrf": token})
         amp.instance_power.assert_awaited_once_with("Plus01", "start")
         self.assertEqual((await self.client.post("/instances/..%2fx/start", data={"csrf": token})).status, 404)
+
+    def test_a_running_game_reports_its_memory_and_uptime(self):
+        proc = Path(tempfile.mkdtemp())
+        (proc / "uptime").write_text("10000.0 1.0\n")
+        game = proc / "321"
+        game.mkdir()
+        os.symlink(f"{self.root}/Plus01/arma-reforger/1874900/ArmaReforgerServer", game / "exe")
+        ticks = os.sysconf("SC_CLK_TCK")
+        started = 10000 - 3600                                      # an hour ago, in seconds since boot
+        (game / "stat").write_text("321 (ArmaReforgerSer) S " + " ".join(["0"] * 18) + f" {started * ticks} 0 0\n")
+        (game / "status").write_text("Name:\tArmaReforgerSer\nVmRSS:\t5242880 kB\n")
+        found = files.game_process(self.root / "Plus01", proc)
+        self.assertEqual(found["memory"], 5 * 1024 ** 3)
+        self.assertAlmostEqual(found["up"], 3600, delta=5)
+        self.assertIsNone(files.game_process(self.root / "Other", proc))
 
     def test_amp_counts_as_running_when_its_program_is_in_the_folder(self):
         proc = Path(tempfile.mkdtemp())

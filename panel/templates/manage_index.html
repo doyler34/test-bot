@@ -2,9 +2,23 @@
 {% block title %}Server manager · OYB Control{% endblock %}
 {% block head %}<script src="/static/manage.js?v={{ asset_version }}" defer></script>{% endblock %}
 {% block body %}
-<h1>Server manager</h1>
-<p class="muted">Every server AMP runs on this box, run from here instead of AMP: power, console, settings, mods and files. <b>AMP on/off</b> is that server's AMP manager; the game server only runs while it's on.</p>
+<div class="mgr-head">
+  <div>
+    <h1>Server manager</h1>
+    <p class="muted">Every server AMP runs on this box: power, console, settings, mods and files, without opening AMP.</p>
+  </div>
+  {% if has_amp and folders %}<a class="button" href="/manage/new">+ New server</a>{% endif %}
+</div>
 {% if not has_amp %}<div class="flash error">The panel has no AMP login yet, so only Files and Mods work. Add it under <a href="/settings/amp">Settings → AMP login</a>.</div>{% endif %}
+
+{% if folders %}
+<div class="mgr-totals">
+  <div><b>{{ totals.running }}<span> / {{ folders|length }}</span></b><span>Servers running</span></div>
+  <div><b>{{ totals.players }}</b><span>Players on</span></div>
+  <div><b>{{ totals.memory|filesize if totals.memory else "—" }}</b><span>Memory in use</span></div>
+</div>
+{% endif %}
+
 {% for name, p in setups %}
 <section class="card setup-progress {{ 'bad' if p.error else ('done' if p.done else '') }}">
   <div class="row"><h2>Setting up {{ name }}</h2><span class="muted">{{ p.at|ago }} · by {{ p.by }}</span></div>
@@ -12,27 +26,49 @@
   {% if p.error %}<p class="warn">{{ p.error }}</p>{% endif %}
 </section>
 {% endfor %}
+
 {% if folders %}
-<div class="cards">
+<div class="mgr-grid">
   {% for f in folders %}
-  <section class="card files-server">
-    <h2><a href="/manage/{{ f.name }}">{{ f.name }}</a> <span class="pill {{ 'on' if f.running else '' }}">AMP {{ "on" if f.running else "off" }}</span></h2>
-    <div class="row-actions">
-      <a class="button small" href="/manage/{{ f.name }}">Open</a>
-      {% if can("power") and has_amp %}
-      <form method="post" action="/instances/{{ f.name }}/{{ 'stop' if f.running else 'start' }}" class="inline"
-            data-confirm="{{ ('Stop ' ~ f.name ~ '\'s AMP? Its game server stops with it.') if f.running else ('Start ' ~ f.name ~ '\'s AMP?') }}">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button class="small {{ 'danger' if f.running else 'ghost' }}">{{ "Stop AMP" if f.running else "Start AMP" }}</button>
-      </form>
+  <section class="card mgr-card {{ 'live' if f.game else ('idle' if f.running else 'off') }}">
+    <div class="mgr-title">
+      <span class="dot" aria-hidden="true"></span>
+      <div>
+        <h2><a href="/manage/{{ f.name }}">{{ f.friendly or f.name }}</a></h2>
+        <p class="muted mono small">{{ f.name }}</p>
+      </div>
+      <span class="pill {{ 'on' if f.game else ('gold' if f.running else '') }}">{{ "Running" if f.game else ("Stopped" if f.running else "AMP off") }}</span>
+    </div>
+    {% if f.server_name %}<p class="mgr-browser" title="{{ f.server_name }}">{{ f.server_name }}</p>{% endif %}
+    <div class="mgr-stats">
+      <div><b>{% if f.players is not none %}{{ f.players }}{% else %}—{% endif %}{% if f.max %}<span> / {{ f.max }}</span>{% endif %}</b><span>Players</span></div>
+      <div><b>{{ f.map or "—" }}</b><span>Map</span></div>
+      <div><b>{{ f.game.memory|filesize if f.game else "—" }}</b><span>Memory</span></div>
+      <div><b>{{ f.game.up|span if f.game else "—" }}</b><span>Up</span></div>
+      <div><b>{{ f.mods }}</b><span>Mods</span></div>
+      <div><b>{{ f.admins }}</b><span>Admins</span></div>
+    </div>
+    <nav class="mgr-links">
+      <a href="/manage/{{ f.name }}">Overview</a><a href="/manage/{{ f.name }}/console">Console</a>{% if can("amp_settings") %}<a href="/manage/{{ f.name }}/settings">Settings</a>{% endif %}{% if can("mods") %}<a href="/mods/{{ f.name }}">Mods</a>{% endif %}<a href="/files/{{ f.name }}">Files</a>
+    </nav>
+    {% if can("power") and has_amp %}
+    <div class="mgr-actions">
+      {% if f.running %}
+      {% if f.game %}
+      <form method="post" action="/manage/{{ f.name }}/power/restart" data-confirm="Restart {{ f.friendly or f.name }}? Everyone on it gets kicked."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small ghost">Restart</button></form>
+      <form method="post" action="/manage/{{ f.name }}/power/stop" data-confirm="Stop {{ f.friendly or f.name }}? Everyone on it gets kicked."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small danger">Stop</button></form>
+      {% else %}
+      <form method="post" action="/manage/{{ f.name }}/power/start" data-confirm="Start {{ f.friendly or f.name }}?"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small">Start</button></form>
+      {% endif %}
+      {% else %}
+      <form method="post" action="/instances/{{ f.name }}/start" data-confirm="Start {{ f.name }}'s AMP?"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small">Start AMP</button></form>
       {% endif %}
     </div>
+    {% endif %}
   </section>
   {% endfor %}
 </div>
 {% else %}
 <p class="muted">No server folders found in <code>{{ root }}</code>.</p>
 {% endif %}
-
-{% if has_amp and folders %}<p><a class="button" href="/manage/new">+ New server</a></p>{% endif %}
 {% endblock %}

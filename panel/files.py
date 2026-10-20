@@ -284,6 +284,32 @@ def latest_console(base, tail=64 * 1024):
     return path, text
 
 
+def game_process(base, proc="/proc"):
+    """{pid, memory (bytes), up (seconds)} for this server's running game, or None."""
+    try:
+        boot = time.time() - float(Path(proc, "uptime").read_text().split()[0])
+        ticks = os.sysconf("SC_CLK_TCK")
+    except (OSError, ValueError, IndexError):
+        return None
+    for entry in Path(proc).iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            exe = os.readlink(entry / "exe")
+        except OSError:
+            continue
+        if not (exe.startswith(f"{base}/") and Path(exe).name.startswith("ArmaReforgerServer")):
+            continue
+        try:
+            fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
+            rss = next((int(line.split()[1]) * 1024 for line in (entry / "status").read_text().splitlines()
+                        if line.startswith("VmRSS:")), 0)
+        except (OSError, ValueError, IndexError):
+            continue
+        return {"pid": int(entry.name), "memory": rss, "up": max(0, int(time.time() - boot - int(fields[19]) / ticks))}
+    return None
+
+
 KVP = "GenericModule.kvp"
 MANIFEST = "configmanifest.json"
 SETTINGS_LINE = "App.AppSettings="
