@@ -173,6 +173,7 @@ class ServerModsSearchTests(unittest.IsolatedAsyncioTestCase):
         self.app = create_app(self.config, self.db, ServerManager(self.config, self.db), start_manager=False)
         self.app[FILES_ROOT] = root
         self.app[WORKSHOP] = workshop.Workshop(fetch=self.fetch)
+        self.queries = []
         self.client = TestClient(TestServer(self.app))
         await self.client.start_server()
         self.addAsyncCleanup(self.client.close)
@@ -180,6 +181,7 @@ class ServerModsSearchTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
 
     async def fetch(self, path, query):
+        self.queries.append(query)
         if query and query.get("search") == "boom":
             raise workshop.WorkshopError("The mod list didn't answer. Try again in a few minutes.")
         return LIST
@@ -193,10 +195,17 @@ class ServerModsSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('href="https://reforger.armaplatform.com/workshop/' + RADIO + '"', html)
         self.assertIn("img-src 'self' https:", response.headers["Content-Security-Policy"])
 
-    async def test_mods_tab_without_a_search_shows_no_results(self):
+    async def test_mods_tab_browses_popular_mods_without_a_search(self):
         html = await (await self.client.get("/mods/Plus01")).text()
         self.assertIn("Find a mod", html)
-        self.assertNotIn("mod-result", html)
+        self.assertIn("Radio Pack", html)
+        self.assertEqual(self.queries[-1], {"page": 1, "sort": "popularity"})
+        self.assertIn('href="/mods/Plus01?sort=subscribers"', html)
+
+    async def test_sort_chip_changes_the_browse_order(self):
+        html = await (await self.client.get("/mods/Plus01", params={"sort": "subscribers"})).text()
+        self.assertEqual(self.queries[-1], {"page": 1, "sort": "subscribers"})
+        self.assertIn('class="on" aria-current="true"', html)
 
     async def test_search_error_shows_on_the_tab(self):
         html = await (await self.client.get("/mods/Plus01", params={"q": "boom"})).text()

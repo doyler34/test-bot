@@ -12,7 +12,7 @@ import sys
 import time
 import warnings
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import jinja2
 from aiohttp import web
@@ -2988,16 +2988,17 @@ async def mods_page(request):
     except ValueError:
         page = 1
     browse, browse_error, links = None, "", {}
-    if query:
-        try:
-            browse = await request.app[WORKSHOP].search(query, sort, page)
-            links = workshop.paging(browse, f"/mods/{inst}")
-        except workshop.WorkshopError as exc:
-            browse_error = str(exc)
+    try:
+        browse = await request.app[WORKSHOP].search(query, sort, page)
+        links = workshop.paging(browse, f"/mods/{inst}")
+    except workshop.WorkshopError as exc:
+        browse_error = str(exc)
+    sort_links = {value: f"/mods/{inst}?" + urlencode({"sort": value, **({"q": query} if query else {})})
+                  for value in workshop.SORTS}
     return render(request, "mods.html", inst=inst, mods=mods, on_disk=on_disk, spare=spare, error=error,
                   running=running, can_files=allowed(request, "files"), tabs=manage_tabs(request, inst, "mods"),
                   using=using, browse=browse, browse_error=browse_error, browse_q=query, browse_sort=sort,
-                  sorts=workshop.SORTS, links=links,
+                  sorts=workshop.SORTS, sort_links=sort_links, links=links,
                   csp="default-src 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' https:")
 
 

@@ -39,12 +39,12 @@
   <form method="get" action="/mods/{{ inst }}" class="find-mods">
     <label class="visually-hidden" for="mod-q">Search the Workshop</label>
     <input id="mod-q" name="q" value="{{ browse_q }}" placeholder="Search by name" maxlength="80" autocomplete="off">
-    <label class="visually-hidden" for="mod-sort">Sort</label>
-    <select id="mod-sort" name="sort">
-      {% for value, label in sorts.items() %}<option value="{{ value }}" {% if value == browse_sort %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
+    <input type="hidden" name="sort" value="{{ browse_sort }}">
     <button class="small">Search</button>
   </form>
+  <nav class="sort-chips" aria-label="Sort mods">
+    {% for value, label in sorts.items() %}<a href="{{ sort_links[value] }}" {% if value == browse_sort %}class="on" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}
+  </nav>
   {% if browse_error %}
   <div class="flash error">{{ browse_error }}</div>
   {% elif browse %}
