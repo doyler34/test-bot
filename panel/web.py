@@ -2987,17 +2987,23 @@ async def mods_page(request):
         page = max(1, int(request.query.get("page", "1")))
     except ValueError:
         page = 1
+    tag = request.query.get("tag", "") if request.query.get("tag", "") in workshop.CATEGORIES else ""
     browse, browse_error, links = None, "", {}
     try:
-        browse = await request.app[WORKSHOP].search(query, sort, page)
+        browse = await request.app[WORKSHOP].search(query, sort, page, tag)
         links = workshop.paging(browse, f"/mods/{inst}")
     except workshop.WorkshopError as exc:
         browse_error = str(exc)
-    sort_links = {value: f"/mods/{inst}?" + urlencode({"sort": value, **({"q": query} if query else {})})
-                  for value in workshop.SORTS}
+
+    def mods_link(**changes):
+        values = {"q": query, "sort": sort, "tag": tag, **changes}
+        return f"/mods/{inst}?" + urlencode({k: v for k, v in values.items() if v})
+    sort_links = {value: mods_link(sort=value) for value in workshop.SORTS}
+    category_links = {"": mods_link(tag="")} | {value: mods_link(tag=value) for value in workshop.CATEGORIES}
     return render(request, "mods.html", inst=inst, mods=mods, on_disk=on_disk, spare=spare, error=error,
                   running=running, can_files=allowed(request, "files"), tabs=manage_tabs(request, inst, "mods"),
                   using=using, browse=browse, browse_error=browse_error, browse_q=query, browse_sort=sort,
+                  browse_tag=tag, categories=workshop.CATEGORIES, category_links=category_links,
                   sorts=workshop.SORTS, sort_links=sort_links, links=links,
                   csp="default-src 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' https:")
 

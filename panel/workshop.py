@@ -18,6 +18,7 @@ DETAIL_TTL = 3600
 CACHE_SIZE = 300
 SORTS = {"popularity": "Most popular", "newest": "Newest", "recently-updated": "Recently updated",
          "highest-rated": "Highest rated", "subscribers": "Most subscribed", "name": "Name"}
+CATEGORIES = {"VEHICLES": "Vehicles", "WEAPONS": "Weapons", "SCENARIOS": "Scenarios", "TERRAIN": "Terrain"}
 MOD_ID = re.compile(r"^[0-9A-Fa-f]{16}$")
 PREVIEW_FIELDS = ("name", "author", "summary", "version", "sizeFormatted", "ratingCount", "subscriberCount",
                   "tags", "updatedAt")
@@ -39,11 +40,13 @@ def workshop_url(mod_id):
     return f"https://reforger.armaplatform.com/workshop/{mod_id}"
 
 
-def search_query(search="", sort="popularity", page=1):
+def search_query(search="", sort="popularity", page=1, tag=""):
     query = {"page": max(1, page), "sort": sort if sort in SORTS else "popularity"}
     text = " ".join(str(search or "").split())[:80]
     if text:
         query["search"] = text
+    if tag in CATEGORIES:
+        query["tags"] = tag
     return query
 
 
@@ -52,7 +55,7 @@ def paging(found, path):
     links = {}
     for name, number in (("prev", found["page"] - 1), ("next", found["page"] + 1)):
         if 1 <= number <= found["pages"]:
-            query = {"search": found["search"], "sort": found["sort"], "page": number}
+            query = {"search": found["search"], "sort": found["sort"], "tag": found["tag"], "page": number}
             links[name] = path + "?" + urlencode({k: v for k, v in query.items() if v not in ("", None)})
     return links
 
@@ -117,14 +120,14 @@ class Workshop:
         self._cache[key] = (now, data)
         return data
 
-    async def search(self, search="", sort="popularity", page=1):
-        query = search_query(search, sort, page)
+    async def search(self, search="", sort="popularity", page=1, tag=""):
+        query = search_query(search, sort, page, tag)
         data = await self._cached(("search", tuple(sorted(query.items()))), SEARCH_TTL, "mods", query)
         meta = data.get("meta") if isinstance(data, dict) and isinstance(data.get("meta"), dict) else {}
         rows = data.get("data") if isinstance(data, dict) and isinstance(data.get("data"), list) else []
         return {"mods": [row for row in map(preview, rows) if row], "page": query["page"],
                 "pages": meta.get("totalPages") or 1, "total": meta.get("totalMods"),
-                "sort": query["sort"], "search": query.get("search", "")}
+                "sort": query["sort"], "search": query.get("search", ""), "tag": tag if tag in CATEGORIES else ""}
 
     async def mod(self, mod_id):
         if not valid_id(mod_id):

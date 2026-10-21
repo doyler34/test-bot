@@ -40,8 +40,13 @@
     <label class="visually-hidden" for="mod-q">Search the Workshop</label>
     <input id="mod-q" name="q" value="{{ browse_q }}" placeholder="Search by name" maxlength="80" autocomplete="off">
     <input type="hidden" name="sort" value="{{ browse_sort }}">
+    <input type="hidden" name="tag" value="{{ browse_tag }}">
     <button class="small">Search</button>
   </form>
+  <nav class="sort-chips" aria-label="Categories">
+    <a href="{{ category_links[''] }}" {% if not browse_tag %}class="on" aria-current="true"{% endif %}>All</a>
+    {% for value, label in categories.items() %}<a href="{{ category_links[value] }}" {% if value == browse_tag %}class="on" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}
+  </nav>
   <nav class="sort-chips" aria-label="Sort mods">
     {% for value, label in sorts.items() %}<a href="{{ sort_links[value] }}" {% if value == browse_sort %}class="on" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}
   </nav>

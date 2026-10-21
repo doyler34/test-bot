@@ -202,6 +202,16 @@ class ServerModsSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.queries[-1], {"page": 1, "sort": "popularity"})
         self.assertIn('href="/mods/Plus01?sort=subscribers"', html)
 
+    async def test_category_browses_only_that_tag(self):
+        html = await (await self.client.get("/mods/Plus01", params={"tag": "VEHICLES"})).text()
+        self.assertEqual(self.queries[-1], {"page": 1, "sort": "popularity", "tags": "VEHICLES"})
+        self.assertIn('href="/mods/Plus01?sort=popularity&amp;tag=VEHICLES"', html)
+        self.assertIn('class="on" aria-current="true">Vehicles', html)
+
+    async def test_unknown_category_is_ignored(self):
+        await self.client.get("/mods/Plus01", params={"tag": "NOPE"})
+        self.assertNotIn("tags", self.queries[-1])
+
     async def test_sort_chip_changes_the_browse_order(self):
         html = await (await self.client.get("/mods/Plus01", params={"sort": "subscribers"})).text()
         self.assertEqual(self.queries[-1], {"page": 1, "sort": "subscribers"})
