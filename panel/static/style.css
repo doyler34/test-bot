@@ -1699,3 +1699,15 @@ body.map-open { overflow: hidden; }
   body.app main { padding-bottom: 104px; }
   .dc-actions, .set-save { bottom: 64px; }
 }
+
+.find-mods { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.find-mods input { flex: 1 1 200px; min-width: 0; }
+.mod-results { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.mod-result { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start;
+  border-top: 1px solid var(--line); padding-top: 12px; }
+.mod-result img { width: 120px; height: auto; border-radius: 6px; }
+.mod-result p { margin: 4px 0; }
+@media (max-width: 520px) {
+  .mod-result { grid-template-columns: 1fr; }
+  .mod-result img { width: 100%; }
+}

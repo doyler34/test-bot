@@ -33,6 +33,55 @@
   {% endif %}
 </section>
 
+<section class="card">
+  <h2>Find a mod</h2>
+  <p class="muted small">Search the Workshop, then tap Add. It applies when {{ inst }} next starts.</p>
+  <form method="get" action="/mods/{{ inst }}" class="find-mods">
+    <label class="visually-hidden" for="mod-q">Search the Workshop</label>
+    <input id="mod-q" name="q" value="{{ browse_q }}" placeholder="Search by name" maxlength="80" autocomplete="off">
+    <label class="visually-hidden" for="mod-sort">Sort</label>
+    <select id="mod-sort" name="sort">
+      {% for value, label in sorts.items() %}<option value="{{ value }}" {% if value == browse_sort %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="small">Search</button>
+  </form>
+  {% if browse_error %}
+  <div class="flash error">{{ browse_error }}</div>
+  {% elif browse %}
+    <p class="muted small">{% if browse.total is not none %}{{ browse.total }} mods · {% endif %}page {{ browse.page }} of {{ browse.pages }}</p>
+    {% if browse.mods %}
+    <ul class="mod-results">
+      {% for m in browse.mods %}
+      <li class="mod-result">
+        {% if m.imageUrl %}<img src="{{ m.imageUrl }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+        <div>
+          <b>{{ m.name }}</b>{% if m.author %} <span class="muted">by {{ m.author }}</span>{% endif %}
+          {% if m.summary %}<p class="small">{{ m.summary }}</p>{% endif %}
+          <p class="muted small mono">{{ m.id }}{% if m.sizeFormatted %} · {{ m.sizeFormatted }}{% endif %}{% if m.percent is not none %} · {{ m.percent }}%{% endif %}</p>
+          <div class="row-actions">
+            {% if m.id in using %}<span class="pill on">On this server</span>{% else %}
+            <form method="post" action="/mods/{{ inst }}" class="inline">
+              <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add">
+              <input type="hidden" name="mod_id" value="{{ m.id }}"><input type="hidden" name="name" value="{{ m.name }}">
+              <button class="small">Add</button>
+            </form>
+            {% endif %}
+            <a class="button small ghost" href="{{ m.workshopUrl }}" rel="noopener" target="_blank">Workshop page</a>
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="row-actions">
+      {% if links.prev %}<a class="button small ghost" href="{{ links.prev }}">Previous</a>{% endif %}
+      {% if links.next %}<a class="button small ghost" href="{{ links.next }}">Next</a>{% endif %}
+    </div>
+    {% else %}
+    <p class="muted">Nothing matched.</p>
+    {% endif %}
+  {% endif %}
+</section>
+
 <form class="card" method="post" action="/mods/{{ inst }}">
   <h2>Add a mod</h2>
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add">

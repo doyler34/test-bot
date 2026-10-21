@@ -12,7 +12,7 @@ import sys
 import time
 import warnings
 from pathlib import Path
-from urllib.parse import quote, urlencode
+from urllib.parse import quote
 
 import jinja2
 from aiohttp import web
@@ -798,12 +798,8 @@ async def site_workshop(request):
         found = await client.search(search, sort, page)
     except workshop.WorkshopError as exc:
         return render_workshop(request, doc, error=str(exc), search=search, sort=sort)
-    links = {}
-    for name, number in (("prev", found["page"] - 1), ("next", found["page"] + 1)):
-        if 1 <= number <= found["pages"]:
-            query = {"search": found["search"], "sort": found["sort"], "page": number}
-            links[name] = "/workshop?" + urlencode({k: v for k, v in query.items() if v not in ("", None)})
-    return render_workshop(request, doc, found=found, links=links, search=search, sort=sort)
+    return render_workshop(request, doc, found=found, links=workshop.paging(found, "/workshop"), search=search,
+                           sort=sort)
 
 
 def render_workshop(request, doc, **context):
@@ -2985,8 +2981,24 @@ async def mods_page(request):
     using = {m["modId"] for m in mods}
     spare = sorted(((mod_id, info) for mod_id, info in on_disk.items() if mod_id not in using),
                    key=lambda item: item[1]["name"].lower())
+    query = " ".join(request.query.get("q", "").split())[:80]
+    sort = request.query.get("sort", "popularity")
+    try:
+        page = max(1, int(request.query.get("page", "1")))
+    except ValueError:
+        page = 1
+    browse, browse_error, links = None, "", {}
+    if query:
+        try:
+            browse = await request.app[WORKSHOP].search(query, sort, page)
+            links = workshop.paging(browse, f"/mods/{inst}")
+        except workshop.WorkshopError as exc:
+            browse_error = str(exc)
     return render(request, "mods.html", inst=inst, mods=mods, on_disk=on_disk, spare=spare, error=error,
-                  running=running, can_files=allowed(request, "files"), tabs=manage_tabs(request, inst, "mods"))
+                  running=running, can_files=allowed(request, "files"), tabs=manage_tabs(request, inst, "mods"),
+                  using=using, browse=browse, browse_error=browse_error, browse_q=query, browse_sort=sort,
+                  sorts=workshop.SORTS, links=links,
+                  csp="default-src 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' https:")
 
 
 async def mods_change(request):

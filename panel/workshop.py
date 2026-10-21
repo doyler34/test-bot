@@ -6,6 +6,7 @@ Answers are kept for a while so visitors don't each call the API.
 """
 import re
 import time
+from urllib.parse import urlencode
 
 import aiohttp
 
@@ -46,6 +47,16 @@ def search_query(search="", sort="popularity", page=1):
     return query
 
 
+def paging(found, path):
+    """Previous and next links for a search result, keeping the search and sort."""
+    links = {}
+    for name, number in (("prev", found["page"] - 1), ("next", found["page"] + 1)):
+        if 1 <= number <= found["pages"]:
+            query = {"search": found["search"], "sort": found["sort"], "page": number}
+            links[name] = path + "?" + urlencode({k: v for k, v in query.items() if v not in ("", None)})
+    return links
+
+
 def https_or_none(value):
     return value if isinstance(value, str) and value.startswith("https://") else None
 
@@ -55,9 +66,9 @@ def preview(raw):
     if not isinstance(raw, dict) or not valid_id(raw.get("id")):
         return None
     row = {key: raw[key] for key in PREVIEW_FIELDS if raw.get(key) not in (None, "")}
-    row["id"] = raw["id"]
-    row["url"] = f"/workshop/{raw['id']}"
-    row["workshopUrl"] = workshop_url(raw["id"])
+    row["id"] = raw["id"].upper()
+    row["url"] = f"/workshop/{row['id']}"
+    row["workshopUrl"] = workshop_url(row["id"])
     row["imageUrl"] = https_or_none(raw.get("imageUrl"))
     rating = raw.get("rating")
     row["percent"] = round(rating * 100) if isinstance(rating, (int, float)) else None

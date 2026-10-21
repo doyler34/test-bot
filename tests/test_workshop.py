@@ -9,7 +9,7 @@ from panel import auth, workshop
 from panel.config import PanelConfig, ServerConfig
 from panel.db import PanelDB
 from panel.servers import ServerManager
-from panel.web import WORKSHOP, create_app
+from panel.web import FILES_ROOT, WORKSHOP, create_app
 
 RADIO = "5965550F24A0C152"
 DEP = "597706D1E4C7BAAD"
@@ -159,6 +159,48 @@ class WorkshopPageTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_site_nav_links_to_mods(self):
         self.assertIn('href="/workshop"', await (await self.site("/")).text())
+
+
+class ServerModsSearchTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name) / "instances"
+        (root / "Plus01").mkdir(parents=True)
+        (root / "Plus01" / "GenericModule.kvp").write_text('App.AppSettings={"mods":""}')
+        self.db = PanelDB(":memory:")
+        self.db.add_user("boss", auth.hash_password("boss-password"), "owner")
+        self.config = PanelConfig(database=":memory:", cookie_secure=False, servers=[ServerConfig("one", "One")])
+        self.app = create_app(self.config, self.db, ServerManager(self.config, self.db), start_manager=False)
+        self.app[FILES_ROOT] = root
+        self.app[WORKSHOP] = workshop.Workshop(fetch=self.fetch)
+        self.client = TestClient(TestServer(self.app))
+        await self.client.start_server()
+        self.addAsyncCleanup(self.client.close)
+        self.addCleanup(self.tmp.cleanup)
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+
+    async def fetch(self, path, query):
+        if query and query.get("search") == "boom":
+            raise workshop.WorkshopError("The mod list didn't answer. Try again in a few minutes.")
+        return LIST
+
+    async def test_search_on_the_server_mods_tab(self):
+        response = await self.client.get("/mods/Plus01", params={"q": "radio"})
+        html = await response.text()
+        self.assertEqual(response.status, 200)
+        self.assertIn("Radio Pack", html)
+        self.assertIn(f'name="mod_id" value="{RADIO}"', html)
+        self.assertIn('href="https://reforger.armaplatform.com/workshop/' + RADIO + '"', html)
+        self.assertIn("img-src 'self' https:", response.headers["Content-Security-Policy"])
+
+    async def test_mods_tab_without_a_search_shows_no_results(self):
+        html = await (await self.client.get("/mods/Plus01")).text()
+        self.assertIn("Find a mod", html)
+        self.assertNotIn("mod-result", html)
+
+    async def test_search_error_shows_on_the_tab(self):
+        html = await (await self.client.get("/mods/Plus01", params={"q": "boom"})).text()
+        self.assertIn("didn&#39;t answer", html)
 
 
 if __name__ == "__main__":
