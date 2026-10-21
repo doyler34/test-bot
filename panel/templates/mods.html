@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ inst }} mods · OYB Control{% endblock %}
+{% block head %}<script src="/static/manage.js?v={{ asset_version }}" defer></script>{% endblock %}
 {% block body %}
 {% include "_manage_tabs.html" %}
 <p class="muted">The mods this server loads, saved into AMP. Changes apply when the server next restarts; the game downloads any it doesn't have yet.</p>
@@ -71,12 +72,20 @@
               <button class="small">Add</button>
             </form>
             {% endif %}
+            {% if m.id not in using %}<label class="pick"><input type="checkbox" name="pick" value="{{ m.id }}:{{ m.name }}" form="pick-find"> Select</label>{% endif %}
             <a class="button small ghost" href="{{ m.workshopUrl }}" rel="noopener" target="_blank">Workshop page</a>
           </div>
         </div>
       </li>
       {% endfor %}
     </ul>
+    <form id="pick-find" class="pick-bar" method="post" action="/mods/{{ inst }}" data-pick>
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add_many">
+      <span class="muted" data-pick-count>None selected</span>
+      <button type="button" class="small ghost" data-pick-all>Select all</button>
+      <button type="button" class="small ghost" data-pick-none>Clear</button>
+      <button class="small" data-pick-go disabled>Add selected</button>
+    </form>
     <div class="row-actions">
       {% if links.prev %}<a class="button small ghost" href="{{ links.prev }}">Previous</a>{% endif %}
       {% if links.next %}<a class="button small ghost" href="{{ links.next }}">Next</a>{% endif %}
@@ -101,11 +110,19 @@
 {% if spare %}
 <section class="card">
   <h2>Downloaded but not loaded ({{ spare|length }})</h2>
-  <p class="muted">Already on this server's disk from before, so they start straight away. Add puts one back on the list.</p>
+  <p class="muted">Already on this server's disk from before, so they start straight away. Add puts one back on the list, or tick several and add them together.</p>
+  <form id="pick-spare" class="pick-bar" method="post" action="/mods/{{ inst }}" data-pick>
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add_many">
+    <span class="muted" data-pick-count>None selected</span>
+    <button type="button" class="small ghost" data-pick-all>Select all</button>
+    <button type="button" class="small ghost" data-pick-none>Clear</button>
+    <button class="small" data-pick-go disabled>Add selected</button>
+  </form>
   <div class="scroll"><table class="stack">
     <tbody>
     {% for mod_id, info in spare %}
     <tr>
+      <td><label class="pick"><input type="checkbox" name="pick" value="{{ mod_id }}:{{ info.name }}" form="pick-spare" aria-label="Select {{ info.name }}"></label></td>
       <td class="strong">{{ info.name }}</td>
       <td class="mono" data-label="ID">{{ mod_id }}</td>
       <td>

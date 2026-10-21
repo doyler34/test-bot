@@ -1721,3 +1721,10 @@ body.map-open { overflow: hidden; }
 .ctl-nums b span { font-size: .9rem; font-weight: 500; color: #9aa1a9; }
 .ctl-nums b.bad { color: #ff7b72; }
 .ctl-nums small { color: #9aa1a9; font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+
+.pick { display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+.pick input { width: 20px; height: 20px; margin: 0; }
+.pick-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; padding: 10px 12px;
+  background: var(--panel, #15181d); border: 1px solid var(--line); border-radius: 10px; position: sticky; bottom: 12px; z-index: 5; }
+.pick-bar [data-pick-count] { margin-right: auto; }
+@media (max-width: 720px) { .pick-bar { bottom: 84px; } }

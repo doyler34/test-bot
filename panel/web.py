@@ -3048,12 +3048,58 @@ async def mods_page(request):
                   csp="default-src 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' https:")
 
 
+def parse_picks(values):
+    """[(mod id, name)] from the "ID:name" values of ticked mods; anything without a real ID is dropped."""
+    picked = {}
+    for value in values:
+        mod_id, _, name = str(value).partition(":")
+        mod_id = mod_id.strip().upper()
+        if files.MOD_ID.match(mod_id):
+            picked.setdefault(mod_id, " ".join(name.split())[:120] or mod_id)
+    return list(picked.items())[:100]
+
+
+async def add_many_mods(request, inst, base, form):
+    """Put every ticked mod on the server's list in one go."""
+    back = f"/mods/{inst}"
+    picks = parse_picks(form.getall("pick", []))
+    if not picks:
+        flash(request, "Tick at least one mod first.", "error")
+        raise web.HTTPFound(back)
+    added = []
+
+    def change(value):
+        mods = files.parse_mods(value)
+        have = {m["modId"] for m in mods}
+        added.clear()
+        added.extend(pick for pick in picks if pick[0] not in have)
+        return files.format_mods(mods + [{"modId": mod_id, "name": name} for mod_id, name in added])
+
+    try:
+        if files.amp_running(base):
+            await request.app[AMP].change_setting(await amp_instance(request, inst), "mods", change)
+        else:
+            files.set_kvp_mods(base, change)
+    except (AmpError, files.FileError, OSError, ValueError) as exc:
+        audit(request, "add mods", inst, detail=str(exc), ok=False)
+        flash(request, str(exc), "error")
+        raise web.HTTPFound(back)
+    audit(request, "add mods", inst, detail=f"{len(added)}: " + ", ".join(name for _, name in added)[:400])
+    skipped = len(picks) - len(added)
+    flash(request, f"Added {len(added)} mod{'s' if len(added) != 1 else ''}"
+                   + (f" ({skipped} already on the list)" if skipped else "")
+                   + f". They apply when {inst} next starts.")
+    raise web.HTTPFound(back)
+
+
 async def mods_change(request):
     require(request, "mods")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     form = await request.post()
     action = form.get("action", "")
+    if action == "add_many":
+        return await add_many_mods(request, inst, base, form)
     mod_id = form.get("mod_id", "").strip().upper()
     name = form.get("name", "").strip()
     version = form.get("version", "").strip()

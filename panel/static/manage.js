@@ -68,3 +68,22 @@ from?.addEventListener("change", () => { location.href = "/manage/new?from=" + e
 
 // Server manager list: while a new server is being set up, check on it every few seconds.
 if (document.querySelector(".setup-progress .spinner")) setTimeout(() => location.reload(), 8000);
+
+// Mods page: tick several mods, then add them together.
+for (const bar of document.querySelectorAll("[data-pick]")) {
+  const boxes = () => [...document.querySelectorAll(`input[name=pick][form="${bar.id}"]`)];
+  const count = bar.querySelector("[data-pick-count]");
+  const go = bar.querySelector("[data-pick-go]");
+  const refresh = () => {
+    const n = boxes().filter((b) => b.checked).length;
+    count.textContent = n ? `${n} selected` : "None selected";
+    go.disabled = !n;
+    go.textContent = n ? `Add ${n} selected` : "Add selected";
+  };
+  document.addEventListener("change", (event) => {
+    if (event.target.matches && event.target.matches(`input[name=pick][form="${bar.id}"]`)) refresh();
+  });
+  bar.querySelector("[data-pick-all]").addEventListener("click", () => { for (const b of boxes()) b.checked = true; refresh(); });
+  bar.querySelector("[data-pick-none]").addEventListener("click", () => { for (const b of boxes()) b.checked = false; refresh(); });
+  refresh();
+}

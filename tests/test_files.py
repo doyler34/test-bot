@@ -388,6 +388,21 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.app[web_module.SETUPS]["Arland02"]["step"], "Started")
         self.assertIn("Setting up Arland02", await (await self.client.get("/manage")).text())
 
+    async def test_ticking_several_mods_adds_them_in_one_go(self):
+        token = await self.login("chief")
+        picks = [("pick", "6A263A54663F2EDB:AdvancedFlashBangSystem"), ("pick", "not-an-id:Nope"),
+                 ("pick", "6a843b0ec5b8bd3b:AKMRISRail"), ("pick", "6A263A54663F2EDB:AdvancedFlashBangSystem")]
+        await self.client.post("/mods/Plus01", data=[("csrf", token), ("action", "add_many")] + picks)
+        mods = files.parse_mods(files.kvp_mods(self.root / "Plus01"))
+        self.assertEqual([(m["modId"], m["name"]) for m in mods],
+                         [("6A263A54663F2EDB", "AdvancedFlashBangSystem"), ("6A843B0EC5B8BD3B", "AKMRISRail")])
+        self.assertTrue(self.db.one("SELECT 1 FROM audit WHERE action = 'add mods'"))
+        again = await self.client.post("/mods/Plus01", data=[("csrf", token), ("action", "add_many")] + picks[:1])
+        self.assertIn("1 already on the list", await again.text())
+        self.assertEqual(len(files.parse_mods(files.kvp_mods(self.root / "Plus01"))), 2)
+        empty = await self.client.post("/mods/Plus01", data=[("csrf", token), ("action", "add_many")])
+        self.assertIn("Tick at least one mod", await empty.text())
+
     async def test_a_servers_map_comes_from_the_scenario_it_is_set_to_play(self):
         (self.root / "Plus01" / "GenericModule.kvp").write_text(
             'App.AppSettings={"name":"OYB Plus","scenarioId":"{ARL}"}')
