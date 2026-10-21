@@ -387,6 +387,54 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.app[web_module.SETUPS]["Arland02"]["step"], "Started")
         self.assertIn("Setting up Arland02", await (await self.client.get("/manage")).text())
 
+    async def test_new_game_puts_the_save_aside_and_starts_the_server_again(self):
+        profile = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "profile"
+        (profile / ".save").mkdir(parents=True)
+        (profile / ".save" / "world.dat").write_text("progress")
+        trash = self.root / "Plus01" / "arma-reforger" / "1874900" / ".trash" / "AReforgerMaster" / "profile" / ".save.1"
+        trash.mkdir(parents=True)
+        amp = mock.Mock()
+        amp.instance_power = mock.AsyncMock()
+        self.app[AMP] = amp
+        self.db.add_user("mod", auth.hash_password("mod-password"), "moderator")
+        await self.client.post("/login", data={"username": "mod", "password": "mod-password"})
+        page = await (await self.client.get("/guide")).text()
+        token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+        reply = await self.client.post("/manage/Plus01/newgame", data={"csrf": token})
+        self.assertEqual(reply.status, 403)
+        self.assertTrue((profile / ".save").exists())
+        token = await self.login("chief")
+        with mock.patch("panel.files.amp_running", side_effect=[True, False]):
+            await self.client.post("/manage/Plus01/newgame", data={"csrf": token})
+        self.assertEqual([c.args for c in amp.instance_power.await_args_list],
+                         [("Plus01", "stop"), ("Plus01", "start")])
+        self.assertFalse((profile / ".save").exists())
+        kept = list((self.root.parent / files.SAVE_BACKUPS / "Plus01").glob("*/.save/world.dat"))
+        self.assertEqual([p.read_text() for p in kept], ["progress"])
+        self.assertTrue(trash.exists())
+        self.assertTrue(self.db.one("SELECT 1 FROM audit WHERE action = 'new game'"))
+        self.assertIn("is on a new game", await (await self.client.get("/manage/Plus01")).text())
+
+    async def test_new_game_on_a_stopped_server_does_not_start_it(self):
+        profile = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "profile"
+        (profile / ".save").mkdir(parents=True)
+        amp = mock.Mock()
+        amp.instance_power = mock.AsyncMock()
+        self.app[AMP] = amp
+        token = await self.login("chief")
+        with mock.patch("panel.files.amp_running", return_value=False):
+            await self.client.post("/manage/Plus01/newgame", data={"csrf": token})
+        amp.instance_power.assert_not_awaited()
+        self.assertFalse((profile / ".save").exists())
+
+    async def test_new_game_with_no_save_changes_nothing(self):
+        amp = mock.Mock()
+        amp.instance_power = mock.AsyncMock()
+        self.app[AMP] = amp
+        token = await self.login("chief")
+        await self.client.post("/manage/Plus01/newgame", data={"csrf": token})
+        amp.instance_power.assert_not_awaited()
+
     async def test_deleting_a_server_is_named_people_only_typed_out_and_backed_up_first(self):
         game = self.root / "Plus01" / "arma-reforger" / "1874900"
         (game / "addons" / "data").mkdir(parents=True)

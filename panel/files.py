@@ -254,6 +254,30 @@ def backup(root, base):
     return target, target.stat().st_size
 
 
+SAVE_BACKUPS = "save-backups"
+
+
+def save_folder(base):
+    """The game's .save folder for this server, or None when it has no save yet."""
+    found = sorted(Path(base).glob("arma-reforger/*/*/profile/.save"))
+    return found[0] if found else None
+
+
+def new_game(root, base):
+    """Put this server's save aside so its next start is a fresh game. The save is moved
+    to a folder of its own, not deleted. Returns where it went, or None if there was none."""
+    save = save_folder(base)
+    if save is None:
+        return None
+    folder = Path(root).parent / SAVE_BACKUPS / Path(base).name / time.strftime("%Y-%m-%d_%H-%M-%S")
+    folder.mkdir(parents=True)
+    for made in (folder.parent.parent, folder.parent, folder):
+        hand_over(made)
+    target = folder / save.name
+    shutil.move(str(save), str(target))
+    return target
+
+
 def shortcuts(base):
     """[(label, path)] to the files people open most, where this server has them."""
     found = []

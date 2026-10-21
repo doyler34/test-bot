@@ -2622,6 +2622,45 @@ async def manage_delete(request):
     raise web.HTTPFound("/manage")
 
 
+async def manage_newgame(request):
+    """A new game on one server: stop it, put its save aside (kept, not deleted) and start it again."""
+    require(request, "power")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    back = f"/manage/{inst}"
+    if not request.app[AMP]:
+        flash(request, "The panel has no AMP login yet, so it can't restart servers.", "error")
+        raise web.HTTPFound(back)
+    if files.save_folder(base) is None:
+        flash(request, f"{inst} has no save, so it's already on a new game.")
+        raise web.HTTPFound(back)
+    was_running = files.amp_running(base)
+    try:
+        if was_running:
+            await request.app[AMP].instance_power(inst, "stop")
+            for _ in range(90):
+                await asyncio.sleep(1)
+                if not files.amp_running(base):
+                    break
+            else:
+                raise AmpError(f"{inst} didn't stop within 90 seconds, so its save was left alone.")
+        kept = await asyncio.to_thread(files.new_game, request.app[FILES_ROOT], base)
+    except (AmpError, OSError) as exc:
+        audit(request, "new game", inst, detail=str(exc), ok=False)
+        flash(request, f"{inst} wasn't reset: {exc}", "error")
+        raise web.HTTPFound(back)
+    problem = ""
+    if was_running:
+        try:
+            await request.app[AMP].instance_power(inst, "start")
+        except AmpError as exc:
+            problem = f" It didn't start again ({exc}). Start it from here."
+    audit(request, "new game", inst, detail=f"old save kept at {kept}", ok=not problem)
+    alert(request, f"New game: {inst}", f"By {request[USER]['username']}. The old save is kept at {kept}.", colour=GOLD)
+    flash(request, f"{inst} is on a new game. Its old save is kept at {kept}." + problem, "error" if problem else "ok")
+    raise web.HTTPFound(back)
+
+
 async def manage_overview(request):
     require(request, "power")
     inst = request.match_info["inst"]
@@ -3767,6 +3806,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/manage/{inst}", manage_overview)
     app.router.add_post("/manage/{inst}/delete", manage_delete)
     app.router.add_post("/manage/{inst}/power/{action}", manage_power)
+    app.router.add_post("/manage/{inst}/newgame", manage_newgame)
     app.router.add_route("GET", "/manage/{inst}/console", manage_console)
     app.router.add_get("/manage/{inst}/console.txt", manage_console)
     app.router.add_post("/manage/{inst}/console", manage_console)
