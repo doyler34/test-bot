@@ -429,6 +429,11 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/tour/manage/done", data={"csrf": token})
         again = await (await self.client.get("/manage")).text()
         self.assertNotIn('id="tour"', again)
+        # Someone who saw the first version of the walkthrough gets the updated one once.
+        self.db.write("UPDATE users SET manage_toured = 1 WHERE username = ?", "newmgr")
+        await self.client.post("/logout", data={"csrf": token})
+        await self.client.post("/login", data={"username": "newmgr", "password": "newmgr-password"})
+        self.assertIn('data-done="/tour/manage/done"', await (await self.client.get("/manage")).text())
         # A senior admin is not a manager, so it never shows for them.
         await self.client.post("/logout", data={"csrf": token})
         self.db.add_user("senior", auth.hash_password("senior-password"), "owner")

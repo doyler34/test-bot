@@ -149,6 +149,8 @@ def _until(value):
 TOUR_PAGES = ("dashboard.html", "server.html", "players.html", "bans.html", "data.html", "settings.html")
 # Raise this when the tour changes enough that everyone should see it once more.
 TOUR_VERSION = 2
+# The same for the Server manager walkthrough; people who saw an older one get it once more.
+MANAGE_TOUR_VERSION = 2
 
 
 def render(request, template, **context):
@@ -171,7 +173,7 @@ def render(request, template, **context):
         context.setdefault("notices", attention(request, list(request.app[MANAGER].states.values())))
         # Anyone who runs servers from the Server manager gets the walkthrough once, whatever their role.
         if template in MANAGE_TOUR_PAGES and allowed(request, "files") and (
-                request.query.get("tour") == "1" or not user["manage_toured"]):
+                request.query.get("tour") == "1" or user["manage_toured"] < MANAGE_TOUR_VERSION):
             context.setdefault("tour", "manage")
             context.setdefault("tour_inst", request.match_info.get("inst") or first_instance(request))
         else:
@@ -439,7 +441,7 @@ async def tour_done(request):
 
 
 async def manage_tour_done(request):
-    request.app[DB].write("UPDATE users SET manage_toured = 1 WHERE id = ?", request[USER]["id"])
+    request.app[DB].write("UPDATE users SET manage_toured = ? WHERE id = ?", MANAGE_TOUR_VERSION, request[USER]["id"])
     return web.Response(status=204)
 
 
