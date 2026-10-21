@@ -79,10 +79,10 @@ function startTour(box) {
     // A page's steps are only part of the walk-through, so a count per page reads wrong.
     // Where the walk-through is in sections ("Part 2 of 7") says where you really are.
     const counted = steps.filter((s) => !("splash" in s.dataset));
-    const place = counted.indexOf(step);
+    const number = counted.indexOf(step);
     card.querySelector(".tour-count").textContent = box.dataset.countSections !== undefined
       ? (chapter >= 0 && !("splash" in step.dataset) ? `Part ${chapter + 1} of ${chapters.length}` : "")
-      : place >= 0 && counted.length > 1 ? `${place + 1} of ${counted.length}` : "";
+      : number >= 0 && counted.length > 1 ? `${number + 1} of ${counted.length}` : "";
     const body = card.querySelector(".tour-body");
     body.innerHTML = step.innerHTML;
     body.classList.remove("in");
