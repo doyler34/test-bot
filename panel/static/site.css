@@ -197,3 +197,27 @@ footer p { margin: 0; }
   footer { padding: 22px 16px; }
   footer nav { margin-left: 0; }
 }
+
+.ws { max-width: 900px; margin: 0 auto; padding: 96px 16px 48px; }
+.ws h1 { font-family: var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 8px 0 4px; }
+.ws h2 { font-family: var(--display); text-transform: uppercase; font-size: 1.1rem; margin-top: 24px; }
+.ws-search { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.ws-search input { flex: 1 1 220px; min-width: 0; padding: 10px 12px; background: var(--raise); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.ws-search select { padding: 10px 12px; background: var(--raise); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 6px; font: inherit; }
+.ws-list { list-style: none; padding: 0; margin: 0; }
+.ws-list li { border-top: 1px solid var(--line-soft); padding: 14px 0; }
+.ws-list li a b { color: var(--ink); }
+.ws-list p { margin: 4px 0 0; }
+.ws-pages { display: flex; gap: 8px; margin-top: 16px; }
+.ws-error { background: var(--raise); border: 1px solid var(--line); padding: 14px; border-radius: 6px; }
+.ws-art { display: block; max-width: 100%; height: auto; margin: 12px 0; border-radius: 6px; }
+.ws-summary { font-size: 1.05rem; }
+.ws-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
+.ws-facts div { background: var(--raise); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.ws-facts dt { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; }
+.ws-facts dd { margin: 2px 0 0; }
+.ws-tags .pill { margin-right: 6px; }
+.ws-desc { white-space: pre-line; color: var(--text); margin: 16px 0; }
+.ws-note { margin-top: 32px; }

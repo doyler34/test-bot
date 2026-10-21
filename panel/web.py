@@ -12,7 +12,7 @@ import sys
 import time
 import warnings
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import jinja2
 from aiohttp import web
@@ -25,7 +25,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, attacks, auth, ballistics, console, files, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois
+from . import archive, attacks, auth, ballistics, console, files, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois, workshop
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -71,6 +71,7 @@ MANAGER = web.AppKey("manager", ServerManager)
 THROTTLE = web.AppKey("throttle", auth.LoginThrottle)
 FLASH = web.AppKey("flash", dict)
 JINJA = web.AppKey("jinja", jinja2.Environment)
+WORKSHOP = web.AppKey("workshop", workshop.Workshop)
 STATS = web.AppKey("stats", OybStats)
 BM = web.AppKey("battlemetrics", object)
 AMP = web.AppKey("amp", object)
@@ -280,6 +281,8 @@ async def public_site(request, handler):
             return await handler(request)
         if request.path == "/mortar" or request.path.startswith("/mortar/"):
             return await site_mortar(request)
+        if request.method == "GET" and (request.path == "/workshop" or request.path.startswith("/workshop/")):
+            return await site_workshop(request)
         raise web.HTTPNotFound(text="Not found.")
     if request.path == "/robots.txt":
         return web.Response(text="User-agent: *\nDisallow: /\n")
@@ -770,6 +773,48 @@ def site_page(request, preview=False):
         doc=doc, site=site_view(request, doc), rules=site_rules(request), board=request.app[STATS].weekly_board(),
         preview=preview,
         asset_version=ASSET_VERSION, year=time.strftime("%Y"))
+    return web.Response(text=html, content_type="text/html")
+
+
+async def site_workshop(request):
+    """The Workshop mod browser on the public site: search, and one page per mod."""
+    client, doc = request.app[WORKSHOP], site_doc(request)
+    parts = request.path.rstrip("/").split("/")
+    if len(parts) == 3 and parts[2]:
+        try:
+            mod = await client.mod(parts[2])
+        except workshop.NotFound:
+            raise web.HTTPNotFound(text="That mod isn't on the Workshop.")
+        except workshop.WorkshopError as exc:
+            return render_workshop(request, doc, error=str(exc))
+        return render_workshop(request, doc, mod=mod)
+    search = request.query.get("search", "")
+    sort = request.query.get("sort", "popularity")
+    try:
+        page = max(1, int(request.query.get("page", "1")))
+    except ValueError:
+        page = 1
+    try:
+        found = await client.search(search, sort, page)
+    except workshop.WorkshopError as exc:
+        return render_workshop(request, doc, error=str(exc), search=search, sort=sort)
+    links = {}
+    for name, number in (("prev", found["page"] - 1), ("next", found["page"] + 1)):
+        if 1 <= number <= found["pages"]:
+            query = {"search": found["search"], "sort": found["sort"], "page": number}
+            links[name] = "/workshop?" + urlencode({k: v for k, v in query.items() if v not in ("", None)})
+    return render_workshop(request, doc, found=found, links=links, search=search, sort=sort)
+
+
+def render_workshop(request, doc, **context):
+    context.setdefault("found", None)
+    context.setdefault("error", "")
+    context.setdefault("search", "")
+    context.setdefault("sort", "popularity")
+    context.setdefault("sorts", workshop.SORTS)
+    context.setdefault("links", {})
+    html = request.app[JINJA].get_template("workshop_site.html").render(
+        doc=doc, asset_version=ASSET_VERSION, year=time.strftime("%Y"), **context)
     return web.Response(text=html, content_type="text/html")
 
 
@@ -3598,6 +3643,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
                        part=lambda zone: body_part(zone) if zone else "", filesize=_filesize)
     env.globals.update(ban_reasons=reason_options(BAN_REASONS), kick_reasons=reason_options(KICK_REASONS))
     app[JINJA] = env
+    app[WORKSHOP] = workshop.Workshop()
 
     if start_manager:
         async def lifecycle(app):

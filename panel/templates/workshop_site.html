@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if mod %}{{ mod.name }} · {% endif %}Mods · {{ doc.name }} Gaming</title>
+<meta name="description" content="Arma Reforger Workshop mods, as {{ doc.name }} Gaming sees them.">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="icon" href="/static/site/oyb-icon.png" type="image/png">
+<link rel="preload" href="/brand/fonts/Display.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="/static/site.css?v={{ asset_version }}">
+</head>
+<body>
+<header class="bar">
+  <a class="logo" href="/" aria-label="{{ doc.name }} Gaming home"><span class="wordmark small"><b>{{ doc.name }}</b><i>Gaming</i></span></a>
+  <nav class="links" aria-label="Main"><a href="/">Home</a><a href="/workshop">Mods</a></nav>
+  {% if doc.discord %}<a class="button outline small join-top" href="{{ doc.discord }}" rel="noopener"><span>Discord</span></a>{% endif %}
+</header>
+
+<main class="ws">
+{% if mod %}
+  <p><a href="/workshop">← All mods</a></p>
+  <article class="ws-mod">
+    <h1>{{ mod.name }}</h1>
+    <p class="ws-by">{% if mod.author %}by {{ mod.author }}{% endif %}{% if mod.version %} · version {{ mod.version }}{% endif %}</p>
+    {% if mod.imageUrl %}<img class="ws-art" src="{{ mod.imageUrl }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+    {% if mod.summary %}<p class="ws-summary">{{ mod.summary }}</p>{% endif %}
+    <dl class="ws-facts">
+      {% if mod.sizeFormatted %}<div><dt>Size</dt><dd>{{ mod.sizeFormatted }}</dd></div>{% endif %}
+      {% if mod.percent is not none %}<div><dt>Rating</dt><dd>{{ mod.percent }}%{% if mod.ratingCount %} from {{ mod.ratingCount }}{% endif %}</dd></div>{% endif %}
+      {% if mod.subscriberCount %}<div><dt>Subscribers</dt><dd>{{ mod.subscriberCount }}</dd></div>{% endif %}
+      {% if mod.updatedAt %}<div><dt>Updated</dt><dd>{{ mod.updatedAt[:10] }}</dd></div>{% endif %}
+      {% if mod.license %}<div><dt>Licence</dt><dd>{{ mod.license }}</dd></div>{% endif %}
+    </dl>
+    {% if mod.tags %}<p class="ws-tags">{% for tag in mod.tags %}<span class="pill">{{ tag }}</span>{% endfor %}</p>{% endif %}
+    {% if mod.description %}<div class="ws-desc">{{ mod.description }}</div>{% endif %}
+    {% if mod.dependencies %}
+    <h2>Needs</h2>
+    <ul class="ws-list">{% for dep in mod.dependencies %}<li><a href="{{ dep.url }}">{{ dep.name }}</a></li>{% endfor %}</ul>
+    {% endif %}
+    <p><a class="button" href="{{ mod.workshopUrl }}" rel="noopener">Open in Official Workshop</a></p>
+  </article>
+{% else %}
+  <h1>Mods</h1>
+  <p class="muted">Arma Reforger Workshop mods. Search, open one to read about it, then open it in the official Workshop.</p>
+  <form class="ws-search" method="get" action="/workshop">
+    <label class="visually-hidden" for="ws-q">Search mods</label>
+    <input id="ws-q" name="search" value="{{ search }}" placeholder="Search by name" maxlength="80" autocomplete="off">
+    <label class="visually-hidden" for="ws-sort">Sort</label>
+    <select id="ws-sort" name="sort">
+      {% for value, label in sorts.items() %}<option value="{{ value }}" {% if value == sort %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="button small">Search</button>
+  </form>
+  {% if error %}
+  <p class="ws-error">{{ error }}</p>
+  {% elif found %}
+    {% if found.total is not none %}<p class="muted small">{{ found.total }} mods{% if found.search %} for "{{ found.search }}"{% endif %} · page {{ found.page }} of {{ found.pages }}</p>{% endif %}
+    {% if found.mods %}
+    <ul class="ws-list">
+      {% for m in found.mods %}
+      <li>
+        <a href="{{ m.url }}"><b>{{ m.name }}</b>{% if m.author %} <span class="muted">by {{ m.author }}</span>{% endif %}</a>
+        {% if m.summary %}<p class="small">{{ m.summary }}</p>{% endif %}
+        {% if m.sizeFormatted or m.percent is not none or m.subscriberCount %}<p class="muted small">{% if m.sizeFormatted %}{{ m.sizeFormatted }}{% endif %}{% if m.percent is not none %} · {{ m.percent }}%{% endif %}{% if m.subscriberCount %} · {{ m.subscriberCount }} subscribed{% endif %}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <nav class="ws-pages" aria-label="Pages">
+      {% if links.prev %}<a class="button small ghost" href="{{ links.prev }}">Previous</a>{% endif %}
+      {% if links.next %}<a class="button small ghost" href="{{ links.next }}">Next</a>{% endif %}
+    </nav>
+    {% else %}
+    <p class="muted">Nothing matched.</p>
+    {% endif %}
+  {% endif %}
+{% endif %}
+  <p class="muted small ws-note">Mod listings come from ReforgerMods, an independent service that isn't part of Bohemia Interactive. Mods download in the game itself, not from this site.</p>
+</main>
+
+<footer>
+  <p>© {{ year }} {{ doc.name }} Gaming. Arma Reforger and other game names belong to their owners; we aren't connected to them.</p>
+</footer>
+</body>
+</html>
