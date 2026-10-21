@@ -2421,12 +2421,32 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.active_ban(rook[2])["expires_at"], self.db.active_ban(HAVOC)["expires_at"])
         self.assertIn(f"#kick {rook[0]}", self.fake.commands)
 
-    async def test_ip_ban_box_is_off_by_default(self):
+    async def test_every_ban_is_an_ip_ban(self):
         self.connect(HAVOC, "Sgt Havoc", "203.0.113.7")
         await self.login("boss", "boss-password")
         token = await self.csrf("/bans")
         await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "reason": "x", "duration": "0"})
+        self.assertEqual(self.db.banned_ips(), {"203.0.113.7"})
+
+    async def test_senior_admins_can_ban_the_account_alone(self):
+        self.connect(HAVOC, "Sgt Havoc", "203.0.113.7")
+        await self.login("boss", "boss-password")
+        token = await self.csrf("/bans")
+        self.assertIn('name="account_only"', await (await self.client.get("/bans")).text())
+        await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "reason": "x", "duration": "0",
+                                              "account_only": "1"})
+        self.assertTrue(self.db.active_ban(HAVOC))
         self.assertEqual(self.db.banned_ips(), set())
+
+    async def test_an_admins_ban_is_an_ip_ban_with_no_way_out(self):
+        self.connect(HAVOC, "Sgt Havoc", "203.0.113.7")
+        self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
+        await self.login("adm", "adm-password")
+        token = await self.csrf("/bans")
+        self.assertNotIn('name="account_only"', await (await self.client.get("/bans")).text())
+        await self.client.post("/bans", data={"csrf": token, "identity": HAVOC, "reason": "x", "duration": "0",
+                                              "account_only": "1"})
+        self.assertEqual(self.db.banned_ips(), {"203.0.113.7"})
 
     async def test_summary_strip(self):
         state = self.manager.state("server-1")

@@ -123,7 +123,7 @@
   <section data-step data-chapter="3" data-target='form.card[action="/bans"]'>
     <h3>Banning</h3>
     <p>Type part of their name and pick them from the list, choose how long, pick or type a reason, and press <b>Ban on all servers</b>. It applies to every server at once, and they're told how to appeal.</p>
-    {% if can("ips") %}<p><b>IP ban</b> also catches their alts and any new account from the same IP. People in the same house share an IP, so only tick it when you mean it.</p>{% endif %}
+    <p>Every ban is an IP ban: it also catches their alts and any new account from the same IP. People in the same house share an IP, so be sure before you ban.</p>
   </section>
   {% endif %}
   <section data-step data-chapter="3" data-target="section.card"{{ onward() }}>

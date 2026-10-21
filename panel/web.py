@@ -1097,7 +1097,8 @@ async def add_ban(request):
     length = length_text(seconds) if seconds else "Permanent"
     name = name or (db.player(identity) or {"name": ""})["name"]
     by = request[USER]["username"]
-    ip_ban = form.get("ip") == "1" and allowed(request, "ips")
+    # Every ban is an IP ban. Only someone who may see IPs can ask for the account alone.
+    ip_ban = not (form.get("account_only") == "1" and allowed(request, "ips"))
     targets = [(identity, name, reason)]
     if ip_ban:
         ips = [c["ip"] for c in db.ips(identity)]

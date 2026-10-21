@@ -34,8 +34,9 @@
     </label>
     <label>Reason <span class="muted">(the appeal link is added if it's missing)</span> <input name="reason" maxlength="200" required></label>
   </div>
+  <p class="muted small">Every ban is an IP ban: it also bans every other account seen on their IPs (PC, PlayStation, Xbox, alts), and any new account that joins from them. People in the same house share an IP.</p>
   {% if can("ips") %}
-  <label class="check"><input type="checkbox" name="ip" value="1"> IP ban: also ban every other account seen on their IPs (PC, PlayStation, Xbox, alts), and any new account that joins from them. People in the same house share an IP.</label>
+  <label class="check"><input type="checkbox" name="account_only" value="1"> Account only: don't ban their IPs or other accounts.</label>
   {% endif %}
   <button class="danger">Ban on all servers</button>
 </form>
