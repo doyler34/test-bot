@@ -169,9 +169,8 @@ def render(request, template, **context):
     )
     if user and not template.startswith("_"):
         context.setdefault("notices", attention(request, list(request.app[MANAGER].states.values())))
-        # Anyone who runs servers from the Server manager gets the walkthrough once, whether their role
-        # is manager or they were granted files; owners already know the panel.
-        if template in MANAGE_TOUR_PAGES and user["role"] != "owner" and allowed(request, "files") and (
+        # Anyone who runs servers from the Server manager gets the walkthrough once, whatever their role.
+        if template in MANAGE_TOUR_PAGES and allowed(request, "files") and (
                 request.query.get("tour") == "1" or not user["manage_toured"]):
             context.setdefault("tour", "manage")
             context.setdefault("tour_inst", request.match_info.get("inst") or first_instance(request))
