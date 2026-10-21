@@ -1230,7 +1230,7 @@ async def players_page(request):
     server = next((st for st in request.app[MANAGER].states.values()
                    if q and q.lower() in (st.config.name.lower(), st.config.id.lower())), None)
     if server:
-        raise web.HTTPFound(f"/?server={server.config.id}")
+        raise web.HTTPFound(f"/server/{server.config.id}")
     rows = [dict(r) for r in request.app[DB].search_players(q, limit=50)]
     if q and re.fullmatch(r"[0-9a-fA-F.:]{3,}", q) and allowed(request, "ips"):
         seen = {r["identity"] for r in rows}

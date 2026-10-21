@@ -17,6 +17,15 @@
     {% endif %}
   </div>
 </div>
+{% if card.address or can("cards") %}
+<div class="dash-ip srv-ip">
+  {% if card.address %}
+  <span>IP: {{ card.address }}</span>
+  <button type="button" class="icon-btn" data-copy-text="{{ card.address }}" title="Copy IP" aria-label="Copy IP"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
+  <a class="join" href="steam://connect/{{ card.address }}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>Join</a>
+  {% else %}<a class="muted small-link" href="/settings/pictures">Add the join address</a>{% endif %}
+</div>
+{% endif %}
 {% if not s.online %}<p class="muted">{{ s.error or "Connecting…" }}</p>{% endif %}
 
 <nav class="tabs srv-tabs">

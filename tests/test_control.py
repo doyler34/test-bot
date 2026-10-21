@@ -50,11 +50,13 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
     async def test_home_has_a_card_per_server_and_each_opens_its_page(self):
         await self.login("boss")
         home = await (await self.client.get("/")).text()
-        for words in ("Everon Tactical", "Conflict Legacy", "1 / 128", "32 ms", "No admin on", 'href="/?server=one"',
-                      'href="/?server=two"', "Server Information", "Player List (1)", 'href="/server/one"'):
+        for words in ("Everon Tactical", "Conflict Legacy", "<b>1<span> / 128</span></b>", "No admin on",
+                      'href="/server/one"', 'href="/server/two"'):
             self.assertIn(words, home)
-        self.assertNotIn("/power/stop", home)      # no AMP: the buttons are there but disabled, and say why
-        self.assertIn('disabled title="Connect the panel to AMP to use this">Stop</button>', home)
+        for words in ("/power/stop", "ctl-btn", "Server Information", "Player List (1)"):
+            self.assertNotIn(words, home)      # the power buttons and the open-up panel are gone from the dashboard
+        no_amp = await (await self.client.get("/server/one")).text()
+        self.assertIn('disabled title="Connect the panel to AMP to use this">Stop</button>', no_amp)
         page = await (await self.client.get("/server/one")).text()
         for words in ("Server Information", "2h 0m", "Player List", "Gaz", "1h 30m", "CPU usage", "Memory usage",
                       "Network", "Live Map", "Live feed", "Admins on", "None", "aria-label=\"All servers\"", "Memory", "bar cpu"):
@@ -115,10 +117,10 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         amp.power = mock.AsyncMock()
         self.app[AMP] = amp
         await self.login("boss")
-        page = await (await self.client.get("/")).text()
+        self.assertNotIn("/power/", await (await self.client.get("/")).text())      # not on the dashboard cards
+        page = await (await self.client.get("/server/one")).text()
         self.assertIn('action="/server/one/power/stop"', page)
-        self.assertNotIn('action="/server/one/power/update"', page)      # three buttons on the cards, as drawn
-        self.assertIn('action="/server/one/power/update"', await (await self.client.get("/server/one")).text())
+        self.assertIn('action="/server/one/power/update"', page)
         token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
         reply = await self.client.post("/server/one/power/restart", data={"csrf": token}, allow_redirects=False)
         self.assertEqual(reply.headers["Location"], "/")
@@ -126,7 +128,7 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.all("SELECT action FROM audit WHERE action LIKE '%AMP%'")[0]["action"], "restart through AMP")
         await self.client.post("/logout", data={"csrf": token})
         await self.login("mod")
-        page = await (await self.client.get("/")).text()
+        page = await (await self.client.get("/server/one")).text()
         self.assertNotIn('action="/server/one/power/stop"', page)
         token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
         reply = await self.client.post("/server/one/power/stop", data={"csrf": token}, allow_redirects=False)
@@ -217,31 +219,35 @@ class DashboardDetailTests(unittest.IsolatedAsyncioTestCase):
     async def test_card_details_show_on_the_dashboard(self):
         token = await self.login("boss")
         home = await (await self.client.get("/")).text()
-        self.assertIn("1.2.1.189", home)
         self.assertIn("128 Slot", home)
-        self.assertNotIn("steam://connect", home)                 # no address yet: no Join
+        page = await (await self.client.get("/server/one")).text()
+        self.assertIn("1.2.1.189", page)
+        self.assertNotIn("steam://connect", page)                 # no address yet: no Join
         await self.client.post("/settings/pictures/one/details",
                                data={"csrf": token, "description": "Milsim / Daily Ops", "address": "185.123.45.67:2001"})
         home = await (await self.client.get("/")).text()
         self.assertIn("128 Slot - Milsim / Daily Ops", home)
-        self.assertIn('href="steam://connect/185.123.45.67:2001"', home)
-        self.assertIn('data-copy-text="185.123.45.67:2001"', home)
+        page = await (await self.client.get("/server/one")).text()
+        self.assertIn('href="steam://connect/185.123.45.67:2001"', page)
+        self.assertIn('data-copy-text="185.123.45.67:2001"', page)
         await self.client.post("/settings/pictures/one/details", data={"csrf": token, "description": "x", "address": "not an address"})
-        self.assertIn("185.123.45.67:2001", await (await self.client.get("/")).text())     # a bad address isn't saved
-        two = await (await self.client.get("/?server=two")).text()
-        self.assertIn("<h2><i class=\"dot bad\"></i>Conflict Legacy</h2>", two)
+        self.assertIn("185.123.45.67:2001", await (await self.client.get("/server/one")).text())     # a bad address isn't saved
+        two = await (await self.client.get("/server/two")).text()
+        self.assertIn("Conflict Legacy", two)
+        self.assertEqual((await self.client.get("/?server=two", allow_redirects=False)).headers["Location"], "/server/two")
 
     async def test_search_finds_a_server_and_the_bell_counts(self):
         await self.login("mod")
         reply = await self.client.get("/players", params={"q": "conflict legacy"}, allow_redirects=False)
-        self.assertEqual(reply.headers["Location"], "/?server=two")
+        self.assertEqual(reply.headers["Location"], "/server/two")
         self.assertNotIn('class="count"', await (await self.client.get("/")).text())
         self.db.add_feed("one", "sus", "3 players were blown up in the same second")
         home = await (await self.client.get("/")).text()
         self.assertIn('<i class="count">1</i>', home)
         self.assertIn("1 sus flag in the last hour", home)
-        # the player panel also carries the live feed, filtered by the same part the server page uses
-        self.assertIn('data-side-tab="feed"', home)
-        self.assertIn('data-refresh="/server/one/feed.part"', home)
-        self.assertIn("3 players were blown up in the same second", home)
+        # the server's own page has the player panel, which also carries the live feed
+        page = await (await self.client.get("/server/one")).text()
+        self.assertIn('data-side-tab="feed"', page)
+        self.assertIn('data-refresh="/server/one/feed.part"', page)
+        self.assertIn("3 players were blown up in the same second", page)
         self.assertEqual((await self.client.post("/settings/pictures/one/details", data={})).status, 403)
