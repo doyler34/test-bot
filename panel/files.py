@@ -410,6 +410,37 @@ def scenarios(base):
     return {}
 
 
+_MAPS = {}
+
+
+def map_name(base):
+    """The island a server is set to play ("Conflict - Everon" gives "Everon"), from its
+    saved scenario. Empty when it has none, or one the manifest doesn't name."""
+    try:
+        stamp = (Path(base) / KVP).stat().st_mtime
+    except OSError:
+        return ""
+    hit = _MAPS.get(str(base))
+    if hit and hit[0] == stamp:
+        return hit[1]
+    try:
+        name = scenarios(Path(base)).get(game_settings(Path(base)).get("scenarioId", ""), "")
+    except (OSError, ValueError):
+        name = ""
+    island = name.rsplit(" - ", 1)[-1].strip() if name else ""
+    _MAPS[str(base)] = (stamp, island)
+    return island
+
+
+def server_map(config):
+    """The map for a panel server, found through the AMP instance its logs live in."""
+    parts = [p for p in str(config.log_dir).split("/") if p]
+    name = config.amp_instance
+    if not name and "instances" in parts and parts.index("instances") + 1 < len(parts):
+        name = parts[parts.index("instances") + 1]
+    return map_name(instances_root([config]) / name) if name else ""
+
+
 def kvp_mods(base):
     """The mod list straight from the instance's settings file, for when its AMP is off."""
     for line in (base / KVP).read_text(encoding="utf-8").splitlines():

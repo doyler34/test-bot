@@ -2,6 +2,7 @@ import json
 import os
 import re
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -386,6 +387,22 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         amp.power.assert_awaited_once_with(instance, "start")
         self.assertEqual(self.app[web_module.SETUPS]["Arland02"]["step"], "Started")
         self.assertIn("Setting up Arland02", await (await self.client.get("/manage")).text())
+
+    async def test_a_servers_map_comes_from_the_scenario_it_is_set_to_play(self):
+        (self.root / "Plus01" / "GenericModule.kvp").write_text(
+            'App.AppSettings={"name":"OYB Plus","scenarioId":"{ARL}"}')
+        (self.root / "Plus01" / "configmanifest.json").write_text(json.dumps([
+            {"FieldName": "scenarioId", "EnumValues": {"{ECC}": "Conflict - Everon", "{ARL}": "Game Master - Arland"}}]))
+        self.assertEqual(files.map_name(self.root / "Plus01"), "Arland")
+        config = ServerConfig("plus", "Plus", log_dir=f"{self.root}/Plus01/arma-reforger/1874900/AReforgerMaster/logs")
+        self.assertEqual(files.server_map(config), "Arland")
+        by_name = ServerConfig("plus", "Plus", amp_instance="Plus01", log_dir=f"{self.root}/Elsewhere/logs")
+        self.assertEqual(files.server_map(by_name), "Arland")
+        (self.root / "Plus01" / "GenericModule.kvp").write_text('App.AppSettings={"scenarioId":"{ECC}"}')
+        os.utime(self.root / "Plus01" / "GenericModule.kvp", (time.time() + 5, time.time() + 5))
+        self.assertEqual(files.map_name(self.root / "Plus01"), "Everon")
+        self.assertEqual(files.map_name(self.root / "Missing"), "")
+        self.assertEqual(files.server_map(ServerConfig("x", "X")), "")
 
     async def test_new_game_puts_the_save_aside_and_starts_the_server_again(self):
         profile = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "profile"

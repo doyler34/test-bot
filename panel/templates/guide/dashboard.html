@@ -1,26 +1,21 @@
 {% extends "guide/_page.html" %}
 {% from "guide/_macros.html" import shot with context %}
 {% block guide %}
-<p>The dashboard is the first thing you see after logging in. The top has a card for every server; under them is one server opened up, with its information, a live map of kills, who's on and its charts.</p>
-{{ shot("dashboard", "The dashboard: the server cards, then OYB #1 opened up under them.") }}
+<p>The dashboard is the first thing you see after logging in: a card for every server. <span class="only-desk">Click</span><span class="only-phone">Tap</span> a card to open that server on its own page.</p>
+{{ shot("dashboard", "The dashboard: a card for every server.") }}
 
 <h2>The server cards</h2>
 {{ shot("cards", "A server's card.") }}
 <ul>
   <li><b>Online</b> or <b>Offline</b>, and a red <b>No admin on</b> when no admin is in game on it.</li>
   <li>Its name, number of slots and a short description, over its picture. Senior admins set those on <a href="/guide/settings">Settings → Server cards</a>.</li>
-  <li>Players on, the map, and how fast the server answers (ping).</li>
+  <li>Three numbers: players on (out of its slots), the map, and the server's FPS.</li>
   <li>The <b>★</b> makes it a favourite: favourites go first. It's saved on this <span class="only-desk">computer</span><span class="only-phone">phone</span>, so everyone can have their own.</li>
-  <li><b>Start</b>, <b>Restart</b> and <b>Stop</b>.{% if can("power") %} Restart and Stop ask you to confirm first, because they kick everyone off. They work once the panel is connected to AMP.{% else %} They're greyed out unless a senior admin has given you the start and stop permission.{% endif %}</li>
 </ul>
-<p><span class="only-desk">Click</span><span class="only-phone">Tap</span> a card to open that server underneath. The cards refresh on their own.</p>
+<p>The cards refresh on their own. The Start, Restart and Stop buttons are on the server's own page: see <a href="/guide/servers">A server's own page</a>.</p>
 
-<h2>The server panel</h2>
-<p>Under the cards, the server you picked:</p>
-<ul>
-  <li>The top line has its name and, once a senior admin has added it, the join address. <span class="only-desk">Click</span><span class="only-phone">Tap</span> the copy button to copy the address, or <b>Join</b> to open it in Steam.</li>
-  <li><b>Players</b> opens the server's own page on its live feed{% if can("game_admins") %}, <b>Settings</b> its in-game admins,{% endif %} and <b>Full page →</b> the server's own page. See <a href="/guide/servers">A server's own page</a>.</li>
-</ul>
+<h2>A server's Overview</h2>
+<p>The Overview tab on a server's own page shows:</p>
 
 <h3>Server information</h3>
 <p>Status, how long it's been up, which admins are on (red <b>None</b> when nobody is), the game, map, players, game version, CPU, memory and disk.</p>

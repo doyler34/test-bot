@@ -1714,3 +1714,10 @@ body.map-open { overflow: hidden; }
 .sort-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
 .sort-chips a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: .85rem; color: var(--muted, inherit); text-decoration: none; }
 .sort-chips a.on { border-color: var(--gold); color: var(--gold); }
+
+.ctl-nums { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; pointer-events: none; }
+.ctl-nums div { background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.ctl-nums b { display: block; font-size: 1.35rem; line-height: 1.15; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctl-nums b span { font-size: .9rem; font-weight: 500; color: #9aa1a9; }
+.ctl-nums b.bad { color: #ff7b72; }
+.ctl-nums small { color: #9aa1a9; font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }

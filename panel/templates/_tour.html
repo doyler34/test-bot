@@ -7,7 +7,7 @@
 {% for url, _ in chapters %}{% if path == url or (url == "/server/" and path.startswith(url)) %}{% set ns.here = loop.index0 %}{% endif %}{% endfor %}
 {% set last = ns.here == chapters|length - 1 %}
 {% set coming = chapters[ns.here + 1] if not last else none %}
-{% set next_url = (("/server/" ~ chosen.id ~ "?tour=1#live") if coming[0] == "/server/" and chosen else
+{% set next_url = (("/server/" ~ (cards|selectattr("online")|first or cards|first).id ~ "?tour=1#live") if coming[0] == "/server/" and cards else
                    "/players?tour=1" if coming[0] == "/server/" else coming[0] ~ "?tour=1") if coming else "" %}
 {% macro onward() %}{% if coming %} data-next="{{ next_url }}"{% endif %}{% endmacro %}
 {% macro hint() %}{% if coming %}<p class="tour-hint">Next: {{ coming[1] }}.</p>{% endif %}{% endmacro %}
@@ -39,30 +39,8 @@
   </section>
   <section data-step data-chapter="0" data-target=".ctl-cards">
     <h3>Every server</h3>
-    <p>A card for each server: online or not, players on, the map and ping. A red <b>No admin on</b> means nobody's watching it.</p>
-    <p>{{ tap|safe }} a card to open that server underneath. The ★ keeps your favourites first, just for you.</p>
-  </section>
-  <section data-step data-chapter="0" data-target=".dash-panel-head">
-    <h3>The server you picked</h3>
-    <p>Its join address, with a copy and <b>Join</b> button. <b>Players</b> opens its full player list and live feed. <b>Full page →</b> has its history, health and the Monitor.</p>
-  </section>
-  <section data-step data-chapter="0" data-target=".ctl-info">
-    <h3>Server information</h3>
-    <p>How long it's been up, who's on, and which admins are in game. Red <b>None</b> next to Admins on means you might want to jump in.</p>
-  </section>
-  <section data-step data-chapter="0" data-target=".ctl-map-panel">
-    <h3>Live map</h3>
-    <p>Kills where they happened. <i class="tour-dot k"></i> a kill, <i class="tour-dot t"></i> a teamkill, <i class="tour-dot a"></i> a kill by AI or with nobody named.
-      <span class="only-desk">Hover over</span><span class="only-phone">Tap</span> a dot for who, with what and from how far.</p>
-    <p>Pick how far back next to the title, up to 30 days. <b>Layers</b> adds density, a 1 km grid and an area count. A cluster of purple nobody can explain is how an explosion cheat shows.</p>
-  </section>
-  <section data-step data-chapter="0" data-target=".ctl-panel:has(.ctl-switch)">
-    <h3>Players and the live feed</h3>
-    <p>Switch this box between who's on now and the live feed. Next to the map, you can spot a teamkill in the feed and see where it happened at once. {{ tap|safe }} any name to open that player.</p>
-  </section>
-  <section data-step data-chapter="0" data-target=".ctl-charts">
-    <h3>Charts</h3>
-    <p>CPU, memory, players and network over the last hour. A sudden spike when players complain about lag is worth mentioning to a senior admin.</p>
+    <p>A card for each server: online or not, players on, the map and its FPS. A red <b>No admin on</b> means nobody's watching it.</p>
+    <p>{{ tap|safe }} a card to open that server on its own page. The ★ keeps your favourites first, just for you.</p>
   </section>
   <section data-step data-chapter="0" data-target="aside.side .side-nav" data-phone-target="nav.dock">
     <h3>Getting around</h3>
@@ -80,7 +58,7 @@
 {% elif path.startswith("/server/") %}
   <section data-step data-chapter="1" data-target=".srv-head">
     <h3>{{ s.name }}'s own page</h3>
-    <p>Everything about one server.{% if can("power") %} The power buttons are here too: Restart and Stop kick everyone, so they always ask first.{% endif %}</p>
+    <p>Everything about one server: its Overview has how long it's been up, a map of recent kills and charts.{% if can("power") %} The power buttons are here too: Restart and Stop kick everyone, so they always ask first.{% endif %}</p>
   </section>
   <section data-step data-chapter="1" data-target=".srv-tabs">
     <h3>Its tabs</h3>

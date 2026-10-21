@@ -417,8 +417,8 @@ async def dashboard(request):
     live = list(request.app[MANAGER].states.values())
     details = card_details(request.app[DB])
     states = [control_card(s, request.app[PICTURES], details) for s in live]
-    chosen = request.app[MANAGER].states.get(request.query.get("server", "")) \
-        or next((s for s in live if s.online), live[0] if live else None)
+    if request.query.get("server", "") in request.app[MANAGER].states:
+        raise web.HTTPFound(f"/server/{request.query['server']}")
     db = request.app[DB]
     hour = time.localtime().tm_hour
     welcome = {
@@ -428,11 +428,7 @@ async def dashboard(request):
         "bans": len(db.bans()),
         "sus": db.one("SELECT COUNT(*) FROM feed WHERE kind = 'sus' AND at > ?", now() - 86400)[0],
     }
-    extra = {}
-    if chosen:
-        extra = {"chosen": next(c for c in states if c["id"] == chosen.config.id), **server_overview(request, chosen),
-                 "csp": MAP_CSP}
-    return render(request, "dashboard.html", cards=states, welcome=welcome, amp=bool(request.app[AMP]), gb=GB, **extra)
+    return render(request, "dashboard.html", cards=states, welcome=welcome, amp=bool(request.app[AMP]))
 
 
 async def tour_done(request):
@@ -506,7 +502,7 @@ async def guide_page(request):
 async def dashboard_part(request):
     details = card_details(request.app[DB])
     states = [control_card(s, request.app[PICTURES], details) for s in request.app[MANAGER].states.values()]
-    return render(request, "_cards.html", cards=states, amp=bool(request.app[AMP]), chosen_id=request.query.get("server", ""))
+    return render(request, "_cards.html", cards=states, amp=bool(request.app[AMP]))
 
 
 async def server_page(request):
@@ -1604,7 +1600,8 @@ def control_card(state, pictures=None, details=None):
             "description": mine.get("description", ""), "address": mine.get("address", ""),
             "version": q.get("version") or "",
             "count": len(state.players) if state.online else 0, "slots": q.get("slots"),
-            "map": q.get("map"), "ping": q.get("ms"), "unreachable": state.unreachable >= UNREACHABLE_AFTER}
+            "map": q.get("map") or files.server_map(state.config), "ping": q.get("ms"),
+            "unreachable": state.unreachable >= UNREACHABLE_AFTER}
 
 
 def server_overview(request, state):

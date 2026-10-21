@@ -1562,6 +1562,18 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Wrong username or password", await response.text())
         self.assertEqual(self.db.audit()[0]["action"], "login failed")
 
+    async def test_dashboard_cards_show_numbers_and_open_the_servers_own_page(self):
+        await self.login("boss", "boss-password")
+        html = await (await self.client.get("/")).text()
+        self.assertNotIn("ctl-power", html)
+        self.assertNotIn("dash-panel", html)
+        self.assertIn('href="/server/server-1"', html)
+        for label in ("Players", "Map", "FPS"):
+            self.assertIn(f"<small>{label}</small>", html)
+        old = await self.client.get("/?server=server-1", allow_redirects=False)
+        self.assertEqual((old.status, old.headers["Location"]), (302, "/server/server-1"))
+        self.assertIn('class="ctl-power"', await (await self.client.get("/server/server-1")).text())
+
     async def test_dashboard_shows_live_server(self):
         await self.login("boss", "boss-password")
         html = await (await self.client.get("/")).text()

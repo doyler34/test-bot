@@ -1,7 +1,7 @@
 {% for c in cards %}
-<section class="ctl-card{{ ' chosen' if c.id == chosen_id }}" data-id="{{ c.id }}">
+<section class="ctl-card" data-id="{{ c.id }}">
   {% if c.image %}<img class="ctl-card-img" src="{{ c.image }}" alt="" loading="lazy">{% endif %}
-  <a class="ctl-card-link" href="/?server={{ c.id }}" aria-label="Show {{ c.name }}"></a>
+  <a class="ctl-card-link" href="/server/{{ c.id }}" aria-label="Open {{ c.name }}"></a>
   <div class="ctl-card-top"><div class="ctl-pills">
     {% if not c.configured %}<span class="ctl-state">Not set up</span>
     {% else %}<span class="ctl-state {{ 'on' if c.online else 'off' }}">{{ "Online" if c.online else "Offline" }}</span>{% endif %}
@@ -11,12 +11,11 @@
   </div>
   <h2>{{ c.name }}</h2>
   <p class="ctl-sub">{% if c.slots %}{{ c.slots }} Slot{% if c.description %} - {% endif %}{% endif %}{{ c.description or ("" if c.slots else "Arma Reforger") }}</p>
-  <div class="ctl-stats">
-    <span title="Players"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/></svg>{{ c.count }}{% if c.slots %} / {{ c.slots }}{% endif %}</span>
-    <span title="Map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>{{ c.map or "—" }}</span>
-    <span class="ctl-ping{{ ' bad' if c.unreachable }}" title="How long the server browser check took"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20v-4M12 20v-9M18 20V5"/></svg>{% if c.unreachable %}Unreachable{% elif c.ping is not none %}<b>{{ c.ping|round|int }} ms</b>{% else %}—{% endif %}</span>
+  <div class="ctl-nums">
+    <div title="Players on now"><b>{{ c.count }}{% if c.slots %}<span> / {{ c.slots }}</span>{% endif %}</b><small>Players</small></div>
+    <div title="The map it's on"><b>{{ c.map or "—" }}</b><small>Map</small></div>
+    <div title="Server FPS{{ ': below 20 players feel lag' if c.fps is not none and c.fps < 20 }}"><b class="{{ 'bad' if c.online and c.fps is not none and c.fps < 20 }}">{% if c.online and c.fps is not none %}{{ c.fps|round|int }}{% else %}—{% endif %}</b><small>FPS</small></div>
   </div>
-  {% if not c.online and c.error %}<p class="ctl-note">{{ c.error }}</p>{% endif %}
-  {% include "_power.html" %}
+  {% if c.unreachable %}<p class="ctl-note">Unreachable</p>{% elif not c.online and c.error %}<p class="ctl-note">{{ c.error }}</p>{% endif %}
 </section>
 {% endfor %}
