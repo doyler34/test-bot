@@ -434,6 +434,12 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.db.add_user("senior", auth.hash_password("senior-password"), "owner")
         await self.client.post("/login", data={"username": "senior", "password": "senior-password"})
         self.assertNotIn('id="tour"', await (await self.client.get("/mods/Plus01")).text())
+        # A moderator who has been given the Files grant runs servers too, so they get the walkthrough.
+        self.db.add_user("helper", auth.hash_password("helper-password"), "moderator")
+        self.db.set_grants(self.db.one("SELECT id FROM users WHERE username = ?", "helper")["id"], {"files"})
+        await self.client.post("/logout", data={"csrf": token})
+        await self.client.post("/login", data={"username": "helper", "password": "helper-password"})
+        self.assertIn('data-done="/tour/manage/done"', await (await self.client.get("/manage")).text())
 
 
 class AmpLoginTests(unittest.IsolatedAsyncioTestCase):
