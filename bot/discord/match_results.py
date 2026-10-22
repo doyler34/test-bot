@@ -126,9 +126,10 @@ class MatchResults:
             if channel is None:
                 return
             if live_board_channel_id() == channel.id:
-                # The live board already stands in this channel as the final
-                # result; a second post would just repeat it.
-                LOG.info('Live board owns %s; skipping the results post', channel.id)
+                # The live channel keeps one board per server and nothing else, so a
+                # finished match is not posted into it. Give past games a channel of
+                # their own with GAME_LEADERBOARD_CHANNEL_ID.
+                LOG.info('%s is the live channel; not posting the finished match there', channel.id)
                 return
             rows = self.rows(guild, start, end, server_id)
             if not rows:
