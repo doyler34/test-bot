@@ -19,6 +19,12 @@ OK, WARN, BAD, INFO = "ok", "warn", "bad", "info"
 STAT_KEYS = ("rx_bytes", "tx_bytes", "rx_packets", "tx_packets", "rx_errors", "tx_errors", "rx_dropped",
              "tx_dropped", "rx_crc_errors", "rx_missed_errors", "rx_fifo_errors", "rx_over_errors", "collisions")
 ETHTOOL_WORTH = re.compile(r"miss|drop|err|crc|over|fifo|no_buffer|discard|timeout|restart", re.I)
+# Counters that mean the card really lost packets, and ones that are just the driver's bookkeeping
+# (Intel's flow director counts every flow it has no filter for, which is normal).
+LOSS_COUNTER = re.compile(r"missed|no_buffer|out_of_buffer|fifo|rx_over|rx_dropped|discard", re.I)
+BOOKKEEPING = re.compile(r"^fdir_", re.I)
+# Damaged packets only matter when they're more than a trickle of what the port has received.
+DAMAGED_SHARE = 0.001
 TARGETS = (("Cloudflare", "1.1.1.1", 443), ("Google", "8.8.8.8", 443))
 # What "Fix the network" sets: changes that take effect at once and never drop
 # the link. The card's own ring sizes (ethtool -G) reset the port, so they're left to a person.
@@ -483,27 +489,46 @@ def judge(before, after, servers, extras):
                             "The queue in front of the port was full, so packets going out were thrown away." if grew else ""))
         tool = extras["ethtool"].get(name)
         if tool:
+            busy = {k: v for k, v in tool["counters"].items() if v and not BOOKKEEPING.match(k)}
+            lost = {k: v for k, v in busy.items() if LOSS_COUNTER.search(k)}
+            damaged = {k: v for k, v in busy.items() if ("csum" in k or "crc" in k) and k not in lost}
+            other = {k: v for k, v in busy.items() if k not in damaged and k not in lost}
+            losing = bool(lost) or any(total.get(k) for k in ("rx_missed_errors", "rx_fifo_errors", "rx_over_errors"))
             if tool["rx_now"] and tool["rx_max"]:
                 small = tool["rx_now"] < tool["rx_max"]
-                out.append(line(s, f"{name} receive buffer", f"{tool['rx_now']} of {tool['rx_max']} packets",
-                                WARN if small else OK,
-                                f"The card only holds {tool['rx_now']} packets while it waits for the CPU; a burst "
-                                "bigger than that is lost. Changing it drops the port for a second or two, so do it "
-                                "when the servers are empty." if small else "Already at its biggest.",
-                                f"ethtool -G {name} rx {tool['rx_max']}" if small else ""))
-            busy = {k: v for k, v in tool["counters"].items() if v}
-            damaged = {k: v for k, v in busy.items() if "csum" in k or "crc" in k}
-            other = {k: v for k, v in busy.items() if k not in damaged}
+                bigger = min(tool["rx_max"], max(tool["rx_now"] * 4, 2048))
+                if small and losing:
+                    out.append(line(s, f"{name} receive buffer", f"{tool['rx_now']} of {tool['rx_max']} packets", WARN,
+                                    f"The card only holds {tool['rx_now']} packets while it waits for the CPU, and it has "
+                                    "missed packets: a burst bigger than that is lost. Changing it drops the port for a "
+                                    "second or two, so do it when the servers are empty. A moderate size is enough: "
+                                    "bigger isn't automatically better, because packets waiting in it arrive later.",
+                                    f"ethtool -G {name} rx {bigger}"))
+                else:
+                    out.append(line(s, f"{name} receive buffer", f"{tool['rx_now']} of {tool['rx_max']} packets", OK,
+                                    "Normal. Nothing has been missed. Raise it only if the card starts missing packets "
+                                    "(rx_missed / rx_no_buffer), and then to a moderate size, not the maximum."
+                                    if small else "At its biggest."))
+            if lost:
+                out.append(line(s, f"{name} packets the card couldn't take", ", ".join(f"{k} {v}" for k, v in sorted(lost.items())),
+                                WARN, "Packets arrived faster than the card's buffer could be emptied: real loss since boot."))
             if damaged:
-                out.append(line(s, f"{name} packets arriving damaged", f"{sum(damaged.values())} since boot "
-                                f"({', '.join(f'{k} {v}' for k, v in sorted(damaged.items()))})", WARN,
-                                "Packets reached the card with a bad checksum: corrupted on the way, usually by a faulty "
-                                "cable, switch port or transceiver. Damaged game packets are thrown away.",
-                                "Send this to the host: they can check the cable and switch port on their side."))
+                count = sum(damaged.values())
+                received = nic["stats"].get("rx_packets") or 0
+                trickle = received and count / received < DAMAGED_SHARE
+                detail = f"{count} since boot ({', '.join(f'{k} {v}' for k, v in sorted(damaged.items()))})"
+                if trickle:
+                    out.append(line(s, f"{name} packets arriving damaged", detail, INFO,
+                                    f"A trickle: {count / received:.3%} of what this port has received. Only worth a look "
+                                    "if it keeps growing; check again after a busy match."))
+                else:
+                    out.append(line(s, f"{name} packets arriving damaged", detail, WARN,
+                                    "Packets reached the card with a bad checksum: corrupted on the way, usually by a "
+                                    "faulty cable, switch port or transceiver. Damaged game packets are thrown away.",
+                                    "Send this to the host: they can check the cable and switch port on their side."))
             if other:
                 out.append(line(s, f"{name} card counters", ", ".join(f"{k} {v}" for k, v in sorted(other.items())),
-                                WARN, "The driver's own count of trouble since boot; rx_missed / rx_no_buffer mean "
-                                      "packets arrived faster than they were taken off the card."))
+                                WARN, "The driver's own count of trouble since boot."))
 
     s = "Kernel"
     pairs = list(zip(before["softnet"], after["softnet"]))

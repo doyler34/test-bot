@@ -48,6 +48,40 @@ def proc(root, softnet_dropped, udp_errors, sock_drops, irq):
 
 
 class NetCheckTests(unittest.TestCase):
+    def judged(self, counters, rx_packets, rx_now=512, rx_max=8192):
+        with tempfile.TemporaryDirectory() as sys_root, tempfile.TemporaryDirectory() as proc_root:
+            nic(sys_root, "enp4s0", "ixgbe", "up", 10000, {"rx_bytes": 0, "tx_bytes": 0, "rx_packets": rx_packets})
+            proc(proc_root, 0, 0, 0, 1000)
+            before = netcheck.snapshot({}, proc_root, sys_root)
+            after = netcheck.snapshot({}, proc_root, sys_root)
+            after["at"] = before["at"] + 10
+            extras = {"routes": netcheck.default_routes(proc_root), "sysctl": netcheck.sysctls(proc_root), "queries": {},
+                      "internet": {}, "buffers": {},
+                      "ethtool": {"enp4s0": {"rx_max": rx_max, "rx_now": rx_now, "counters": counters}}}
+        return {(r["section"], r["label"]): r for r in netcheck.judge(before, after, [], extras)}
+
+    def test_a_card_that_has_missed_nothing_is_not_told_to_max_its_buffer(self):
+        rows = self.judged({"fdir_miss": 111763, "fdir_overflow": 5, "rx_csum_offload_errors": 143}, rx_packets=569586)
+        buffer = rows[("Network ports", "enp4s0 receive buffer")]
+        self.assertEqual((buffer["verdict"], buffer["fix"]), ("ok", ""))
+        self.assertNotIn(("Network ports", "enp4s0 card counters"), rows)      # the flow director's bookkeeping is not trouble
+        damaged = rows[("Network ports", "enp4s0 packets arriving damaged")]
+        self.assertEqual(damaged["verdict"], "info")                          # 143 of 569,586
+        self.assertIn("trickle", damaged["why"])
+
+    def test_missed_packets_are_real_loss_and_a_lot_of_damaged_ones_go_to_the_host(self):
+        rows = self.judged({"rx_missed_errors": 40, "rx_csum_offload_errors": 5000}, rx_packets=100000)
+        self.assertEqual(rows[("Network ports", "enp4s0 receive buffer")]["verdict"], "warn")
+        self.assertEqual(rows[("Network ports", "enp4s0 receive buffer")]["fix"], "ethtool -G enp4s0 rx 2048")
+        self.assertEqual(rows[("Network ports", "enp4s0 packets the card couldn't take")]["verdict"], "warn")
+        damaged = rows[("Network ports", "enp4s0 packets arriving damaged")]
+        self.assertEqual(damaged["verdict"], "warn")
+        self.assertIn("Send this to the host", damaged["fix"])
+
+    def test_a_card_already_at_its_biggest_buffer_says_so(self):
+        rows = self.judged({}, rx_packets=1000, rx_now=8192)
+        self.assertEqual(rows[("Network ports", "enp4s0 receive buffer")]["why"], "At its biggest.")
+
     def test_the_noc_change_situation(self):
         with tempfile.TemporaryDirectory() as sys_root, tempfile.TemporaryDirectory() as proc_root:
             nic(sys_root, "enp4s0", "igb", "up", 1000, {"rx_bytes": 0, "tx_bytes": 0, "rx_missed_errors": 10})
@@ -81,7 +115,7 @@ class NetCheckTests(unittest.TestCase):
                          "152 since boot (rx_queue_0_csum_err 80, rx_queue_1_csum_err 72)")
         self.assertEqual(v("Network ports", "enp4s0 traffic"), "warn")                 # 640 Mb/s of 1000
         self.assertEqual(v("Network ports", "enp4s0 errors right now"), "bad")          # rx_missed grew
-        self.assertEqual(rows[("Network ports", "enp4s0 receive buffer")]["fix"], "ethtool -G enp4s0 rx 4096")
+        self.assertEqual(rows[("Network ports", "enp4s0 receive buffer")]["fix"], "ethtool -G enp4s0 rx 2048")   # missed packets: a moderate size, not the biggest
         self.assertEqual(v("Kernel", "Packets dropped by the kernel (backlog full)"), "bad")
         self.assertEqual(v("Kernel", "Incoming UDP packets thrown away"), "bad")
         self.assertEqual(v("Kernel", "Largest incoming UDP buffer allowed"), "warn")
