@@ -25,7 +25,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from . import archive, attacks, auth, ballistics, console, files, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois, workshop
+from . import archive, attacks, auth, ballistics, console, files, investigate, licence, maptiles, memory, monitor, netcheck, outliers, site, whois, workshop
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -2952,6 +2952,34 @@ async def amp_login_page(request):
     return render(request, "amp_login.html", amp=amp, seen=seen, error=error)
 
 
+async def amp_licence_page(request):
+    """Reactivate AMP on this machine with its licence key, from the panel instead of a shell.
+    Only the panel's owners. The key is used once and never kept or logged."""
+    if not named(request):
+        raise web.HTTPForbidden(text="Only the panel's owners can reactivate AMP.")
+    names = files.instances(request.app[FILES_ROOT])
+    results = None
+    if request.method == "POST":
+        form = await request.post()
+        key, pick = form.get("key", "").strip(), form.get("instance", "all")
+        targets = names if pick == "all" else [pick] if pick in names else []
+        if not licence.KEY.match(key):
+            flash(request, "That doesn't look like a licence key. It's letters, numbers and dashes.", "error")
+            raise web.HTTPFound("/settings/licence")
+        if not targets:
+            flash(request, "Pick a server, or all of them.", "error")
+            raise web.HTTPFound("/settings/licence")
+        results = []
+        for name in targets:
+            ok, text = await licence.reactivate(name, key)
+            results.append({"name": name, "ok": ok, "text": text})
+        del key
+        audit(request, "AMP licence", ", ".join(targets),
+              detail="; ".join(f"{r['name']}: {'reactivated' if r['ok'] else 'failed'}" for r in results),
+              ok=all(r["ok"] for r in results))
+    return render(request, "amp_licence.html", names=names, results=results)
+
+
 async def amp_instance(request, inst):
     if not request.app[AMP]:
         raise AmpError(f"{inst}'s AMP is running, so changes have to go through it, and the panel has no AMP login yet. "
@@ -3843,6 +3871,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/attacks/untrust", untrust_ip)
     app.router.add_route("GET", "/settings/amp", amp_login_page)
     app.router.add_post("/settings/amp", amp_login_page)
+    app.router.add_route("GET", "/settings/licence", amp_licence_page)
+    app.router.add_post("/settings/licence", amp_licence_page)
     app.router.add_get("/manage", manage_index)
     app.router.add_get("/manage/new", manage_new_page)
     app.router.add_post("/manage/new", manage_create)
