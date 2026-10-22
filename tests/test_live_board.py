@@ -103,6 +103,10 @@ class TickTests(unittest.IsolatedAsyncioTestCase):
 
         async def send(**kwargs):
             message = message_with(kwargs['embed'].title, kwargs['embed'].footer.text)
+            # Like Discord: what is posted shows in the channel's history, newest first,
+            # until it is deleted.
+            message.delete = AsyncMock(side_effect=lambda: self.history.remove(message))
+            self.history.insert(0, message)
             self.posted.append((kwargs['embed'], message))
             return message
         self.channel.send = AsyncMock(side_effect=send)
@@ -238,6 +242,7 @@ class TickTests(unittest.IsolatedAsyncioTestCase):
             self.board.setup([('server-1', 'OYB Classic')])
             await self.board.tick()
             gone = self.posted[0][1]
+            self.history.remove(gone)                                 # someone deleted it
             gone.edit.side_effect = discord.NotFound(MagicMock(status=404), 'gone')
             self.board.start('server-1', 'OYB Classic', START)
             self.kill('one', START + timedelta(minutes=5), OTHER, self.identity, server='server-1')
@@ -252,6 +257,63 @@ class TickTests(unittest.IsolatedAsyncioTestCase):
         await self.board.tick()
         self.channel.send.assert_not_awaited()
         self.assertEqual(self.board.matches, {})
+
+
+class OnlineTests(TickTests):
+    """A server that isn't up has no board; one that comes up gets its board back in its place."""
+
+    def servers(self, **state):
+        self.up_now = state
+        self.board.setup([('server-1', 'OYB Classic'), ('server-2', 'OYB Arland'), ('server-3', 'OYB Plus')],
+                         online=lambda server_id: self.up_now.get(server_id, False))
+
+    async def test_a_server_that_is_down_gets_no_board(self):
+        with self.enable():
+            self.servers(**{'server-1': True, 'server-2': True})
+            await self.board.tick()
+        self.assertEqual([embed.title for embed, _ in self.posted], ['⚪ A — OYB Classic', '⚪ B — OYB Arland'])
+
+    async def test_a_server_coming_up_takes_its_place_in_the_order(self):
+        with self.enable():
+            self.servers(**{'server-2': True})
+            await self.board.tick()
+            only_b = self.posted[0][1]
+            self.up_now['server-1'] = True
+            await self.board.tick()
+        only_b.delete.assert_awaited()
+        self.assertEqual([embed.title for embed, _ in self.posted],
+                         ['⚪ B — OYB Arland', '⚪ A — OYB Classic', '⚪ B — OYB Arland'])
+
+    async def test_a_server_that_goes_quiet_keeps_its_board_for_a_few_ticks_then_loses_it(self):
+        with self.enable():
+            self.servers(**{'server-1': True, 'server-2': True})
+            await self.board.tick()
+            board_b = self.posted[1][1]
+            self.up_now['server-2'] = False
+            await self.board.tick()
+            await self.board.tick()
+            board_b.delete.assert_not_awaited()                       # a blip
+            await self.board.tick()
+        board_b.delete.assert_awaited()
+        self.assertEqual(len(self.posted), 3)                         # A and B, then A again without B
+
+    async def test_a_running_match_counts_as_up_even_when_the_server_looks_quiet(self):
+        with self.enable():
+            self.servers()
+            self.board.start('server-3', 'OYB Plus', START)
+            await self.board.tick()
+        self.assertEqual([embed.title for embed, _ in self.posted], ['⚪ C — OYB Plus'])
+
+    async def test_a_live_board_survives_the_boards_being_put_back_in_order(self):
+        with self.enable():
+            self.servers(**{'server-2': True})
+            self.board.start('server-2', 'OYB Arland', START)
+            self.kill('one', START + timedelta(minutes=5), OTHER, self.identity, server='server-2')
+            await self.board.tick()
+            self.up_now['server-1'] = True
+            await self.board.tick()
+        live_b = self.posted[-1][1]
+        self.assertRegex(live_b.edit.await_args.kwargs['embeds'][0].description, r'Test Player\s+1\s+0')
 
 
 class NumberTests(unittest.TestCase):

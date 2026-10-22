@@ -302,7 +302,10 @@ class NotificationBot(TimerBot):
                 await self.close()
                 return
             self._booted = True
-            self.live_board.setup([(server.id, label_for(server)) for server in self.config.servers if server.enabled])
+            self.live_board.setup(
+                [(server.id, label_for(server)) for server in self.config.servers if server.enabled],
+                online=lambda server_id: any(sid == server_id and getattr(m, "online", False)
+                                             for sid, m in self.monitors))
             for server in self.config.servers:
                 if not server.enabled:
                     continue

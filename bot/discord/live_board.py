@@ -1,9 +1,10 @@
-"""One self-updating board per server, kept in a fixed order.
+"""One self-updating board per running server, kept in a fixed order.
 
-Each server owns one message in the live channel, posted once and then only
-edited: server A on top, B under it, and so on. While a match runs its message
-is the live board; between matches it says so, with a line about the last game.
-A finished match's own results go to the results channel, so nothing piles up
+Each server that is up owns one message in the live channel, edited in place:
+server A on top, B under it, and so on. While a match runs its message is the live
+board; between matches it says so, with a line about the last game. A server that
+is down has no board, and gets one back, in its place in the order, when it comes
+up. A finished match's own results go to the results channel, so nothing piles up
 here.
 """
 import asyncio
@@ -27,6 +28,9 @@ LIVE = 0x3BA55D
 IDLE = 0x747F8D
 # Wait for the ingestor's closing pass before the last game is summed up.
 SETTLE = 45
+# A server has to read as down this many ticks running before its board is taken away,
+# so a log that goes quiet for a moment doesn't make the boards jump about.
+DOWN_TICKS = 3
 MARKER = 'OYB-LIVE'
 # A Discord message allows 6000 characters across its embeds. A board row is 38
 # characters and a Reforger server tops out at 128 slots, so even a full server
@@ -88,17 +92,23 @@ class LiveBoard:
         self.bot = bot
         self.matches = {}
         self.slots = {}
+        self.boards = []
+        self.down = {}
+        self.online = lambda server_id: True
         self.arranged = False
         self.lock = asyncio.Lock()
         self.retry_at = 0
         self.failures = 0
         self._tasks = set()
 
-    def setup(self, servers):
+    def setup(self, servers, online=None):
         """The servers to keep a board for: [(id, name)]. They show in letter order,
-        A first, whatever order they're listed in."""
+        A first, whatever order they're listed in. `online(server_id)` says whether a
+        server is up; a server that isn't, and has no match running, gets no board."""
         if live_board_channel_id() is None:
             return
+        if online is not None:
+            self.online = online
         ordered = sorted(servers, key=lambda s: (server_letter(s[0]), s[0]))
         self.slots = {server_id: dict(name=name, message=None, last='', shown=None)
                       for server_id, name in ordered}
@@ -182,18 +192,27 @@ class LiveBoard:
             return None
         return channel
 
-    async def arrange(self, channel):
-        """Make sure every server has exactly one board, in order. After a restart the
-        boards already there are taken back over, if they are all there and in order;
-        otherwise ours are removed and posted again, A first."""
+    def up(self, server_id):
+        """Whether this server gets a board: it's online or has a match running, and a
+        server that was showing keeps its board through a short blip."""
+        if server_id in self.matches or self.online(server_id):
+            self.down[server_id] = 0
+            return True
+        self.down[server_id] = self.down.get(server_id, 0) + 1
+        return server_id in self.boards and self.down[server_id] < DOWN_TICKS
+
+    async def arrange(self, channel, wanted):
+        """Make sure every server that is up has exactly one board, in order. After a
+        restart the boards already there are taken back over, if they are all there
+        and in order; otherwise ours are removed and posted again, A first."""
         history = [message async for message in channel.history(limit=100)]
         history.reverse()
         found = [(slot_server(message, self.bot.user.id), message) for message in history]
         found = [(server_id, message) for server_id, message in found if server_id in self.slots]
-        wanted = list(self.slots)
         if [server_id for server_id, _ in found] == wanted:
             for server_id, message in found:
                 self.slots[server_id].update(message=message, shown=None)
+            self.boards = list(wanted)
             LOG.info('Live boards taken back over: %s', len(found))
             return
         for _, message in found:
@@ -201,13 +220,18 @@ class LiveBoard:
                 await message.delete()
             except discord.HTTPException:
                 pass
+        for slot in self.slots.values():
+            slot['message'], slot['shown'] = None, None
+        for match in self.matches.values():
+            match['rows'] = None
         for server_id in wanted:
             slot = self.slots[server_id]
             slot['message'] = await channel.send(
                 embed=idle_embed(server_id, slot['name'], slot['last']), silent=True,
                 allowed_mentions=discord.AllowedMentions.none())
             slot['shown'] = 'idle'
-        LOG.info('Live boards posted in order: %s', ', '.join(wanted))
+        self.boards = list(wanted)
+        LOG.info('Live boards posted in order: %s', ', '.join(wanted) or 'none, no server is up')
 
     async def tick(self):
         async with self.lock:
@@ -221,10 +245,12 @@ class LiveBoard:
                 channel = await self.channel(guild)
                 if channel is None:
                     return
-                if not self.arranged:
-                    await self.arrange(channel)
+                wanted = [server_id for server_id in self.slots if self.up(server_id)]
+                if not self.arranged or wanted != self.boards:
+                    await self.arrange(channel, wanted)
                     self.arranged = True
-                for server_id, slot in self.slots.items():
+                for server_id in self.boards:
+                    slot = self.slots[server_id]
                     match = self.matches.get(server_id)
                     rows = self.rows(guild, server_id, match['started']) if match else None
                     if rows:
