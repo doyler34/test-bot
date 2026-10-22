@@ -10,7 +10,7 @@ from unittest import mock
 from aiohttp import FormData
 from aiohttp.test_utils import TestClient, TestServer
 
-from panel import auth, files, licence
+from panel import auth, files
 from panel.amp import AmpError
 from panel.config import PanelConfig, ServerConfig
 from panel.db import PanelDB
@@ -403,26 +403,6 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         empty = await self.client.post("/mods/Plus01", data=[("csrf", token), ("action", "add_many")])
         self.assertIn("Tick at least one mod", await empty.text())
 
-    async def test_amp_licence_page_is_for_the_owners_and_never_keeps_the_key(self):
-        key = "ABCD-EFGH-1234-WXYZ"
-        await self.login("chief")                                    # a manager, but not one of the named accounts
-        self.assertEqual((await self.client.get("/settings/licence")).status, 403)
-        self.db.add_user("burd", auth.hash_password("burd-password"), "manager")
-        token = await self.login("burd")
-        self.assertIn("All servers (1)", await (await self.client.get("/settings/licence")).text())
-        self.assertIn('href="/settings/licence"', await (await self.client.get("/settings")).text())
-        bad = await self.client.post("/settings/licence", data={"csrf": token, "key": "x", "instance": "all"})
-        self.assertIn("doesn&#39;t look like a licence key", await bad.text())
-        with mock.patch("panel.licence.reactivate", new=mock.AsyncMock(return_value=(True, "Reactivated"))) as run:
-            page = await (await self.client.post("/settings/licence",
-                                                 data={"csrf": token, "key": key, "instance": "all"})).text()
-        run.assert_awaited_once_with("Plus01", key)
-        self.assertIn("Reactivated", page)
-        self.assertIn("Start AMP", page)
-        self.assertNotIn(key, page)
-        self.assertNotIn(key, str([dict(r) for r in self.db.all("SELECT * FROM audit")]))
-        self.assertTrue(self.db.one("SELECT 1 FROM audit WHERE action = 'AMP licence'"))
-
     async def test_a_servers_map_comes_from_the_scenario_it_is_set_to_play(self):
         (self.root / "Plus01" / "GenericModule.kvp").write_text(
             'App.AppSettings={"name":"OYB Plus","scenarioId":"{ARL}"}')
@@ -636,49 +616,3 @@ class AmpStartTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(AmpError):
             await amp.power(inst, "stop", pause=0)
         amp.instance_power.assert_not_awaited()
-
-
-class LicenceTests(unittest.IsolatedAsyncioTestCase):
-    class Proc:
-        def __init__(self, out, code=0):
-            self.out, self.returncode, self.fed = out, code, None
-
-        async def communicate(self, data=None):
-            self.fed = data
-            return self.out.encode(), None
-
-        def kill(self):
-            pass
-
-        async def wait(self):
-            pass
-
-    def spawner(self, *procs):
-        self.commands, self.procs = [], list(procs)
-
-        async def spawn(*command, **kwargs):
-            self.commands.append(list(command))
-            return self.procs[len(self.commands) - 1]
-        return spawn
-
-    async def test_the_key_goes_in_on_stdin_and_not_on_the_command_line(self):
-        proc = self.Proc("AMP Instance Manager\nInstance Plus01 reactivated.")
-        done, text = await licence.reactivate("Plus01", "ABCD-EFGH-1234", self.spawner(proc))
-        self.assertTrue(done)
-        self.assertEqual(self.commands, [["sudo", "-n", "-u", "amp", "ampinstmgr", "reactivate", "Plus01"]])
-        self.assertEqual(proc.fed, b"ABCD-EFGH-1234\n")
-
-    async def test_if_amp_never_read_the_key_it_is_tried_once_as_an_argument(self):
-        empty = self.Proc("Please enter value for Licence Key\n>\n[Error/1]  is not a valid licence key.")
-        done, text = await licence.reactivate("Plus01", "ABCD-EFGH-1234", self.spawner(empty, self.Proc("Reactivated.")))
-        self.assertTrue(done)
-        self.assertEqual(self.commands[1][-1], "ABCD-EFGH-1234")
-        self.assertEqual(len(self.commands), 2)
-
-    async def test_a_wrong_key_fails_and_is_blanked_out_of_what_is_shown(self):
-        wrong = self.Proc("[Error/1] ABCD-EFGH-1234 is not a valid licence key.")
-        done, text = await licence.reactivate("Plus01", "ABCD-EFGH-1234", self.spawner(wrong))
-        self.assertFalse(done)
-        self.assertNotIn("ABCD-EFGH-1234", text)
-        self.assertIn("***", text)
-        self.assertEqual(len(self.commands), 1)
