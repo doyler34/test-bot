@@ -2,7 +2,7 @@
 
 Each server that is up owns one message in the live channel, edited in place:
 server A on top, B under it, and so on. While a match runs its message is the live
-board; between matches it says so, with a line about the last game. A server that
+board; between matches it says so. A server that
 is down has no board, and gets one back, in its place in the order, when it comes
 up. A finished match's own results go to the results channel, so nothing piles up
 here.
@@ -26,7 +26,7 @@ POLL = 30
 # matches is grey.
 LIVE = 0x3BA55D
 IDLE = 0x747F8D
-# Wait for the ingestor's closing pass before the last game is summed up.
+# Let the ingestor's closing pass land before the board goes back to waiting.
 SETTLE = 45
 # A server has to read as down this many ticks running before its board is taken away,
 # so a log that goes quiet for a moment doesn't make the boards jump about.
@@ -64,13 +64,10 @@ def board_embeds(server_name, rows, start, tag=None, server_id=None):
     return embeds
 
 
-def idle_embed(server_id, server_name, last=''):
+def idle_embed(server_id, server_name):
     """What a server's board says between matches."""
-    lines = ['No game running. This fills in when the next one starts.']
-    if last:
-        lines.append(f'Last game: {last}')
     embed = discord.Embed(colour=IDLE, title=f'⚪ {server_letter(server_id)} — {server_name}'[:256],
-                          description='\n'.join(lines))
+                          description='No game running. This fills in when the next one starts.')
     embed.set_footer(text=f'{footer_head(server_id)}\nUpdates every 30s while a game runs')
     return embed
 
@@ -110,7 +107,7 @@ class LiveBoard:
         if online is not None:
             self.online = online
         ordered = sorted(servers, key=lambda s: (server_letter(s[0]), s[0]))
-        self.slots = {server_id: dict(name=name, message=None, last='', shown=None)
+        self.slots = {server_id: dict(name=name, message=None, shown=None)
                       for server_id, name in ordered}
         self.arranged = False
 
@@ -120,7 +117,7 @@ class LiveBoard:
         if live_board_channel_id() is None:
             return
         if server_id not in self.slots:
-            self.slots[server_id] = dict(name=server_name, message=None, last='', shown=None)
+            self.slots[server_id] = dict(name=server_name, message=None, shown=None)
             self.arranged = False
         self.matches[server_id] = dict(name=server_name, started=started, rows=None,
                                        tag=self.tag(server_id, started))
@@ -138,12 +135,12 @@ class LiveBoard:
     def finish(self, server_id):
         if server_id not in self.matches:
             return
-        task = asyncio.create_task(self._finalise(server_id, time.time()))
+        task = asyncio.create_task(self._finalise(server_id))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _finalise(self, server_id, ended):
-        """The match is over: its board goes back to waiting, with a line about the game."""
+    async def _finalise(self, server_id):
+        """The match is over: its board goes back to waiting."""
         try:
             await asyncio.sleep(SETTLE)
             match = self.matches.pop(server_id, None)
@@ -151,18 +148,10 @@ class LiveBoard:
             if match is None or slot is None or slot['message'] is None or slot['shown'] != 'live':
                 return
             async with self.lock:
-                guild = self.bot.get_guild(self.bot.config.guild_id)
-                if guild is None:
-                    return
-                closed = datetime.fromtimestamp(ended)
-                rows = self.rows(guild, server_id, match['started'], closed)
-                slot['last'] = ' • '.join(part for part in (
-                    match['tag'], f'{len(rows)} players', duration(match['started'], closed),
-                    f'ended {closed:%d %b %H:%M}') if part)
-                await slot['message'].edit(embeds=[idle_embed(server_id, slot['name'], slot['last'])],
+                await slot['message'].edit(embeds=[idle_embed(server_id, slot['name'])],
                                            allowed_mentions=discord.AllowedMentions.none())
                 slot['shown'] = 'idle'
-            LOG.info('Live board for %s is waiting for the next game (%s)', match['name'], slot['last'])
+            LOG.info('Live board for %s is waiting for the next game', match['name'])
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -227,7 +216,7 @@ class LiveBoard:
         for server_id in wanted:
             slot = self.slots[server_id]
             slot['message'] = await channel.send(
-                embed=idle_embed(server_id, slot['name'], slot['last']), silent=True,
+                embed=idle_embed(server_id, slot['name']), silent=True,
                 allowed_mentions=discord.AllowedMentions.none())
             slot['shown'] = 'idle'
         self.boards = list(wanted)
@@ -263,7 +252,7 @@ class LiveBoard:
                         match['rows'], slot['shown'] = rows, 'live'
                     elif slot['shown'] != 'idle':
                         await slot['message'].edit(
-                            embeds=[idle_embed(server_id, slot['name'], slot['last'])],
+                            embeds=[idle_embed(server_id, slot['name'])],
                             allowed_mentions=discord.AllowedMentions.none())
                         slot['shown'] = 'idle'
                 self.failures = 0

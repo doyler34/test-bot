@@ -41,8 +41,6 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn('LIVE', waiting.title)
         self.assertIn('No game running', waiting.description)
         self.assertNotIn('Last game', waiting.description)
-        after = idle_embed('server-2', 'OYB Classic', '#0007B • 12 players • 1h 35m')
-        self.assertIn('Last game: #0007B • 12 players • 1h 35m', after.description)
 
     def test_a_running_board_is_green_and_a_waiting_one_is_grey(self):
         running, = board_embeds('OYB Classic', rows(3), START)
@@ -186,7 +184,7 @@ class TickTests(unittest.IsolatedAsyncioTestCase):
         self.assertRegex(self.posted[0][1].edit.await_args.kwargs['embeds'][0].description,
                          r'Test Player\s+1\s+0')
 
-    async def test_when_the_match_ends_the_board_goes_back_to_waiting_and_names_the_game(self):
+    async def test_when_the_match_ends_the_board_goes_back_to_waiting(self):
         with self.enable(), patch('bot.discord.live_board.SETTLE', 0):
             self.live()
             self.kill('one', START + timedelta(minutes=5), OTHER, self.identity)
@@ -196,8 +194,7 @@ class TickTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.channel.send.await_count, 1)              # still one message
         embed = self.posted[0][1].edit.await_args.kwargs['embeds'][0]
         self.assertTrue(embed.title.startswith('⚪'))
-        self.assertIn('Last game:', embed.description)
-        self.assertIn('1 players', embed.description)
+        self.assertNotIn('Last game', embed.description)
         self.assertNotIn('s', self.board.matches)
         # The next tick leaves it waiting, and a new match takes the same message over.
         edits = self.posted[0][1].edit.await_count
