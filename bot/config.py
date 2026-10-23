@@ -89,9 +89,9 @@ def unverified_role_name() -> str:
 
 
 def live_board_channel_id() -> int | None:
-    """Where the live boards live: one message per server, A on top, edited in place.
-    Unset turns the live boards off. Finished matches are not posted here: their
-    results go to GAME_LEADERBOARD_CHANNEL_ID, and are skipped if that is this channel."""
+    """Where a running match's self-updating board lives. Unset turns the live
+    board off. Point it at the results channel and the live message becomes that
+    match's final board, so no second results post is made there."""
     return _channel_id("LIVE_BOARD_CHANNEL_ID", None)
 
 
