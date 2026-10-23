@@ -4,7 +4,7 @@ player at the Discord to appeal."""
 APPEAL = "Appeal: discord.gg/oyb"
 
 BAN_REASONS = (
-    "Cheating or hacking",
+    "Fair play violation",
     "Exploiting bugs or glitches",
     "Teamkilling on purpose",
     "Spamming AP mines on friendlies",
