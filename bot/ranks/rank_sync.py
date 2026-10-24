@@ -84,7 +84,7 @@ class RankSync:
         progress = rank_for_xp(xp, faction)
         if not faction:
             return (f"Rank: **{progress.current.role_name}** · **{xp} XP**. "
-                    "Pick US, USSR or FIA to start at Recruit.")
+                    "Pick US, USSR or FIA to start earning ranks.")
         return f"Rank: **{progress.current.role_name}** · **{xp} XP**. Use /rank for your card."
 
     async def tick(self):

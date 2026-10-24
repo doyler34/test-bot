@@ -62,14 +62,14 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
             self.source.execute("UPDATE totals SET seconds=seconds+?", (seconds,))
             self.source.execute("UPDATE global_time SET milliseconds=milliseconds+?", (round(seconds*1000),))
 
-    async def test_pending_gets_nothing_approved_starts_recruit(self):
+    async def test_pending_gets_nothing_approved_starts_renegade(self):
         token = self.links.submit(1, 10, IDENTITY, "Player")
         await self.sync.tick()
         self.guild.fetch_member.assert_not_awaited()
         self.links.review(1, token, 22, True)
         await self.sync.tick()
-        # They picked a side, so their first rank is Recruit and not Renegade.
-        self.member.add_roles.assert_awaited_once_with(self.sync.roles[1], reason="OYB rank: 0 XP", atomic=True)
+        # Below Private is Renegade, side or not.
+        self.member.add_roles.assert_awaited_once_with(self.sync.roles[0], reason="OYB rank: 0 XP", atomic=True)
         self.assertIn("0 XP", self.sync.status(10))
         self.assertEqual(self.source.execute("SELECT seconds FROM totals").fetchone()[0], 1200)
 
@@ -106,7 +106,7 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         # Picking a side lifts them straight to what their XP has earned.
         self.links.set_faction(1, 10, "FIA")
         await self.sync.tick()
-        self.member.add_roles.assert_awaited_with(self.sync.roles[3], reason="OYB rank: 1000 XP", atomic=True)
+        self.member.add_roles.assert_awaited_with(self.sync.roles[2], reason="OYB rank: 1000 XP", atomic=True)
 
     async def test_the_faction_role_beats_a_stale_saved_pick(self):
         # current_faction reads roles, so an admin removing the role drops them
@@ -121,15 +121,15 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
     async def test_full_minutes_promote_and_preserve_other_roles(self):
         self.links.verified_link(1, 10, IDENTITY, "admin:22")
         await self.sync.tick()
-        self.member.roles = [self.sync.roles[1], role(77, "Server One"), role(88, "Admin")]
+        self.member.roles = [self.sync.roles[0], role(77, "Server One"), role(88, "Admin")]
         self.advance(149999)  # 249 XP, one short of Private.
         await self.sync.tick()
         self.assertEqual(self.member.add_roles.await_count, 1)
         self.advance(1)
         await self.sync.tick()
-        self.member.add_roles.assert_awaited_with(self.sync.roles[2], reason="OYB rank: 250 XP", atomic=True)
-        self.member.remove_roles.assert_awaited_once_with(self.sync.roles[1], reason="OYB rank promotion", atomic=True)
-        self.member.roles = [self.sync.roles[2]]
+        self.member.add_roles.assert_awaited_with(self.sync.roles[1], reason="OYB rank: 250 XP", atomic=True)
+        self.member.remove_roles.assert_awaited_once_with(self.sync.roles[0], reason="OYB rank promotion", atomic=True)
+        self.member.roles = [self.sync.roles[1]]
         self.advance(300000)  # 750 XP in total, the Corporal threshold.
         await self.sync.tick()
         self.assertIn("OYB Corporal", self.sync.status(10))
@@ -137,15 +137,15 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_first_pass_on_a_changed_ladder_is_silent(self):
         self.links.verified_link(1, 10, IDENTITY, "admin:22")
         await self.sync.tick()
-        self.member.roles = [self.sync.roles[1]]
+        self.member.roles = [self.sync.roles[0]]
         self.links.db.execute("UPDATE rank_ladder_v2 SET ladder='old ladder'")
-        self.links.db.execute("UPDATE rank_announced_v2 SET tier=1")
+        self.links.db.execute("UPDATE rank_announced_v2 SET tier=0")
         self.sync.applied.clear()
         self.advance(150000)  # 250 XP: a promotion that would normally be posted.
         await self.sync.tick()
-        self.member.add_roles.assert_awaited_with(self.sync.roles[2], reason="OYB rank: 250 XP", atomic=True)
+        self.member.add_roles.assert_awaited_with(self.sync.roles[1], reason="OYB rank: 250 XP", atomic=True)
         self.assertEqual(self.links.db.execute("SELECT COUNT(*) FROM rank_alerts_v2").fetchone()[0], 0)
-        self.assertEqual(self.links.db.execute("SELECT tier FROM rank_announced_v2").fetchone()[0], 2)
+        self.assertEqual(self.links.db.execute("SELECT tier FROM rank_announced_v2").fetchone()[0], 1)
         self.advance(3000000)
         self.sync.applied.clear()
         await self.sync.tick()
@@ -156,11 +156,11 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.links.verified_link(1,10,IDENTITY,'admin:22')
         self.advance(59400)  # 99 playtime XP.
         await self.sync.tick()
-        self.member.roles=[self.sync.roles[1]]
+        self.member.roles=[self.sync.roles[0]]
         self.sync.wallet.award_post(1,10,123,time.time()+1)
         self.advance(90000)  # 249 playtime XP; the post carries them to 250.
         await self.sync.tick()
-        self.member.add_roles.assert_awaited_with(self.sync.roles[2],reason='OYB rank: 250 XP',atomic=True)
+        self.member.add_roles.assert_awaited_with(self.sync.roles[1],reason='OYB rank: 250 XP',atomic=True)
         self.assertIn('250 XP',self.sync.status(10))
         self.assertEqual(self.links.db.execute('SELECT xp FROM rank_alerts_v2').fetchone()[0],250)
 

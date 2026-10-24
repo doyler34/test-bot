@@ -9,8 +9,7 @@ admin-approval workflow in #join-oyb.
 
 | Rank | XP |
 | --- | --- |
-| OYB Renegade | no side picked, or XP below 0 |
-| OYB Recruit | 0 (once a side is picked) |
+| OYB Renegade | no side picked, under 250 XP, or XP below 0 |
 | OYB Private | 250 |
 | OYB Corporal | 750 |
 | OYB Sergeant | 1,750 |

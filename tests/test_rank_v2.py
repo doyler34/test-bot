@@ -16,8 +16,8 @@ from test_playtime import join, heartbeat, leave, UID
 
 class RuleTests(unittest.TestCase):
     def test_all_boundaries(self):
-        # Once on a side, Recruit is the floor: nobody on a faction is Renegade.
-        expected = {0: 'Recruit', 1: 'Recruit', 249: 'Recruit', 250: 'Private', 749: 'Private',
+        # Below Private is Renegade, side or not.
+        expected = {0: 'Renegade', 1: 'Renegade', 249: 'Renegade', 250: 'Private', 749: 'Private',
                     750: 'Corporal', 1749: 'Corporal', 1750: 'Sergeant', 3249: 'Sergeant',
                     3250: 'Lieutenant', 5499: 'Lieutenant', 5500: 'Captain', 8499: 'Captain',
                     8500: 'Major', 20000: 'Major'}
@@ -27,7 +27,7 @@ class RuleTests(unittest.TestCase):
 
     def test_negative_xp_is_renegade_even_on_a_side(self):
         self.assertEqual(rank_for_xp(-1, 'US').current.name, 'Renegade')
-        self.assertEqual(rank_for_xp(0, 'US').current.name, 'Recruit')
+        self.assertEqual(rank_for_xp(0, 'US').current.name, 'Renegade')
 
     def test_renegade_is_the_rank_for_nobody_on_a_side(self):
         # Renegade is where a new member waits, not the bottom of the ladder,
@@ -36,10 +36,11 @@ class RuleTests(unittest.TestCase):
             with self.subTest(xp=xp):
                 self.assertEqual(rank_for_xp(xp).current.name, 'Renegade')
                 self.assertEqual(rank_for_xp(xp, None).tier, 0)
-        # Picking any of the three starts them at Recruit on the same XP.
+        # Picking a side does not change the rank until the XP is there.
         for faction in ('US', 'USSR', 'FIA'):
-            self.assertEqual(rank_for_xp(0, faction).current.name, 'Recruit')
-        # A Renegade carrying more than Recruit asks for does not overfill.
+            self.assertEqual(rank_for_xp(0, faction).current.name, 'Renegade')
+            self.assertEqual(rank_for_xp(250, faction).current.name, 'Private')
+        # A Renegade carrying more than Private asks for does not overfill.
         self.assertEqual(rank_for_xp(20000).fraction, 1.0)
         self.assertEqual(rank_for_xp(20000).remaining, 0)
 
@@ -159,7 +160,7 @@ class CardTests(unittest.TestCase):
         labels=[t for t,_,_ in audit]
         self.assertIn('RENEGADE',labels)
         self.assertIn('PICK A FACTION',labels)
-        self.assertIn('RECRUIT',labels)           # what picking one gets them
+        self.assertIn('PRIVATE',labels)           # what picking one gets them
         self.assertIn('2,600 XP',labels)          # not '2,600 / 100 XP'
         self.assertNotIn('0 XP REMAINING',labels)
         # On a side the same XP counts down to the next rank as normal.

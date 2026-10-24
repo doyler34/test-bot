@@ -35,18 +35,18 @@ class AnnouncementTests(unittest.IsolatedAsyncioTestCase):
         self.links.close()
         self.tmp.cleanup()
 
-    async def test_recruit_quiet_promotion_mentions_only_member_once(self):
+    async def test_first_rank_quiet_promotion_mentions_only_member_once(self):
         self.alerts.record(1, 10, 0, 0)
         await self.alerts.flush(self.guild)
         self.channel.send.assert_not_awaited()
-        self.alerts.record(1, 10, 1, 100)
+        self.alerts.record(1, 10, 1, 250)
         await self.alerts.flush(self.guild)
         args = self.channel.send.await_args.kwargs
         self.assertIn("<@10>", args["content"])
-        self.assertIn("OYB Recruit", args["embed"].description)
+        self.assertIn("OYB Private", args["embed"].description)
         self.assertEqual(args["allowed_mentions"].to_dict(), {"users": [10], "parse": []})
         restarted = RankAnnouncements(self.bot)
-        restarted.record(1, 10, 1, 100)
+        restarted.record(1, 10, 1, 250)
         await restarted.flush(self.guild)
         self.channel.send.assert_awaited_once()
 
