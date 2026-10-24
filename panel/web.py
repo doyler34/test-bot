@@ -1429,6 +1429,32 @@ async def add_note(request):
     raise web.HTTPFound(f"/player/{identity}")
 
 
+def may_delete_note(request, note):
+    """Anyone who can write notes deletes their own; other people's need delete_notes."""
+    return allowed(request, "delete_notes") or (
+        allowed(request, "notes") and note["author"].lower() == request[USER]["username"].lower())
+
+
+async def delete_note(request):
+    require(request, "notes")
+    identity = request.match_info["identity"].lower()
+    if not valid_identity(identity) or not request.match_info["note"].isdigit():
+        raise web.HTTPNotFound(text="No such note.")
+    db = request.app[DB]
+    note = db.note(int(request.match_info["note"]))
+    if note is None or note["identity"] != identity:
+        raise web.HTTPNotFound(text="No such note.")
+    if not may_delete_note(request, note):
+        audit(request, "note delete refused", target=identity, detail=f"note by {note['author']}", ok=False)
+        raise web.HTTPForbidden(text="You can only delete your own notes.")
+    db.delete_note(note["id"])
+    audit(request, "deleted note", target=identity,
+          detail=clean(f"written by {note['author']} on {time.strftime('%d %b %Y %H:%M', time.gmtime(note['created_at']))} UTC: "
+                       f"{note['body']}", 500))
+    flash(request, "Note deleted.")
+    raise web.HTTPFound(f"/player/{identity}")
+
+
 # Discord: what the bot posts, edited here and published to it
 
 async def amp_servers(request):
@@ -3806,6 +3832,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/players/search.json", player_search)
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/notes", add_note)
+    app.router.add_post("/player/{identity}/notes/{note}/delete", delete_note)
     app.router.add_post("/player/{identity}/staff", set_staff)
     app.router.add_get("/sus-settings", sus_page)
     app.router.add_post("/sus-settings", sus_save)

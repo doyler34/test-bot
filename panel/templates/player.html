@@ -65,7 +65,14 @@
   </form>
   {% endif %}
   {% for n in notes %}
-  <div class="note"><p>{{ n.body }}</p><span class="muted">{{ n.author }} · {{ n.created_at|ts }}</span></div>
+  <div class="note"><p>{{ n.body }}</p><span class="muted">{{ n.author }} · {{ n.created_at|ts }}</span>
+    {% if can("delete_notes") or (can("notes") and n.author|lower == user.username|lower) %}
+    <form method="post" action="/player/{{ identity }}/notes/{{ n.id }}/delete" data-confirm="Delete this note? It stays in the audit log.">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="small ghost">Delete</button>
+    </form>
+    {% endif %}
+  </div>
   {% else %}
   <p class="muted">No notes.</p>
   {% endfor %}

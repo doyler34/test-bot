@@ -1111,3 +1111,9 @@ class PanelDB:
 
     def notes(self, identity: str):
         return self.all("SELECT * FROM notes WHERE identity = ? ORDER BY id DESC", identity)
+
+    def note(self, note_id: int):
+        return self.one("SELECT * FROM notes WHERE id = ?", note_id)
+
+    def delete_note(self, note_id: int):
+        self.write("DELETE FROM notes WHERE id = ?", note_id)

@@ -1347,6 +1347,48 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 403)
         run.assert_not_awaited()
 
+    async def test_notes_are_deleted_by_their_author_or_a_senior_admin_and_logged(self):
+        self.db.add_user("mod2", auth.hash_password("mod2-password"), "moderator")
+        identity = "11111111-2222-4333-8444-555555555555"
+        mine = self.db.add_note(identity, "mod", "my note")
+        theirs = self.db.add_note(identity, "mod2", "their note")
+        await self.login("mod", "mod-password")
+        page = await (await self.client.get(f"/player/{identity}")).text()
+        self.assertIn(f"/notes/{mine}/delete", page)
+        self.assertNotIn(f"/notes/{theirs}/delete", page)
+        token = await self.csrf(f"/player/{identity}")
+        refused = await self.client.post(f"/player/{identity}/notes/{theirs}/delete", data={"csrf": token})
+        self.assertEqual(refused.status, 403)
+        self.assertIsNotNone(self.db.note(theirs))
+        self.assertFalse(self.db.audit()[0]["ok"])
+        done = await self.client.post(f"/player/{identity}/notes/{mine}/delete", data={"csrf": token},
+                                      allow_redirects=False)
+        self.assertEqual(done.status, 302)
+        self.assertIsNone(self.db.note(mine))
+        entry = self.db.audit()[0]
+        self.assertEqual((entry["username"], entry["action"], entry["target"]), ("mod", "deleted note", identity))
+        self.assertIn("my note", entry["detail"])
+        await self.client.post("/logout", data={"csrf": token})
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get(f"/player/{identity}")).text()
+        self.assertIn(f"/notes/{theirs}/delete", page)
+        token = await self.csrf(f"/player/{identity}")
+        await self.client.post(f"/player/{identity}/notes/{theirs}/delete", data={"csrf": token})
+        self.assertIsNone(self.db.note(theirs))
+        entry = self.db.audit()[0]
+        self.assertEqual((entry["username"], entry["action"]), ("boss", "deleted note"))
+        self.assertIn("written by mod2", entry["detail"])
+        self.assertIn("their note", entry["detail"])
+
+    async def test_a_note_can_only_be_deleted_from_its_own_players_page(self):
+        note = self.db.add_note("11111111-2222-4333-8444-555555555555", "mod", "hello")
+        await self.login("mod", "mod-password")
+        token = await self.csrf("/")
+        response = await self.client.post(f"/player/99999999-2222-4333-8444-555555555555/notes/{note}/delete",
+                                          data={"csrf": token})
+        self.assertEqual(response.status, 404)
+        self.assertIsNotNone(self.db.note(note))
+
     async def test_owners_can_give_one_person_one_discord_page(self):
         self.db.add_user("mo", auth.hash_password("mo-password-1"), "moderator")
         mo = self.db.user_by_name("mo")["id"]
