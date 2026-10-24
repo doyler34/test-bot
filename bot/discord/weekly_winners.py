@@ -5,7 +5,8 @@ from datetime import timedelta
 
 import discord
 
-from bot.config import leaderboard_channel_id, weekly_winners_channel_id
+from bot.config import leaderboard_channel_id, member_role_name, weekly_winners_channel_id
+from bot.discord.onboarding import by_name
 from bot.storage.combat_store import week_start, window_standings
 
 LOG = logging.getLogger('reforger.weekly_winners')
@@ -68,8 +69,13 @@ class WeeklyWinners:
             if channel is None:
                 LOG.warning('No channel for the weekly top 3; set WEEKLY_WINNERS_CHANNEL_ID')
                 return
-            await channel.send(embed=winners_embed(rows, guild, previous),
-                               allowed_mentions=discord.AllowedMentions.none())
+            role = by_name(guild, member_role_name())
+            if role is None:
+                LOG.warning('No %r role to ping with the weekly top 3', member_role_name())
+            await channel.send(content=role.mention if role else None,
+                               embed=winners_embed(rows, guild, previous),
+                               allowed_mentions=discord.AllowedMentions(roles=[role] if role else False,
+                                                                        everyone=False, users=False))
             LOG.info('Posted the weekly top 3 for %s in %s', previous.date(), channel.id)
         self.bot.store.save_weekly_announced(guild.id, week)
 

@@ -31,6 +31,7 @@ class Guild:
         self.id = 1
         self.channel = channel
         self.members = {}
+        self.roles = []
 
     def get_channel(self, channel_id):
         return self.channel if channel_id == self.channel.id else None
@@ -95,6 +96,23 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('Fourth', text)
         self.assertNotIn('ThisWeek', text)
         self.assertEqual(self.channel.sent[0]['embed'].title, weekly_winners.TITLE)
+
+    async def test_pings_the_member_role(self):
+        role = SimpleNamespace(name='OYB Member', mention='<@&42>')
+        self.guild.roles = [role]
+        self.player(10, 'Hubcaps', 30)
+        self.store.save_weekly_announced(1, self.last_week.date().isoformat())
+        await self.tick(self.monday + timedelta(hours=1))
+        sent = self.channel.sent[0]
+        self.assertEqual(sent['content'], '<@&42>')
+        self.assertEqual(sent['allowed_mentions'].roles, [role])
+        self.assertFalse(sent['allowed_mentions'].everyone)
+
+    async def test_posts_without_a_ping_when_the_role_is_missing(self):
+        self.player(10, 'Hubcaps', 30)
+        self.store.save_weekly_announced(1, self.last_week.date().isoformat())
+        await self.tick(self.monday + timedelta(hours=1))
+        self.assertIsNone(self.channel.sent[0]['content'])
 
     async def test_a_quiet_week_posts_nothing(self):
         self.store.save_weekly_announced(1, self.last_week.date().isoformat())
