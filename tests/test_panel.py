@@ -2504,6 +2504,24 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         entry = self.db.audit()[0]
         self.assertEqual((entry["username"], entry["action"], entry["target"]), ("panel", "IP ban", "Pte Rook"))
 
+    async def test_a_ban_the_game_refuses_is_not_counted_as_sent_or_retried_every_poll(self):
+        original = self.fake.reply
+        self.fake.reply = lambda text: "Failed: invalid identity" if text.startswith("#ban create") else original(text)
+        ban = self.db.add_ban(HAVOC, "Sgt Havoc", "cheating", "boss")
+        state = self.manager.state("server-1")
+        results = await self.manager.push_ban(self.db.ban(ban))
+        self.assertIn("refused by the game: Failed: invalid identity", results["server-1"])
+        self.assertNotIn("server-1", self.db.synced(ban))
+        self.assertEqual(self.db.audit()[0]["action"], "ban refused by the game")
+        sends = sum(1 for c in self.fake.commands if c.startswith("#ban create"))
+        await self.manager.sync_bans(state)
+        await self.manager.sync_bans(state)
+        self.assertEqual(sum(1 for c in self.fake.commands if c.startswith("#ban create")), sends)
+        self.fake.reply = original
+        self.manager._refused_at.clear()
+        await self.manager.sync_bans(state)
+        self.assertIn("server-1", self.db.synced(ban))
+
     async def test_no_ip_kick_after_unban_or_for_old_addresses(self):
         rook = SAMPLE_PLAYERS[1]
         ban = self.db.add_ban(HAVOC, "Sgt Havoc", "cheating", "boss")

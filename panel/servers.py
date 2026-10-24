@@ -100,6 +100,9 @@ class ServerState:
 
 # How often the Monitor page gets a reading.
 MONITOR_SECONDS = 15
+# A ban or unban the game answers with one of these did not take. It is tried again after this long, not every poll.
+GAME_REFUSED = re.compile(r"\b(fail(ed|ure)?|error|invalid|unknown|not found|cannot|can't|unable|denied)\b", re.I)
+REFUSED_RETRY = 600
 # Unanswered outside checks in a row before it counts as unreachable.
 UNREACHABLE_AFTER = 4
 # Failed logins from one address, within ATTACK_WINDOW seconds, that count as an attack.
@@ -121,6 +124,7 @@ class ServerManager:
         self._tasks: list[asyncio.Task] = []
         self._stopping = False
         self._ip_kicked: dict[str, int] = {}
+        self._refused_at: dict[tuple[int, str], int] = {}
         self._ban_lock = asyncio.Lock()
         self._config_admins: dict[str, tuple] = {}
 
@@ -797,11 +801,15 @@ class ServerManager:
         else:
             text = state.config.commands["unban"].format(identity=ban["identity"])
         try:
-            await self.command(state.config.id, text)
+            reply = clean(await self.command(state.config.id, text), 120)
         except RconError as exc:
             return f"failed: {exc}"
+        if GAME_REFUSED.search(reply):
+            self._refused_at[(ban["id"], state.config.id)] = now()
+            self.db.log("panel", f"{action} refused by the game", state.config.id, ban["name"] or ban["identity"], reply)
+            return f"refused by the game: {reply}"
         self.db.mark_synced(ban["id"], state.config.id, action)
-        return "done"
+        return f"done: {reply}" if reply else "done"
 
     async def reban(self, ban) -> dict[str, str]:
         """Put a changed ban back on every server: lift the old one, then ban again with the new
@@ -823,10 +831,10 @@ class ServerManager:
 
     async def sync_bans(self, state: ServerState):
         async with self._ban_lock:
-            for ban in self.db.pending_bans(state.config.id):
-                await self._send_ban(state, ban, "ban")
-            for ban in self.db.pending_unbans(state.config.id):
-                await self._send_ban(state, ban, "unban")
+            for ban in self.db.pending_bans(state.config.id) + self.db.pending_unbans(state.config.id):
+                if now() - self._refused_at.get((ban["id"], state.config.id), 0) < REFUSED_RETRY:
+                    continue
+                await self._send_ban(state, ban, "ban" if not ban["removed_at"] else "unban")
 
     async def power(self, server_id: str, action: str) -> str:
         state = self.states[server_id]
