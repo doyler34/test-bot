@@ -1,23 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% if mod %}{{ mod.name }} · {% endif %}Mods · {{ doc.name }} Gaming</title>
-<meta name="description" content="Arma Reforger Workshop mods, as {{ doc.name }} Gaming sees them.">
-<meta name="theme-color" content="#0a0a0b">
-<link rel="icon" href="/static/site/oyb-icon.png" type="image/png">
-<link rel="preload" href="/brand/fonts/Display.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="/static/site.css?v={{ asset_version }}">
-</head>
-<body>
-<header class="bar">
-  <a class="logo" href="/" aria-label="{{ doc.name }} Gaming home"><span class="wordmark small"><b>{{ doc.name }}</b><i>Gaming</i></span></a>
-  <nav class="links" aria-label="Main"><a href="/">Home</a><a href="/workshop">Mods</a></nav>
-  {% if doc.discord %}<a class="button outline small join-top" href="{{ doc.discord }}" rel="noopener"><span>Discord</span></a>{% endif %}
-</header>
+{% extends "site_base.html" %}
+{% block title %}{% if mod %}{{ mod.name }} · {% endif %}Mods · {{ doc.name }} Gaming{% endblock %}
+{% block description %}Arma Reforger Workshop mods, as {{ doc.name }} Gaming sees them.{% endblock %}
+{% block main %}
+<div class="wrap ws">
 
-<main class="ws">
 {% if mod %}
   <p><a href="/workshop">← All mods</a></p>
   <article class="ws-mod">
@@ -76,10 +62,5 @@
   {% endif %}
 {% endif %}
   <p class="muted small ws-note">Mod listings come from ReforgerMods, an independent service that isn't part of Bohemia Interactive. Mods download in the game itself, not from this site.</p>
-</main>
-
-<footer>
-  <p>© {{ year }} {{ doc.name }} Gaming. Arma Reforger and other game names belong to their owners; we aren't connected to them.</p>
-</footer>
-</body>
-</html>
+</div>
+{% endblock %}

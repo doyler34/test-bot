@@ -1,0 +1,79 @@
+{% from "site_parts.html" import discord_icon, icon, wordmark %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ doc.name }} Gaming{% if doc.tagline %} · {{ doc.tagline }}{% endif %}{% endblock %}</title>
+<meta name="description" content="{% block description %}{{ doc.tagline or doc.about[:150] }}{% endblock %}">
+<meta property="og:title" content="{{ self.title() }}">
+<meta property="og:description" content="{{ self.description() }}">
+<meta property="og:image" content="/static/site/oyb-logo.jpg">
+<meta name="theme-color" content="#09090b">
+<link rel="icon" href="/static/site/oyb-icon.png" type="image/png">
+<link rel="preload" href="/brand/fonts/Display.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="/static/site.css?v={{ asset_version }}">
+<script src="/static/site.js?v={{ asset_version }}" defer></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+<a class="skip" href="#main">Skip to content</a>
+{% if preview %}<div class="preview">Preview of the public site · <a href="/website">Back to editing</a></div>{% endif %}
+
+{% set play = [("Server network", "/servers"), ("How to join", "/servers#join"), ("Server rules", "/servers#rules")] %}
+{% set community = [("About " ~ doc.name, "/#about")] %}
+<header class="site-bar">
+  <div class="wrap bar-in">
+    <a class="logo" href="/" aria-label="{{ doc.name }} Gaming home"><img src="/static/site/oyb-icon.png" alt="" width="40" height="40">{{ wordmark(doc.name, "small") }}</a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="/"{% if active == "home" %} aria-current="page"{% endif %}>Home</a>
+      <details class="drop">
+        <summary{% if active == "servers" %} aria-current="page"{% endif %}>Servers {{ icon("chevron") }}</summary>
+        <div class="drop-list">{% for label, href in play %}<a href="{{ href }}">{{ label }}</a>{% endfor %}</div>
+      </details>
+      <a href="/#leaderboard">Players</a>
+      <a href="/mortar"{% if active == "battlefield" %} aria-current="page"{% endif %}>Battlefield</a>
+      <details class="drop">
+        <summary>Community {{ icon("chevron") }}</summary>
+        <div class="drop-list">{% for label, href in community %}<a href="{{ href }}">{{ label }}</a>{% endfor %}{% if doc.discord %}<a href="{{ doc.discord }}" rel="noopener">Discord</a>{% endif %}</div>
+      </details>
+    </nav>
+    {% if doc.discord %}<a class="button primary small bar-discord" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }}<span>Join Discord</span></a>{% endif %}
+    <details class="menu">
+      <summary aria-label="Menu"><span class="open">{{ icon("menu") }}</span><span class="shut">{{ icon("close") }}</span></summary>
+      <nav class="menu-sheet" aria-label="Menu">
+        <a class="menu-home" href="/">Home</a>
+        <p class="menu-group">Play</p>
+        {% for label, href in play %}<a href="{{ href }}">{{ label }}</a>{% endfor %}
+        <p class="menu-group">Track</p>
+        <a href="/#leaderboard">Weekly leaderboard</a>
+        <p class="menu-group">Battlefield</p>
+        <a href="/mortar">Mortar calculator</a>
+        <p class="menu-group">Community</p>
+        {% for label, href in community %}<a href="{{ href }}">{{ label }}</a>{% endfor %}
+        {% if doc.discord %}<a class="button primary menu-cta" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join Discord</a>{% endif %}
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+{% block main %}{% endblock %}
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="logo" href="/" aria-label="Back to top"><img src="/static/site/oyb-icon.png" alt="" width="40" height="40">{{ wordmark(doc.name, "small") }}</a>
+        <p>{{ doc.tagline or "Old heads and young guns, same squad." }}</p>
+      </div>
+      <nav aria-label="Play"><h2>Play</h2>{% for label, href in play %}<a href="{{ href }}">{{ label }}</a>{% endfor %}</nav>
+      <nav aria-label="Tools"><h2>Tools</h2><a href="/mortar">Mortar calculator</a><a href="/#leaderboard">Weekly leaderboard</a></nav>
+      <nav aria-label="Community"><h2>Community</h2>{% for label, href in community %}<a href="{{ href }}">{{ label }}</a>{% endfor %}{% if doc.discord %}<a href="{{ doc.discord }}" rel="noopener">Discord</a>{% endif %}</nav>
+      <nav aria-label="Support"><h2>Support</h2>{% if doc.discord %}<a href="{{ doc.discord }}" rel="noopener">Help in Discord</a>{% endif %}<a href="/servers#rules">Rules</a><a href="/servers#faq">FAQ</a></nav>
+    </div>
+    <p class="legal">© {{ year }} {{ doc.name }} Gaming. Arma Reforger and other game names belong to their owners; we aren't connected to them.</p>
+  </div>
+</footer>
+</body>
+</html>

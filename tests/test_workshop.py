@@ -157,8 +157,11 @@ class WorkshopPageTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get("/workshop", allow_redirects=False)
         self.assertEqual(response.status, 302)
 
-    async def test_site_nav_links_to_mods(self):
-        self.assertIn('href="/workshop"', await (await self.site("/")).text())
+    async def test_the_vanilla_site_does_not_advertise_mods_but_the_page_still_works(self):
+        self.assertNotIn('href="/workshop"', await (await self.site("/")).text())
+        page = await self.site("/workshop")
+        self.assertEqual(page.status, 200)
+        self.assertIn('class="site-bar"', await page.text())
 
 
 class ServerModsSearchTests(unittest.IsolatedAsyncioTestCase):

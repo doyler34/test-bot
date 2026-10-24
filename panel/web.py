@@ -266,7 +266,7 @@ async def security(request, handler):
 
 
 SITE_FILES = ("/static/site.css", "/static/site.js", "/static/site/oyb-logo.jpg", "/static/site/oyb-icon.png",
-              "/static/site/banner.jpg", "/brand/fonts/Display.ttf", "/brand/fonts/Body.ttf")
+              "/static/site/hero.jpg", "/brand/fonts/Display.ttf", "/brand/fonts/Body.ttf")
 
 
 @web.middleware
@@ -282,6 +282,8 @@ async def public_site(request, handler):
             return web.Response(text="User-agent: *\nAllow: /\n")
         if request.method == "GET" and request.path in SITE_FILES:
             return await handler(request)
+        if request.method == "GET" and (request.path == "/servers" or request.path.startswith("/servers/")):
+            return site_servers(request)
         if request.path == "/mortar" or request.path.startswith("/mortar/"):
             return await site_mortar(request)
         if request.method == "GET" and (request.path == "/workshop" or request.path.startswith("/workshop/")):
@@ -754,9 +756,33 @@ def site_doc(request):
     return site.check_site(raw, [s.id for s in request.app[CONFIG].servers])[0]
 
 
+def site_live(request):
+    """What each server last said about itself: its slots, map and game version."""
+    live = {}
+    for state in request.app[MANAGER].states.values():
+        found = state.query if (state.query or {}).get("ok") else {}
+        slots = found.get("slots")
+        try:
+            game_map = found.get("map") or (files.server_map(state.config) if state.online else "")
+        except OSError:
+            game_map = ""
+        live[state.config.id] = {"slots": slots if isinstance(slots, int) and slots > 0 else None,
+                                 "map": game_map, "version": found.get("version") or ""}
+    return live
+
+
 def site_view(request, doc=None):
     return site.view(doc or site_doc(request), request.app[CONFIG].servers, request.app[MANAGER].states,
-                     bridge(request))
+                     bridge(request), site_live(request))
+
+
+def render_site(request, template, doc, **context):
+    """Every page of the public site shares one layout; this is how each one is drawn."""
+    context.setdefault("preview", False)
+    context.setdefault("has_hero", (HERE / "static" / "site" / "hero.jpg").exists())
+    html = request.app[JINJA].get_template(template).render(
+        doc=doc, asset_version=ASSET_VERSION, year=time.strftime("%Y"), **context)
+    return web.Response(text=html, content_type="text/html")
 
 
 def site_rules(request):
@@ -768,11 +794,23 @@ def site_rules(request):
 
 def site_page(request, preview=False):
     doc = site_doc(request)
-    html = request.app[JINJA].get_template("site.html").render(
-        doc=doc, site=site_view(request, doc), rules=site_rules(request), board=request.app[STATS].weekly_board(),
-        preview=preview,
-        asset_version=ASSET_VERSION, year=time.strftime("%Y"))
-    return web.Response(text=html, content_type="text/html")
+    return render_site(request, "site.html", doc, site=site_view(request, doc), board=request.app[STATS].weekly_board(),
+                       preview=preview, active="home")
+
+
+def site_servers(request):
+    """The server network, and one page for each server in it."""
+    doc, view = site_doc(request), None
+    view = site_view(request, doc)
+    parts = request.path.rstrip("/").split("/")
+    if len(parts) == 2:
+        return render_site(request, "site_servers.html", doc, site=view, rules=site_rules(request), active="servers")
+    if len(parts) == 3:
+        server = next((s for s in view["servers"] if s["slug"] == parts[2]), None)
+        if server:
+            return render_site(request, "site_server.html", doc, site=view, server=server, rules=site_rules(request),
+                               active="servers")
+    raise web.HTTPNotFound(text="No such server.")
 
 
 async def site_workshop(request):
@@ -808,9 +846,7 @@ def render_workshop(request, doc, **context):
     context.setdefault("sort", "popularity")
     context.setdefault("sorts", workshop.SORTS)
     context.setdefault("links", {})
-    html = request.app[JINJA].get_template("workshop_site.html").render(
-        doc=doc, asset_version=ASSET_VERSION, year=time.strftime("%Y"), **context)
-    return web.Response(text=html, content_type="text/html")
+    return render_site(request, "workshop_site.html", doc, active="", **context)
 
 
 async def website_page(request):

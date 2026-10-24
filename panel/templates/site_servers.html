@@ -1,0 +1,73 @@
+{% extends "site_base.html" %}
+{% from "site_parts.html" import discord_icon, icon, server_card, metrics %}
+{% block title %}Servers · {{ doc.name }} Gaming{% endblock %}
+{% block description %}Live {{ doc.name }} Arma Reforger servers: who's online, how to find them in the game, and the rules.{% endblock %}
+{% block body_class %}page-servers{% endblock %}
+{% block main %}
+<section class="masthead">
+  <div class="wrap">
+    <p class="crumbs"><a href="/">Home</a> <span aria-hidden="true">/</span> Servers</p>
+    <p class="tag">Server network</p>
+    <h1>{{ doc.name }} servers</h1>
+    <p class="lead">Arma Reforger only. Players, slots and status below come straight from the servers, and update while you watch.</p>
+  </div>
+</section>
+
+<div class="wrap pull-up">{{ metrics(site) }}<p class="stale" data-stale hidden>Couldn't reach the servers just now. Showing the last numbers we had.</p></div>
+
+<nav class="jump" aria-label="On this page"><div class="wrap">
+  <a href="#network"><b>01</b> Live servers</a><a href="#join"><b>02</b> How to join</a><a href="#rules"><b>03</b> Rules</a><a href="#faq"><b>04</b> Questions</a>
+</div></nav>
+
+<section class="band" id="network" aria-labelledby="network-title">
+  <div class="wrap">
+    <header class="section-head"><p class="tag">01</p><h2 id="network-title">Live servers</h2></header>
+    {% if site.count %}
+    <div class="srv-grid" data-grid>{% for s in site.servers %}{{ server_card(s, doc) }}{% endfor %}</div>
+    {% else %}
+    <p class="empty">No servers are listed right now. Check the Discord for news.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="band" id="join" aria-labelledby="join-title">
+  <div class="wrap two">
+    <header class="section-head"><p class="tag">02</p><h2 id="join-title">How to join</h2>
+      <p>PC, Xbox and PlayStation players share these servers.</p></header>
+    <div>
+      <ol class="steps">
+        <li><b>Open Arma Reforger</b> and choose <b>Multiplayer</b>.</li>
+        <li>Open the <b>server browser</b> and search for <b>{{ doc.name }}</b>.</li>
+        <li>Pick the server you want and press <b>Join</b>.</li>
+        <li>New here? Read the rules below, then say hello in the Discord.</li>
+      </ol>
+      {% set notes = site.servers|selectattr("join")|list %}
+      {% if notes %}
+      <h3 class="small-head">Server notes</h3>
+      <ul class="notes">{% for s in notes %}<li><b>{{ s.name }}</b> {{ s.join }}</li>{% endfor %}</ul>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="band" id="rules" aria-labelledby="rules-title">
+  <div class="wrap two">
+    <header class="section-head"><p class="tag">03</p><h2 id="rules-title">Server rules</h2>
+      <p>The same rules on every {{ doc.name }} server. Admins have the final say.</p></header>
+    {% if rules %}<ol class="rules">{% for line in rules %}<li>{{ line }}</li>{% endfor %}</ol>
+    {% else %}<p class="empty">The rules are posted in the Discord.</p>{% endif %}
+  </div>
+</section>
+
+<section class="band" id="faq" aria-labelledby="faq-title">
+  <div class="wrap two">
+    <header class="section-head"><p class="tag">04</p><h2 id="faq-title">Questions</h2></header>
+    <div class="faq">
+      <details><summary>A server says 0 players. Is it down?</summary><p>Not necessarily. <b>Online · empty</b> means the server is up with nobody on. <b>Offline</b> means we can't reach it right now.</p></details>
+      <details><summary>Can I play with friends on other platforms?</summary><p>Yes. PC, Xbox and PlayStation players share these servers.</p></details>
+      <details><summary>How do I get on the leaderboard?</summary><p>Link your game account in the Discord. An admin approves it, and your kills and deaths are tracked from then on.</p></details>
+      <details><summary>I was banned. What now?</summary><p>The ban message tells you how to appeal{% if doc.discord %}: it points to <a href="{{ doc.discord }}" rel="noopener">{{ doc.discord|replace("https://", "") }}</a>{% endif %}.</p></details>
+    </div>
+  </div>
+</section>
+{% endblock %}

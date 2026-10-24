@@ -56,6 +56,24 @@ def plain(text):
     return re.sub(r"[*_`]", "", text or "").strip()
 
 
+def slugify(text):
+    return re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")
+
+
+FACT = re.compile(r"^([A-Za-z][A-Za-z ]{1,24}):\s*(.+)$")
+
+
+def facts(settings):
+    """The "Key: value" lines of a server's settings card, lower-cased by key. Lines with no
+    key, such as the bot's own note that settings haven't been supplied, never reach visitors."""
+    found = {}
+    for line in str(settings or "").splitlines():
+        match = FACT.match(plain(line))
+        if match and match.group(2).strip():
+            found.setdefault(match.group(1).strip().lower(), match.group(2).strip())
+    return found
+
+
 def rules(text):
     """The bot's rules card as plain lines for the site: no Discord markdown, no bullet marks."""
     lines = []
@@ -66,12 +84,13 @@ def rules(text):
     return lines
 
 
-def view(doc, servers, states, bridge):
-    """What the site shows, grouped by game with the busiest server first. No
-    player names, IPs or anything else from the panel: just who's online and
-    how many are playing."""
+def view(doc, servers, states, bridge, live=None):
+    """What the site shows: every shown server, the busiest first. No player names, IPs or
+    anything else from the panel: just who's online, how many are playing and what the
+    server is running. `live` is what the servers last reported about themselves."""
     reported = {s.get("id"): s for s in bridge.get("servers", [])}
-    games, online, playing = {}, 0, 0
+    live = live or {}
+    shown, online, playing = [], 0, 0
     for config in servers:
         look = doc["servers"].get(config.id) or {"show": True, "game": "Arma Reforger", "join": ""}
         if not look["show"]:
@@ -82,17 +101,29 @@ def view(doc, servers, states, bridge):
         online += up
         playing += count
         name = look.get("name") or (reported.get(config.id) or {}).get("label") or config.name
-        games.setdefault(look["game"], []).append({
-            "id": config.id, "name": name, "online": up, "players": count,
-            "settings": plain((reported.get(config.id) or {}).get("settings", "")),
-            "join": look["join"]})
-    for group in games.values():
-        group.sort(key=lambda s: (not s["online"], -s["players"]))
-    return {"games": games, "online": online, "playing": playing,
-            "count": sum(len(s) for s in games.values())}
+        card = facts((reported.get(config.id) or {}).get("settings", ""))
+        mine = live.get(config.id) or {}
+        shown.append({
+            "id": config.id, "name": name, "online": up, "players": count, "game": look["game"],
+            "slots": mine.get("slots") or None,
+            "map": (mine.get("map") or card.get("map", "")) if up else card.get("map", ""),
+            "mode": card.get("mode") or card.get("game mode", ""), "setup": card.get("setup", ""),
+            "version": mine.get("version", "") if up else "", "join": look["join"]})
+    shown.sort(key=lambda s: (not s["online"], -s["players"], s["name"].lower()))
+    seen = set()
+    for s in shown:
+        s["slug"] = slugify(s["name"]) or slugify(s["id"])
+        if s["slug"] in seen:
+            s["slug"] += "-" + slugify(s["id"])
+        seen.add(s["slug"])
+    known = [s["slots"] for s in shown if s["slots"]]
+    health = ("unknown" if not shown else "healthy" if online == len(shown) else "partial" if online else "down")
+    return {"servers": shown, "online": online, "playing": playing, "count": len(shown),
+            "slots": sum(known) if known else None, "slots_all_known": len(known) == len(shown) and bool(shown),
+            "health": health}
 
 
 def status(view_data):
     return {"online": view_data["online"], "playing": view_data["playing"],
-            "servers": [{"id": s["id"], "online": s["online"], "players": s["players"]}
-                        for group in view_data["games"].values() for s in group]}
+            "servers": [{"id": s["id"], "online": s["online"], "players": s["players"], "slots": s["slots"]}
+                        for s in view_data["servers"]]}

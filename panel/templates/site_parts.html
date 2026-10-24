@@ -1,0 +1,33 @@
+{% macro discord_icon() %}<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18 18 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18a19.8 19.8 0 0 0 6 3l1.3-2a12.7 12.7 0 0 1-2-1l.5-.4a14 14 0 0 0 12.2 0l.5.4-2 1 1.3 2a19.7 19.7 0 0 0 6-3c.5-5.1-.8-9.6-3.6-13.6ZM8 15.3c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.4 8 10.4s2.2 1.1 2.2 2.5-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.5 2.2-2.5 2.2 1.1 2.2 2.5-1 2.4-2.2 2.4Z"/></svg>{% endmacro %}
+
+{% macro icon(name) %}<svg viewBox="0 0 24 24" aria-hidden="true" class="line">{% if name == "servers" %}<rect x="3" y="4" width="18" height="7" rx="1"/><rect x="3" y="13" width="18" height="7" rx="1"/><path d="M7 7.5h.01M7 16.5h.01"/>{% elif name == "trophy" %}<path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H4.5a3 3 0 0 0 3.5 4M16 6h3.5a3 3 0 0 1-3.5 4M12 13v4M8 20h8M9.5 17h5"/>{% elif name == "shield" %}<path d="M12 3l7.5 3v5.5c0 4.5-3.2 8-7.5 9.5-4.3-1.5-7.5-5-7.5-9.5V6L12 3Z"/><path d="M8.8 12l2.2 2.2 4.2-4.4"/>{% elif name == "rules" %}<path d="M6 3h9l3 3v15H6V3Z"/><path d="M9 9h6M9 13h6M9 17h4"/>{% elif name == "squad" %}<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.8a3.4 3.4 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.4 3.5 5.2"/>{% elif name == "target" %}<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>{% elif name == "arrow" %}<path d="M5 12h14M13 6l6 6-6 6"/>{% elif name == "menu" %}<path d="M4 7h16M4 12h16M4 17h16"/>{% elif name == "close" %}<path d="M6 6l12 12M18 6L6 18"/>{% elif name == "chevron" %}<path d="M6 9l6 6 6-6"/>{% elif name == "card" %}<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.4-1.5 1.5-2.2 2.5-2.2s2.1.7 2.5 2.2M14 10h4M14 14h3"/>{% endif %}</svg>{% endmacro %}
+
+{% macro wordmark(name, size="") %}<span class="wordmark {{ size }}"><b>{{ name }}</b><i>Gaming</i></span>{% endmacro %}
+
+{% macro status_chip(s) %}<span class="chip {{ 'on' if s.online else 'off' }}{{ ' empty' if s.online and not s.players }}" data-state>{% if not s.online %}Offline{% elif not s.players %}Online · empty{% else %}Online{% endif %}</span>{% endmacro %}
+
+{% macro population(s) %}<div class="pop"><div class="pop-num"><b data-players>{{ s.players }}</b>{% if s.slots %}<span class="pop-cap">/ <span data-slots>{{ s.slots }}</span></span>{% endif %}<small>playing</small></div>{% if s.slots %}<div class="bar" role="img" aria-label="{{ s.players }} of {{ s.slots }} slots in use"><i data-bar style="width: {{ [(s.players * 100 // s.slots), 100]|min }}%"></i></div>{% endif %}</div>{% endmacro %}
+
+{% macro server_facts(s) %}{% set bits = [s.map, s.mode, s.setup]|select|list %}{% if bits %}<p class="srv-facts">{{ bits|join(" · ") }}</p>{% endif %}{% endmacro %}
+
+{% macro server_card(s, doc) %}
+<article class="srv {{ 'is-on' if s.online else 'is-off' }}" data-server="{{ s.id }}">
+  <div class="srv-head">
+    <h3><a href="/servers/{{ s.slug }}">{{ s.name }}</a></h3>
+    {{ status_chip(s) }}
+  </div>
+  {{ population(s) }}
+  {{ server_facts(s) }}
+  <p class="srv-find">In Arma Reforger: <b>Multiplayer</b>, then search <b>{{ doc.name }}</b>.</p>
+  <a class="srv-link" href="/servers/{{ s.slug }}">View server {{ icon("arrow") }}</a>
+</article>
+{% endmacro %}
+
+{% macro metrics(site) %}
+<ul class="metrics" data-live aria-label="Network at a glance">
+  <li><b data-metric="online">{{ site.online }}<span class="of"> / {{ site.count }}</span></b><small>Servers online</small></li>
+  <li><b data-metric="players">{{ site.playing }}</b><small>Players now</small></li>
+  <li><b data-metric="slots">{{ site.slots if site.slots else "—" }}</b><small>{{ "Total slots" if site.slots_all_known or not site.slots else "Slots known" }}</small></li>
+  <li><b class="health {{ site.health }}" data-metric="health">{{ {"healthy": "Healthy", "partial": "Partly up", "down": "Offline", "unknown": "Unknown"}[site.health] }}</b><small>Network</small></li>
+</ul>
+{% endmacro %}

@@ -1,0 +1,71 @@
+{% extends "site_base.html" %}
+{% from "site_parts.html" import discord_icon, icon, status_chip, population, server_facts %}
+{% block title %}{{ server.name }} · {{ doc.name }} Gaming{% endblock %}
+{% block description %}{{ server.name }}: {{ "online" if server.online else "offline" }}{% if server.online %}, {{ server.players }}{% if server.slots %} of {{ server.slots }}{% endif %} playing{% endif %}. How to find it in Arma Reforger.{% endblock %}
+{% block body_class %}page-server{% endblock %}
+{% block main %}
+<section class="masthead server-head" data-server="{{ server.id }}">
+  <div class="wrap server-head-in">
+    <div>
+      <p class="crumbs"><a href="/">Home</a> <span aria-hidden="true">/</span> <a href="/servers">Servers</a> <span aria-hidden="true">/</span> {{ server.name }}</p>
+      <p class="tag">{{ server.game }}</p>
+      <h1>{{ server.name }}</h1>
+      <div class="head-status {{ 'is-on' if server.online else 'is-off' }}">{{ status_chip(server) }}{{ server_facts(server) }}</div>
+      <p class="stale" data-stale hidden>Couldn't reach the servers just now. Showing the last numbers we had.</p>
+    </div>
+    <div class="head-pop {{ 'is-on' if server.online else 'is-off' }}">{{ population(server) }}
+      <p class="muted-line" data-live>Live: refreshes every 30 seconds.</p></div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap detail">
+    <div class="detail-main">
+      <h2 id="find">Find it in the game</h2>
+      {% if server.join %}<p class="join-note">{{ server.join }}</p>{% endif %}
+      <ol class="steps">
+        <li>Open Arma Reforger and choose <b>Multiplayer</b>.</li>
+        <li>In the server browser, search for <b>{{ doc.name }}</b>.</li>
+        <li>Pick <b>{{ server.name }}</b> and press <b>Join</b>.</li>
+      </ol>
+      <p class="note">PC, Xbox and PlayStation players share the server.</p>
+
+      <h2 id="rules">Rules</h2>
+      {% if rules %}<ol class="rules">{% for line in rules %}<li>{{ line }}</li>{% endfor %}</ol>
+      {% else %}<p class="empty">The rules are posted in the Discord.</p>{% endif %}
+    </div>
+
+    <aside class="detail-side">
+      <section class="card" aria-labelledby="details-title">
+        <h2 id="details-title">Server details</h2>
+        <dl class="facts">
+          <div><dt>Status</dt><dd>{{ "Online" if server.online else "Offline" }}</dd></div>
+          <div><dt>Game</dt><dd>{{ server.game }}</dd></div>
+          {% if server.map %}<div><dt>Map</dt><dd>{{ server.map }}</dd></div>{% endif %}
+          {% if server.mode %}<div><dt>Mode</dt><dd>{{ server.mode }}</dd></div>{% endif %}
+          {% if server.setup %}<div><dt>Setup</dt><dd>{{ server.setup }}</dd></div>{% endif %}
+          {% if server.slots %}<div><dt>Slots</dt><dd>{{ server.slots }}</dd></div>{% endif %}
+          {% if server.version %}<div><dt>Game version</dt><dd>{{ server.version }}</dd></div>{% endif %}
+        </dl>
+      </section>
+      <section class="card" aria-labelledby="more-title">
+        <h2 id="more-title">More from {{ doc.name }}</h2>
+        <ul class="links-list">
+          <li><a href="/mortar">{{ icon("target") }} Mortar calculator</a></li>
+          <li><a href="/#leaderboard">{{ icon("trophy") }} Weekly leaderboard</a></li>
+          {% if doc.discord %}<li><a href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join the Discord</a></li>{% endif %}
+        </ul>
+      </section>
+      {% set others = site.servers|rejectattr("id", "equalto", server.id)|list %}
+      {% if others %}
+      <section class="card" aria-labelledby="others-title">
+        <h2 id="others-title">Other servers</h2>
+        <ul class="links-list">
+          {% for s in others %}<li data-server="{{ s.id }}"><a href="/servers/{{ s.slug }}"><span>{{ s.name }}</span><span class="side-count"><b data-players>{{ s.players }}</b> playing</span></a></li>{% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+    </aside>
+  </div>
+</section>
+{% endblock %}

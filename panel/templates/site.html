@@ -1,173 +1,138 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ doc.name }} Gaming{% if doc.tagline %} · {{ doc.tagline }}{% endif %}</title>
-<meta name="description" content="{{ doc.tagline or doc.about[:150] }}">
-<meta property="og:title" content="{{ doc.name }} Gaming">
-<meta property="og:description" content="{{ doc.tagline or doc.about[:150] }}">
-<meta name="theme-color" content="#0a0a0b">
-<meta property="og:image" content="/static/site/oyb-logo.jpg">
-<link rel="icon" href="/static/site/oyb-icon.png" type="image/png">
-<link rel="preload" href="/brand/fonts/Display.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="/static/site.css?v={{ asset_version }}">
-<script src="/static/site.js?v={{ asset_version }}" defer></script>
-</head>
-<body>
+{% extends "site_base.html" %}
+{% from "site_parts.html" import discord_icon, icon, server_card, metrics %}
+{% block body_class %}page-home{% endblock %}
+{% block main %}
 {% set paras = doc.about.split("\n")|select("ne", "")|list %}
-{% macro discord_icon() %}<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18 18 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18a19.8 19.8 0 0 0 6 3l1.3-2a12.7 12.7 0 0 1-2-1l.5-.4a14 14 0 0 0 12.2 0l.5.4-2 1 1.3 2a19.7 19.7 0 0 0 6-3c.5-5.1-.8-9.6-3.6-13.6ZM8 15.3c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.4 8 10.4s2.2 1.1 2.2 2.5-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.5 2.2-2.5 2.2 1.1 2.2 2.5-1 2.4-2.2 2.4Z"/></svg>{% endmacro %}
-{% macro icon(name) %}<svg viewBox="0 0 24 24" aria-hidden="true" class="line">{% if name == "servers" %}<rect x="3" y="4" width="18" height="7" rx="1"/><rect x="3" y="13" width="18" height="7" rx="1"/><path d="M7 7.5h.01M7 16.5h.01"/>{% elif name == "trophy" %}<path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H4.5a3 3 0 0 0 3.5 4M16 6h3.5a3 3 0 0 1-3.5 4M12 13v4M8 20h8M9.5 17h5"/>{% elif name == "shield" %}<path d="M12 3l7.5 3v5.5c0 4.5-3.2 8-7.5 9.5-4.3-1.5-7.5-5-7.5-9.5V6L12 3Z"/><path d="M8.8 12l2.2 2.2 4.2-4.4"/>{% elif name == "rules" %}<path d="M6 3h9l3 3v15H6V3Z"/><path d="M9 9h6M9 13h6M9 17h4"/>{% elif name == "squad" %}<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.8a3.4 3.4 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.4 3.5 5.2"/>{% endif %}</svg>{% endmacro %}
-{% macro wordmark(size="") %}<span class="wordmark {{ size }}"><b>{{ doc.name }}</b><i>Gaming</i></span>{% endmacro %}
-{% if preview %}<div class="preview">Preview of the public site · <a href="/website">Back to editing</a></div>{% endif %}
 
-<header class="bar">
-  <a class="logo" href="#top" aria-label="{{ doc.name }} Gaming home">{{ wordmark("small") }}</a>
-  {% set nav %}
-    <a href="#top">Home</a>
-    {% if site.count %}<a href="#servers">Servers</a>{% endif %}
-    {% if rules %}<a href="#rules">Rules</a>{% endif %}
-    {% if paras %}<a href="#about">About {{ doc.name }}</a>{% endif %}
-    <a href="#leaderboards">Leaderboards</a>
-    <a href="/workshop">Mods</a>
-    {% if doc.discord %}<a class="nav-discord" href="{{ doc.discord }}" rel="noopener">Discord</a>{% endif %}
-  {% endset %}
-  <nav class="links" aria-label="Main">{{ nav }}</nav>
-  {% if doc.discord %}<a class="button outline small join-top" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} <span>Discord</span></a>{% endif %}
-  <details class="menu">
-    <summary aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true" class="line"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
-    <nav aria-label="Main">{{ nav }}</nav>
-  </details>
-</header>
-
-<section class="hero" id="top">
-  <div class="intro">
-    {% if doc.tagline %}<p class="kicker">{{ doc.tagline }}</p>{% endif %}
-    <h1>{{ wordmark("big") }}<span class="headline">One community. Countless battles.</span></h1>
-    <p class="lead">Join the fight. Find your squad. Play your way.</p>
+<section class="hero{{ ' has-image' if has_hero }}"{% if has_hero %} style="--hero-image: url(/static/site/hero.jpg)"{% endif %}>
+  <div class="wrap hero-in">
+   <div class="hero-copy">
+    <p class="eyebrow">Old Young Bastards <span aria-hidden="true">/</span> Arma Reforger</p>
+    <h1>One community.<br><em>Countless battles.</em></h1>
+    <p class="lead">Arma Reforger servers run by players who turn up, play fair and look after each other. PC, Xbox and PlayStation together.</p>
     <div class="actions">
-      {% if doc.discord %}<a class="button primary" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join Discord</a>
-      {% elif site.count %}<a class="button outline" href="#servers">{{ icon("servers") }} View servers</a>{% endif %}
+      <a class="button primary" href="/servers">Browse live servers {{ icon("arrow") }}</a>
+      {% if doc.discord %}<a class="button outline" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join Discord</a>{% endif %}
+    </div>
+    <p class="live-line" data-live-line aria-live="polite"><span class="dot {{ 'on' if site.online }}" aria-hidden="true"></span>
+      <span data-live-text>{% if not site.count %}No servers listed right now{% elif not site.online %}No servers online right now{% else %}{{ site.playing }} playing across {{ site.online }} online server{{ "s" if site.online != 1 }}{% endif %}</span></p>
+   </div>
+   {% if site.count %}
+   <aside class="hero-live" aria-label="Servers right now">
+     <p class="tag">Live now</p>
+     <ul>
+       {% for s in site.servers[:4] %}<li data-server="{{ s.id }}" class="{{ 'is-on' if s.online else 'is-off' }}">
+         <a href="/servers/{{ s.slug }}"><span class="hl-name"><span class="dot {{ 'on' if s.online }}" aria-hidden="true"></span>{{ s.name }}</span><span class="hl-count"><b data-players>{{ s.players }}</b>{% if s.slots %}<span> / <span data-slots>{{ s.slots }}</span></span>{% endif %}</span>
+         {% if s.slots %}<span class="bar" aria-hidden="true"><i data-bar style="width: {{ [(s.players * 100 // s.slots), 100]|min }}%"></i></span>{% endif %}</a>
+       </li>{% endfor %}
+     </ul>
+     <a class="srv-link" href="/servers">All servers {{ icon("arrow") }}</a>
+   </aside>
+   {% endif %}
+  </div>
+</section>
+
+<div class="wrap pull-up">{{ metrics(site) }}<p class="stale" data-stale hidden>Couldn't reach the servers just now. Showing the last numbers we had.</p></div>
+
+<section class="band" id="servers" aria-labelledby="servers-title">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="tag">01 / Live servers</p>
+      <h2 id="servers-title">Choose your battlefield</h2>
+      <p>Every {{ doc.name }} server, live. Tap one to see how to find it in the game.</p>
+    </header>
+    {% if site.count %}
+    <div class="srv-grid" data-grid>
+      {% for s in site.servers %}{{ server_card(s, doc) }}{% endfor %}
+    </div>
+    <p class="more"><a href="/servers">The full server network {{ icon("arrow") }}</a></p>
+    {% else %}
+    <p class="empty">No servers are listed right now. Check the Discord for news.</p>
+    {% endif %}
+  </div>
+</section>
+
+{% if paras %}
+<section class="band story" id="about" aria-labelledby="about-title">
+  <div class="wrap story-in">
+    <div class="story-copy">
+      <p class="tag">02 / Who we are</p>
+      <h2 id="about-title">About {{ doc.name }}</h2>
+      {% for para in paras[:2] %}<p>{{ para }}</p>{% endfor %}
+      <ul class="pillars">
+        <li>{{ icon("squad") }}<div><b>Strong community</b><span>Old heads and young guns on the same side.</span></div></li>
+        <li>{{ icon("shield") }}<div><b>Fair play</b><span>Admins who watch the games. A cheater is banned on every {{ doc.name }} server at once.</span></div></li>
+      </ul>
+    </div>
+    <figure class="crest"><img src="/static/site/oyb-logo.jpg" alt="The {{ doc.name }} crest" width="420" height="404" loading="lazy"></figure>
+  </div>
+</section>
+{% endif %}
+
+<section class="band" id="tools" aria-labelledby="tools-title">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="tag">03 / Battlefield toolkit</p>
+      <h2 id="tools-title">Tools that win fights</h2>
+    </header>
+    <div class="tools">
+      <a class="tool feature" href="/mortar">
+        <span class="tool-art" aria-hidden="true"></span>
+        <div><p class="tag">Mortar calculator</p><h3>Work out the shot.</h3>
+          <p>Drop your mortar and the target on the map and get a firing solution for the M252 or the 2B14: HE, smoke or illumination.</p>
+          <span class="srv-link">Open the calculator {{ icon("arrow") }}</span></div>
+      </a>
+      <a class="tool" href="#leaderboard">{{ icon("trophy") }}<h3>Weekly leaderboard</h3><p>Kills and deaths for linked players, reset every Monday.</p></a>
+      {% if doc.discord %}<a class="tool" href="{{ doc.discord }}" rel="noopener">{{ icon("card") }}<h3>Rank card</h3><p>Link your account in Discord, then use <b>/rank</b> and <b>/stats</b> to see how you're doing.</p></a>{% endif %}
     </div>
   </div>
 </section>
 
-<main>
-  <div class="top-grid">
-    <section class="panel status" id="servers" aria-labelledby="servers-title">
-      <div class="panel-head" data-live>
-        <h2 id="servers-title"><span class="dot {{ 'on' if site.online }}" aria-hidden="true"></span> Live servers</h2>
-        {% if site.count %}<span class="summary" data-summary aria-live="polite">{{ site.playing }} playing · {{ site.online }} of {{ site.count }} up</span>{% endif %}
-      </div>
-      {% if site.count %}
-      <ul class="servers">
-        {% for game, list in site.games.items() %}
-        {% set game_at = loop.index0 %}
-        {% for s in list %}
-        <li class="server {{ 'is-on' if s.online else 'is-off' }}" data-server="{{ s.id }}" data-game="{{ game_at }}">
-          <img class="badge-img" src="/static/site/oyb-icon.png" alt="" width="40" height="40" loading="lazy">
-          <div class="name">
-            <b>{{ s.name }}</b>
-            <small>{{ game }}{% if s.settings %} · {{ s.settings }}{% endif %}</small>
-          </div>
-          <div class="count">
-            <b data-players>{{ s.players }}</b>
-            <small>playing</small>
-          </div>
-          <span class="state" data-state>{{ "Online" if s.online else "Offline" }}</span>
-          <details class="join">
-            <summary>How to join</summary>
-            {% if s.join %}<p>{{ s.join }}</p>
-            {% else %}<ol>
-              <li>Open Arma Reforger and go to <b>Multiplayer</b>.</li>
-              <li>Type <b>{{ doc.name }}</b> in the server browser search.</li>
-              <li>Pick <b>{{ s.name }}</b> and join.</li>
-            </ol>{% endif %}
-          </details>
-        </li>
-        {% endfor %}
-        {% endfor %}
-      </ul>
-      <p class="stale" data-stale hidden>Couldn't reach the servers just now. Showing the last numbers we had.</p>
-      {% else %}
-      <p class="empty">No servers are listed right now. Check the Discord for news.</p>
-      {% endif %}
-    </section>
-
-    <section class="panel features" aria-labelledby="features-title">
-      <h2 id="features-title" class="visually-hidden">What's here</h2>
-      <ul>
-        <li>
-          {{ icon("squad") }}
-          <div><b>Strong community</b><p>Old heads and young guns on the same side. Turn up, play fair and you're one of us.</p></div>
-        </li>
-        <li>
-          {{ icon("shield") }}
-          <div><b>Fair play</b><p>Admins who actually watch the games. Cheaters are banned on every {{ doc.name }} server at once.</p></div>
-        </li>
-        <li>
-          {{ icon("trophy") }}
-          <div><b>Leaderboards</b><p>Link your game account in the Discord to get on the live, past-game and weekly boards.</p></div>
-        </li>
-      </ul>
-    </section>
-  </div>
-
-  <div class="cards">
-    {% if rules %}
-    <section class="panel" id="rules" aria-labelledby="rules-title">
-      <h2 id="rules-title">{{ icon("rules") }} Server rules</h2>
-      <ol class="rules">
-        {% for line in rules %}<li>{{ line }}</li>{% endfor %}
-      </ol>
-      <p class="note">The same rules on every {{ doc.name }} server. Admins have the final say.</p>
-    </section>
-    {% endif %}
-
-    {% if paras %}
-    <section class="panel" id="about" aria-labelledby="about-title">
-      <h2 id="about-title">{{ icon("squad") }} About {{ doc.name }}</h2>
-      {% for para in paras[:2] %}<p>{{ para }}</p>{% endfor %}
-    </section>
-    {% endif %}
-
-    <section class="panel" id="leaderboards" aria-labelledby="leaderboards-title">
-      <h2 id="leaderboards-title">{{ icon("trophy") }} Leaderboards</h2>
+<section class="band" id="leaderboard" aria-labelledby="leaderboard-title">
+  <div class="wrap pulse">
+    <header class="section-head">
+      <p class="tag">04 / Competitive pulse</p>
+      <h2 id="leaderboard-title">This week's leaders</h2>
+      {% if board and board.rows %}<p>Since Monday {{ board.week }} · {{ board.players }} player{{ "s" if board.players != 1 }}. Linked players only, kills first.</p>{% endif %}
+    </header>
+    <div class="pulse-body">
       {% if board and board.rows %}
-      <p class="board-meta">This week · since Monday {{ board.week }} · {{ board.players }} player{{ "s" if board.players != 1 }}</p>
-      <table class="board">
-        <thead><tr><th scope="col">#</th><th scope="col">Player</th><th scope="col" title="Kills">K</th><th scope="col" title="Deaths">D</th></tr></thead>
-        <tbody>
-          {% for r in board.rows %}<tr{% if loop.index <= 3 %} class="top"{% endif %}><td>{{ loop.index }}</td><td>{{ r.name }}</td><td>{{ r.kills }}</td><td>{{ r.deaths }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <p class="note">Linked players only, kills first. Resets every Monday.</p>
+      <ol class="leaders">
+        {% for r in board.rows[:5] %}<li><span class="place">{{ loop.index }}</span><span class="who">{{ r.name }}</span><span class="kd"><b>{{ r.kills }}</b> kills <i>{{ r.deaths }} deaths</i></span></li>
+        {% endfor %}
+      </ol>
       {% elif board %}
-      <p>No kills recorded this week yet. The board resets every Monday.</p>
+      <p class="empty">No kills recorded this week yet. The board resets every Monday.</p>
       {% else %}
-      <p>Kills, deaths and the rest, tracked on every {{ doc.name }} server, with live, past-game and weekly boards in our Discord.</p>
+      <p class="empty">Kills, deaths and the rest are tracked on every {{ doc.name }} server. The boards live in our Discord.</p>
       {% endif %}
-      <p>Link your game account in the Discord to get on the board.</p>
-      {% if doc.discord %}<a class="button outline small" href="{{ doc.discord }}" rel="noopener">{{ icon("trophy") }} Full board in Discord</a>{% endif %}
-    </section>
+      <div class="pulse-side">
+        <p>Not on the board? Link your game account in the Discord and you're on it.</p>
+        {% if doc.discord %}<a class="button outline" href="{{ doc.discord }}" rel="noopener">{{ icon("trophy") }} Full board in Discord</a>{% endif %}
+      </div>
+    </div>
   </div>
+</section>
 
-  {% if doc.discord %}
-  <section class="panel strip" aria-label="Join the community">
-    <span class="strip-icon">{{ discord_icon() }}</span>
-    <div><b>Join the community</b><p>Find teammates, see the leaderboards and hear about events first.</p></div>
-    <a class="button primary" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join Discord</a>
-  </section>
-  {% endif %}
-</main>
-
-<footer>
-  <div class="foot-top">
-    <a href="#top" aria-label="Back to top">{{ wordmark("small") }}</a>
-    <nav aria-label="Footer">{{ nav }}</nav>
+<section class="band" id="operations" aria-labelledby="ops-title">
+  <div class="wrap ops">
+    <header class="section-head">
+      <p class="tag">05 / Operations</p>
+      <h2 id="ops-title">Events and announcements</h2>
+    </header>
+    <div class="ops-empty">
+      <p><b>Nothing scheduled right now.</b> Operations and announcements are posted in the Discord first, so that's the place to hear about them.</p>
+      {% if doc.discord %}<a class="srv-link" href="{{ doc.discord }}" rel="noopener">See the announcements {{ icon("arrow") }}</a>{% endif %}
+    </div>
   </div>
-  <p>© {{ year }} {{ doc.name }} Gaming. Arma Reforger and other game names belong to their owners; we aren't connected to them.</p>
-</footer>
-</body>
-</html>
+</section>
+
+{% if doc.discord %}
+<section class="recruit" aria-label="Join the community">
+  <div class="wrap recruit-in">
+    <div><p class="tag">Find your squad</p><h2>Turn up. Play fair. You're one of us.</h2><p>Find teammates, see the leaderboards and hear about events first.</p></div>
+    <a class="button primary big" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join Discord</a>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
