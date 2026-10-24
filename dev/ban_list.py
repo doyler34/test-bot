@@ -28,13 +28,14 @@ SHOWN = 15
 
 def panel_view(database):
     db = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
-    bans = db.execute("SELECT id, identity, name FROM bans WHERE removed_at IS NULL"
-                      " AND (expires_at IS NULL OR expires_at > ?)", (int(time.time()),)).fetchall()
-    sent = {}
-    for ban_id, server_id in db.execute("SELECT ban_id, server_id FROM ban_sync WHERE action = 'ban'"):
-        sent.setdefault(server_id, set()).add(ban_id)
+    bans = db.execute("SELECT id, identity, name, expires_at, created_by, created_at FROM bans"
+                      " WHERE removed_at IS NULL AND (expires_at IS NULL OR expires_at > ?)",
+                      (int(time.time()),)).fetchall()
+    sent, lifted = {}, {}
+    for ban_id, server_id, action in db.execute("SELECT ban_id, server_id, action FROM ban_sync"):
+        (sent if action == "ban" else lifted).setdefault(server_id, set()).add(ban_id)
     db.close()
-    return bans, sent
+    return bans, sent, lifted
 
 
 async def game_list(client):
@@ -51,7 +52,7 @@ async def game_list(client):
     return identities, total, pages
 
 
-async def ask(server, bans, sent):
+async def ask(server, bans, sent, lifted):
     client = RconClient(server.rcon_host, server.rcon_port, server.rcon_password)
     try:
         await client.connect()
@@ -61,15 +62,27 @@ async def ask(server, bans, sent):
         return
     finally:
         client.close()
-    missing = [(identity, name) for _, identity, name in bans if identity.lower() not in listed]
-    ours = {identity.lower() for _, identity, _ in bans}
-    unsent = sum(1 for ban_id, _, _ in bans if ban_id not in sent.get(server.id, set()))
+    gone = [ban for ban in bans if ban[1].lower() not in listed]
+    missing = [(ban[1], ban[2]) for ban in gone]
+    ours = {ban[1].lower() for ban in bans}
+    unsent = sum(1 for ban in bans if ban[0] not in sent.get(server.id, set()))
     print(f"\n=== {server.id} ===")
     print(f"The game says it has {total} bans ({pages} pages read, {len(listed)} identities seen).")
     print(f"The panel has {len(bans)} active bans: {len(bans) - len(missing)} are in the game's list, "
           f"{len(missing)} are not.")
     print(f"The panel has not marked {unsent} of its active bans as sent to this server.")
     print(f"{len(listed - ours)} bans in the game's list are not active bans in the panel.")
+    if gone:
+        permanent = sum(1 for ban in gone if ban[3] is None)
+        stamp = lambda at: time.strftime("%d %b %Y", time.gmtime(at))
+        print(f"Of those {len(gone)}: {permanent} permanent, {len(gone) - permanent} with a length. "
+              f"Made between {stamp(min(b[5] for b in gone))} and {stamp(max(b[5] for b in gone))}.")
+        makers = {}
+        for ban in gone:
+            makers[ban[4]] = makers.get(ban[4], 0) + 1
+        print("By who: " + ", ".join(f"{who} {n}" for who, n in sorted(makers.items(), key=lambda kv: -kv[1])[:6]))
+        lifted_here = sum(1 for ban in gone if ban[0] in lifted.get(server.id, set()))
+        print(f"The panel also sent an unban to this server for {lifted_here} of them.")
     for identity, name in missing[:SHOWN]:
         print(f"  not in the game's list: {name} {identity}")
     if len(missing) > SHOWN:
@@ -79,10 +92,10 @@ async def ask(server, bans, sent):
 async def main():
     config = load_config()
     wanted = sys.argv[1:]
-    bans, sent = panel_view(config.database)
+    bans, sent, lifted = panel_view(config.database)
     for server in config.servers:
         if server.configured and (not wanted or server.id in wanted):
-            await ask(server, bans, sent)
+            await ask(server, bans, sent, lifted)
 
 
 asyncio.run(main())
