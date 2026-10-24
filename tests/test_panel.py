@@ -2482,6 +2482,28 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.manager.enforce_ip_bans(state)
         self.assertEqual(self.fake.commands.count(f"#kick {rook[0]}"), kicks)
 
+    async def test_a_join_from_a_banned_ip_is_banned_as_the_log_is_read(self):
+        ban = self.db.add_ban(HAVOC, "Sgt Havoc", "cheating", "boss")
+        self.db.add_ip_bans(ban, ["203.0.113.7"])
+        rook = SAMPLE_PLAYERS[1]
+        join = {"kind": "identity", "identity": rook[2], "name": rook[1], "ip": "203.0.113.7", "guid": "", "at": now()}
+
+        class Reader:
+            def __init__(self, event):
+                self.event = event
+
+            def scan(self, positions):
+                return [self.event], {"console.log": 10}
+
+        state = self.manager.state("server-1")
+        await self.manager.read_logs(state, Reader({**join, "at": now() - 3600}))
+        self.assertIsNone(self.db.active_ban(rook[2]))
+        await self.manager.read_logs(state, Reader(join))
+        self.assertIn("same IP as Sgt Havoc", self.db.active_ban(rook[2])["reason"])
+        self.assertIn(rook[2], self.fake.bans)
+        entry = self.db.audit()[0]
+        self.assertEqual((entry["username"], entry["action"], entry["target"]), ("panel", "IP ban", "Pte Rook"))
+
     async def test_no_ip_kick_after_unban_or_for_old_addresses(self):
         rook = SAMPLE_PLAYERS[1]
         ban = self.db.add_ban(HAVOC, "Sgt Havoc", "cheating", "boss")

@@ -327,6 +327,10 @@ class ServerManager:
         if moved:
             self.db.add_connections(state.config.id, events, moved)
             self.db.add_kills(state.config.id, archive.kill_rows(events))
+            # Don't wait for the next player list: a join from a banned IP is dealt with as it's read.
+            for event in events:
+                if event.get("kind", "identity") == "identity" and event.get("ip") and now() - event["at"] < 300:
+                    await self.ban_for_banned_ip(state, event["identity"], event["name"])
         for action in self.check(state, events) + self.mass_teamkills(state, events):
             await self.auto_punish(state, *action)
 
@@ -713,18 +717,24 @@ class ServerManager:
                 self.db.log("panel", "banned player kick", state.config.id, player["name"],
                             f"still connected while banned ({own['reason']})")
                 continue
-            hit = self.db.ip_ban_hit(identity)
-            if hit is None:
-                continue
-            source = hit["name"] or hit["identity"]
-            reason = f"{hit['reason']} (same IP as {source})"
-            ban = self.ip_ban_account(identity, player["name"], reason, "panel", hit["expires_at"])
-            await self.push_ban(ban)
-            await self.kick_everywhere(identity)
-            detail = f"joined from an IP that is banned with {source} ({hit['reason']})"
-            self.db.log("panel", "IP ban", state.config.id, player["name"], detail)
-            self.alerts.send(f"Banned {player['name']} on {state.config.name}", detail.capitalize(),
-                             alert_colours.RED, [("Identity", identity), ("Same IP as", source)])
+            await self.ban_for_banned_ip(state, identity, player["name"])
+
+    async def ban_for_banned_ip(self, state: ServerState, identity: str, name: str):
+        """Ban an account that has connected from an IP-banned address, and kick it if it's on."""
+        if self.db.active_ban(identity):
+            return
+        hit = self.db.ip_ban_hit(identity)
+        if hit is None:
+            return
+        source = hit["name"] or hit["identity"]
+        reason = f"{hit['reason']} (same IP as {source})"
+        ban = self.ip_ban_account(identity, name, reason, "panel", hit["expires_at"])
+        await self.push_ban(ban)
+        await self.kick_everywhere(identity)
+        detail = f"joined from an IP that is banned with {source} ({hit['reason']})"
+        self.db.log("panel", "IP ban", state.config.id, name, detail)
+        self.alerts.send(f"Banned {name} on {state.config.name}", detail.capitalize(),
+                         alert_colours.RED, [("Identity", identity), ("Same IP as", source)])
 
     def ip_ban_account(self, identity, name, reason, by, expires_at):
         """Ban one account and every IP it has used."""
