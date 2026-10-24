@@ -37,7 +37,6 @@
         <div class="drop-list">{% for label, href in community %}<a href="{{ href }}">{{ label }}</a>{% endfor %}{% if doc.discord %}<a href="{{ doc.discord }}" rel="noopener">Discord</a>{% endif %}</div>
       </details>
     </nav>
-    {% if doc.discord %}<a class="button primary small bar-discord" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }}<span>Join Discord</span></a>{% endif %}
     <details class="menu">
       <summary aria-label="Menu"><span class="open">{{ icon("menu") }}</span><span class="shut">{{ icon("close") }}</span></summary>
       <nav class="menu-sheet" aria-label="Menu">
