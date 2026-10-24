@@ -28,6 +28,7 @@ from bot.storage.combat_store import migrate as migrate_combat
 from bot.tracking.combat_ingestor import CombatIngestor
 from bot.discord.stats_command import StatsCommand
 from bot.discord.mortar_command import MortarCommand
+from bot.discord.help_command import HelpCommand
 from bot.web.server import MortarWeb
 from bot.discord.leaderboard_display import LeaderboardDisplay
 from bot.discord.weekly_winners import WeeklyWinners
@@ -148,6 +149,7 @@ class NotificationBot(TimerBot):
             base_url=mortar_web_base_url(), host=mortar_web_host(), port=mortar_web_port(),
             ttl=mortar_session_ttl(), config=mortar_map_config())
         self.mortar_command = MortarCommand(self)
+        self.help_command = HelpCommand(self)
         self.leaderboard_display = LeaderboardDisplay(self)
         self.weekly_winners = WeeklyWinners(self)
         self.match_results = MatchResults(self)

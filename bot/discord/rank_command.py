@@ -32,7 +32,7 @@ class RankCommand:
             try:
                 await self.tree.sync(guild=self.guild)
                 LOG.info("OYB /rank command ready")
-                for name in ('stats', 'mortar'):
+                for name in ('stats', 'mortar', 'help'):
                     if self.tree.get_command(name, guild=self.guild):
                         LOG.info("OYB /%s command ready", name)
                 return
