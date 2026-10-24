@@ -24,6 +24,7 @@ PAGES = re.compile(r"Page:\s*(\d+)\s*/\s*(\d+)")
 TOTAL = re.compile(r"Total bans:\s*(\d+)")
 IDENTITY = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 SHOWN = 15
+MATCHES = 10
 
 
 def panel_view(database):
@@ -88,9 +89,13 @@ async def ask(server, bans, sent, lifted, find=""):
         made = time.strftime("%d %b %H:%M", time.gmtime(ban[5]))
         print(f"  {made} UTC by {ban[4]}: {ban[2]} {ban[1]}: "
               f"{'in' if ban[1].lower() in listed else 'NOT in'} the game's list")
-    for ban in bans:
-        if find and find in f"{ban[2]} {ban[1]}".lower():
-            print(f"  {ban[2]} {ban[1]}: {'in' if ban[1].lower() in listed else 'NOT in'} the game's list")
+    if find:
+        print(f"Bans matching '{find}' by name, identity or who made them, newest first:")
+        found = [ban for ban in bans if find in f"{ban[2]} {ban[1]} {ban[4]}".lower()]
+        for ban in sorted(found, key=lambda b: -b[5])[:MATCHES]:
+            made = time.strftime("%d %b %H:%M", time.gmtime(ban[5]))
+            print(f"  {made} UTC by {ban[4]}: {ban[2]} {ban[1]}: "
+                  f"{'in' if ban[1].lower() in listed else 'NOT in'} the game's list")
     for identity, name in missing[:SHOWN]:
         print(f"  not in the game's list: {name} {identity}")
     if len(missing) > SHOWN:
