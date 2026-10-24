@@ -197,8 +197,9 @@ class TickTests(unittest.IsolatedAsyncioTestCase):
         self.assertRegex(self.channel.send.await_args.kwargs['embeds'][0].description,
                          r'Test Player\s+1\s+0')
 
-    async def test_the_live_message_becomes_the_final_board(self):
-        with self.enable(), patch('bot.discord.live_board.SETTLE', 0):
+    async def test_when_results_share_the_live_channel_the_live_message_becomes_the_final_board(self):
+        with self.enable(), patch.dict(os.environ, {'GAME_LEADERBOARD_CHANNEL_ID': '555'}), \
+                patch('bot.discord.live_board.SETTLE', 0):
             self.board.start('s', 'OYB Classic', START)
             self.kill('one', START + timedelta(minutes=5), OTHER, self.identity)
             await self.board.tick()
@@ -207,6 +208,18 @@ class TickTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.channel.send.await_count, 1)  # still one message
         embed = self.sent.edit.await_args.kwargs['embeds'][0]
         self.assertIn('Match results', embed.title)
+        self.assertNotIn('s', self.board.matches)
+
+    async def test_with_a_past_games_channel_the_finished_board_is_removed(self):
+        with self.enable(), patch.dict(os.environ, {'GAME_LEADERBOARD_CHANNEL_ID': '777'}), \
+                patch('bot.discord.live_board.SETTLE', 0):
+            self.board.start('s', 'OYB Classic', START)
+            self.kill('one', START + timedelta(minutes=5), OTHER, self.identity)
+            await self.board.tick()
+            self.board.finish('s')
+            await _drain(self.board)
+        self.sent.delete.assert_awaited_once()
+        self.sent.edit.assert_not_awaited()
         self.assertNotIn('s', self.board.matches)
 
     async def test_a_restart_takes_the_old_board_back_over(self):

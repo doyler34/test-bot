@@ -11,7 +11,7 @@ import time
 
 import discord
 
-from bot.config import live_board_channel_id
+from bot.config import game_leaderboard_channel_id, live_board_channel_id
 from bot.discord.leaderboard_command import table
 from bot.discord.leaderboard_display import retry_delay
 from bot.discord.match_results import CHUNK, duration, match_tag, server_letter, titled
@@ -104,6 +104,17 @@ class LiveBoard:
             if match is None or match['message'] is None:
                 return
             async with self.lock:
+                results = game_leaderboard_channel_id()
+                if results and results != live_board_channel_id():
+                    # The finished game is posted to the past games channel, so the live
+                    # channel doesn't keep a second copy.
+                    try:
+                        await match['message'].delete()
+                    except discord.HTTPException:
+                        pass
+                    LOG.info('Live board removed for %s; its results go to the past games channel',
+                             match['name'])
+                    return
                 guild = self.bot.get_guild(self.bot.config.guild_id)
                 if guild is None:
                     return
