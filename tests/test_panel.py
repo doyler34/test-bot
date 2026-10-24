@@ -2876,3 +2876,25 @@ class SiteOrderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ServerListingTests(unittest.TestCase):
+    def test_slots_and_join_address_come_from_serverconfig(self):
+        import json, tempfile
+        from types import SimpleNamespace
+        from panel import files, site
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "instances"
+            conf = root / "OYB01" / "Arma" / "x" / "Configs"
+            conf.mkdir(parents=True)
+            (conf / "serverconfig.json").write_text(json.dumps(
+                {"publicAddress": "203.0.113.5", "publicPort": 2001, "game": {"maxPlayers": 128}}))
+            config = SimpleNamespace(log_dir=f"{root}/OYB01/logs", amp_instance="", query_host="")
+            self.assertEqual(files.server_listing(config), {"slots": 128, "address": "203.0.113.5:2001"})
+            gone = SimpleNamespace(log_dir=f"{root}/NOPE/logs", amp_instance="", query_host="")
+            self.assertEqual(files.server_listing(gone), {})
+        configs = [SimpleNamespace(id="a", name="A")]
+        doc = site.check_site({}, ["a"])[0]
+        view = site.view(doc, configs, {"a": SimpleNamespace(online=True, players=[])}, {},
+                         {"a": {"slots": 128, "address": "203.0.113.5:2001"}})
+        self.assertEqual((view["slots"], view["servers"][0]["address"]), (128, "203.0.113.5:2001"))

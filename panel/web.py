@@ -771,8 +771,13 @@ def site_live(request):
             game_map = found.get("map") or (files.server_map(state.config) if state.online else "")
         except OSError:
             game_map = ""
-        live[state.config.id] = {"slots": slots if isinstance(slots, int) and slots > 0 else None,
-                                 "map": game_map, "version": found.get("version") or ""}
+        try:
+            listing = files.server_listing(state.config)
+        except (OSError, ValueError):
+            listing = {}
+        slots = slots if isinstance(slots, int) and slots > 0 else listing.get("slots")
+        live[state.config.id] = {"slots": slots, "map": game_map, "version": found.get("version") or "",
+                                 "address": listing.get("address", "")}
     return live
 
 

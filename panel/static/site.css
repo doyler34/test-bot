@@ -412,6 +412,8 @@ a.inline { color: var(--red); text-decoration: underline; }
   .jump a { flex: 1 1 0; justify-content: center; padding: 0 2px; font-size: .78rem; letter-spacing: .04em; text-align: center; }
   .jump a b { display: none; }
 }
+.srv-ip { margin: 0; color: var(--muted); font-size: .9rem; }
+.srv-ip code { margin-left: 6px; padding: 3px 8px; background: #000; border: 1px solid var(--line); color: var(--ink); font-size: .95rem; user-select: all; }
 .tool:hover, .srv:hover { transform: translateY(-2px); }
 .tool, .srv { transition: border-color .2s, transform .2s, background-color .2s; }
 .button:hover { transform: translateY(-1px); }

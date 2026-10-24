@@ -441,6 +441,26 @@ def server_map(config):
     return map_name(instances_root([config]) / name) if name else ""
 
 
+def server_listing(config):
+    """Max players and the join address as the server's own serverconfig.json gives them."""
+    parts = [p for p in str(config.log_dir).split("/") if p]
+    name = config.amp_instance
+    if not name and "instances" in parts and parts.index("instances") + 1 < len(parts):
+        name = parts[parts.index("instances") + 1]
+    if not name:
+        return {}
+    hits = sorted((instances_root([config]) / name).glob("*/*/Configs/serverconfig.json"))
+    if not hits:
+        return {}
+    found = json.loads(hits[0].read_text(encoding="utf-8"))
+    game = found.get("game") if isinstance(found.get("game"), dict) else {}
+    slots = game.get("maxPlayers")
+    host = str(found.get("publicAddress") or config.query_host or "").strip()
+    port = found.get("publicPort") or found.get("bindPort")
+    return {"slots": slots if isinstance(slots, int) and slots > 0 else None,
+            "address": f"{host}:{port}" if host and isinstance(port, int) and port > 0 else ""}
+
+
 def kvp_mods(base):
     """The mod list straight from the instance's settings file, for when its AMP is off."""
     for line in (base / KVP).read_text(encoding="utf-8").splitlines():

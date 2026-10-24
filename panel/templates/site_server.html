@@ -22,6 +22,7 @@
   <div class="wrap detail">
     <div class="detail-main">
       <h2 id="find">Find it in the game</h2>
+      {% if server.address %}<p class="srv-ip">Join IP <code>{{ server.address }}</code></p>{% endif %}
       {% if server.join %}<p class="join-note">{{ server.join }}</p>{% endif %}
       <ol class="steps">
         <li>Open Arma Reforger and choose <b>Multiplayer</b>.</li>

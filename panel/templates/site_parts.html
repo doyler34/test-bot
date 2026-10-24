@@ -18,6 +18,7 @@
   </div>
   {{ population(s) }}
   {{ server_facts(s) }}
+  {% if s.address %}<p class="srv-ip">Join IP <code>{{ s.address }}</code></p>{% endif %}
   <p class="srv-find">In Arma Reforger: <b>Multiplayer</b>, then search <b>{{ doc.name }}</b>.</p>
   <a class="srv-link" href="/servers/{{ s.slug }}">View server {{ icon("arrow") }}</a>
 </article>

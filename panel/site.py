@@ -85,9 +85,9 @@ def rules(text):
 
 
 def view(doc, servers, states, bridge, live=None):
-    """What the site shows: every shown server, the busiest first. No player names, IPs or
-    anything else from the panel: just who's online, how many are playing and what the
-    server is running. `live` is what the servers last reported about themselves."""
+    """What the site shows: every shown server, the busiest first. No player names or
+    anything else from the panel: just who's online, how many are playing, what the server
+    is running and the join address it lists. `live` is what the servers last reported."""
     reported = {s.get("id"): s for s in bridge.get("servers", [])}
     live = live or {}
     shown, online, playing = [], 0, 0
@@ -108,7 +108,8 @@ def view(doc, servers, states, bridge, live=None):
             "slots": mine.get("slots") or None,
             "map": (mine.get("map") or card.get("map", "")) if up else card.get("map", ""),
             "mode": card.get("mode") or card.get("game mode", ""), "setup": card.get("setup", ""),
-            "version": mine.get("version", "") if up else "", "join": look["join"]})
+            "version": mine.get("version", "") if up else "", "join": look["join"],
+            "address": mine.get("address", "")})
     shown.sort(key=lambda s: (not s["online"], -s["players"], s["name"].lower()))
     seen = set()
     for s in shown:
