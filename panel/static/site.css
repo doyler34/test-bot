@@ -219,8 +219,8 @@ a.inline { color: var(--red); text-decoration: underline; }
 .xp-list b { font-family: var(--display); font-size: 1.5rem; color: var(--ink); }
 .xp-list span { color: var(--text); }
 .ladder { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: 1fr; }
-.rung { position: relative; display: grid; grid-template-columns: 64px 1fr; gap: 16px; align-items: center; padding: 16px; background: var(--panel); border: 1px solid var(--line); }
-.rung img { width: 64px; height: 64px; padding: 6px; background: var(--bg); border: 1px solid var(--line-soft); }
+.rung { position: relative; display: grid; grid-template-columns: 80px 1fr; gap: 16px; align-items: center; padding: 16px; background: var(--panel); border: 1px solid var(--line); }
+.rung img { width: 80px; height: 80px; padding: 6px; background: var(--bg); border: 1px solid var(--line-soft); }
 .rung h3 { font-size: 1.5rem; margin-bottom: 4px; }
 .rung p { margin: 0; color: var(--muted); font-size: .92rem; }
 .rung p b { color: var(--ink); }

@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+ <defs><linearGradient id="insignia" x1="0" y1="0" x2="0.1" y2="1"><stop offset="0" stop-color="#D5DEC5"/><stop offset=".55" stop-color="#ACBB98"/><stop offset="1" stop-color="#899C77"/></linearGradient></defs>
+ <polygon points="39,81 128,36 217,81 217,101 128,56 39,101" fill="url(#insignia)" stroke="#58634F" stroke-width="3.5" stroke-linejoin="miter" /><polygon points="39,136 128,91 217,136 217,156 128,111 39,156" fill="url(#insignia)" stroke="#58634F" stroke-width="3.5" stroke-linejoin="miter" /><polygon points="39,191 128,146 217,191 217,211 128,166 39,211" fill="url(#insignia)" stroke="#58634F" stroke-width="3.5" stroke-linejoin="miter" />
+ </svg>

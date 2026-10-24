@@ -38,7 +38,7 @@
     <ol class="ladder">
       {% for r in ladder %}
       <li class="rung{{ ' start' if r.start }}{{ ' top' if r.top }}">
-        <img src="/ranks/insignia/{{ r.slug }}.svg" alt="" width="64" height="64">
+        <img src="/ranks/insignia/{{ r.slug }}.svg" alt="" width="80" height="80">
         <div class="rung-body">
           <h3>{{ r.name }}</h3>
           {% if r.start %}<p>Where everyone starts, until they pick a side.</p>

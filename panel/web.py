@@ -804,7 +804,7 @@ def site_page(request, preview=False):
 
 
 PLAYERS_PER_PAGE = 25
-RANK_ART = HERE.parent / "assets" / "rank-card" / "ranks"
+RANK_ART = HERE / "static" / "site" / "ranks"
 
 
 def site_players(request):
