@@ -2,7 +2,7 @@
 
 Run from the panel's folder, where panel.local.json is:
 
-    .venv/bin/python dev/ban_list.py [server-id ...]
+    .venv/bin/python dev/ban_list.py [server-id ...] [find=part-of-a-name-or-identity]
 
 It only reads. Nothing is banned or unbanned. The game lists bans a page at a time,
 so this asks for every page, one every half second.
@@ -52,7 +52,7 @@ async def game_list(client):
     return identities, total, pages
 
 
-async def ask(server, bans, sent, lifted):
+async def ask(server, bans, sent, lifted, find=""):
     client = RconClient(server.rcon_host, server.rcon_port, server.rcon_password)
     try:
         await client.connect()
@@ -83,6 +83,9 @@ async def ask(server, bans, sent, lifted):
         print("By who: " + ", ".join(f"{who} {n}" for who, n in sorted(makers.items(), key=lambda kv: -kv[1])[:6]))
         lifted_here = sum(1 for ban in gone if ban[0] in lifted.get(server.id, set()))
         print(f"The panel also sent an unban to this server for {lifted_here} of them.")
+    for ban in bans:
+        if find and find in f"{ban[2]} {ban[1]}".lower():
+            print(f"  {ban[2]} {ban[1]}: {'in' if ban[1].lower() in listed else 'NOT in'} the game's list")
     for identity, name in missing[:SHOWN]:
         print(f"  not in the game's list: {name} {identity}")
     if len(missing) > SHOWN:
@@ -91,11 +94,12 @@ async def ask(server, bans, sent, lifted):
 
 async def main():
     config = load_config()
-    wanted = sys.argv[1:]
+    find = next((a[5:].lower() for a in sys.argv[1:] if a.startswith("find=")), "")
+    wanted = [a for a in sys.argv[1:] if not a.startswith("find=")]
     bans, sent, lifted = panel_view(config.database)
     for server in config.servers:
         if server.configured and (not wanted or server.id in wanted):
-            await ask(server, bans, sent, lifted)
+            await ask(server, bans, sent, lifted, find)
 
 
 asyncio.run(main())
