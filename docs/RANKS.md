@@ -9,18 +9,22 @@ admin-approval workflow in #join-oyb.
 
 | Rank | XP |
 | --- | --- |
-| OYB Renegade | 0 |
-| OYB Recruit | 100 |
-| OYB Private | 200 |
-| OYB Corporal | 300 |
-| OYB Sergeant | 400 |
-| OYB Lieutenant | 500 |
-| OYB Captain | 600 |
-| OYB Major | 700 |
+| OYB Renegade | no side picked, or XP below 0 |
+| OYB Recruit | 0 (once a side is picked) |
+| OYB Private | 250 |
+| OYB Corporal | 750 |
+| OYB Sergeant | 1,750 |
+| OYB Lieutenant | 3,250 |
+| OYB Captain | 5,500 |
+| OYB Major | 8,500 |
+
+Combat XP is worked out from the match log: +2 per kill, +5 per match fought and
+-15 per teamkill, so a teamkill costs more than seven kills earn. Old teamkills are
+counted at the new rate too, since combat XP is worked out from the log.
 
 `bot/ranks/rank_rules.py` is the single canonical definition. Major is the maximum rank,
-but XP continues to accumulate. Progress is through the current rank: 347 XP
-is Corporal, 47% toward Sergeant, with 53 XP remaining. Major has a full bar
+but XP continues to accumulate. Progress is through the current rank: 1,250 XP
+is Corporal, 33% toward Sergeant, with 500 XP remaining. Major has a full bar
 and MAX RANK, without a next rank or remaining XP.
 
 Total XP combines retained legacy credit, playtime XP, and **1 XP per new Discord
@@ -70,6 +74,9 @@ awarded XP is never reduced to compensate. Unprocessed time before the migration
 cutover is not awarded again. Keep both databases and their backups.
 Missing/reset tracking data retains cached earned XP but can pause further
 progression until the source catches up; restore backups instead of deleting data.
+
+The first pass after the ladder changes moves everyone to their new rank without
+posting promotions; only later promotions are announced.
 
 Roles are recalculated using the new thresholds, so an old test role may change
 even though its XP is preserved. Only bot-managed rank assignments are removed;

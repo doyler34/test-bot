@@ -25,7 +25,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
-from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP
+from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP, XP_PER_TEAMKILL
 from . import archive, attacks, auth, ballistics, console, files, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois, workshop
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
@@ -858,7 +858,7 @@ def site_ranks(request):
                        "gap": following.threshold - rank.threshold if following and index else None,
                        "top": following is None, "start": index == 0})
     return render_site(request, "site_ranks.html", site_doc(request), ladder=ladder,
-                       minutes_per_xp=SECONDS_PER_XP // 60, active="players")
+                       minutes_per_xp=SECONDS_PER_XP // 60, teamkill=-XP_PER_TEAMKILL, active="players")
 
 
 def site_servers(request):

@@ -2675,7 +2675,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         for rank in RANKS:
             self.assertIn(f"<h3>{rank.name}</h3>", html)
             self.assertIn(f"/ranks/insignia/{rank.slug}.svg", html)
-        for needed in ("100 XP", "1900 XP", "every 10 minutes", "+5 XP", "+2 XP", "−2 XP", "up to 10 a day"):
+        for needed in ("250 XP", "8500 XP", "every 10 minutes", "+5 XP", "+2 XP", "−15 XP", "up to 10 a day"):
             self.assertIn(needed, html)
         art = await self.client.get("/ranks/insignia/major.svg", headers=host)
         self.assertEqual((art.status, art.content_type), (200, "image/svg+xml"))

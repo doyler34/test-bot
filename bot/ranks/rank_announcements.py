@@ -22,8 +22,16 @@ class RankAnnouncements:
                 PRIMARY KEY(guild,member,tier));
         ''')
 
-    def record(self, guild, member, tier, xp):
-        """Called only after the desired role was successfully reconciled."""
+    def record(self, guild, member, tier, xp, quiet=False):
+        """Called only after the desired role was successfully reconciled.
+
+        quiet moves everyone to their new tier without a post, for the one pass
+        after the ladder itself has changed.
+        """
+        if quiet:
+            with self.db:
+                self.db.execute("INSERT OR REPLACE INTO rank_announced_v2 VALUES (?,?,?)", (guild, member, tier))
+            return
         with self.db:
             row = self.db.execute("SELECT tier FROM rank_announced_v2 WHERE guild=? AND member=?",
                                   (guild, member)).fetchone()
@@ -33,6 +41,10 @@ class RankAnnouncements:
                                 (guild, member, tier, xp, time.time()))
             self.db.execute("INSERT OR REPLACE INTO rank_announced_v2 VALUES (?,?,?)",
                             (guild, member, max(previous, tier)))
+
+    def forget_unsent(self, guild):
+        with self.db:
+            self.db.execute("DELETE FROM rank_alerts_v2 WHERE guild=? AND message IS NULL", (guild,))
 
     def wanted(self):
         """Promotion posts are opt-in. RANK_ANNOUNCEMENTS=off turns them off

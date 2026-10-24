@@ -98,7 +98,7 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.links.db.execute("DELETE FROM faction_choice")
         self.links.db.commit()
         self.links.verified_link(1, 10, IDENTITY, "admin:22")
-        self.advance(600000)  # 1000 XP, which would be Lieutenant on a side.
+        self.advance(600000)  # 1000 XP, which would be Corporal on a side.
         await self.sync.tick()
         self.member.add_roles.assert_awaited_once_with(self.sync.roles[0], reason="OYB rank: 1000 XP", atomic=True)
         self.assertIn("OYB Renegade", self.sync.status(10))
@@ -106,7 +106,7 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         # Picking a side lifts them straight to what their XP has earned.
         self.links.set_faction(1, 10, "FIA")
         await self.sync.tick()
-        self.member.add_roles.assert_awaited_with(self.sync.roles[5], reason="OYB rank: 1000 XP", atomic=True)
+        self.member.add_roles.assert_awaited_with(self.sync.roles[3], reason="OYB rank: 1000 XP", atomic=True)
 
     async def test_the_faction_role_beats_a_stale_saved_pick(self):
         # current_faction reads roles, so an admin removing the role drops them
@@ -130,9 +130,26 @@ class RankTests(unittest.IsolatedAsyncioTestCase):
         self.member.add_roles.assert_awaited_with(self.sync.roles[2], reason="OYB rank: 250 XP", atomic=True)
         self.member.remove_roles.assert_awaited_once_with(self.sync.roles[1], reason="OYB rank promotion", atomic=True)
         self.member.roles = [self.sync.roles[2]]
-        self.advance(120000)  # 450 XP in total, the Corporal threshold.
+        self.advance(300000)  # 750 XP in total, the Corporal threshold.
         await self.sync.tick()
         self.assertIn("OYB Corporal", self.sync.status(10))
+
+    async def test_the_first_pass_on_a_changed_ladder_is_silent(self):
+        self.links.verified_link(1, 10, IDENTITY, "admin:22")
+        await self.sync.tick()
+        self.member.roles = [self.sync.roles[1]]
+        self.links.db.execute("UPDATE rank_ladder_v2 SET ladder='old ladder'")
+        self.links.db.execute("UPDATE rank_announced_v2 SET tier=1")
+        self.sync.applied.clear()
+        self.advance(150000)  # 250 XP: a promotion that would normally be posted.
+        await self.sync.tick()
+        self.member.add_roles.assert_awaited_with(self.sync.roles[2], reason="OYB rank: 250 XP", atomic=True)
+        self.assertEqual(self.links.db.execute("SELECT COUNT(*) FROM rank_alerts_v2").fetchone()[0], 0)
+        self.assertEqual(self.links.db.execute("SELECT tier FROM rank_announced_v2").fetchone()[0], 2)
+        self.advance(3000000)
+        self.sync.applied.clear()
+        await self.sync.tick()
+        self.assertEqual(self.links.db.execute("SELECT COUNT(*) FROM rank_alerts_v2").fetchone()[0], 1)
 
     async def test_post_plus_playtime_promotes_existing_role_and_announces(self):
         import time

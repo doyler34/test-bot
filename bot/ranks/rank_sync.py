@@ -8,7 +8,7 @@ import discord
 
 LOG = logging.getLogger("reforger.ranks")
 from bot.discord.factions import held_faction
-from bot.ranks.rank_rules import RANKS as DEFINITIONS, rank_for_xp
+from bot.ranks.rank_rules import RANKS as DEFINITIONS, XP_PER_TEAMKILL, rank_for_xp
 from bot.storage.rank_persistence import XPStore
 RANKS = tuple(rank.role_name for rank in DEFINITIONS)
 _NO_SNAPSHOT = object()
@@ -24,6 +24,7 @@ class RankSync:
         self.wallet = XPStore(self.db)
         self.db.execute("CREATE TABLE IF NOT EXISTS rank_roles_v2 (guild INTEGER, tier INTEGER, role INTEGER, PRIMARY KEY(guild,tier))")
         self.db.commit()
+        self.db.execute("CREATE TABLE IF NOT EXISTS rank_ladder_v2 (guild INTEGER PRIMARY KEY, ladder TEXT)")
         from bot.ranks.rank_announcements import RankAnnouncements
         self.announcements = RankAnnouncements(bot)
 
@@ -101,6 +102,16 @@ class RankSync:
             rows = [(member_id, held.split(",")) for member_id, held in rows]
             # One batched read-only load of playtime for the whole tick, instead
             # of opening a connection per linked member.
+            ladder = ",".join(f"{r.name}:{r.threshold}" for r in DEFINITIONS) + f",tk:{XP_PER_TEAMKILL}"
+            saved = self.db.execute("SELECT ladder FROM rank_ladder_v2 WHERE guild=?", (guild.id,)).fetchone()
+            # The first pass on a new ladder moves people quietly; only promotions after that are posted.
+            # No saved ladder but people already announced means the ladder predates this record.
+            known = self.db.execute("SELECT 1 FROM rank_announced_v2 WHERE guild=? LIMIT 1", (guild.id,)).fetchone()
+            quiet = (saved[0] != ladder) if saved else bool(known)
+            if quiet:
+                self.announcements.forget_unsent(guild.id)
+                self.applied.clear()
+            failed = False
             snapshot = self.wallet.snapshot(os.getenv("PLAYTIME_DB", "data/playtime.sqlite3")) if self._ready() else None
             for member_id, identity in rows:
                 # Hand the loop back between members. The XP read is synchronous,
@@ -137,13 +148,17 @@ class RankSync:
                     obsolete = [r for r in managed.values() if r.id in current and r.id != target.id]
                     if obsolete:
                         await member.remove_roles(*obsolete, reason="OYB rank promotion", atomic=True)
-                    self.announcements.record(guild.id, member_id, tier, xp)
+                    self.announcements.record(guild.id, member_id, tier, xp, quiet)
                     self.applied[member_id] = (target.id, time.monotonic())
                     LOG.info("Rank synced for Discord %s: %s (%s XP)", member_id, RANKS[tier], xp)
                 except discord.NotFound:
                     self.applied[member_id] = (self.roles[tier].id, time.monotonic())
                 except Exception:
+                    failed = True
                     LOG.exception("Rank update failed for %s; retrying", member_id)
+            if not failed and (saved is None or quiet):
+                with self.db:
+                    self.db.execute("INSERT OR REPLACE INTO rank_ladder_v2 VALUES (?,?)", (guild.id, ladder))
             await self.announcements.flush(guild)
 
     async def run(self):

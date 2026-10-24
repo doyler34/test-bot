@@ -4,7 +4,7 @@ Run from the panel's folder, where panel.local.json is:
 
     .venv/bin/python dev/rank_preview.py
 
-It works on a copy of the bot's database in a temporary folder and changes nothing real.
+It compares the old ladder with the one in bot/ranks/rank_rules.py. It works on a copy of the bot's database in a temporary folder and changes nothing real.
 Everyone is counted as if they had picked a side, since Renegade has nothing to do with XP.
 """
 
@@ -22,10 +22,11 @@ from bot.storage.combat_store import SCORED, held  # noqa: E402
 from bot.storage.rank_persistence import XPStore  # noqa: E402
 from panel.config import load_config  # noqa: E402
 
-PROPOSED = (("Recruit", 150), ("Private", 400), ("Lance Corporal", 750), ("Corporal", 1200), ("Sergeant", 1800),
-            ("Staff Sergeant", 2600), ("2nd Lieutenant", 3600), ("Lieutenant", 4900), ("Captain", 6500),
-            ("Major", 8500))
-NEW_TEAMKILL = -15
+OLD = (("Recruit", 100), ("Private", 250), ("Corporal", 450), ("Sergeant", 700), ("Lieutenant", 1000),
+       ("Captain", 1400), ("Major", 1900))
+OLD_TEAMKILL = -2
+PROPOSED = tuple((r.name, r.threshold) for r in RANKS if r.name != "Renegade")
+NEW_TEAMKILL = XP_PER_TEAMKILL
 SHOWN = 12
 
 
@@ -41,7 +42,7 @@ def main():
     source = Path(load_config().oyb_data) / "account_links.sqlite3"
     if not source.is_file():
         sys.exit(f"No bot database at {source}.")
-    current = tuple((r.name, r.threshold) for r in RANKS if r.name != "Renegade")
+    current = OLD
     with tempfile.TemporaryDirectory() as tmp, closing(sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True)) as live:
         copy = sqlite3.connect(Path(tmp) / "copy.sqlite3")
         live.backup(copy)
@@ -59,19 +60,19 @@ def main():
             marks = ",".join("?" * len(identities))
             kills = copy.execute(f"SELECT COUNT(*) FROM combat_events WHERE killer IN ({marks}) AND relation='TK' AND {SCORED}",
                                  identities).fetchone()[0]
-            rows.append((member, xp, kills, xp + kills * (NEW_TEAMKILL - XP_PER_TEAMKILL)))
+            rows.append((member, xp, kills, xp + kills * (NEW_TEAMKILL - OLD_TEAMKILL)))
         copy.close()
     before = Counter(rank_of(xp, current) for _, xp, _, _ in rows)
     after = Counter(rank_of(xp, PROPOSED) for _, _, _, xp in rows)
     order = [name for name, _ in PROPOSED]
     names = [name for name, _ in current]
-    print(f"{len(rows)} linked members. Teamkill {XP_PER_TEAMKILL} XP now, {NEW_TEAMKILL} in the proposal.\n")
+    print(f"{len(rows)} linked members. Teamkill {OLD_TEAMKILL} XP now, {NEW_TEAMKILL} in the proposal.\n")
     print("Now:      " + ", ".join(f"{name} {before.get(name, 0)}" for name in names))
     print("Proposed: " + ", ".join(f"{name} {after.get(name, 0)}" for name in order))
     same = sum(1 for _, xp, _, new in rows if rank_of(xp, current) == rank_of(new, PROPOSED))
     print(f"\nSame rank: {same}. Different rank: {len(rows) - same}.")
     print(f"Members with a teamkill on record: {sum(1 for r in rows if r[2])}. "
-          f"XP they would lose to teamkills: {sum(r[2] * (XP_PER_TEAMKILL - NEW_TEAMKILL) for r in rows)} in total.")
+          f"XP they would lose to teamkills: {sum(r[2] * (OLD_TEAMKILL - NEW_TEAMKILL) for r in rows)} in total.")
     print("\nBiggest teamkill hits (Discord id, XP now, teamkills, XP after):")
     for member, xp, kills, new in sorted(rows, key=lambda r: -r[2])[:SHOWN]:
         if kills:

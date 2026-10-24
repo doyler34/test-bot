@@ -7,7 +7,7 @@ XP_PER_POST = 1
 # the top rank in an evening.
 POSTS_PER_DAY = 10
 XP_PER_KILL = 2
-XP_PER_TEAMKILL = -2
+XP_PER_TEAMKILL = -15
 XP_PER_MATCH = 5
 
 
@@ -27,8 +27,8 @@ class Rank:
 # side. Recruit is the real first rung, and the gaps widen from there so the
 # senior ranks stay worth holding.
 RANKS = tuple(Rank(name, threshold) for name, threshold in (
-    ("Renegade", 0), ("Recruit", 100), ("Private", 250), ("Corporal", 450),
-    ("Sergeant", 700), ("Lieutenant", 1000), ("Captain", 1400), ("Major", 1900)))
+    ("Renegade", 0), ("Recruit", 0), ("Private", 250), ("Corporal", 750),
+    ("Sergeant", 1750), ("Lieutenant", 3250), ("Captain", 5500), ("Major", 8500)))
 
 
 def xp_from_seconds(seconds):
@@ -50,6 +50,8 @@ class RankProgress:
         if not self.next:
             return 1.0
         span = self.next.threshold - self.current.threshold
+        if span <= 0:
+            return 1.0
         # A Renegade can be holding more XP than Recruit asks for, so clamp
         # rather than draw a bar past its own end.
         return min(1.0, max(0.0, (self.xp - self.current.threshold) / span))
@@ -65,8 +67,8 @@ def rank_for_xp(xp, faction=None):
     With no faction the ladder does not apply at all: you are Renegade until
     you pick one, however much XP you are carrying.
     """
-    xp = max(0, int(xp))
-    if not faction:
+    xp = int(xp)
+    if not faction or xp < 0:
         return RankProgress(xp, 0)
     earned = max(i for i, rank in enumerate(RANKS) if xp >= rank.threshold)
     return RankProgress(xp, max(1, earned))
