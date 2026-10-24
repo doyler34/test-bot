@@ -45,7 +45,7 @@ p { margin: 0 0 var(--s2); }
 .button.outline:hover, .button.ghost:hover { border-color: var(--red); }
 
 /* header */
-.site-bar { position: sticky; top: 0; z-index: 30; height: var(--bar); background: rgba(9, 9, 11, .98); border-bottom: 1px solid var(--line); }
+.site-bar { position: sticky; top: 0; z-index: 30; height: var(--bar); background: #09090b; border-bottom: 1px solid var(--line); }
 .bar-in { display: flex; align-items: center; gap: 12px; height: 100%; }
 .logo { display: inline-flex; align-items: center; gap: 10px; }
 .logo img { width: 40px; height: 40px; }
@@ -228,7 +228,7 @@ a.inline { color: var(--red); text-decoration: underline; }
 .rung.top { border-color: var(--red); background: linear-gradient(135deg, #1d1315, var(--panel) 65%); }
 .rung-note { color: var(--red) !important; font-weight: 700; }
 .rung-gap { grid-column: 2; color: var(--faint); font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; }
-.two p .button + .button { margin-left: 8px; }
+.two p:has(.button) { display: flex; flex-wrap: wrap; gap: 12px; }
 
 /* operations and recruit */
 .ops-empty { padding: 28px; border: 1px dashed var(--line); background: var(--bg-2); max-width: 760px; }
@@ -249,7 +249,7 @@ a.inline { color: var(--red); text-decoration: underline; }
 .crumbs { margin: 0 0 var(--s3); color: var(--muted); font-size: .88rem; }
 .crumbs a:hover { color: var(--ink); }
 .crumbs span { margin: 0 6px; color: var(--faint); }
-.jump { position: sticky; top: var(--bar); z-index: 20; background: rgba(9, 9, 11, .95); border-bottom: 1px solid var(--line); }
+.jump { position: sticky; top: var(--bar); z-index: 20; background: #09090b; border-bottom: 1px solid var(--line); }
 .jump .wrap { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .jump a { flex: none; display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; font-family: var(--display); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: .9rem; color: var(--muted); border-bottom: 2px solid transparent; }
 .jump a b { color: var(--red); }
@@ -403,6 +403,7 @@ a.inline { color: var(--red); text-decoration: underline; }
   .srv h3 { font-size: 1.3rem; }
   .srv-find { display: none; }
   .actions .button { flex: 1 1 100%; }
+  .two p:has(.button) .button { flex: 1 1 100%; }
   .pop-num b { font-size: 2.4rem; }
 }
 @media (prefers-reduced-motion: reduce) {
