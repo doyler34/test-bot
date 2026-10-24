@@ -83,6 +83,11 @@ async def ask(server, bans, sent, lifted, find=""):
         print("By who: " + ", ".join(f"{who} {n}" for who, n in sorted(makers.items(), key=lambda kv: -kv[1])[:6]))
         lifted_here = sum(1 for ban in gone if ban[0] in lifted.get(server.id, set()))
         print(f"The panel also sent an unban to this server for {lifted_here} of them.")
+    print("Newest bans:")
+    for ban in sorted(bans, key=lambda b: -b[5])[:5]:
+        made = time.strftime("%d %b %H:%M", time.gmtime(ban[5]))
+        print(f"  {made} UTC by {ban[4]}: {ban[2]} {ban[1]}: "
+              f"{'in' if ban[1].lower() in listed else 'NOT in'} the game's list")
     for ban in bans:
         if find and find in f"{ban[2]} {ban[1]}".lower():
             print(f"  {ban[2]} {ban[1]}: {'in' if ban[1].lower() in listed else 'NOT in'} the game's list")
