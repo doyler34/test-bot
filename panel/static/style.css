@@ -1728,3 +1728,15 @@ body.map-open { overflow: hidden; }
   background: var(--panel, #15181d); border: 1px solid var(--line); border-radius: 10px; position: sticky; bottom: 12px; z-index: 5; }
 .pick-bar [data-pick-count] { margin-right: auto; }
 @media (max-width: 720px) { .pick-bar { bottom: 84px; } }
+
+/* Phone: each player is a small card, the name and time on top and Kick and Ban under, so a long name never pushes the buttons off the screen. */
+@media (max-width: 720px) {
+  .players-table, .players-table tbody, .players-table tr { display: block; width: 100%; }
+  .players-table thead { display: none; }
+  .players-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: baseline;
+    padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  .players-table td { display: block; border: 0; padding: 0; }
+  .players-table td:nth-child(2) { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+  .players-table td.num { text-align: right; white-space: nowrap; }
+  .players-table td.actions { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+}
