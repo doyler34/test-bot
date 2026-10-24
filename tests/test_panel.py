@@ -1347,38 +1347,74 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 403)
         run.assert_not_awaited()
 
-    async def test_notes_are_deleted_by_their_author_or_a_senior_admin_and_logged(self):
+    async def test_notes_are_edited_and_deleted_by_their_author_and_the_right_roles_and_logged(self):
         self.db.add_user("mod2", auth.hash_password("mod2-password"), "moderator")
+        self.db.add_user("chief", auth.hash_password("chief-password"), "manager")
         identity = "11111111-2222-4333-8444-555555555555"
         mine = self.db.add_note(identity, "mod", "my note")
         theirs = self.db.add_note(identity, "mod2", "their note")
+        base = f"/player/{identity}/notes"
+        # A moderator changes and removes their own notes, and no one else's.
         await self.login("mod", "mod-password")
         page = await (await self.client.get(f"/player/{identity}")).text()
-        self.assertIn(f"/notes/{mine}/delete", page)
-        self.assertNotIn(f"/notes/{theirs}/delete", page)
+        self.assertIn(f"{base}/{mine}/edit", page)
+        self.assertIn(f"{base}/{mine}/delete", page)
+        self.assertNotIn(f"{base}/{theirs}/edit", page)
+        self.assertNotIn(f"{base}/{theirs}/delete", page)
         token = await self.csrf(f"/player/{identity}")
-        refused = await self.client.post(f"/player/{identity}/notes/{theirs}/delete", data={"csrf": token})
-        self.assertEqual(refused.status, 403)
-        self.assertIsNotNone(self.db.note(theirs))
-        self.assertFalse(self.db.audit()[0]["ok"])
-        done = await self.client.post(f"/player/{identity}/notes/{mine}/delete", data={"csrf": token},
-                                      allow_redirects=False)
-        self.assertEqual(done.status, 302)
+        for action in ("edit", "delete"):
+            refused = await self.client.post(f"{base}/{theirs}/{action}", data={"csrf": token, "body": "hijacked"})
+            self.assertEqual(refused.status, 403)
+            self.assertFalse(self.db.audit()[0]["ok"])
+        self.assertEqual(self.db.note(theirs)["body"], "their note")
+        await self.client.post(f"{base}/{mine}/edit", data={"csrf": token, "body": "my note, changed"})
+        self.assertEqual(self.db.note(mine)["body"], "my note, changed")
+        self.assertEqual(self.db.note(mine)["edited_by"], "mod")
+        entry = self.db.audit()[0]
+        self.assertEqual((entry["username"], entry["action"], entry["target"]), ("mod", "edited note", identity))
+        self.assertIn("Was: my note | Now: my note, changed", entry["detail"])
+        await self.client.post(f"{base}/{mine}/delete", data={"csrf": token})
         self.assertIsNone(self.db.note(mine))
         entry = self.db.audit()[0]
-        self.assertEqual((entry["username"], entry["action"], entry["target"]), ("mod", "deleted note", identity))
-        self.assertIn("my note", entry["detail"])
+        self.assertEqual((entry["username"], entry["action"]), ("mod", "deleted note"))
+        self.assertIn("my note, changed", entry["detail"])
         await self.client.post("/logout", data={"csrf": token})
+        # A senior admin edits anyone's note but can't delete another person's.
         await self.login("boss", "boss-password")
         page = await (await self.client.get(f"/player/{identity}")).text()
-        self.assertIn(f"/notes/{theirs}/delete", page)
+        self.assertIn(f"{base}/{theirs}/edit", page)
+        self.assertNotIn(f"{base}/{theirs}/delete", page)
         token = await self.csrf(f"/player/{identity}")
-        await self.client.post(f"/player/{identity}/notes/{theirs}/delete", data={"csrf": token})
+        await self.client.post(f"{base}/{theirs}/edit", data={"csrf": token, "body": "their note, fixed"})
+        entry = self.db.audit()[0]
+        self.assertEqual((entry["username"], entry["action"]), ("boss", "edited note"))
+        self.assertIn("written by mod2", entry["detail"])
+        self.assertIn("Was: their note | Now: their note, fixed", entry["detail"])
+        refused = await self.client.post(f"{base}/{theirs}/delete", data={"csrf": token})
+        self.assertEqual(refused.status, 403)
+        self.assertIsNotNone(self.db.note(theirs))
+        await self.client.post("/logout", data={"csrf": token})
+        # A manager can delete anyone's.
+        await self.login("chief", "chief-password")
+        page = await (await self.client.get(f"/player/{identity}")).text()
+        self.assertIn(f"{base}/{theirs}/delete", page)
+        token = await self.csrf(f"/player/{identity}")
+        await self.client.post(f"{base}/{theirs}/delete", data={"csrf": token})
         self.assertIsNone(self.db.note(theirs))
         entry = self.db.audit()[0]
-        self.assertEqual((entry["username"], entry["action"]), ("boss", "deleted note"))
-        self.assertIn("written by mod2", entry["detail"])
-        self.assertIn("their note", entry["detail"])
+        self.assertEqual((entry["username"], entry["action"]), ("chief", "deleted note"))
+        self.assertIn("their note, fixed", entry["detail"])
+
+    async def test_an_edited_note_says_so_and_an_empty_one_is_refused(self):
+        identity = "11111111-2222-4333-8444-555555555555"
+        note = self.db.add_note(identity, "mod", "first")
+        await self.login("mod", "mod-password")
+        token = await self.csrf(f"/player/{identity}")
+        await self.client.post(f"/player/{identity}/notes/{note}/edit", data={"csrf": token, "body": "   "})
+        self.assertEqual(self.db.note(note)["body"], "first")
+        await self.client.post(f"/player/{identity}/notes/{note}/edit", data={"csrf": token, "body": "second"})
+        page = await (await self.client.get(f"/player/{identity}")).text()
+        self.assertIn("edited by mod", page)
 
     async def test_a_note_can_only_be_deleted_from_its_own_players_page(self):
         note = self.db.add_note("11111111-2222-4333-8444-555555555555", "mod", "hello")

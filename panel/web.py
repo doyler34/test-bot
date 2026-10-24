@@ -1429,28 +1429,62 @@ async def add_note(request):
     raise web.HTTPFound(f"/player/{identity}")
 
 
+def own_note(request, note):
+    return allowed(request, "notes") and note["author"].lower() == request[USER]["username"].lower()
+
+
+def may_edit_note(request, note):
+    """Anyone who can write notes edits their own; other people's need edit_notes."""
+    return allowed(request, "edit_notes") or own_note(request, note)
+
+
 def may_delete_note(request, note):
     """Anyone who can write notes deletes their own; other people's need delete_notes."""
-    return allowed(request, "delete_notes") or (
-        allowed(request, "notes") and note["author"].lower() == request[USER]["username"].lower())
+    return allowed(request, "delete_notes") or own_note(request, note)
+
+
+def note_stamp(at):
+    return time.strftime("%d %b %Y %H:%M", time.gmtime(at)) + " UTC"
+
+
+def find_note(request):
+    identity = request.match_info["identity"].lower()
+    if not valid_identity(identity) or not request.match_info["note"].isdigit():
+        raise web.HTTPNotFound(text="No such note.")
+    note = request.app[DB].note(int(request.match_info["note"]))
+    if note is None or note["identity"] != identity:
+        raise web.HTTPNotFound(text="No such note.")
+    return identity, note
+
+
+async def edit_note(request):
+    require(request, "notes")
+    identity, note = find_note(request)
+    if not may_edit_note(request, note):
+        audit(request, "note edit refused", target=identity, detail=f"note by {note['author']}", ok=False)
+        raise web.HTTPForbidden(text="You can only edit your own notes.")
+    body = (await request.post()).get("body", "").strip()[:2000]
+    if not body:
+        flash(request, "A note can't be empty. Delete it instead.")
+    elif body != note["body"]:
+        request.app[DB].edit_note(note["id"], body, request[USER]["username"])
+        audit(request, "edited note", target=identity,
+              detail=clean(f"written by {note['author']} on {note_stamp(note['created_at'])}. "
+                           f"Was: {note['body']} | Now: {body}", 4500))
+        flash(request, "Note changed.")
+    raise web.HTTPFound(f"/player/{identity}")
 
 
 async def delete_note(request):
     require(request, "notes")
-    identity = request.match_info["identity"].lower()
-    if not valid_identity(identity) or not request.match_info["note"].isdigit():
-        raise web.HTTPNotFound(text="No such note.")
+    identity, note = find_note(request)
     db = request.app[DB]
-    note = db.note(int(request.match_info["note"]))
-    if note is None or note["identity"] != identity:
-        raise web.HTTPNotFound(text="No such note.")
     if not may_delete_note(request, note):
         audit(request, "note delete refused", target=identity, detail=f"note by {note['author']}", ok=False)
         raise web.HTTPForbidden(text="You can only delete your own notes.")
     db.delete_note(note["id"])
     audit(request, "deleted note", target=identity,
-          detail=clean(f"written by {note['author']} on {time.strftime('%d %b %Y %H:%M', time.gmtime(note['created_at']))} UTC: "
-                       f"{note['body']}", 500))
+          detail=clean(f"written by {note['author']} on {note_stamp(note['created_at'])}: {note['body']}", 2200))
     flash(request, "Note deleted.")
     raise web.HTTPFound(f"/player/{identity}")
 
@@ -3832,6 +3866,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/players/search.json", player_search)
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/notes", add_note)
+    app.router.add_post("/player/{identity}/notes/{note}/edit", edit_note)
     app.router.add_post("/player/{identity}/notes/{note}/delete", delete_note)
     app.router.add_post("/player/{identity}/staff", set_staff)
     app.router.add_get("/sus-settings", sus_page)

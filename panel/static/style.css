@@ -1742,3 +1742,8 @@ body.map-open { overflow: hidden; }
 }
 
 .note form { display: inline; margin: 0 0 0 10px; }
+.note details.edit-note { display: inline-block; vertical-align: top; margin-left: 10px; }
+.note details.edit-note summary { list-style: none; }
+.note details.edit-note summary::-webkit-details-marker { display: none; }
+.note details.edit-note[open] { display: block; margin: 8px 0 0; }
+.note details.edit-note form { display: grid; gap: 6px; margin: 0; }

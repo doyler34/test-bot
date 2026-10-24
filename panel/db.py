@@ -8,7 +8,7 @@ FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"),
               "rcon": ("rcon", "server"), "admin": ()}
 
 # Columns added after their table first shipped: older databases get them on start.
-ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
+ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("notes", "edited_by", "TEXT"), ("notes", "edited_at", "INTEGER"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
                  *(("kills", c, "REAL") for c in ("victim_x", "victim_y", "killer_x", "killer_y")),
                  *(("box_samples", c, "REAL") for c in ("disk_pct", "disk_read", "disk_write", "temp", "conntrack",
                                                         "tcp_retrans", "softnet_drop", "nic_errors")))
@@ -1114,6 +1114,9 @@ class PanelDB:
 
     def note(self, note_id: int):
         return self.one("SELECT * FROM notes WHERE id = ?", note_id)
+
+    def edit_note(self, note_id: int, body: str, editor: str):
+        self.write("UPDATE notes SET body = ?, edited_by = ?, edited_at = ? WHERE id = ?", body, editor, now(), note_id)
 
     def delete_note(self, note_id: int):
         self.write("DELETE FROM notes WHERE id = ?", note_id)

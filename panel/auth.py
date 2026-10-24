@@ -17,8 +17,9 @@ PERMISSIONS = {
     "view": "moderator",
     "kick": "moderator",
     "notes": "moderator",
-    # Everyone deletes their own notes; this is for other people's.
-    "delete_notes": "owner",
+    # Everyone edits and deletes their own notes; these are for other people's.
+    "edit_notes": "owner",
+    "delete_notes": "manager",
     "ban": "admin",
     # Admins kick and ban; taking a ban back, IPs and server power stay with owners.
     "unban": "owner",
@@ -48,6 +49,7 @@ PERMISSIONS = {
 GRANTS = (
     ("kick", "Kick players"),
     ("notes", "Write notes on players"),
+    ("edit_notes", "Edit other people's notes"),
     ("delete_notes", "Delete other people's notes"),
     ("ban", "Ban players"),
     ("unban", "Unban players"),
