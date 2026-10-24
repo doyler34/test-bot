@@ -92,3 +92,19 @@ document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   drops.forEach(drop => { if (drop.open) { drop.open = false; drop.querySelector("summary").focus(); } });
 });
+
+// Sections ease in once as they scroll into view. Without JS, or with reduced
+// motion, nothing is hidden.
+if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  const seen = new IntersectionObserver(entries => {
+    for (const entry of entries) if (entry.isIntersecting) { entry.target.classList.add("in"); seen.unobserve(entry.target); }
+  }, { rootMargin: "0px 0px -8% 0px" });
+  document.querySelectorAll("main .band").forEach(band => {
+    band.querySelectorAll(".section-head, .srv, .tool, .rung, .steps li, .xp-list, .faq details, .facts > *").forEach((el, i) => {
+      if (el.getBoundingClientRect().top < innerHeight) return;
+      el.style.setProperty("--d", Math.min(i % 4, 3) * 0.06 + "s");
+      el.classList.add("reveal");
+      seen.observe(el);
+    });
+  });
+}
