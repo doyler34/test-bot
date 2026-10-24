@@ -25,6 +25,7 @@ from bot.web import server as mortar_server
 from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, profiles
 from bot.mortar.wind import Wind
 
+from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP
 from . import archive, attacks, auth, ballistics, console, files, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois, workshop
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
@@ -284,6 +285,10 @@ async def public_site(request, handler):
             return await handler(request)
         if request.method == "GET" and (request.path == "/servers" or request.path.startswith("/servers/")):
             return site_servers(request)
+        if request.method == "GET" and request.path.rstrip("/") == "/players":
+            return site_players(request)
+        if request.method == "GET" and (request.path.rstrip("/") == "/ranks" or request.path.startswith("/ranks/insignia/")):
+            return site_ranks(request)
         if request.path == "/mortar" or request.path.startswith("/mortar/"):
             return await site_mortar(request)
         if request.method == "GET" and (request.path == "/workshop" or request.path.startswith("/workshop/")):
@@ -796,6 +801,64 @@ def site_page(request, preview=False):
     doc = site_doc(request)
     return render_site(request, "site.html", doc, site=site_view(request, doc), board=request.app[STATS].weekly_board(),
                        preview=preview, active="home")
+
+
+PLAYERS_PER_PAGE = 25
+RANK_ART = HERE.parent / "assets" / "rank-card" / "ranks"
+
+
+def site_players(request):
+    """The leaderboard: this week or all time, with a search box and pages."""
+    doc = site_doc(request)
+    kind = "lifetime" if request.query.get("board") == "lifetime" else "weekly"
+    search = " ".join(request.query.get("q", "").split())[:40]
+    try:
+        page = max(1, int(request.query.get("page", "1")))
+    except ValueError:
+        page = 1
+    board = request.app[STATS].standings(kind)
+    rows = []
+    for place, row in enumerate(board["rows"] if board else [], start=1):
+        if search and search.lower() not in row["name"].lower():
+            continue
+        ratio = row["kills"] / row["deaths"] if row["deaths"] else row["kills"]
+        rows.append({**row, "place": place, "kd": f"{ratio:.2f}"})
+    pages = max(1, -(-len(rows) // PLAYERS_PER_PAGE))
+    page = min(page, pages)
+
+    def link(**changes):
+        query = {"board": kind, "q": search, "page": page, **changes}
+        query = {k: v for k, v in query.items() if v not in ("", None) and not (k == "board" and v == "weekly")
+                 and not (k == "page" and v == 1)}
+        return "/players" + ("?" + urlencode(query) if query else "")
+
+    links = {"weekly": link(board="weekly", page=1), "lifetime": link(board="lifetime", page=1),
+             "prev": link(page=page - 1) if page > 1 else "", "next": link(page=page + 1) if page < pages else ""}
+    shown = rows[(page - 1) * PLAYERS_PER_PAGE:page * PLAYERS_PER_PAGE]
+    return render_site(request, "site_players.html", doc, board=board, kind=kind, search=search, rows=shown,
+                       found=len(rows), page=page, pages=pages, links=links, active="players")
+
+
+def site_ranks(request):
+    """How OYB ranks work, from the same rules the bot uses, and the insignia pictures."""
+    parts = request.path.split("/")
+    if request.path.startswith("/ranks/insignia/"):
+        slug = parts[3][:-4] if len(parts) == 4 and parts[3].endswith(".svg") else ""
+        if slug in {rank.slug for rank in RANKS} and (RANK_ART / f"{slug}.svg").is_file():
+            return web.FileResponse(RANK_ART / f"{slug}.svg", headers={
+                "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400"})
+        raise web.HTTPNotFound(text="No such insignia.")
+    if request.path.rstrip("/") != "/ranks":
+        raise web.HTTPNotFound(text="Not found.")
+    ladder = []
+    for index, rank in enumerate(RANKS):
+        following = RANKS[index + 1] if index + 1 < len(RANKS) else None
+        ladder.append({"name": rank.name, "slug": rank.slug, "threshold": rank.threshold,
+                       "hours": round(rank.threshold * SECONDS_PER_XP / 3600),
+                       "gap": following.threshold - rank.threshold if following and index else None,
+                       "top": following is None, "start": index == 0})
+    return render_site(request, "site_ranks.html", site_doc(request), ladder=ladder,
+                       minutes_per_xp=SECONDS_PER_XP // 60, active="players")
 
 
 def site_servers(request):

@@ -82,7 +82,7 @@
           <p>Drop your mortar and the target on the map and get a firing solution for the M252 or the 2B14: HE, smoke or illumination.</p>
           <span class="srv-link">Open the calculator {{ icon("arrow") }}</span></div>
       </a>
-      <a class="tool" href="#leaderboard">{{ icon("trophy") }}<h3>Weekly leaderboard</h3><p>Kills and deaths for linked players, reset every Monday.</p></a>
+      <a class="tool" href="/players">{{ icon("trophy") }}<h3>Leaderboard</h3><p>Kills and deaths for linked players, reset every Monday.</p></a>
       {% if doc.discord %}<a class="tool" href="{{ doc.discord }}" rel="noopener">{{ icon("card") }}<h3>Rank card</h3><p>Link your account in Discord, then use <b>/rank</b> and <b>/stats</b> to see how you're doing.</p></a>{% endif %}
     </div>
   </div>
@@ -108,7 +108,8 @@
       {% endif %}
       <div class="pulse-side">
         <p>Not on the board? Link your game account in the Discord and you're on it.</p>
-        {% if doc.discord %}<a class="button outline" href="{{ doc.discord }}" rel="noopener">{{ icon("trophy") }} Full board in Discord</a>{% endif %}
+        <a class="button outline" href="/players">{{ icon("trophy") }} Full leaderboard</a>
+        <p class="more"><a href="/ranks">How ranks and XP work {{ icon("arrow") }}</a></p>
       </div>
     </div>
   </div>

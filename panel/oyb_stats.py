@@ -6,11 +6,14 @@ panel can never change them.
 import sqlite3
 import time
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 
 from bot.storage.combat_store import recent_matches, week_start, window_standings
 
 CACHE_SECONDS = 60
+# Before any OYB server was recorded, so a board from here is every game ever played.
+EVER = datetime(2000, 1, 1)
 
 
 def _open(path: Path):
@@ -34,7 +37,7 @@ class OybStats:
         self.data = Path(data_dir)
         self._cache: dict[str, tuple[float, dict | None]] = {}
         self._played: dict[str, tuple[float, int | None]] = {}
-        self._board: tuple[float, dict | None] | None = None
+        self._boards: dict[str, tuple[float, dict | None]] = {}
 
     @property
     def available(self) -> bool:
@@ -159,26 +162,33 @@ class OybStats:
             report["player"] = found
         return report
 
-    def weekly_board(self, limit: int = 10) -> dict | None:
-        """The same weekly standings the bot pins in Discord: linked players only,
-        kills first, reset every Monday. None when the bot's data isn't here."""
-        if self._board and time.monotonic() - self._board[0] < CACHE_SECONDS:
-            return self._board[1]
+    def standings(self, kind: str = "weekly") -> dict | None:
+        """Every linked player's kills and deaths, the same standings the bot posts in Discord:
+        kills first, then fewer deaths. "weekly" resets every Monday; "lifetime" is every game
+        recorded. None when the bot's data isn't here."""
+        hit = self._boards.get(kind)
+        if hit and time.monotonic() - hit[0] < CACHE_SECONDS:
+            return hit[1]
         board = None
         links = _open(self.data / "account_links.sqlite3")
         if links:
             with closing(links):
                 try:
                     guild = _one(links, "SELECT guild FROM account_links GROUP BY guild ORDER BY COUNT(*) DESC LIMIT 1")
-                    start = week_start()
+                    start = EVER if kind == "lifetime" else week_start()
                     rows = window_standings(links, guild[0], start) if guild else []
-                    board = {"week": f"{start:%d %b}", "players": len(rows), "rows": [
+                    board = {"kind": kind, "week": f"{start:%d %b}", "players": len(rows), "rows": [
                         {"name": name or self._game_name(links, guild[0], member), "kills": kills, "deaths": deaths}
-                        for member, kills, deaths, name in rows[:limit]]}
+                        for member, kills, deaths, name in rows]}
                 except sqlite3.Error:
                     board = None
-        self._board = (time.monotonic(), board)
+        self._boards[kind] = (time.monotonic(), board)
         return board
+
+    def weekly_board(self, limit: int = 10) -> dict | None:
+        """This week's standings, trimmed to the first few places for the home page."""
+        board = self.standings("weekly")
+        return None if board is None else {**board, "rows": board["rows"][:limit]}
 
     def _game_name(self, links, guild, member) -> str:
         identities = [r[0] for r in links.execute(

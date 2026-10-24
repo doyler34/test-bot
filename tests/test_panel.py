@@ -1587,8 +1587,9 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Old Young <em>Bastards</em>", html)
         self.assertIn("Old and young, just playing and having a good time", html)
         self.assertNotIn("Countless battles", html)
-        self.assertNotIn("bar-discord", html)
-        self.assertIn('href="/#leaderboard"', html)
+        self.assertIn('class="button primary small bar-discord"', html)
+        self.assertNotIn('aria-label="OYB Gaming home"><img', html)
+        self.assertIn('href="/players"', html)
         self.assertIn('href="/servers"', html)
         self.assertIn("data-stale hidden", html)
         self.assertNotIn("No servers are listed", html)
@@ -2640,6 +2641,50 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         html = await (await self.client.get("/servers", headers={"Host": "oybgaming.com"})).text()
         self.assertIn("<span data-slots>64</span>", html)
         self.assertIn('<p class="srv-facts">Everon</p>', html)
+
+    async def test_the_public_leaderboard_has_weekly_and_all_time_boards_with_search(self):
+        self.config.site_hosts = ["oybgaming.com"]
+        host = {"Host": "oybgaming.com"}
+        with tempfile.TemporaryDirectory() as root:
+            bot_data(root)
+            self.client.app[STATS_KEY].data = Path(root)
+            self.client.app[STATS_KEY]._boards.clear()
+            weekly = await (await self.client.get("/players", headers=host)).text()
+            self.assertIn("No kills recorded this week yet", weekly)
+            life = await (await self.client.get("/players?board=lifetime", headers=host)).text()
+            self.assertIn('<td class="who">Sgt Havoc</td><td>3</td><td>1</td><td>3.00</td>', life)
+            self.assertIn("1 player ·", life)
+            hit = await (await self.client.get("/players?board=lifetime&q=HAVOC", headers=host)).text()
+            self.assertIn("Sgt Havoc", hit)
+            miss = await (await self.client.get("/players?board=lifetime&q=zzz", headers=host)).text()
+            self.assertIn('Nobody called "zzz"', miss)
+            self.assertNotIn("Sgt Havoc", miss)
+            late = await self.client.get("/players?board=lifetime&page=99&q=", headers=host)
+            self.assertEqual(late.status, 200)
+        self.client.app[STATS_KEY]._boards.clear()
+        self.client.app[STATS_KEY].data = Path("/nonexistent")
+        gone = await self.client.get("/players", headers=host)
+        self.assertEqual(gone.status, 200)
+        self.assertIn("isn't available right now", await gone.text())
+
+    async def test_the_ranks_page_follows_the_bots_own_rules(self):
+        from bot.ranks.rank_rules import RANKS
+        self.config.site_hosts = ["oybgaming.com"]
+        host = {"Host": "oybgaming.com"}
+        html = await (await self.client.get("/ranks", headers=host)).text()
+        for rank in RANKS:
+            self.assertIn(f"<h3>{rank.name}</h3>", html)
+            self.assertIn(f"/ranks/insignia/{rank.slug}.svg", html)
+        for needed in ("100 XP", "1900 XP", "every 10 minutes", "+5 XP", "+2 XP", "−2 XP", "up to 10 a day"):
+            self.assertIn(needed, html)
+        art = await self.client.get("/ranks/insignia/major.svg", headers=host)
+        self.assertEqual((art.status, art.content_type), (200, "image/svg+xml"))
+        for path in ("/ranks/insignia/nope.svg", "/ranks/insignia/major", "/ranks/insignia/..%2fmajor.svg"):
+            self.assertEqual((await self.client.get(path, headers=host)).status, 404, path)
+        home = await (await self.client.get("/", headers=host)).text()
+        self.assertIn('href="/players"', home)
+        self.assertIn('href="/ranks"', home)
+        self.assertEqual((await self.client.get("/ranks", allow_redirects=False)).status, 302)
 
     async def test_site_shows_the_discord_rules(self):
         self.config.site_hosts = ["oybgaming.com"]

@@ -1,0 +1,69 @@
+{% extends "site_base.html" %}
+{% from "site_parts.html" import discord_icon, icon %}
+{% block title %}Rank progression · {{ doc.name }} Gaming{% endblock %}
+{% block description %}How {{ doc.name }} ranks work: what earns XP and how much each rank needs.{% endblock %}
+{% block body_class %}page-ranks{% endblock %}
+{% block main %}
+<section class="masthead">
+  <div class="wrap">
+    <p class="crumbs"><a href="/">Home</a> <span aria-hidden="true">/</span> <a href="/players">Players</a> <span aria-hidden="true">/</span> Ranks</p>
+    <p class="tag">Rank progression</p>
+    <h1>Earn your rank</h1>
+    <p class="lead">Nobody hands out ranks. You earn XP by turning up and playing on {{ doc.name }} servers, and the XP carries you up the ladder.</p>
+  </div>
+</section>
+
+<nav class="jump" aria-label="On this page"><div class="wrap">
+  <a href="#xp"><b>01</b> How XP works</a><a href="#ladder"><b>02</b> The ladder</a><a href="#progress"><b>03</b> Progress</a>
+</div></nav>
+
+<section class="band" id="xp" aria-labelledby="xp-title">
+  <div class="wrap two">
+    <header class="section-head"><p class="tag">01</p><h2 id="xp-title">How XP works</h2>
+      <p>Time on the servers is the steady one. Fighting and chatting add to it.</p></header>
+    <ul class="xp-list">
+      <li><b>1 XP</b><span>for every {{ minutes_per_xp }} minutes you play on a {{ doc.name }} server</span></li>
+      <li><b>+5 XP</b><span>for each match you actually fought in. Idling in the lobby earns nothing.</span></li>
+      <li><b>+2 XP</b><span>for every enemy kill</span></li>
+      <li><b>−2 XP</b><span>for every teamkill</span></li>
+      <li><b>+1 XP</b><span>for a message in the Discord, up to 10 a day</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="band" id="ladder" aria-labelledby="ladder-title">
+  <div class="wrap">
+    <header class="section-head"><p class="tag">02</p><h2 id="ladder-title">The ladder</h2>
+      <p>Pick a side in the Discord (US, USSR or FIA) and you start at Recruit. Until you do, you're a Renegade, however much XP you have.</p></header>
+    <ol class="ladder">
+      {% for r in ladder %}
+      <li class="rung{{ ' start' if r.start }}{{ ' top' if r.top }}">
+        <img src="/ranks/insignia/{{ r.slug }}.svg" alt="" width="64" height="64">
+        <div class="rung-body">
+          <h3>{{ r.name }}</h3>
+          {% if r.start %}<p>Where everyone starts, until they pick a side.</p>
+          {% else %}<p><b>{{ r.threshold }} XP</b>{% if r.hours %} · about {{ r.hours }} hours of play on time alone{% endif %}</p>
+          {% if r.top %}<p class="rung-note">The top of the ladder.</p>{% endif %}{% endif %}
+        </div>
+        {% if r.gap %}<span class="rung-gap">+{{ r.gap }} XP to next</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>
+
+<section class="band" id="progress" aria-labelledby="progress-title">
+  <div class="wrap two">
+    <header class="section-head"><p class="tag">03</p><h2 id="progress-title">Check your progress</h2></header>
+    <div>
+      <ol class="steps">
+        <li><b>Link your game account</b> in the Discord. An admin approves it.</li>
+        <li><b>Pick your side</b>: US, USSR or FIA.</li>
+        <li>Use <b>/rank</b> in the Discord for your rank card, or <b>/stats</b> and <b>/lifetime</b> for your numbers.</li>
+      </ol>
+      <p><a class="button outline" href="/players">{{ icon("trophy") }} See the leaderboard</a>
+        {% if doc.discord %}<a class="button primary" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }} Join Discord</a>{% endif %}</p>
+    </div>
+  </div>
+</section>
+{% endblock %}

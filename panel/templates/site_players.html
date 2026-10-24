@@ -1,0 +1,58 @@
+{% extends "site_base.html" %}
+{% from "site_parts.html" import icon %}
+{% block title %}Leaderboard · {{ doc.name }} Gaming{% endblock %}
+{% block description %}{{ doc.name }} Arma Reforger leaderboard: kills, deaths and K/D for linked players, this week and all time.{% endblock %}
+{% block body_class %}page-players{% endblock %}
+{% block main %}
+<section class="masthead">
+  <div class="wrap">
+    <p class="crumbs"><a href="/">Home</a> <span aria-hidden="true">/</span> Players</p>
+    <p class="tag">Leaderboard</p>
+    <h1>{{ "All-time" if kind == "lifetime" else "This week's" }} leaders</h1>
+    <p class="lead">Player kills and deaths on {{ doc.name }} servers. Linked players only: link your game account in the Discord to get on the board.</p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="board-bar">
+      <nav class="tabs" aria-label="Board">
+        <a href="{{ links.weekly }}"{% if kind == "weekly" %} aria-current="page"{% endif %}>This week</a>
+        <a href="{{ links.lifetime }}"{% if kind == "lifetime" %} aria-current="page"{% endif %}>All time</a>
+      </nav>
+      <form class="board-search" method="get" action="/players" role="search">
+        <input type="hidden" name="board" value="{{ kind }}">
+        <label class="visually-hidden" for="q">Search players</label>
+        <input id="q" name="q" value="{{ search }}" placeholder="Search by name" maxlength="40" autocomplete="off">
+        <button class="button small">Search</button>
+      </form>
+    </div>
+
+    {% if not board %}
+    <p class="empty">The leaderboard isn't available right now. Check back soon.</p>
+    {% elif not board.players %}
+    <p class="empty">{{ "No kills recorded this week yet. The board resets every Monday." if kind == "weekly" else "No games have been recorded yet." }}</p>
+    {% elif not found %}
+    <p class="empty">Nobody called "{{ search }}" is on this board. <a class="inline" href="{{ links[kind] }}">Clear the search</a></p>
+    {% else %}
+    <p class="board-meta">{{ board.players }} player{{ "s" if board.players != 1 }}{% if kind == "weekly" %} · since Monday {{ board.week }}{% endif %}{% if search %} · {{ found }} match{{ "es" if found != 1 }}{% endif %} · page {{ page }} of {{ pages }}</p>
+    <table class="lb">
+      <thead><tr><th scope="col">#</th><th scope="col">Player</th><th scope="col" title="Kills">K</th><th scope="col" title="Deaths">D</th><th scope="col" title="Kills per death">K/D</th></tr></thead>
+      <tbody>
+        {% for r in rows %}<tr{% if r.place <= 3 %} class="top"{% endif %}><td>{{ r.place }}</td><td class="who">{{ r.name }}</td><td>{{ r.kills }}</td><td>{{ r.deaths }}</td><td>{{ r.kd }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if pages > 1 %}
+    <nav class="pager" aria-label="Pages">
+      {% if links.prev %}<a class="button small outline" href="{{ links.prev }}" rel="prev">Previous</a>{% else %}<span></span>{% endif %}
+      {% if links.next %}<a class="button small outline" href="{{ links.next }}" rel="next">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+    <p class="note">Ranked by kills, then fewer deaths. Player-vs-player only: deaths to AI and suicides aren't counted. Refreshes about once a minute.{% if kind == "weekly" %} The weekly board resets every Monday.{% endif %}</p>
+    {% endif %}
+
+    <p class="more"><a href="/ranks">How ranks and XP work {{ icon("arrow") }}</a></p>
+  </div>
+</section>
+{% endblock %}

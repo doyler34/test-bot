@@ -23,20 +23,24 @@
 {% set community = [("About " ~ doc.name, "/#about")] %}
 <header class="site-bar">
   <div class="wrap bar-in">
-    <a class="logo" href="/" aria-label="{{ doc.name }} Gaming home"><img src="/static/site/oyb-icon.png" alt="" width="40" height="40">{{ wordmark(doc.name, "small") }}</a>
+    <a class="logo" href="/" aria-label="{{ doc.name }} Gaming home">{{ wordmark(doc.name, "small") }}</a>
     <nav class="site-nav" aria-label="Main">
       <a href="/"{% if active == "home" %} aria-current="page"{% endif %}>Home</a>
       <details class="drop">
         <summary{% if active == "servers" %} aria-current="page"{% endif %}>Servers {{ icon("chevron") }}</summary>
         <div class="drop-list">{% for label, href in play %}<a href="{{ href }}">{{ label }}</a>{% endfor %}</div>
       </details>
-      <a href="/#leaderboard">Players</a>
+      <details class="drop">
+        <summary{% if active == "players" %} aria-current="page"{% endif %}>Players {{ icon("chevron") }}</summary>
+        <div class="drop-list"><a href="/players">Leaderboard</a><a href="/ranks">Rank progression</a></div>
+      </details>
       <a href="/mortar"{% if active == "battlefield" %} aria-current="page"{% endif %}>Battlefield</a>
       <details class="drop">
         <summary>Community {{ icon("chevron") }}</summary>
         <div class="drop-list">{% for label, href in community %}<a href="{{ href }}">{{ label }}</a>{% endfor %}{% if doc.discord %}<a href="{{ doc.discord }}" rel="noopener">Discord</a>{% endif %}</div>
       </details>
     </nav>
+    {% if doc.discord %}<a class="button primary small bar-discord" href="{{ doc.discord }}" rel="noopener">{{ discord_icon() }}<span>Join Discord</span></a>{% endif %}
     <details class="menu">
       <summary aria-label="Menu"><span class="open">{{ icon("menu") }}</span><span class="shut">{{ icon("close") }}</span></summary>
       <nav class="menu-sheet" aria-label="Menu">
@@ -44,7 +48,8 @@
         <p class="menu-group">Play</p>
         {% for label, href in play %}<a href="{{ href }}">{{ label }}</a>{% endfor %}
         <p class="menu-group">Track</p>
-        <a href="/#leaderboard">Weekly leaderboard</a>
+        <a href="/players">Leaderboard</a>
+        <a href="/ranks">Rank progression</a>
         <p class="menu-group">Battlefield</p>
         <a href="/mortar">Mortar calculator</a>
         <p class="menu-group">Community</p>
@@ -67,7 +72,7 @@
         <p>{{ doc.tagline or "Old heads and young guns, same squad." }}</p>
       </div>
       <nav aria-label="Play"><h2>Play</h2>{% for label, href in play %}<a href="{{ href }}">{{ label }}</a>{% endfor %}</nav>
-      <nav aria-label="Tools"><h2>Tools</h2><a href="/mortar">Mortar calculator</a><a href="/#leaderboard">Weekly leaderboard</a></nav>
+      <nav aria-label="Tools"><h2>Tools</h2><a href="/mortar">Mortar calculator</a><a href="/players">Leaderboard</a><a href="/ranks">Rank progression</a></nav>
       <nav aria-label="Community"><h2>Community</h2>{% for label, href in community %}<a href="{{ href }}">{{ label }}</a>{% endfor %}{% if doc.discord %}<a href="{{ doc.discord }}" rel="noopener">Discord</a>{% endif %}</nav>
       <nav aria-label="Support"><h2>Support</h2>{% if doc.discord %}<a href="{{ doc.discord }}" rel="noopener">Help in Discord</a>{% endif %}<a href="/servers#rules">Rules</a><a href="/servers#faq">FAQ</a></nav>
     </div>
