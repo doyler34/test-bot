@@ -112,4 +112,5 @@ async def main():
             await ask(server, bans, sent, lifted, find)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
