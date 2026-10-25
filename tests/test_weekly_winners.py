@@ -78,7 +78,7 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_first_run_only_remembers_the_week(self):
         self.player(10, 'Hubcaps', 30)
-        await self.tick(self.monday + timedelta(hours=1))
+        await self.tick(self.monday + timedelta(hours=20))
         self.assertEqual(self.channel.sent, [])
 
     async def test_posts_last_weeks_top_three_once(self):
@@ -87,8 +87,8 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
             self.player(member, name, kills, deaths=3)
         self.player(15, 'ThisWeek', 99, when=self.monday)
         self.store.save_weekly_announced(1, self.last_week.date().isoformat())
-        await self.tick(self.monday + timedelta(hours=1))
-        await self.tick(self.monday + timedelta(hours=2))
+        await self.tick(self.monday + timedelta(hours=20))
+        await self.tick(self.monday + timedelta(hours=21))
         self.assertEqual(len(self.channel.sent), 1)
         text = self.channel.sent[0]['embed'].description
         self.assertEqual([line.split(' — ')[0] for line in text.splitlines() if line and line[0] in '🥇🥈🥉'],
@@ -97,12 +97,22 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('ThisWeek', text)
         self.assertEqual(self.channel.sent[0]['embed'].title, weekly_winners.TITLE)
 
+    async def test_waits_for_six_in_the_evening_irish_time(self):
+        self.player(10, 'Hubcaps', 30)
+        self.store.save_weekly_announced(1, self.last_week.date().isoformat())
+        await self.tick(self.monday + timedelta(hours=1))
+        await self.tick(self.monday + timedelta(hours=12))   # 4 to 5pm in Ireland
+        self.assertEqual(self.channel.sent, [])
+        self.assertEqual(self.store.weekly_announced(1), self.last_week.date().isoformat())
+        await self.tick(self.monday + timedelta(hours=15))   # after 6pm in Ireland
+        self.assertEqual(len(self.channel.sent), 1)
+
     async def test_pings_the_member_role(self):
         role = SimpleNamespace(name='OYB Member', mention='<@&42>')
         self.guild.roles = [role]
         self.player(10, 'Hubcaps', 30)
         self.store.save_weekly_announced(1, self.last_week.date().isoformat())
-        await self.tick(self.monday + timedelta(hours=1))
+        await self.tick(self.monday + timedelta(hours=20))
         sent = self.channel.sent[0]
         self.assertEqual(sent['content'], '<@&42>')
         self.assertEqual(sent['allowed_mentions'].roles, [role])
@@ -111,12 +121,12 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
     async def test_posts_without_a_ping_when_the_role_is_missing(self):
         self.player(10, 'Hubcaps', 30)
         self.store.save_weekly_announced(1, self.last_week.date().isoformat())
-        await self.tick(self.monday + timedelta(hours=1))
+        await self.tick(self.monday + timedelta(hours=20))
         self.assertIsNone(self.channel.sent[0]['content'])
 
     async def test_a_quiet_week_posts_nothing(self):
         self.store.save_weekly_announced(1, self.last_week.date().isoformat())
-        await self.tick(self.monday + timedelta(hours=1))
+        await self.tick(self.monday + timedelta(hours=20))
         self.assertEqual(self.channel.sent, [])
         self.assertEqual(self.store.weekly_announced(1), self.monday.date().isoformat())
 
@@ -124,7 +134,7 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
         weekly_winners.WEEKLY.update({"on": True, "title": "Kings of {week}", "intro": "", "outro": "GG all"})
         self.player(10, 'Hubcaps', 30)
         self.store.save_weekly_announced(1, self.last_week.date().isoformat())
-        await self.tick(self.monday + timedelta(hours=1))
+        await self.tick(self.monday + timedelta(hours=20))
         embed = self.channel.sent[0]['embed']
         self.assertEqual(embed.title, f'Kings of {self.last_week:%d %b}')
         self.assertTrue(embed.description.startswith(weekly_winners.INTRO))
@@ -134,7 +144,7 @@ class WeeklyWinnersTests(unittest.IsolatedAsyncioTestCase):
         weekly_winners.WEEKLY.update({"on": False})
         self.player(10, 'Hubcaps', 30)
         self.store.save_weekly_announced(1, self.last_week.date().isoformat())
-        await self.tick(self.monday + timedelta(hours=1))
+        await self.tick(self.monday + timedelta(hours=20))
         self.assertEqual(self.channel.sent, [])
         self.assertEqual(self.store.weekly_announced(1), self.monday.date().isoformat())
 

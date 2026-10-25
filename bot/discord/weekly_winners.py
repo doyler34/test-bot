@@ -1,7 +1,8 @@
 """When the weekly leaderboard resets, post last week's top 3."""
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import discord
 
@@ -11,6 +12,9 @@ from bot.storage.combat_store import week_start, window_standings
 
 LOG = logging.getLogger('reforger.weekly_winners')
 POLL = 60
+# The week still ends Monday 00:00 Boston; the post goes out that evening, Irish time.
+DUBLIN = ZoneInfo('Europe/Dublin')
+ANNOUNCE_AT = time(18, 0)
 MEDALS = ('🥇', '🥈', '🥉')
 TITLE = '🏆 WEEKLY LEADERBOARD — RESET'
 INTRO = "That's the end of this week's leaderboard.\nBig shoutout to the top 3:"
@@ -18,6 +22,15 @@ OUTRO = ('Fair play lads. 👏\n\nThe leaderboard is now resetting for the new w
          'Everyone starts back at zero — time to see who takes the top spot this week. 🔥')
 # The wording as published from OYB Control; blank keeps the above.
 WEEKLY: dict = {}
+
+
+def announce_due(start, now=None):
+    """True once it is 6pm in Ireland on the Monday the new week began."""
+    moment = datetime.now().astimezone() if now is None else now
+    if moment.tzinfo is None:
+        moment = moment.astimezone()
+    day = start.astimezone(DUBLIN).date()
+    return moment >= datetime.combine(day, ANNOUNCE_AT, tzinfo=DUBLIN)
 
 
 def winners_embed(rows, guild, start):
@@ -61,6 +74,8 @@ class WeeklyWinners:
             return
         if not WEEKLY.get('on', True):
             self.bot.store.save_weekly_announced(guild.id, week)
+            return
+        if not announce_due(start, now):
             return
         previous = start - timedelta(days=7)
         rows = [r for r in window_standings(self.bot.account_links.db, guild.id, previous, start) if r[1] > 0][:3]
