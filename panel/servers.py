@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -31,6 +32,23 @@ POWER_SERVICE = ("start", "stop", "restart")
 # Only act on what happened just now, never on old log lines read back after a restart.
 AUTO_FRESH = 300
 AUTO_KICK_GAP = 600
+# A warned player's next teamkill this close, by bullet or similar, earns an automatic ban.
+WARNED_METRES = 100
+WARNED_BAN = 10 * 3600
+# Explosions and crashes: a car blast can't be told from a grenade in the log, so none of them count.
+WARNED_SKIP = {"EXPLOSIVE", "FRAGMENTATION", "INCENDIARY", "COLLISION"}
+
+
+def warned_teamkill(event) -> bool:
+    """A teamkill by a person, within 100 m, that wasn't an explosion or a crash."""
+    if event.get("kind") != "teamkill" or not event.get("killer") or event.get("by_ai"):
+        return False
+    if event.get("damage") in WARNED_SKIP:
+        return False
+    metres = event.get("distance")
+    if metres is None and event.get("killer_at") and event.get("victim_at"):
+        metres = math.dist(event["killer_at"], event["victim_at"])
+    return metres is not None and metres <= WARNED_METRES
 
 
 def valid_identity(text: str) -> bool:
@@ -337,6 +355,9 @@ class ServerManager:
                     await self.ban_for_banned_ip(state, event["identity"], event["name"])
         for action in self.check(state, events) + self.mass_teamkills(state, events):
             await self.auto_punish(state, *action)
+        for event in events:
+            if warned_teamkill(event) and now() - event["at"] < AUTO_FRESH:
+                await self.ban_warned(state, event)
 
     def check(self, state: ServerState, events) -> list:
         """Runs the cheating checks over new log lines; AP mine spam also goes to the staff channel.
@@ -395,6 +416,26 @@ class ServerManager:
                 actions.append(("tk", killer, event.get("killer_name") or killer, state.tk_burst.in_window(killer),
                                 settings))
         return actions
+
+    async def ban_warned(self, state: ServerState, event):
+        """Bans someone who's been warned and has just teamkilled up close: 10 hours, until an admin has looked."""
+        identity = event["killer"]
+        warning = self.db.open_warning(identity)
+        if not warning or identity in self.staff_ids() or self.db.active_ban(identity):
+            return
+        name = event.get("killer_name") or warning["name"] or identity
+        what = f"teamkilled {event.get('victim_name') or 'someone'}"
+        if not self.db.use_warning(warning["id"], f"{what} on {state.config.name}"):
+            return
+        reason = "Teamkill after a warning (automatic, 10 hours until an admin reviews it)"
+        ban = self.db.ban(self.db.add_ban(identity, name, reason, "Automatic", now() + WARNED_BAN))
+        await self.push_ban(ban)
+        await self.kick_everywhere(identity)
+        text = (f"**{name}** had a warning from {warning['author']} and {what} on {state.config.name}. "
+                f"Banned for 10 hours until an admin has looked at it.")
+        self.db.log("Automatic", "auto ban", state.config.id, name, text.replace("**", ""))
+        self.db.add_staff_alert(state.config.id, now(), f"Warned player banned on {state.config.name}", text)
+        self.db.add_feed(state.config.id, "sus", text.replace("**", ""))
 
     async def auto_punish(self, state: ServerState, kind, identity, name, count, settings):
         """Kicks or bans someone who's reached the count set on the Staff alerts page. Never an admin."""

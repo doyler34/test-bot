@@ -56,6 +56,31 @@
 </section>
 
 <section class="card">
+  <h2>Warning</h2>
+  <p class="muted">A warned player's next teamkill within 100 m, other than an explosion or a crash, is an automatic 10 hour ban until an admin reviews it. Staff are alerted.</p>
+  {% if can("warn") and not (warnings|selectattr("used_at", "none")|selectattr("withdrawn_at", "none")|list) %}
+  <form method="post" action="/player/{{ identity }}/warn">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="reason" maxlength="500" placeholder="Why (optional)">
+    <button>Give a warning</button>
+  </form>
+  {% endif %}
+  {% for w in warnings %}
+  <div class="note"><p>{% if w.used_at %}Used: {{ w.used_for }}{% elif w.withdrawn_at %}Withdrawn by {{ w.withdrawn_by }}{% else %}<b>Waiting</b>: the next close-range teamkill bans them.{% endif %}{% if w.reason %} · {{ w.reason }}{% endif %}</p>
+    <span class="muted">{{ w.author }} · {{ w.created_at|ts }}{% if w.used_at %} · used {{ w.used_at|ts }}{% endif %}</span>
+    {% if can("warn") and not w.used_at and not w.withdrawn_at %}
+    <form method="post" action="/player/{{ identity }}/warn/{{ w.id }}/withdraw" data-confirm="Take this warning back?">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="small ghost">Withdraw</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="muted">No warnings.</p>
+  {% endfor %}
+</section>
+
+<section class="card">
   <h2>Admin notes</h2>
   {% if can("notes") %}
   <form method="post" action="/player/{{ identity }}/notes">

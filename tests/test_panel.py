@@ -821,6 +821,38 @@ class AutoPunishTests(unittest.IsolatedAsyncioTestCase):
         for action in self.manager.mass_teamkills(self.state, [event]):
             await self.manager.auto_punish(self.state, *action)
 
+    def close_tk(self, **extra):
+        return {"kind": "teamkill", "at": now(), "killer": BUFORD, "killer_name": "Buford", "victim_name": "V",
+                "distance": 40, "damage": "KINETIC", "by_ai": False, **extra}
+
+    async def test_a_warning_turns_the_next_close_teamkill_into_a_ten_hour_ban(self):
+        from panel.servers import warned_teamkill
+        await self.manager.ban_warned(self.state, self.close_tk())
+        self.assertIsNone(self.db.active_ban(BUFORD))          # no warning, no ban
+        self.db.add_warning(BUFORD, "Buford", "gaz", "friendly fire")
+        for far in (self.close_tk(distance=101), self.close_tk(distance=None, killer_at=(0, 0), victim_at=(300, 0)),
+                    self.close_tk(distance=None), self.close_tk(damage="EXPLOSIVE"), self.close_tk(damage="COLLISION"),
+                    self.close_tk(by_ai=True)):
+            self.assertFalse(warned_teamkill(far), far)
+        self.assertTrue(warned_teamkill(self.close_tk(distance=None, killer_at=(0, 0), victim_at=(60, 80))))
+        self.assertTrue(warned_teamkill(self.close_tk(distance=100)))
+        await self.manager.ban_warned(self.state, self.close_tk())
+        ban = self.db.active_ban(BUFORD)
+        self.assertEqual(ban["created_by"], "Automatic")
+        self.assertAlmostEqual(ban["expires_at"], now() + 36000, delta=5)
+        self.manager.push_ban.assert_awaited_once()
+        self.assertEqual(self.kicked, ["7"])
+        self.assertEqual(self.db.staff_alerts()[0]["title"], "Warned player banned on Server 1")
+        self.assertIsNone(self.db.open_warning(BUFORD))
+        self.assertEqual(self.db.audit()[0]["username"], "Automatic")
+
+    async def test_a_withdrawn_or_staff_warning_does_nothing(self):
+        warning = self.db.add_warning(BUFORD, "Buford", "gaz", "")
+        self.assertTrue(self.db.withdraw_warning(warning, "gaz"))
+        await self.manager.ban_warned(self.state, self.close_tk())
+        self.assertIsNone(self.db.active_ban(BUFORD))
+        self.assertFalse(self.db.use_warning(warning, "x"))
+
     async def test_kick_then_ban_for_teamkills(self):
         self.settings(tk_kick=3, tk_ban=5, tk_ban_length=3600)
         for n in range(4):
@@ -1416,6 +1448,27 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         page = await (await self.client.get(f"/player/{identity}")).text()
         self.assertIn("edited by mod", page)
 
+    async def test_admins_give_and_withdraw_warnings_and_moderators_cannot(self):
+        identity = "11111111-2222-4333-8444-555555555555"
+        await self.login("mod", "mod-password")
+        token = await self.csrf(f"/player/{identity}")
+        refused = await self.client.post(f"/player/{identity}/warn", data={"csrf": token, "reason": "x"})
+        self.assertEqual(refused.status, 403)
+        self.assertIsNone(self.db.open_warning(identity))
+        await self.client.post("/logout", data={"csrf": token})
+        await self.login("boss", "boss-password")
+        token = await self.csrf(f"/player/{identity}")
+        await self.client.post(f"/player/{identity}/warn", data={"csrf": token, "reason": "friendly fire"})
+        await self.client.post(f"/player/{identity}/warn", data={"csrf": token, "reason": "again"})
+        self.assertEqual(len(self.db.warnings(identity)), 1)
+        self.assertEqual(self.db.audit()[0]["action"], "warned")
+        page = await (await self.client.get(f"/player/{identity}")).text()
+        self.assertIn("friendly fire", page)
+        warning = self.db.open_warning(identity)["id"]
+        await self.client.post(f"/player/{identity}/warn/{warning}/withdraw", data={"csrf": token})
+        self.assertIsNone(self.db.open_warning(identity))
+        self.assertEqual(self.db.audit()[0]["action"], "withdrew warning")
+
     async def test_a_note_can_only_be_deleted_from_its_own_players_page(self):
         note = self.db.add_note("11111111-2222-4333-8444-555555555555", "mod", "hello")
         await self.login("mod", "mod-password")
@@ -1471,7 +1524,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("boss", "boss-password")
         token = await self.csrf("/users")
         await self.client.post(f"/users/{adm}", data={"csrf": token, "action": "grants",
-                                                      "grant": ["discord", "discord:welcome", "kick", "notes", "ban"]})
+                                                      "grant": ["discord", "discord:welcome", "kick", "notes", "ban", "warn"]})
         self.assertEqual(self.db.grants(adm), {"discord"})
 
     async def test_owners_can_take_one_thing_off_one_person(self):
@@ -1480,7 +1533,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("boss", "boss-password")
         token = await self.csrf("/users")
         await self.client.post(f"/users/{adm}", data={"csrf": token, "action": "grants",
-                                                      "grant": ["kick", "notes", "box"]})
+                                                      "grant": ["kick", "notes", "box", "warn"]})
         self.assertEqual(self.db.grants(adm), {"-ban", "box"})
         self.assertIn("1 extra, 1 taken off", await (await self.client.get("/users")).text())
         await self.client.post("/logout", data={"csrf": token})

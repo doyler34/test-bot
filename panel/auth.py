@@ -21,6 +21,7 @@ PERMISSIONS = {
     "edit_notes": "owner",
     "delete_notes": "manager",
     "ban": "admin",
+    "warn": "admin",
     # Admins kick and ban; taking a ban back, IPs and server power stay with owners.
     "unban": "owner",
     "edit_bans": "owner",
@@ -52,6 +53,7 @@ GRANTS = (
     ("edit_notes", "Edit other people's notes"),
     ("delete_notes", "Delete other people's notes"),
     ("ban", "Ban players"),
+    ("warn", "Warn players (their next close-range teamkill is an automatic 10 hour ban)"),
     ("unban", "Unban players"),
     ("edit_bans", "Change any ban's reason or length"),
     ("ips", "See IPs, login attacks and other accounts on the same IP"),

@@ -313,6 +313,19 @@ CREATE TABLE IF NOT EXISTS notes (
     body TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS warnings (
+    id INTEGER PRIMARY KEY,
+    identity TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    author TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    used_at INTEGER,
+    used_for TEXT,
+    withdrawn_by TEXT,
+    withdrawn_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS warnings_identity ON warnings (identity);
 """
 
 
@@ -1111,6 +1124,35 @@ class PanelDB:
 
     def notes(self, identity: str):
         return self.all("SELECT * FROM notes WHERE identity = ? ORDER BY id DESC", identity)
+
+    # warnings: the next close-range teamkill after one earns an automatic ban
+
+    def add_warning(self, identity, name, author, reason) -> int:
+        return self.write("INSERT INTO warnings (identity, name, author, reason, created_at) VALUES (?, ?, ?, ?, ?)",
+                          identity, name, author, reason, now())
+
+    def warnings(self, identity: str):
+        return self.all("SELECT * FROM warnings WHERE identity = ? ORDER BY id DESC", identity)
+
+    def warning(self, warning_id: int):
+        return self.one("SELECT * FROM warnings WHERE id = ?", warning_id)
+
+    def open_warning(self, identity: str):
+        return self.one("SELECT * FROM warnings WHERE identity = ? AND used_at IS NULL AND withdrawn_at IS NULL"
+                        " ORDER BY id LIMIT 1", identity)
+
+    def use_warning(self, warning_id: int, used_for: str) -> bool:
+        """Spends a warning. False when something else already did, so one teamkill bans once."""
+        cur = self.db.execute("UPDATE warnings SET used_at = ?, used_for = ? WHERE id = ?"
+                              " AND used_at IS NULL AND withdrawn_at IS NULL", (now(), used_for, warning_id))
+        self.db.commit()
+        return cur.rowcount == 1
+
+    def withdraw_warning(self, warning_id: int, by: str) -> bool:
+        cur = self.db.execute("UPDATE warnings SET withdrawn_by = ?, withdrawn_at = ? WHERE id = ?"
+                              " AND used_at IS NULL AND withdrawn_at IS NULL", (by, now(), warning_id))
+        self.db.commit()
+        return cur.rowcount == 1
 
     def note(self, note_id: int):
         return self.one("SELECT * FROM notes WHERE id = ?", note_id)

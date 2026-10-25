@@ -1495,7 +1495,7 @@ async def player_page(request):
                   ips=db.ips(identity) if allowed(request, "ips") else [],
                   banned_ips=db.banned_ips() if allowed(request, "ips") else set(),
                   alts=db.alts(identity) if allowed(request, "ips") else [],
-                  names=db.player_names(identity), notes=db.notes(identity), bans=bans,
+                  names=db.player_names(identity), notes=db.notes(identity), warnings=db.warnings(identity), bans=bans,
                   platform=db.platform(identity),
                   same_steam=db.same_steam((db.platform(identity) or {"steam_id": ""})["steam_id"], identity)
                   if allowed(request, "ips") else [],
@@ -1530,6 +1530,36 @@ async def add_note(request):
     if body:
         request.app[DB].add_note(identity, request[USER]["username"], body)
         audit(request, "note", target=identity, detail=clean(body, 200))
+    raise web.HTTPFound(f"/player/{identity}")
+
+
+async def add_warning(request):
+    require(request, "warn")
+    identity = request.match_info["identity"].lower()
+    if not valid_identity(identity):
+        raise web.HTTPNotFound(text="No such player.")
+    db = request.app[DB]
+    name = (db.player(identity) or {"name": ""})["name"]
+    reason = (await request.post()).get("reason", "").strip()[:500]
+    if db.open_warning(identity):
+        flash(request, "They already have a warning waiting.")
+    else:
+        db.add_warning(identity, name, request[USER]["username"], reason)
+        audit(request, "warned", target=name or identity, detail=clean(reason, 200))
+        flash(request, "Warning given. Their next teamkill within 100 m (not an explosion) is a 10 hour ban.")
+    raise web.HTTPFound(f"/player/{identity}")
+
+
+async def withdraw_warning(request):
+    require(request, "warn")
+    identity = request.match_info["identity"].lower()
+    warning = request.app[DB].warning(int(request.match_info["warning"])) if request.match_info["warning"].isdigit() else None
+    if not valid_identity(identity) or warning is None or warning["identity"] != identity:
+        raise web.HTTPNotFound(text="No such warning.")
+    if request.app[DB].withdraw_warning(warning["id"], request[USER]["username"]):
+        audit(request, "withdrew warning", target=warning["name"] or identity,
+              detail=clean(f"given by {warning['author']}: {warning['reason']}", 200))
+        flash(request, "Warning withdrawn.")
     raise web.HTTPFound(f"/player/{identity}")
 
 
@@ -3969,6 +3999,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/players/unusual", unusual_page)
     app.router.add_get("/players/search.json", player_search)
     app.router.add_get("/player/{identity}", player_page)
+    app.router.add_post("/player/{identity}/warn", add_warning)
+    app.router.add_post("/player/{identity}/warn/{warning}/withdraw", withdraw_warning)
     app.router.add_post("/player/{identity}/notes", add_note)
     app.router.add_post("/player/{identity}/notes/{note}/edit", edit_note)
     app.router.add_post("/player/{identity}/notes/{note}/delete", delete_note)
