@@ -4,6 +4,7 @@ Run from the panel's folder, where panel.local.json is:
 
     .venv/bin/python dev/network_spikes.py        # last 24 hours
     .venv/bin/python dev/network_spikes.py 72     # last 72 hours
+    .venv/bin/python dev/network_spikes.py 5 02:30   # minute by minute, 40 minutes either side of 02:30 today
 
 It only reads the panel's database. Nothing is changed or sent anywhere.
 """
@@ -48,6 +49,27 @@ def groups(points):
     return out
 
 
+def around(rows, clock):
+    """Minute by minute for 40 minutes either side of a time of day (today, the box's clock)."""
+    hour, minute = (int(x) for x in clock.split(":"))
+    today = time.localtime()
+    centre = time.mktime((today.tm_year, today.tm_mon, today.tm_mday, hour, minute, 0, 0, 0, -1))
+    if centre > time.time():
+        centre -= 86400
+    cols = ("rx_mbps", "tx_mbps", "tx_pps", "udp_errors", "rx_drop", "softnet_drop", "tcp_retrans", "cpu", "load1")
+    print("time    " + "".join(f"{c:>13}" for c in cols) + "   (highest in that minute)")
+    minutes = {}
+    for r in rows:
+        if abs(r["at"] - centre) <= 2400:
+            minutes.setdefault(int(r["at"] // 60), []).append(r)
+    for key in sorted(minutes):
+        cells = []
+        for c in cols:
+            values = [r[c] for r in minutes[key] if r[c] is not None]
+            cells.append(f"{max(values):13.1f}" if values else f"{'-':>13}")
+        print(time.strftime("%H:%M   ", time.localtime(key * 60)) + "".join(cells))
+
+
 def main():
     hours = float(sys.argv[1]) if len(sys.argv) > 1 else 24
     config = load_config()
@@ -57,6 +79,8 @@ def main():
     if not rows:
         sys.exit(f"No box samples in the last {hours:g} hours.")
     print(f"{len(rows)} box samples, {stamp(rows[0]['at'])} to {stamp(rows[-1]['at'])}\n")
+    if len(sys.argv) > 2:
+        return around(rows, sys.argv[2])
     found = False
     for key in TRAFFIC:
         values = [r[key] for r in rows if r[key] is not None]
