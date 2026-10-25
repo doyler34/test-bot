@@ -135,9 +135,7 @@
   </div>
   {% if result.ports %}
   {% set using = result.ports|selectattr("in_use")|list %}
-  {% set idle = result.ports|rejectattr("in_use")|rejectattr("up")|list %}
-  <p>{% for port in using %}Traffic goes through <span class="mono">{{ port.name }}</span>, the {{ port.words }}{% if port.speed %} at {{ port.speed }} Mb/s{% endif %}.{% endfor %}
-    {% if idle %}<span class="muted">Not connected: {% for port in idle %}<span class="mono">{{ port.name }}</span>{{ ", " if not loop.last }}{% endfor %}.</span>{% endif %}</p>
+  <p>{% for port in using %}Traffic goes through <span class="mono">{{ port.name }}</span>, the {{ port.words }}{% if port.speed %} at {{ port.speed }} Mb/s{% endif %}.{% endfor %}</p>
   {% endif %}
 </section>
 
