@@ -49,7 +49,7 @@ def groups(points):
     return out
 
 
-def around(rows, clock):
+def around(rows, clock, db=None, servers=(), since=0):
     """Minute by minute for 40 minutes either side of a time of day (today, the box's clock)."""
     hour, minute = (int(x) for x in clock.split(":"))
     today = time.localtime()
@@ -68,6 +68,20 @@ def around(rows, clock):
             values = [r[c] for r in minutes[key] if r[c] is not None]
             cells.append(f"{max(values):13.1f}" if values else f"{'-':>13}")
         print(time.strftime("%H:%M   ", time.localtime(key * 60)) + "".join(cells))
+    for server in servers:
+        print(f"\n{server.name}: players, game CPU (100 = one full core) and lowest FPS, per minute")
+        by_minute = {}
+        for r in db.server_samples(server.id, since):
+            if abs(r["at"] - centre) <= 2400:
+                by_minute.setdefault(int(r["at"] // 60), []).append(r)
+        for key in sorted(by_minute):
+            group = by_minute[key]
+            fps = [r["fps"] for r in group if r["fps"] is not None]
+            cpu = [r["proc_cpu"] for r in group if r["proc_cpu"] is not None]
+            players = [r["players"] for r in group if r["players"] is not None]
+            print(time.strftime("%H:%M   ", time.localtime(key * 60))
+                  + f"players {max(players) if players else '-':>4}   cpu {max(cpu) if cpu else '-':>6}   "
+                  f"fps {min(fps) if fps else '-':>6}")
 
 
 def main():
@@ -80,7 +94,7 @@ def main():
         sys.exit(f"No box samples in the last {hours:g} hours.")
     print(f"{len(rows)} box samples, {stamp(rows[0]['at'])} to {stamp(rows[-1]['at'])}\n")
     if len(sys.argv) > 2:
-        return around(rows, sys.argv[2])
+        return around(rows, sys.argv[2], db, config.servers, since)
     found = False
     for key in TRAFFIC:
         values = [r[key] for r in rows if r[key] is not None]

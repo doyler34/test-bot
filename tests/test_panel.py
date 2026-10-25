@@ -2951,3 +2951,46 @@ class ServerListingTests(unittest.TestCase):
         view = site.view(doc, configs, {"a": SimpleNamespace(online=True, players=[])}, {},
                          {"a": {"slots": 128, "address": "203.0.113.5:2001"}})
         self.assertEqual((view["slots"], view["servers"][0]["address"]), (128, "203.0.113.5:2001"))
+
+
+class ResendWatchTests(unittest.TestCase):
+    def test_a_jump_that_stays_up_alerts_once_and_a_blip_does_not(self):
+        from panel.resend_watch import ResendWatch
+        watch = ResendWatch()
+        at = 1_000_000
+        for _ in range(30):
+            at += 15
+            self.assertIsNone(watch.feed(8, at))
+        at += 15
+        self.assertIsNone(watch.feed(100, at))          # one reading is a blip
+        at += 15
+        self.assertIsNone(watch.feed(8, at))
+        at += 15
+        self.assertIsNone(watch.feed(52, at))
+        at += 15
+        jump = watch.feed(92, at)                        # two in a row
+        self.assertEqual((jump["peak"], jump["usual"]), (92, 8))
+        for value in (100, 100, 100):
+            at += 15
+            self.assertIsNone(watch.feed(value, at))     # already told them
+        at += 1000
+        self.assertIsNotNone(watch.feed(100, at))        # still going a quarter of an hour later: tell them again
+
+    def test_ordinary_resends_never_alert(self):
+        from panel.resend_watch import ResendWatch
+        watch = ResendWatch()
+        for n in range(200):
+            self.assertIsNone(watch.feed(30 if n % 7 == 0 else 8, 1000 + n * 15))
+
+    def test_the_manager_queues_a_staff_alert(self):
+        db = PanelDB(":memory:")
+        self.addCleanup(db.close)
+        manager = ServerManager(PanelConfig(servers=[ServerConfig("one", "Server 1")]), db, alerts=FakeAlerts())
+        for n in range(30):
+            manager.resend_alert({"tcp_retrans": 8}, 1000 + n * 15)
+        manager.resend_alert({"tcp_retrans": 90}, 2000)
+        self.assertEqual(db.staff_alerts(), [])
+        manager.resend_alert({"tcp_retrans": 95}, 2015)
+        alert = db.staff_alerts()[0]
+        self.assertEqual(alert["title"], "Network: packets being lost on the way out")
+        self.assertIn("95 a minute", alert["text"])

@@ -20,6 +20,7 @@ from .rcon import RconClient, RconError
 from bot.discord import welcome_doc
 from bot.discord.ban_roles import length_text
 from .suspicion import DEFAULTS, Detector, check_settings
+from .resend_watch import ResendWatch
 from .tk_burst import TkBurst
 
 PLAYER_ROW = re.compile(r"\d+\s*;\s*[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}\s*;")
@@ -138,6 +139,7 @@ class ServerManager:
         self.sampler = sampler
         self.settle = memory.SETTLE_SECONDS
         self.box_total = memory.box_total()
+        self.resends = ResendWatch()
         self.states = {s.id: ServerState(s, detector=Detector(config.suspicion)) for s in config.servers}
         self._tasks: list[asyncio.Task] = []
         self._stopping = False
@@ -214,7 +216,9 @@ class ServerManager:
             await asyncio.sleep(max(due - time.monotonic(), 0))
             try:
                 after = await asyncio.to_thread(monitor.read_box, proc_root)
-                self.db.add_box_sample(monitor.box_rates(before, after))
+                rates = monitor.box_rates(before, after)
+                self.db.add_box_sample(rates)
+                self.resend_alert(rates, after["at"])
                 before = after
                 if beat % 4 == 0:
                     await self.find_programs(proc_root)
@@ -224,6 +228,16 @@ class ServerManager:
                 raise
             except Exception:
                 log.exception("monitor reading failed")
+
+    def resend_alert(self, rates, at):
+        """Tells staff when TCP resends jump, so a short outage on the way out isn't only found afterwards."""
+        jump = self.resends.feed(rates.get("tcp_retrans"), at)
+        if not jump:
+            return
+        text = (f"TCP resends jumped to {jump['peak']:.0f} a minute (usually about {jump['usual']:.0f}). "
+                "Packets leaving the box are being lost on the way out, which can show up as ping spikes and "
+                "rubber-banding for players. The box itself is not the cause. If it keeps happening, tell the host.")
+        self.db.add_staff_alert("", int(at), "Network: packets being lost on the way out", text)
 
     async def _watch_attacks(self, reader=None):
         reader = reader or attacks.Reader()
