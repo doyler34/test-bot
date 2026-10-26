@@ -24,37 +24,53 @@ that only Workbench can make. Each one takes a minute.
 2. **Open it.** Launch Arma Reforger Tools, press **Add Existing**, pick
    `OYB_Arsenal.gproj`, and double-click it. If a red error box appears,
    screenshot it and send it over: it names the exact line.
-3. **Make the empty layout.** In the **Resource Browser**, inside
-   `OYB_Arsenal`, make the folders `UI/layouts/OYBArsenal`. Right-click in that
-   folder, create a new **Layout**, and call it `OYB_ArsenalMain`. Open it: the
-   root widget should be a **FrameWidget** that fills the screen (anchors
-   stretched on both sides, offsets 0). Leave it empty and save. The menu
-   builds everything inside it.
-4. **Register the menu.** In the Resource Browser search `chimeraMenus`,
-   right-click `chimeraMenus.conf` → **Override in OYB_Arsenal**, and open the
-   copy. Add one entry to the menu list:
-   - **Name:** `OYB_ArsenalMenu` (exactly this; it must match the script)
-   - **Class:** `OYB_ArsenalMenu`
-   - **Layout:** pick `OYB_ArsenalMain.layout` from step 3
+3. **Make the empty layout.** In the **Resource Browser**, right-click the
+   `Ui` folder inside `OYB_Arsenal`, create a new **Layout**, and call it
+   `OYB_ArsenalMain`. It comes with one empty FrameWidget called `rootFrame`;
+   leave it as it is and save. The menu builds everything inside it.
+4. **Register the menu.** Search the Resource Browser for `chimeraMenus`,
+   right-click `chimeraMenus.conf` → **Override in 'OYB_Arsenal'**. Workbench
+   won't open the copy for editing, so do it in Notepad:
+   - open `Documents\OYB_Arsenal\Ui\OYB_ArsenalMain.layout.meta` and copy the
+     `Name` value, e.g. `{F6E4A4D4C839150B}Ui/OYB_ArsenalMain.layout`;
+   - open `Documents\OYB_Arsenal\Configs\System\chimeraMenus.conf` and replace
+     everything with:
 
-   Save with Ctrl+S.
-5. **Put the action on an arsenal.** Search the Resource Browser for `Arsenal`
-   and pick the arsenal box you test with (the US or USSR one from Conflict is
-   fine). Right-click it → **Override in OYB_Arsenal**, open the copy, and
-   select its **ActionsManagerComponent**. Under **Additional Actions** press
-   **+** and choose `OYB_OpenArsenalUserAction`. Set its **Parent Context
-   List** to the same context the box's other actions use, and its **UI Info →
-   Name** to `Open OYB Arsenal`. Save with Ctrl+S.
+   ```
+   MenuManager {
+    MenuPresets {
+     MenuPreset OYB_ArsenalMenu {
+      Layout "{F6E4A4D4C839150B}Ui/OYB_ArsenalMain.layout"
+      Class "OYB_ArsenalMenu"
+     }
+    }
+   }
+   ```
+
+   using your own `Name` value as `Layout`. Restart Workbench.
+5. **Put the action on every arsenal box.** Open the **World Editor**. In its
+   Resource Browser go to `ArmaReforger → Prefabs → Props → Military → Arsenal
+   → ArsenalBoxes`, right-click **`ArsenalBox_Base.et`** → **Override in
+   'OYB_Arsenal'**, and double-click the copy. Click the top line in the
+   Hierarchy, then in **Object Properties** pick **ActionsManagerComponent**.
+   Under **Additional Actions** press **+** and choose
+   `OYB_OpenArsenalUserAction`. Set **Parent Context List** to `default` and
+   **UIInfo → Name** to `Open OYB Arsenal`, then **File → Save**. Ctrl+S
+   doesn't save here. Check by opening the copy in Notepad: it should contain
+   `OYB_OpenArsenalUserAction`.
+
+   Use `ArsenalBox_Base`, not the US box: the Game Master arsenals aren't built
+   from `ArsenalBox_US`, but they and the faction boxes all share the base.
 
 If any of these menus look different from the description, send a screenshot
 of what you see.
 
 ## Run it
 
-1. In the **Resource Browser** search `GM_Everon`, double-click that world,
-   and press **F5**.
-2. As Game Master, place the arsenal box from step 5 and a soldier, and take
-   control of the soldier.
+1. In the World Editor, **File → Load World** → `worlds/GameMaster/GM_Eden.ent`
+   (not `worlds/Eden/Eden.ent`, which has no game mode), and press **F5**.
+2. As Game Master, place the US **Arsenal** and a US soldier, and take control
+   of the soldier.
 3. Walk up to the box and pick **Open OYB Arsenal**.
 4. Try it with the mouse, then with a controller:
    - Categories down the left; LB / RB also switch category.
@@ -101,11 +117,15 @@ Workbench disagrees, Workbench wins.
 
 ## Tested and not tested
 
-- **Not compiled and not run yet.** Every name above was checked against the
-  game's source, but none of this has been through Workbench.
-- Not tried: the layout, menu and prefab steps; how the window looks at
-  different resolutions; controller focus moving between the three columns;
-  the on-screen keyboard for search.
+- **Tested in Workbench (1.8.0.13):** the scripts compile; the catalogues load
+  without errors; the setup steps above work; **Open OYB Arsenal** shows on a
+  Game Master US arsenal and opens the menu.
+- **Found and fixed in testing:** modding `SCR_ArsenalItem` broke catalogue
+  loading; a button can hold only one child widget, so each row's background
+  and label now sit in an overlay.
+- Not tried yet: the window itself after that fix; how it looks at other
+  resolutions; controller focus between the three columns; the on-screen
+  keyboard for search.
 
 ## What this does not do yet
 

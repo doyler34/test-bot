@@ -217,11 +217,16 @@ class OYB_ArsenalMenu : ChimeraMenuBase
 		LayoutSlot.SetPadding(row.m_wButton, 0, 2, 4, 2);
 		row.m_wButton.AddHandler(this);
 
-		row.m_wBackground = ImageWidget.Cast(workspace.CreateWidget(WidgetType.ImageWidgetTypeID, WidgetFlags.VISIBLE | WidgetFlags.BLEND | WidgetFlags.STRETCH | WidgetFlags.IGNORE_CURSOR, m_ColorRow, 0, row.m_wButton));
+		// A button holds a single child, so the background and label share an overlay.
+		Widget overlay = workspace.CreateWidget(WidgetType.OverlayWidgetTypeID, WidgetFlags.VISIBLE, new Color(1, 1, 1, 1), 0, row.m_wButton);
+		AlignableSlot.SetHorizontalAlign(overlay, LayoutHorizontalAlign.Stretch);
+		AlignableSlot.SetVerticalAlign(overlay, LayoutVerticalAlign.Stretch);
+
+		row.m_wBackground = ImageWidget.Cast(workspace.CreateWidget(WidgetType.ImageWidgetTypeID, WidgetFlags.VISIBLE | WidgetFlags.BLEND | WidgetFlags.STRETCH | WidgetFlags.IGNORE_CURSOR, m_ColorRow, 0, overlay));
 		AlignableSlot.SetHorizontalAlign(row.m_wBackground, LayoutHorizontalAlign.Stretch);
 		AlignableSlot.SetVerticalAlign(row.m_wBackground, LayoutVerticalAlign.Stretch);
 
-		row.m_wText = CreateText(row.m_wButton, label, 20, m_ColorText);
+		row.m_wText = CreateText(overlay, label, 20, m_ColorText);
 		AlignableSlot.SetPadding(row.m_wText, 12, 5, 12, 5);
 		return row;
 	}
