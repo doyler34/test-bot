@@ -1,9 +1,10 @@
 // Saved loadouts: five slots per player, kept by the server in its profile folder
 // so a client can't hand it a made-up kit. Saving writes the player's kit with the
 // game's own loadout format (the one used for respawning with an arsenal kit).
-// Loading at an arsenal only pays for what the player doesn't already carry, and
-// each of those items has to be offered by that arsenal. Whatever the kit throws
-// away is refunded the way the arsenal refunds it when an item is put back.
+// Loading at an arsenal only pays for what the player doesn't already carry, at
+// the arsenal's price, or the catalogue's for items it doesn't sell. Whatever the
+// kit throws away is refunded the way the arsenal refunds it when an item is put
+// back.
 modded class SCR_PlayerController
 {
 	static const int OYB_LOADOUT_SLOTS = 5;
@@ -149,8 +150,7 @@ modded class SCR_PlayerController
 		}
 
 		// Parts that come fitted to something being bought, like the M203 on an
-		// M16A2 M203, arrive with it, so they're neither paid for nor looked for in
-		// the arsenal.
+		// M16A2 M203, arrive with it, so they aren't paid for again.
 		map<ResourceName, int> missingCounts = new map<ResourceName, int>();
 		foreach (ResourceName prefab, int count : wanted)
 		{
@@ -169,18 +169,8 @@ modded class SCR_PlayerController
 			if (missing <= 0)
 				continue;
 
-			if (!prices.Contains(needed))
-			{
-				string itemName = OYB_ArsenalCatalogService.OYB_ReadInventoryName(needed);
-				if (itemName.IsEmpty())
-					itemName = FilePath.StripExtension(FilePath.StripPath(needed.GetPath()));
-				PrintFormat("OYB_ARSENAL loadout %1 needs: %2", slot + 1, needs);
-				OYB_SendMessage(string.Format("This arsenal doesn't have %1.", itemName));
-				return;
-			}
-
 			if (usesSupplies)
-				cost += prices.Get(needed) * missing;
+				cost += OYB_GetPrice(needed, prices, arsenal) * missing;
 		}
 
 		PrintFormat("OYB_ARSENAL loadout %1 needs: %2", slot + 1, needs);
@@ -269,6 +259,33 @@ modded class SCR_PlayerController
 			}
 			pos = kit.IndexOfFrom(end + 1, "\"{");
 		}
+	}
+
+	// Items this arsenal sells cost what it charges. Anything else in the kit, like
+	// a uniform the player spawned in, is priced the way the game prices a saved
+	// respawn kit: from the item catalogue, or free if it isn't listed there.
+	protected float OYB_GetPrice(ResourceName prefab, map<ResourceName, float> prices, SCR_ArsenalComponent arsenal)
+	{
+		if (prices.Contains(prefab))
+			return prices.Get(prefab);
+
+		SCR_EntityCatalogManagerComponent catalogManager = SCR_EntityCatalogManagerComponent.GetInstance();
+		if (!catalogManager)
+			return 0;
+
+		SCR_EntityCatalogEntry entry = catalogManager.GetEntryWithPrefabFromAnyCatalog(EEntityCatalogType.ITEM, prefab, arsenal.GetAssignedFaction());
+		if (!entry)
+			return 0;
+
+		SCR_ArsenalItem arsenalData = SCR_ArsenalItem.Cast(entry.GetEntityDataOfType(SCR_ArsenalItem));
+		if (arsenalData)
+			return arsenalData.GetSupplyCost(arsenal.GetSupplyCostType());
+
+		SCR_NonArsenalItemCostCatalogData otherData = SCR_NonArsenalItemCostCatalogData.Cast(entry.GetEntityDataOfType(SCR_NonArsenalItemCostCatalogData));
+		if (otherData)
+			return otherData.GetSupplyCost(arsenal.GetSupplyCostType());
+
+		return 0;
 	}
 
 	// How many of each part come already fitted to the given items, read from
