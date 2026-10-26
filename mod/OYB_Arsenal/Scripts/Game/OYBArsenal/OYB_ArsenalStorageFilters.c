@@ -208,7 +208,7 @@ modded class SCR_InventoryStorageBaseUI
 
 	}
 
-	// A column of category buttons to the right of the item grid. The grid is
+	// A column of category buttons to the left of the item grid. The grid is
 	// moved into a row with the column so the rest of the panel is untouched.
 	protected void OYB_BuildCategoryColumn()
 	{
@@ -220,19 +220,21 @@ modded class SCR_InventoryStorageBaseUI
 			return;
 		row.SetName("OYB_GridRow");
 		OYB_MoveBefore(row, m_wGrid);
-		// A widget with nothing holding it is deleted when it's taken out of its
-		// parent; the member is a weak reference, so a local keeps it alive.
-		Widget grid = m_wGrid;
-		container.RemoveChild(grid);
-		row.AddChild(grid);
-
 		Widget column = workspace.CreateWidget(WidgetType.VerticalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, row);
 		if (!column)
 			return;
 		column.SetName("OYB_CategoryColumn");
 		m_wOYB_CategoryColumn = column;
-		AlignableSlot.SetPadding(column, 8, 0, 0, 0);
+		AlignableSlot.SetPadding(column, 0, 0, 8, 0);
 		AlignableSlot.SetVerticalAlign(column, LayoutVerticalAlign.Top);
+
+		// Added after the column, so it sits to its right. A widget with nothing
+		// holding it is deleted when it's taken out of its parent; the member is a
+		// weak reference, so a local keeps it alive.
+		Widget grid = m_wGrid;
+		container.RemoveChild(grid);
+		row.AddChild(grid);
+		OYB_KeepCreationOrder(row);
 
 		for (int category = 0; category < OYB_ArsenalCategories.COUNT; category++)
 		{

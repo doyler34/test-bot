@@ -9,7 +9,7 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
 
 ## What's in so far
 
-- **A category column beside the arsenal grid:** All, Rifles, Machine guns,
+- **A category column to the left of the arsenal grid:** All, Rifles, Machine guns,
   Sniper rifles, Pistols, Launchers, Ammo, Attachments, Clothing, Vests &
   bags, Medical, Grenades & explosives, Tools, Other, each with its item count.
   Only categories the arsenal has items in get a button. Built from the game's
