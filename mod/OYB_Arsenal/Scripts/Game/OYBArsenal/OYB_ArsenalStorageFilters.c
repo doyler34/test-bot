@@ -34,14 +34,15 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_FilterArsenalItems(notnull array<IEntity> pItemsInStorage, BaseInventoryStorageComponent pStorage)
 	{
-		m_OYB_Arsenal = OYB_GetArsenal(pStorage);
-		if (!m_OYB_Arsenal)
-		{
-			OYB_ShowFilterBar(false);
-			return;
-		}
+		// A refresh lists other storages too, so whether the bar shows depends on
+		// what the panel is showing, not on which list this happens to be.
+		OYB_UpdateFilterBarVisibility();
 
-		OYB_ShowFilterBar(true);
+		SCR_ArsenalComponent listed = OYB_GetArsenal(pStorage);
+		if (!listed)
+			return;
+
+		m_OYB_Arsenal = listed;
 		OYB_UpdateCategoryText();
 
 		if (s_iOYB_Category == OYB_EArsenalCategory.ALL && s_sOYB_Search.IsEmpty())
@@ -119,6 +120,11 @@ modded class SCR_InventoryStorageBaseUI
 
 	//------------------------------------------------------------------------------------------------
 	// Filter bar
+
+	protected void OYB_UpdateFilterBarVisibility()
+	{
+		OYB_ShowFilterBar(OYB_GetArsenal(GetCurrentNavigationStorage()) != null);
+	}
 
 	protected void OYB_ShowFilterBar(bool show)
 	{
@@ -425,8 +431,8 @@ modded class SCR_InventoryStorageBaseUI
 	}
 }
 
-// The Vicinity panel lists what's around the player itself and only goes through
-// the base class once it steps into a storage, so the bar is hidden there.
+// The Vicinity panel lists what's around the player itself without going through
+// the base class, so the bar's visibility is checked here too.
 modded class SCR_InventoryStorageLootUI
 {
 	override protected void GetAllItems(out notnull array<IEntity> pItemsInStorage, BaseInventoryStorageComponent pStorage = null)
@@ -434,6 +440,6 @@ modded class SCR_InventoryStorageLootUI
 		super.GetAllItems(pItemsInStorage, pStorage);
 
 		if (!pStorage)
-			OYB_ShowFilterBar(false);
+			OYB_UpdateFilterBarVisibility();
 	}
 }
