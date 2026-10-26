@@ -211,8 +211,11 @@ modded class SCR_InventoryStorageBaseUI
 			return;
 		row.SetName("OYB_GridRow");
 		OYB_MoveBefore(row, m_wGrid);
-		container.RemoveChild(m_wGrid);
-		row.AddChild(m_wGrid);
+		// A widget with nothing holding it is deleted when it's taken out of its
+		// parent; the member is a weak reference, so a local keeps it alive.
+		Widget grid = m_wGrid;
+		container.RemoveChild(grid);
+		row.AddChild(grid);
 
 		Widget column = workspace.CreateWidget(WidgetType.VerticalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, row);
 		if (!column)

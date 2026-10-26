@@ -18,6 +18,9 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   categories (the game's `MenuFilter` action, X on keyboard), the current
   category and count, and the game's own search box. Q / E stay the
   inventory's page buttons.
+- **Every infantry arsenal also stocks its faction's medical gear, vests and
+  helmets**, even a weapons-only box (`OYB_ArsenalAlwaysStocked.c`). Arsenals
+  with no infantry gear at all, such as vehicle pylons, are left alone.
 - The item list comes from the arsenal's own filtered list
   (`SCR_ArsenalComponent.GetAvailablePrefabs`), the same one vanilla shows, so
   faction, item type and mode rules are the game's own.
@@ -76,6 +79,8 @@ display names and search text, and caches it until the arsenal's offer changes.
   every arsenal entry (`Unknown class 'SCR_ArsenalItem'`). Item names are now
   looked up through `SCR_EntityCatalogManagerComponent` instead.
 - A `ButtonWidget` holds one child widget only.
+- Taking a widget out of its parent deletes it unless something holds a strong
+  reference; widget members are weak, so moves go through a local variable.
 - The Game Master arsenals aren't built from `ArsenalBox_US`; they share
   `ArsenalBox_Base`.
 - Q / E (`MenuTabLeft` / `MenuTabRight`) turn the inventory grid's pages, so
