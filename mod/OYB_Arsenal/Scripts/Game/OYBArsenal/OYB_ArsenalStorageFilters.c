@@ -61,6 +61,11 @@ modded class SCR_InventoryStorageBaseUI
 			return;
 		}
 
+		// Each word of the search has to appear somewhere in the name, in any
+		// order, so "m16 ca" finds "M16A2 Carbine".
+		array<string> words = {};
+		s_sOYB_Search.Split(" ", words, true);
+
 		OYB_ArsenalCatalogService catalog = OYB_ArsenalCatalogService.GetInstance();
 		array<IEntity> kept = {};
 		foreach (int i, IEntity item : pItemsInStorage)
@@ -70,13 +75,23 @@ modded class SCR_InventoryStorageBaseUI
 				continue;
 			if (s_iOYB_Category != OYB_EArsenalCategory.ALL && entry.m_iCategory != s_iOYB_Category)
 				continue;
-			if (!s_sOYB_Search.IsEmpty() && !entry.m_sSearch.Contains(s_sOYB_Search))
+			if (!OYB_MatchesAll(entry.m_sSearch, words))
 				continue;
 			kept.Insert(item);
 		}
 
 		pItemsInStorage.Clear();
 		pItemsInStorage.InsertAll(kept);
+	}
+
+	protected bool OYB_MatchesAll(string text, array<string> words)
+	{
+		foreach (string word : words)
+		{
+			if (!text.Contains(word))
+				return false;
+		}
+		return true;
 	}
 
 	// Only the storages the game itself lists as arsenal items, the same test its
