@@ -54,12 +54,15 @@ will complain about a class that no longer exists:
 
 ## How it works
 
-`OYB_ArsenalStorageFilters.c` is a `modded class` of the vanilla arsenal panel,
-`SCR_InventoryOpenedStorageArsenalUI`. It lets the game build its item list,
-then keeps only the items in the chosen category that match the search, and
-refreshes the panel. The game creates one card per offered prefab, in the
-arsenal's order, so each card's prefab is found by position; if the counts
-ever differ it logs `OYB_ARSENAL filter skipped` and shows everything.
+`OYB_ArsenalStorageFilters.c` modifies `SCR_InventoryStorageBaseUI`, the base of
+every inventory panel. An arsenal is usually shown by the **Vicinity** panel
+(`SCR_InventoryStorageLootUI`) after you step into the box, and sometimes as an
+opened storage (`SCR_InventoryOpenedStorageArsenalUI`); both get their items
+through the base class, so that's where OYB filters them and adds the bar. The
+bar only shows while an arsenal is on screen. The game creates one card per
+offered prefab, in the arsenal's order, so each card's prefab is found by
+position; if the counts ever differ it logs `OYB_ARSENAL filter skipped` and
+shows everything.
 
 `OYB_ArsenalCatalogService.c` turns the arsenal's offer into categories,
 display names and search text, and caches it until the arsenal's offer changes.
@@ -73,6 +76,9 @@ display names and search text, and caches it until the arsenal's offer changes.
 - A `ButtonWidget` holds one child widget only.
 - The Game Master arsenals aren't built from `ArsenalBox_US`; they share
   `ArsenalBox_Base`.
+- Opening an arsenal from Vicinity doesn't use
+  `SCR_InventoryOpenedStorageArsenalUI` at all, so modding only that class did
+  nothing; the filter now lives in the shared base class.
 
 ## Not tested yet
 

@@ -1,9 +1,11 @@
-// The vanilla arsenal panel, with an OYB filter bar above its item grid:
-// previous / next category with controller prompts, the category name and count,
-// and a search box. The bar is built from the game's own widget library layouts so
-// it matches the rest of the inventory. Cards, icons, supply costs, dragging and
-// equipping stay the game's own.
-modded class SCR_InventoryOpenedStorageArsenalUI
+// Whenever an inventory panel shows an arsenal, OYB adds a filter bar above its
+// item grid: previous / next category with controller prompts, the category name
+// and count, and a search box. Arsenals are shown by the Vicinity panel (after
+// stepping into the box) or as an opened storage; both list their items through
+// this base class, so this is where the filter goes. The bar is built from the
+// game's own widget library layouts so it matches the rest of the inventory.
+// Cards, icons, supply costs, dragging and equipping stay the game's own.
+modded class SCR_InventoryStorageBaseUI
 {
 	protected static const ResourceName OYB_NAV_BUTTON_LAYOUT = "{08CF3B69CB1ACBC4}UI/layouts/WidgetLibrary/WLib_NavigationButton.layout";
 	protected static const ResourceName OYB_LABEL_LAYOUT = "{829BC1189A899017}UI/layouts/WidgetLibrary/WLibRefined/WLib_Label.layout";
@@ -13,21 +15,10 @@ modded class SCR_InventoryOpenedStorageArsenalUI
 	protected static string s_sOYB_Search;
 	protected static bool s_bOYB_TreeLogged;
 
+	protected Widget m_wOYB_FilterBar;
 	protected TextWidget m_wOYB_CategoryText;
 	protected SCR_EditBoxComponent m_OYB_Search;
-
-	override void Init()
-	{
-		super.Init();
-
-		if (!s_bOYB_TreeLogged)
-		{
-			s_bOYB_TreeLogged = true;
-			OYB_LogTree(m_widget, 0);
-		}
-
-		OYB_BuildFilterBar();
-	}
+	protected SCR_ArsenalComponent m_OYB_Arsenal;
 
 	//------------------------------------------------------------------------------------------------
 	// Filtering
@@ -35,13 +26,25 @@ modded class SCR_InventoryOpenedStorageArsenalUI
 	override protected void GetAllItems(out notnull array<IEntity> pItemsInStorage, BaseInventoryStorageComponent pStorage = null)
 	{
 		super.GetAllItems(pItemsInStorage, pStorage);
+		OYB_FilterArsenalItems(pItemsInStorage, pStorage);
+	}
 
-		if (!m_bIsArsenal || (s_iOYB_Category == OYB_EArsenalCategory.ALL && s_sOYB_Search.IsEmpty()))
+	protected void OYB_FilterArsenalItems(notnull array<IEntity> pItemsInStorage, BaseInventoryStorageComponent pStorage)
+	{
+		m_OYB_Arsenal = OYB_GetArsenal(pStorage);
+		if (!m_OYB_Arsenal)
+		{
+			OYB_ShowFilterBar(false);
+			return;
+		}
+
+		OYB_ShowFilterBar(true);
+		OYB_UpdateCategoryText();
+
+		if (s_iOYB_Category == OYB_EArsenalCategory.ALL && s_sOYB_Search.IsEmpty())
 			return;
 
-		SCR_ArsenalComponent arsenal = OYB_GetArsenal();
-		if (!arsenal)
-			return;
+		SCR_ArsenalComponent arsenal = m_OYB_Arsenal;
 
 		// The panel's items are resolved one per prefab, in the order the arsenal
 		// lists them, so the prefab for each item is found by position.
@@ -71,12 +74,18 @@ modded class SCR_InventoryOpenedStorageArsenalUI
 		pItemsInStorage.InsertAll(kept);
 	}
 
-	protected SCR_ArsenalComponent OYB_GetArsenal()
+	// Only the storages the game itself lists as arsenal items, the same test its
+	// own GetAllItems uses.
+	protected SCR_ArsenalComponent OYB_GetArsenal(BaseInventoryStorageComponent storage)
 	{
-		if (!m_Storage || !m_Storage.GetOwner())
+		if (!storage || !storage.GetOwner())
 			return null;
 
-		return SCR_ArsenalComponent.Cast(m_Storage.GetOwner().FindComponent(SCR_ArsenalComponent));
+		IEntity owner = storage.GetOwner();
+		if (!owner.FindComponent(SCR_ArsenalInventoryStorageManagerComponent))
+			return null;
+
+		return SCR_ArsenalComponent.Cast(owner.FindComponent(SCR_ArsenalComponent));
 	}
 
 	void OYB_SetCategory(int category)
@@ -85,7 +94,6 @@ modded class SCR_InventoryOpenedStorageArsenalUI
 			return;
 
 		s_iOYB_Category = category;
-		OYB_UpdateCategoryText();
 		OYB_ApplyFilters();
 	}
 
@@ -109,26 +117,38 @@ modded class SCR_InventoryOpenedStorageArsenalUI
 	//------------------------------------------------------------------------------------------------
 	// Filter bar
 
-	// Init runs before the panel's items are read, so m_bIsArsenal isn't set yet;
-	// this class is only created for arsenals anyway.
+	protected void OYB_ShowFilterBar(bool show)
+	{
+		if (show && !m_wOYB_FilterBar)
+			OYB_BuildFilterBar();
+
+		if (m_wOYB_FilterBar)
+			m_wOYB_FilterBar.SetVisible(show);
+	}
+
 	protected void OYB_BuildFilterBar()
 	{
-		if (!m_wGrid)
+		if (!s_bOYB_TreeLogged)
+		{
+			s_bOYB_TreeLogged = true;
+			PrintFormat("OYB_ARSENAL arsenal shown in %1, panel structure:", ClassName());
+			OYB_LogTree(m_widget, 0);
+		}
+
+		if (!m_wGrid || !m_wGrid.GetParent())
 		{
 			Print("OYB_ARSENAL no item grid found, filter bar not added", LogLevel.WARNING);
 			return;
 		}
 
-		Widget gridParent = m_wGrid.GetParent();
-		if (!gridParent)
-			return;
-
 		WorkspaceWidget workspace = GetGame().GetWorkspace();
-		Widget bar = workspace.CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, gridParent);
+		Widget bar = workspace.CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, m_wGrid.GetParent());
 		if (!bar)
 			return;
 		bar.SetName("OYB_FilterBar");
 		OYB_MoveBefore(bar, m_wGrid);
+		m_wOYB_FilterBar = bar;
+		PrintFormat("OYB_ARSENAL filter bar added above %1 in %2", m_wGrid.GetName(), m_wGrid.GetParent().GetName());
 
 		SCR_InputButtonComponent previous = OYB_CreateNavButton(bar, "MenuTabLeft", "Previous");
 		if (previous)
@@ -163,7 +183,6 @@ modded class SCR_InventoryOpenedStorageArsenalUI
 			}
 		}
 
-		OYB_UpdateCategoryText();
 	}
 
 	protected SCR_InputButtonComponent OYB_CreateNavButton(Widget parent, string action, string label)
@@ -188,11 +207,10 @@ modded class SCR_InventoryOpenedStorageArsenalUI
 			return;
 
 		int count;
-		SCR_ArsenalComponent arsenal = OYB_GetArsenal();
-		if (arsenal)
+		if (m_OYB_Arsenal)
 		{
 			bool fromCache;
-			array<ref OYB_ArsenalEntry> entries = OYB_ArsenalCatalogService.GetInstance().GetEntries(arsenal, fromCache);
+			array<ref OYB_ArsenalEntry> entries = OYB_ArsenalCatalogService.GetInstance().GetEntries(m_OYB_Arsenal, fromCache);
 			foreach (OYB_ArsenalEntry entry : entries)
 			{
 				if (s_iOYB_Category == OYB_EArsenalCategory.ALL || entry.m_iCategory == s_iOYB_Category)
@@ -300,5 +318,18 @@ modded class SCR_InventoryOpenedStorageArsenalUI
 			OYB_LogTree(child, depth + 1);
 			child = child.GetSibling();
 		}
+	}
+}
+
+// The Vicinity panel lists what's around the player itself and only goes through
+// the base class once it steps into a storage, so the bar is hidden there.
+modded class SCR_InventoryStorageLootUI
+{
+	override protected void GetAllItems(out notnull array<IEntity> pItemsInStorage, BaseInventoryStorageComponent pStorage = null)
+	{
+		super.GetAllItems(pItemsInStorage, pStorage);
+
+		if (!pStorage)
+			OYB_ShowFilterBar(false);
 	}
 }
