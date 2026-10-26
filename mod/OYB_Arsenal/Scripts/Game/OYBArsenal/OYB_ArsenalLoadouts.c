@@ -148,37 +148,62 @@ modded class SCR_PlayerController
 				prices.Set(item.GetItemResourceName(), item.GetSupplyCost(arsenal.GetSupplyCostType()));
 		}
 
-		bool usesSupplies = arsenal.IsArsenalUsingSupplies();
-		float cost;
+		// Parts that come fitted to something being bought, like the M203 on an
+		// M16A2 M203, arrive with it, so they're neither paid for nor looked for in
+		// the arsenal.
+		map<ResourceName, int> missingCounts = new map<ResourceName, int>();
 		foreach (ResourceName prefab, int count : wanted)
 		{
-			int missing = count - carried.Get(prefab);
+			if (count > carried.Get(prefab))
+				missingCounts.Set(prefab, count - carried.Get(prefab));
+		}
+		map<ResourceName, int> comesWith = OYB_CountFittedParts(missingCounts);
+
+		bool usesSupplies = arsenal.IsArsenalUsingSupplies();
+		float cost;
+		string needs;
+		foreach (ResourceName needed, int neededCount : missingCounts)
+		{
+			int missing = neededCount - comesWith.Get(needed);
+			needs += string.Format("%1 x%2 (%3 fitted); ", FilePath.StripPath(needed.GetPath()), neededCount, neededCount - Math.Max(missing, 0));
 			if (missing <= 0)
 				continue;
 
-			if (!prices.Contains(prefab))
+			if (!prices.Contains(needed))
 			{
-				string itemName = OYB_ArsenalCatalogService.OYB_ReadInventoryName(prefab);
+				string itemName = OYB_ArsenalCatalogService.OYB_ReadInventoryName(needed);
 				if (itemName.IsEmpty())
-					itemName = FilePath.StripExtension(FilePath.StripPath(prefab.GetPath()));
+					itemName = FilePath.StripExtension(FilePath.StripPath(needed.GetPath()));
+				PrintFormat("OYB_ARSENAL loadout %1 needs: %2", slot + 1, needs);
 				OYB_SendMessage(string.Format("This arsenal doesn't have %1.", itemName));
 				return;
 			}
 
 			if (usesSupplies)
-				cost += prices.Get(prefab) * missing;
+				cost += prices.Get(needed) * missing;
 		}
+
+		PrintFormat("OYB_ARSENAL loadout %1 needs: %2", slot + 1, needs);
 
 		map<ResourceName, float> refunds = new map<ResourceName, float>();
 		if (arsenal.IsRefundEnabled())
 			OYB_FindRefunds(character, arsenal, refunds);
 
-		float refund;
+		map<ResourceName, int> droppedCounts = new map<ResourceName, int>();
 		foreach (ResourceName had, int hadCount : carried)
 		{
-			int dropped = hadCount - wanted.Get(had);
+			if (hadCount > wanted.Get(had))
+				droppedCounts.Set(had, hadCount - wanted.Get(had));
+		}
+		map<ResourceName, int> wentWith = OYB_CountFittedParts(droppedCounts);
+
+		// The refund for an item already covers what came fitted to it.
+		float refund;
+		foreach (ResourceName gone, int goneCount : droppedCounts)
+		{
+			int dropped = goneCount - wentWith.Get(gone);
 			if (dropped > 0)
-				refund += refunds.Get(had) * dropped;
+				refund += refunds.Get(gone) * dropped;
 		}
 
 		SCR_ResourceConsumer consumer = resourceComponent.GetConsumer(EResourceGeneratorID.DEFAULT, EResourceType.SUPPLIES);
@@ -243,6 +268,95 @@ modded class SCR_PlayerController
 				counts.Set(prefab, counts.Get(prefab) + 1);
 			}
 			pos = kit.IndexOfFrom(end + 1, "\"{");
+		}
+	}
+
+	// How many of each part come already fitted to the given items, read from
+	// their prefabs (and the prefabs of those parts in turn).
+	protected map<ResourceName, int> OYB_CountFittedParts(map<ResourceName, int> items)
+	{
+		map<ResourceName, int> parts = new map<ResourceName, int>();
+		foreach (ResourceName prefab, int count : items)
+			OYB_AddFittedParts(prefab, count, parts, 3);
+
+		return parts;
+	}
+
+	protected void OYB_AddFittedParts(ResourceName prefab, int times, notnull map<ResourceName, int> parts, int depth)
+	{
+		if (depth <= 0)
+			return;
+
+		Resource resource = Resource.Load(prefab);
+		if (!resource || !resource.IsValid())
+			return;
+
+		// Each part once per item: the same setting can be reached more than one way.
+		array<ResourceName> found = {};
+		OYB_FindPrefabsIn(SCR_BaseContainerTools.FindEntitySource(resource), found);
+		set<ResourceName> unique = new set<ResourceName>();
+		foreach (ResourceName part : found)
+		{
+			if (part == prefab || !unique.Insert(part))
+				continue;
+
+			parts.Set(part, parts.Get(part) + times);
+			OYB_AddFittedParts(part, times, parts, depth - 1);
+		}
+	}
+
+	// Every prefab a prefab's settings point at: attachment and magazine slots,
+	// and child entities.
+	protected void OYB_FindPrefabsIn(BaseContainer container, notnull array<ResourceName> found)
+	{
+		if (!container)
+			return;
+
+		int vars = container.GetNumVars();
+		for (int i = 0; i < vars; i++)
+		{
+			string varName = container.GetVarName(i);
+			DataVarType type = container.GetDataVarType(i);
+			if (type == DataVarType.RESOURCE_NAME)
+			{
+				ResourceName value;
+				container.Get(varName, value);
+				if (value.EndsWith(".et"))
+					found.Insert(value);
+			}
+			else if (type == DataVarType.OBJECT)
+			{
+				OYB_FindPrefabsIn(container.GetObject(varName), found);
+			}
+			else if (type == DataVarType.OBJECT_ARRAY)
+			{
+				BaseContainerList list = container.GetObjectArray(varName);
+				if (list)
+				{
+					for (int j = 0; j < list.Count(); j++)
+						OYB_FindPrefabsIn(list.Get(j), found);
+				}
+			}
+		}
+
+		IEntitySource entitySource = IEntitySource.Cast(container);
+		if (!entitySource)
+			return;
+
+		for (int k = 0; k < entitySource.GetComponentCount(); k++)
+			OYB_FindPrefabsIn(entitySource.GetComponent(k), found);
+
+		for (int c = 0; c < entitySource.GetNumChildren(); c++)
+		{
+			BaseContainer child = entitySource.GetChild(c);
+			ResourceName childPrefab;
+			while (childPrefab.IsEmpty() && child)
+			{
+				childPrefab = child.GetResourceName();
+				child = child.GetAncestor();
+			}
+			if (!childPrefab.IsEmpty())
+				found.Insert(childPrefab);
 		}
 	}
 
