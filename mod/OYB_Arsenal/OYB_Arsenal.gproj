@@ -1,0 +1,14 @@
+GameProject {
+ ID "OYB_Arsenal"
+ GUID "654E0414D5AF2D32"
+ TITLE "OYB Arsenal"
+ Dependencies {
+  "58D0FB3206B6F859"
+ }
+ Configurations {
+  GameProjectConfig PC {
+  }
+  GameProjectConfig HEADLESS {
+  }
+ }
+}
