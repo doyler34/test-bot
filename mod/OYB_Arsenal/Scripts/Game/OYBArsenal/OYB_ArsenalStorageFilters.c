@@ -68,6 +68,7 @@ modded class SCR_InventoryStorageBaseUI
 
 		OYB_ArsenalCatalogService catalog = OYB_ArsenalCatalogService.GetInstance();
 		array<IEntity> kept = {};
+		string matched;
 		foreach (int i, IEntity item : pItemsInStorage)
 		{
 			OYB_ArsenalEntry entry = catalog.FindEntry(arsenal, prefabs[i]);
@@ -78,7 +79,12 @@ modded class SCR_InventoryStorageBaseUI
 			if (!OYB_MatchesAll(entry.m_sSearch, words))
 				continue;
 			kept.Insert(item);
+			if (!words.IsEmpty())
+				matched += entry.m_sName + "; ";
 		}
+
+		if (!words.IsEmpty())
+			PrintFormat("OYB_ARSENAL search '%1' matched %2: %3", s_sOYB_Search, kept.Count(), matched);
 
 		pItemsInStorage.Clear();
 		pItemsInStorage.InsertAll(kept);

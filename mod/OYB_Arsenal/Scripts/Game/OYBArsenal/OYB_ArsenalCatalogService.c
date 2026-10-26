@@ -143,6 +143,23 @@ class OYB_ArsenalCatalogService
 		m_mCachedByPrefab.Clear();
 	}
 
+	protected string OYB_ReadInventoryName(ResourceName prefab)
+	{
+		Resource resource = Resource.Load(prefab);
+		if (!resource || !resource.IsValid())
+			return string.Empty;
+
+		IEntityComponentSource itemSource = SCR_ComponentHelper.GetInventoryItemComponentSource(SCR_BaseContainerTools.FindEntitySource(resource));
+		if (!itemSource)
+			return string.Empty;
+
+		SCR_ItemAttributeCollection attributes = SCR_ComponentHelper.GetInventoryItemInfo(itemSource);
+		if (!attributes || !attributes.GetUIInfo())
+			return string.Empty;
+
+		return WidgetManager.Translate(attributes.GetUIInfo().GetName());
+	}
+
 	protected array<ref OYB_ArsenalEntry> Build(SCR_ArsenalComponent arsenal)
 	{
 		array<ref OYB_ArsenalEntry> entries = {};
@@ -173,13 +190,17 @@ class OYB_ArsenalCatalogService
 			entry.m_iSupplyCost = item.GetSupplyCost(costType);
 			entry.m_eRank = item.GetRequiredRank();
 
-			// The display name lives on the catalogue entry, not on the arsenal item.
-			string name = string.Empty;
-			SCR_EntityCatalogEntry catalogEntry = null;
-			if (catalogManager)
-				catalogEntry = catalogManager.GetEntryWithPrefabFromAnyCatalog(EEntityCatalogType.ITEM, prefab, faction);
-			if (catalogEntry)
-				name = WidgetManager.Translate(catalogEntry.GetEntityName());
+			// The name the inventory tooltip shows comes from the item's inventory
+			// attributes. The catalogue entry prefers the weapon's own name, which
+			// variants share (an M16A2 carbine is still "M16A2" there), so it's only
+			// the fallback.
+			string name = OYB_ReadInventoryName(prefab);
+			if (name.IsEmpty() && catalogManager)
+			{
+				SCR_EntityCatalogEntry catalogEntry = catalogManager.GetEntryWithPrefabFromAnyCatalog(EEntityCatalogType.ITEM, prefab, faction);
+				if (catalogEntry)
+					name = WidgetManager.Translate(catalogEntry.GetEntityName());
+			}
 
 			// The game names an item MISSING when its prefab has no UI info.
 			entry.m_bHasName = !name.IsEmpty() && name != "MISSING";
