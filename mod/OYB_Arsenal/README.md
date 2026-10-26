@@ -20,7 +20,7 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   hands, using the game's own checks (`AttachmentSlotComponent.CanSetAttachment`
   and matching magazine wells on each muzzle). Drag them onto the weapon the
   vanilla way. Hidden when you hold nothing or nothing fits.
-- **Weapon picker**: "< Customising: M16A2 >" in the bar steps through the
+- **Weapon picker**: the **Weapon** key and "< M16A2 >" in the bar step through the
   guns you carry (in hands, then each weapon slot; grenades skipped). The
   "Fits" list and attachment fitting work on the chosen weapon, slung or
   holstered, without switching to it (`OYB_ArsenalTargetWeapon.c`).
@@ -54,7 +54,8 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   game picks as usual.
 - **Saved loadouts** (`OYB_ArsenalLoadouts.c`): under the item grid, a
   "Saved loadouts" heading, "< Loadout 1 >" to pick one of five slots,
-  **Save** to store the kit you're wearing and **Load** to put it on at this
+  **Save** (`MenuSave`) to store the kit you're wearing and **Load**
+  (`MenuDeploy`) to put it on at this
   arsenal. Empty slots say so. The server keeps them in
   `$profile:OYB_Arsenal/<player id>.json`, using the game's own arsenal
   loadout format. Loading only charges for items you don't already carry, at
@@ -85,29 +86,29 @@ Verified complete / Blocked. "Verified" means seen working in Workbench
 (1.8.0.13, Game Master, local host); nothing has been run on a dedicated
 server or with a controller yet.
 
-**1. Core functionality — In progress (audit done, fixes awaiting testing)**
-- Verified: arsenal opens and closes; the item list loads from the arsenal's
-  own offer (173 items in the US box, no unnamed items); categories, counts
-  and search; fitting attachments and swapping parts; clothing swap;
-  saving and loading kits.
-- Fixed in the audit, awaiting testing: a category the arsenal has nothing
-  in (or Fits after the weapon is put away) now falls back to All instead
-  of an empty grid; clothing into an empty slot is only requested if it
-  fits, since the server takes supplies before it spawns (verified with a
-  helmet); loadout requests
-  from dead players or less than a second apart are ignored.
-- Not checked: whether the two `OverlayWidget Frame0 has invalid slot
-  GridWidgetSlot` errors also appear without OYB (they look like the game's
-  own item cards); the weapon swap is awaiting testing.
+**1. Core functionality — Verified complete** (Workbench, local host)
+- Arsenal opens and closes; the item list loads from the arsenal's own
+  offer; categories, counts and search; attachment fitting and part swaps;
+  clothing and weapon swaps; items joining the same items already carried;
+  saving and loading kits; an empty category falling back to All; clothing
+  for an empty slot only requested when it fits.
+- Left open: the two `OverlayWidget Frame0 has invalid slot GridWidgetSlot`
+  errors may be the game's own (check with the mod off); the loadout
+  one-second limit hasn't been seen in action.
 
-**2. Keyboard and controller — In progress**
-- Done: Category on the game's `MenuFilter` action with its prompt; Q / E
-  (LB / RB) paging, now also right after switching category; every OYB
-  button is a game widget-library button, so it can be focused and pressed
-  with a controller.
-- Not done: dedicated, rebindable OYB input actions (needs an input config
-  in the mod); inspect from the arsenal; keeping the page when switching
-  category; any controller testing.
+**2. Keyboard and controller — In progress (awaiting testing)**
+- OYB uses the game's own menu actions through its Input Manager, so the
+  game's key settings and controller layouts apply and no extra input file
+  is needed. Each key button shows its prompt and can also be clicked:
+  Category `MenuFilter`, Weapon `MenuRefresh`, Save `MenuSave`, Load
+  `MenuDeploy`. Which keys these are inside the inventory isn't known yet;
+  a crossed circle on a prompt means the action has no key there, and every
+  press is logged as `OYB_ARSENAL key`.
+- Q / E (LB / RB) page the grid, also right after switching category, and
+  each category remembers its page until the search or weapon changes.
+- Not done: OYB-only rebindable actions (needs an input config the mod
+  would ship; the format couldn't be checked from here); inspecting an
+  arsenal item; controller testing.
 
 **3. Loadouts — In progress**
 - Done: five slots per player saved on the server under `$profile:`, keyed

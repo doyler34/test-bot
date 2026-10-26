@@ -15,6 +15,9 @@ modded class SCR_InventoryStorageBaseUI
 	protected static int s_iOYB_Category = OYB_EArsenalCategory.ALL;
 	protected static string s_sOYB_Search;
 	protected static int s_iOYB_LoadoutSlot;
+	// The page each category was last left on, so going back to one picks up
+	// where you were.
+	protected static ref map<int, int> s_mOYB_CategoryPages = new map<int, int>();
 
 	protected Widget m_wOYB_FilterBar;
 	protected Widget m_wOYB_CategoryColumn;
@@ -211,8 +214,10 @@ modded class SCR_InventoryStorageBaseUI
 		if (category == s_iOYB_Category)
 			return;
 
+		s_mOYB_CategoryPages.Set(s_iOYB_Category, m_iLastShownPage);
 		s_iOYB_Category = category;
-		OYB_ApplyFilters();
+		m_iLastShownPage = s_mOYB_CategoryPages.Get(category);
+		Refresh();
 	}
 
 	void OYB_SetSearch(string search)
@@ -228,6 +233,7 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_ApplyFilters()
 	{
+		s_mOYB_CategoryPages.Clear();
 		m_iLastShownPage = 0;
 		Refresh();
 	}
@@ -283,8 +289,12 @@ modded class SCR_InventoryStorageBaseUI
 		if (cycle)
 			cycle.m_OnActivated.Insert(OYB_OnNextCategory);
 
-		// < Customising: M16A2 > picks which carried weapon the Fits list and
-		// attachment fitting work on.
+		// The Weapon key and < M16A2 > pick which carried weapon the Fits list
+		// and attachment fitting work on.
+		SCR_InputButtonComponent weaponKey = OYB_CreateNavButton(categoryRow, "MenuRefresh", "Weapon");
+		if (weaponKey)
+			weaponKey.m_OnActivated.Insert(OYB_OnWeaponKey);
+
 		SCR_ButtonTextComponent previousWeapon, nextWeapon;
 		m_wOYB_WeaponText = OYB_BuildSwitcher(categoryRow, previousWeapon, nextWeapon);
 		if (previousWeapon)
@@ -362,19 +372,15 @@ modded class SCR_InventoryStorageBaseUI
 		if (nextSlot)
 			nextSlot.m_OnClicked.Insert(OYB_OnNextLoadoutSlot);
 
-		SCR_ButtonTextComponent save = OYB_CreateTextButton(row, "Save");
+		// Key buttons, so they work from a keyboard or controller with their
+		// prompt shown, and can still be clicked.
+		SCR_InputButtonComponent save = OYB_CreateNavButton(row, "MenuSave", "Save");
 		if (save)
-		{
-			OYB_StyleActionButton(save);
-			save.m_OnClicked.Insert(OYB_OnSaveLoadout);
-		}
+			save.m_OnActivated.Insert(OYB_OnSaveKey);
 
-		SCR_ButtonTextComponent load = OYB_CreateTextButton(row, "Load");
+		SCR_InputButtonComponent load = OYB_CreateNavButton(row, "MenuDeploy", "Load");
 		if (load)
-		{
-			OYB_StyleActionButton(load);
-			load.m_OnClicked.Insert(OYB_OnLoadLoadout);
-		}
+			load.m_OnActivated.Insert(OYB_OnLoadKey);
 
 		SCR_PlayerController.OYB_GetOnLoadoutNames().Insert(OYB_UpdateLoadoutText);
 		OYB_UpdateLoadoutText();
@@ -414,6 +420,18 @@ modded class SCR_InventoryStorageBaseUI
 		int slots = SCR_PlayerController.OYB_LOADOUT_SLOTS;
 		s_iOYB_LoadoutSlot = (s_iOYB_LoadoutSlot + slots - 1) % slots;
 		OYB_UpdateLoadoutText();
+	}
+
+	protected void OYB_OnSaveKey(SCR_InputButtonComponent button, string action)
+	{
+		PrintFormat("OYB_ARSENAL key %1 (%2)", action, "SaveKey");
+		OYB_OnSaveLoadout(null);
+	}
+
+	protected void OYB_OnLoadKey(SCR_InputButtonComponent button, string action)
+	{
+		PrintFormat("OYB_ARSENAL key %1 (%2)", action, "LoadKey");
+		OYB_OnLoadLoadout(null);
 	}
 
 	protected void OYB_OnSaveLoadout(SCR_ButtonBaseComponent button)
@@ -503,12 +521,6 @@ modded class SCR_InventoryStorageBaseUI
 		button.ColorizeBackground(false);
 		if (button.GetTextWidget())
 			button.GetTextWidget().SetColor(OYB_ORANGE);
-	}
-
-	protected void OYB_StyleActionButton(SCR_ButtonTextComponent button)
-	{
-		button.SetBackgroundColors(new Color(1, 1, 1, 0.08), new Color(0.898, 0.541, 0.184, 0.35), null, null, new Color(0.898, 0.541, 0.184, 0.7));
-		button.ColorizeBackground(false);
 	}
 
 	protected SCR_ButtonTextComponent OYB_CreateTextButton(Widget parent, string text)
@@ -665,7 +677,7 @@ modded class SCR_InventoryStorageBaseUI
 		{
 			string weaponLabel = "No weapon";
 			if (!m_sOYB_WeaponName.IsEmpty())
-				weaponLabel = "Customising: " + m_sOYB_WeaponName;
+				weaponLabel = m_sOYB_WeaponName;
 			m_wOYB_WeaponText.SetText(weaponLabel);
 		}
 
@@ -707,6 +719,12 @@ modded class SCR_InventoryStorageBaseUI
 		OYB_ShowFits();
 	}
 
+	protected void OYB_OnWeaponKey(SCR_InputButtonComponent button, string action)
+	{
+		PrintFormat("OYB_ARSENAL key %1 (%2)", action, "WeaponKey");
+		OYB_OnNextWeapon(null);
+	}
+
 	protected void OYB_OnPreviousWeapon(SCR_ButtonBaseComponent button)
 	{
 		OYB_TargetWeapon.Next(SCR_PlayerController.GetLocalControlledEntity(), -1);
@@ -731,6 +749,7 @@ modded class SCR_InventoryStorageBaseUI
 	// Skips categories this arsenal has nothing in, like the button column does.
 	protected void OYB_OnNextCategory(SCR_InputButtonComponent button, string action)
 	{
+		PrintFormat("OYB_ARSENAL key %1 (%2)", action, "NextCategory");
 		int category = s_iOYB_Category;
 		for (int i = 0; i < OYB_ArsenalCategories.COUNT; i++)
 		{
