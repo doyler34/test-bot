@@ -72,6 +72,67 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   (`SCR_ArsenalComponent.GetAvailablePrefabs`), the same one vanilla shows, so
   faction, item type and mode rules are the game's own.
 
+## Milestones
+
+Status: Not started / In progress / Implemented — awaiting testing /
+Verified complete / Blocked. "Verified" means seen working in Workbench
+(1.8.0.13, Game Master, local host); nothing has been run on a dedicated
+server or with a controller yet.
+
+**1. Core functionality — In progress (audit done, fixes awaiting testing)**
+- Verified: arsenal opens and closes; the item list loads from the arsenal's
+  own offer (173 items in the US box, no unnamed items); categories, counts
+  and search; fitting attachments and swapping parts; clothing swap;
+  saving and loading kits.
+- Fixed in the audit, awaiting testing: a category the arsenal has nothing
+  in (or Fits after the weapon is put away) now falls back to All instead
+  of an empty grid; clothing into an empty slot is only requested if it
+  fits, since the server takes supplies before it spawns; loadout requests
+  from dead players or less than a second apart are ignored.
+- Not checked: whether the two `OverlayWidget Frame0 has invalid slot
+  GridWidgetSlot` errors also appear without OYB (they look like the game's
+  own item cards); double-clicking a weapon while one is already in that
+  slot still does whatever the game does.
+
+**2. Keyboard and controller — In progress**
+- Done: Category on the game's `MenuFilter` action with its prompt; Q / E
+  (LB / RB) paging, now also right after switching category; every OYB
+  button is a game widget-library button, so it can be focused and pressed
+  with a controller.
+- Not done: dedicated, rebindable OYB input actions (needs an input config
+  in the mod); inspect from the arsenal; keeping the page when switching
+  category; any controller testing.
+
+**3. Loadouts — In progress**
+- Done: five slots per player saved on the server under `$profile:`, keyed
+  by the player's identity, so they survive reconnects and restarts; save
+  overwrites; load checks faction, reach and supplies, charges only for
+  what's missing and refunds what's dropped; clothing, weapons,
+  attachments, magazines and pocket contents use the game's own loadout
+  format.
+- Not done: deleting and renaming slots; a clear message naming items that
+  no longer exist (a removed mod); a reconnect / restart test on a
+  dedicated server.
+
+**4. Modded equipment — Implemented — awaiting testing**
+- Items come from the arsenal's own filtered catalogue, categories from
+  each item's arsenal type and mode, names from its inventory info, fits
+  from the game's attachment and magazine-well checks. No item is listed
+  by hand. Items without a name are logged and shown by file name.
+- Not tested with any mod's items.
+
+**5. Performance — Not started** (the item list is already cached per
+arsenal until its offer changes; nothing has been measured).
+
+**6. Security — In progress**
+- Item requests and refunds go through the game's own server checks
+  (ownership, distance, faction catalogue, supplies). Loadouts are built
+  and checked on the server from its own copy, with a one-second limit.
+- Not done: an ownership / licence notice; a review of the military supply
+  allocation, which loadout loading doesn't count.
+
+**7. Release — Not started.**
+
 ## Set up (once)
 
 1. On GitHub press **Code → Download ZIP**, unzip it, and copy

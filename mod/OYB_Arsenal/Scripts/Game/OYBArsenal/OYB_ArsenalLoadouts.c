@@ -10,6 +10,9 @@ modded class SCR_PlayerController
 	static const int OYB_LOADOUT_SLOTS = 5;
 	protected static const string OYB_LOADOUT_FOLDER = "$profile:OYB_Arsenal";
 	protected static const float OYB_MAX_ARSENAL_DISTANCE_SQ = 900;
+	protected static const int OYB_REQUEST_COOLDOWN_MS = 1000;
+
+	protected float m_fOYB_LastRequestTime = -OYB_REQUEST_COOLDOWN_MS;
 
 	// What the local player sees in the slot list, sent by the server.
 	protected static ref array<string> s_aOYB_LoadoutNames = {};
@@ -61,11 +64,8 @@ modded class SCR_PlayerController
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
 	protected void OYB_RpcAsk_SaveLoadout(int slot)
 	{
-		if (slot < 0 || slot >= OYB_LOADOUT_SLOTS)
-			return;
-
-		SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(GetControlledEntity());
-		if (!character || !character.GetFaction())
+		SCR_ChimeraCharacter character = OYB_GetLoadoutCharacter(slot);
+		if (!character)
 			return;
 
 		string loadout = OYB_WriteKit(character);
@@ -95,11 +95,8 @@ modded class SCR_PlayerController
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
 	protected void OYB_RpcAsk_LoadLoadout(int slot, RplId arsenalResourceId)
 	{
-		if (slot < 0 || slot >= OYB_LOADOUT_SLOTS)
-			return;
-
-		SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(GetControlledEntity());
-		if (!character || !character.GetFaction())
+		SCR_ChimeraCharacter character = OYB_GetLoadoutCharacter(slot);
+		if (!character)
 			return;
 
 		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.Cast(Replication.FindItem(arsenalResourceId));
@@ -224,6 +221,30 @@ modded class SCR_PlayerController
 			OYB_SendMessage(string.Format("Loaded loadout %1.", slot + 1));
 		else
 			OYB_SendMessage("Only part of the kit could be loaded.");
+	}
+
+	// The living character a save or load applies to. Bad slots, dead players
+	// and requests closer together than a second (a held button, a spamming
+	// client) get nothing, so a load can't run twice over the same kit.
+	protected SCR_ChimeraCharacter OYB_GetLoadoutCharacter(int slot)
+	{
+		if (slot < 0 || slot >= OYB_LOADOUT_SLOTS)
+			return null;
+
+		float now = GetGame().GetWorld().GetWorldTime();
+		if (now - m_fOYB_LastRequestTime < OYB_REQUEST_COOLDOWN_MS)
+			return null;
+		m_fOYB_LastRequestTime = now;
+
+		SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(GetControlledEntity());
+		if (!character || !character.GetFaction())
+			return null;
+
+		DamageManagerComponent damage = character.GetDamageManager();
+		if (damage && damage.GetState() == EDamageState.DESTROYED)
+			return null;
+
+		return character;
 	}
 
 	// The kit in the game's arsenal loadout format, with its faction in front.

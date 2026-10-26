@@ -224,6 +224,11 @@ modded class SCR_InventoryMenuUI
 		IEntity worn = slot.GetAttachedEntity();
 		if (!worn)
 		{
+			// The server takes the supplies before it spawns, so don't ask for
+			// something that can't go in.
+			if (!m_InventoryManager.CanInsertItemInStorage(preview, wearing, slot.GetID()))
+				return false;
+
 			PrintFormat("OYB_ARSENAL wear (%1): slot empty, requesting %2", via, resource.GetPath());
 			OYB_ArsenalRequest.Request(resourceId, Replication.FindItemId(wearing), resource);
 			return true;

@@ -55,6 +55,14 @@ modded class SCR_InventoryStorageBaseUI
 		m_iOYB_FitCount = OYB_FindFits(pItemsInStorage, fits);
 		OYB_UpdateCategoryText();
 
+		// A category this arsenal has nothing in (another box, or Fits after the
+		// weapon was put away) would show an empty grid with its button hidden.
+		if (s_iOYB_Category != OYB_EArsenalCategory.ALL && m_aOYB_CategoryCounts.IsIndexValid(s_iOYB_Category) && m_aOYB_CategoryCounts[s_iOYB_Category] == 0)
+		{
+			s_iOYB_Category = OYB_EArsenalCategory.ALL;
+			OYB_UpdateCategoryText();
+		}
+
 		if (s_iOYB_Category == OYB_EArsenalCategory.ALL && s_sOYB_Search.IsEmpty())
 			return;
 
