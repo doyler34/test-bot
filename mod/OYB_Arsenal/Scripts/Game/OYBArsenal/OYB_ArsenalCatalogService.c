@@ -190,7 +190,8 @@ class OYB_ArsenalCatalogService
 			}
 			entry.m_sName = name;
 
-			string search = name + " " + FilePath.StripPath(prefab.GetPath());
+			// Search matches what the player sees, not the prefab's file name.
+			string search = name;
 			search.ToLower();
 			entry.m_sSearch = search;
 

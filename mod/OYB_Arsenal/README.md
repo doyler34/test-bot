@@ -16,7 +16,8 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   own `WLib_ButtonTextUnderlined` buttons.
 - **A bar above the grid:** a **Category** button that cycles the same
   categories (the game's `MenuFilter` action, X on keyboard), the current
-  category and count, and the game's own search box. Q / E stay the
+  category and count, and the game's own search box, which matches each word
+  against the name shown in-game, in any order. Q / E stay the
   inventory's page buttons.
 - **Every infantry arsenal also stocks its faction's medical gear, vests and
   helmets**, even a weapons-only box (`OYB_ArsenalAlwaysStocked.c`). Arsenals
