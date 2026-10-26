@@ -19,6 +19,14 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   hands, using the game's own checks (`AttachmentSlotComponent.CanSetAttachment`
   and matching magazine wells on each muzzle). Drag them onto the weapon the
   vanilla way. Hidden when you hold nothing or nothing fits.
+- **Fit attachments in one go** (`OYB_ArsenalWeaponFitting.c`): double-click
+  an attachment in the arsenal, or drag it onto the character, and it goes
+  straight onto the matching slot of the weapon in your hands. Whatever was in
+  that slot (a muzzle brake when fitting a suppressor) is moved into your kit
+  first, and the new part is only requested once that has worked; with no room
+  for the old part nothing changes. The new part is requested with the game's
+  own arsenal request, so the server's checks and supply cost still apply.
+  Magazines and other items keep the vanilla behaviour.
 - **A bar above the grid:** a **Category** button that cycles the same
   categories (the game's `MenuFilter` action, X on keyboard), the current
   category and count, and the game's own search box, which matches each word
