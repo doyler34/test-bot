@@ -9,7 +9,8 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
 
 ## What's in so far
 
-- **A category column to the left of the arsenal grid:** All, Rifles, Machine guns,
+- **A category list to the left of the arsenal grid** (dark rows, name on the
+  left, count on the right, the selected row lit with an orange edge): All, Rifles, Machine guns,
   Sniper rifles, Pistols, Launchers, Ammo, Attachments, Clothing, Vests &
   bags, Medical, Grenades & explosives, Tools, Other, each with its item count.
   Only categories the arsenal has items in get a button. Built from the game's
@@ -19,11 +20,10 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   hands, using the game's own checks (`AttachmentSlotComponent.CanSetAttachment`
   and matching magazine wells on each muzzle). Drag them onto the weapon the
   vanilla way. Hidden when you hold nothing or nothing fits.
-- **Weapon picker**: a **Weapon** button in the bar cycles through the guns
-  you carry (in hands, then each weapon slot; grenades skipped). The "Fits"
-  list and attachment fitting work on the chosen weapon, slung or holstered,
-  without switching to it (`OYB_ArsenalTargetWeapon.c`). It's on the game's
-  `MenuSearch` action.
+- **Weapon picker**: "< Customising: M16A2 >" in the bar steps through the
+  guns you carry (in hands, then each weapon slot; grenades skipped). The
+  "Fits" list and attachment fitting work on the chosen weapon, slung or
+  holstered, without switching to it (`OYB_ArsenalTargetWeapon.c`).
 - **Fit attachments in one go** (`OYB_ArsenalWeaponFitting.c`): double-click
   an attachment in the arsenal, or drag it onto the character, and it goes
   straight onto the matching slot of the weapon in your hands. Whatever was in
@@ -34,10 +34,10 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   changes. The new part is requested with the game's
   own arsenal request, so the server's checks and supply cost still apply.
   Magazines and other items keep the vanilla behaviour.
-- **Saved loadouts** (`OYB_ArsenalLoadouts.c`): a row under the item grid
-  with five slots. Tap the slot button to pick a slot, **Save** to store the
-  kit you're wearing, **Load** to put it on at this arsenal. Slots are named
-  after the guns in the kit. The server keeps them in
+- **Saved loadouts** (`OYB_ArsenalLoadouts.c`): under the item grid, a
+  "Saved loadouts" heading, "< 1: M16A2 + M9 >" to pick one of five slots,
+  **Save** to store the kit you're wearing and **Load** to put it on at this
+  arsenal. Slots are named after the guns in the kit. The server keeps them in
   `$profile:OYB_Arsenal/<player id>.json`, using the game's own arsenal
   loadout format. Loading only charges for items you don't already carry, at
   the arsenal's price (or the item catalogue's for things it doesn't sell,
@@ -45,8 +45,8 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   kit), refuses if you lack supplies, and refunds what the kit drops the way the arsenal normally refunds. A kit saved
   for another faction won't load. Military supply allocation isn't counted.
 - **A bar above the grid:** a **Category** button that cycles the same
-  categories (the game's `MenuFilter` action, X on keyboard), the current
-  category and count, and the game's own search box, which matches each word
+  categories (the game's `MenuFilter` action, X on keyboard), the weapon
+  picker, and the game's own search box, which matches each word
   against the name shown in-game, in any order. Q / E stay the
   inventory's page buttons.
 - **Every infantry arsenal also stocks its faction's medical gear, vests and

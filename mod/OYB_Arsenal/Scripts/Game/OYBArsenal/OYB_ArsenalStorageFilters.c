@@ -1,6 +1,6 @@
-// Whenever an inventory panel shows an arsenal, OYB adds a filter bar above its
-// item grid: previous / next category with controller prompts, the category name
-// and count, and a search box. Arsenals are shown by the Vicinity panel (after
+// Whenever an inventory panel shows an arsenal, OYB adds a bar above its item
+// grid (the Category key, a < weapon > switcher and a search box), a category
+// list to its left and saved loadouts under it. Arsenals are shown by the Vicinity panel (after
 // stepping into the box) or as an opened storage; both list their items through
 // this base class, so this is where the filter goes. The bar is built from the
 // game's own widget library layouts so it matches the rest of the inventory.
@@ -19,11 +19,12 @@ modded class SCR_InventoryStorageBaseUI
 	protected Widget m_wOYB_FilterBar;
 	protected Widget m_wOYB_CategoryColumn;
 	protected Widget m_wOYB_LoadoutRow;
-	protected TextWidget m_wOYB_CategoryText;
-	protected SCR_InputButtonComponent m_OYB_WeaponButton;
+	protected TextWidget m_wOYB_WeaponText;
+	protected TextWidget m_wOYB_LoadoutText;
 	protected SCR_EditBoxComponent m_OYB_Search;
-	protected SCR_ButtonTextComponent m_OYB_LoadoutSlotButton;
 	protected ref array<SCR_ButtonTextComponent> m_aOYB_CategoryButtons = {};
+	protected ref array<TextWidget> m_aOYB_CategoryCountTexts = {};
+	protected ref array<Widget> m_aOYB_CategoryAccents = {};
 	protected ref array<int> m_aOYB_CategoryCounts = {};
 	protected SCR_ArsenalComponent m_OYB_Arsenal;
 	protected int m_iOYB_FitCount;
@@ -274,18 +275,14 @@ modded class SCR_InventoryStorageBaseUI
 		if (cycle)
 			cycle.m_OnActivated.Insert(OYB_OnNextCategory);
 
-		m_OYB_WeaponButton = OYB_CreateNavButton(categoryRow, "MenuSearch", "Weapon");
-		if (m_OYB_WeaponButton)
-			m_OYB_WeaponButton.m_OnActivated.Insert(OYB_OnNextWeapon);
-
-		Widget label = workspace.CreateWidgets(OYB_LABEL_LAYOUT, categoryRow);
-		if (label)
-		{
-			m_wOYB_CategoryText = TextWidget.Cast(OYB_FindWidgetOfType(label, TextWidget));
-			LayoutSlot.SetSizeMode(label, LayoutSizeMode.Fill);
-			AlignableSlot.SetHorizontalAlign(label, LayoutHorizontalAlign.Center);
-			AlignableSlot.SetVerticalAlign(label, LayoutVerticalAlign.Center);
-		}
+		// < Customising: M16A2 > picks which carried weapon the Fits list and
+		// attachment fitting work on.
+		SCR_ButtonTextComponent previousWeapon, nextWeapon;
+		m_wOYB_WeaponText = OYB_BuildSwitcher(categoryRow, previousWeapon, nextWeapon);
+		if (previousWeapon)
+			previousWeapon.m_OnClicked.Insert(OYB_OnPreviousWeapon);
+		if (nextWeapon)
+			nextWeapon.m_OnClicked.Insert(OYB_OnNextWeapon);
 
 		OYB_KeepCreationOrder(categoryRow);
 
@@ -311,40 +308,65 @@ modded class SCR_InventoryStorageBaseUI
 		OYB_BuildLoadoutRow();
 	}
 
-	// Under the item grid: pick a slot (the first button cycles them), then save
-	// the current kit to it or load it here. The server keeps the slots and
-	// charges for what's missing.
+	// Under the item grid: a "Saved loadouts" heading, then < slot > to pick a
+	// slot, Save to store the current kit in it and Load to put it on here. The
+	// server keeps the slots and charges for what's missing.
 	protected void OYB_BuildLoadoutRow()
 	{
 		Widget gridRow = m_wGrid.GetParent();
 		if (!gridRow || !gridRow.GetParent())
 			return;
 
-		Widget row = GetGame().GetWorkspace().CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, gridRow.GetParent());
+		WorkspaceWidget workspace = GetGame().GetWorkspace();
+		Widget area = workspace.CreateWidget(WidgetType.VerticalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, gridRow.GetParent());
+		if (!area)
+			return;
+		area.SetName("OYB_LoadoutRow");
+		m_wOYB_LoadoutRow = area;
+		AlignableSlot.SetHorizontalAlign(area, LayoutHorizontalAlign.Stretch);
+		AlignableSlot.SetPadding(area, 0, 8, 0, 0);
+		Widget afterGrid = gridRow.GetSibling();
+		if (afterGrid && afterGrid != area)
+			OYB_MoveBefore(area, afterGrid);
+
+		Widget heading = workspace.CreateWidgets(OYB_LABEL_LAYOUT, area);
+		if (heading)
+		{
+			TextWidget headingText = TextWidget.Cast(OYB_FindWidgetOfType(heading, TextWidget));
+			if (headingText)
+			{
+				headingText.SetText("SAVED LOADOUTS");
+				headingText.SetExactFontSize(14);
+				headingText.SetColor(new Color(0.55, 0.55, 0.55, 1));
+			}
+		}
+
+		Widget row = workspace.CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, area);
 		if (!row)
 			return;
-		row.SetName("OYB_LoadoutRow");
-		m_wOYB_LoadoutRow = row;
 		AlignableSlot.SetHorizontalAlign(row, LayoutHorizontalAlign.Stretch);
-		AlignableSlot.SetPadding(row, 0, 6, 0, 0);
-		Widget afterGrid = gridRow.GetSibling();
-		if (afterGrid && afterGrid != row)
-			OYB_MoveBefore(row, afterGrid);
+		AlignableSlot.SetPadding(row, 0, 2, 0, 0);
 
-		m_OYB_LoadoutSlotButton = OYB_CreateTextButton(row, "Loadout 1");
-		if (m_OYB_LoadoutSlotButton)
-		{
-			LayoutSlot.SetSizeMode(m_OYB_LoadoutSlotButton.GetRootWidget(), LayoutSizeMode.Fill);
-			m_OYB_LoadoutSlotButton.m_OnClicked.Insert(OYB_OnNextLoadoutSlot);
-		}
+		SCR_ButtonTextComponent previousSlot, nextSlot;
+		m_wOYB_LoadoutText = OYB_BuildSwitcher(row, previousSlot, nextSlot);
+		if (previousSlot)
+			previousSlot.m_OnClicked.Insert(OYB_OnPreviousLoadoutSlot);
+		if (nextSlot)
+			nextSlot.m_OnClicked.Insert(OYB_OnNextLoadoutSlot);
 
 		SCR_ButtonTextComponent save = OYB_CreateTextButton(row, "Save");
 		if (save)
+		{
+			OYB_StyleActionButton(save);
 			save.m_OnClicked.Insert(OYB_OnSaveLoadout);
+		}
 
 		SCR_ButtonTextComponent load = OYB_CreateTextButton(row, "Load");
 		if (load)
+		{
+			OYB_StyleActionButton(load);
 			load.m_OnClicked.Insert(OYB_OnLoadLoadout);
+		}
 
 		OYB_KeepCreationOrder(row);
 
@@ -364,7 +386,7 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_UpdateLoadoutText()
 	{
-		if (!m_OYB_LoadoutSlotButton)
+		if (!m_wOYB_LoadoutText)
 			return;
 
 		string name = "empty";
@@ -372,12 +394,19 @@ modded class SCR_InventoryStorageBaseUI
 		if (names.IsIndexValid(s_iOYB_LoadoutSlot) && !names[s_iOYB_LoadoutSlot].IsEmpty())
 			name = names[s_iOYB_LoadoutSlot];
 
-		m_OYB_LoadoutSlotButton.SetText(string.Format("Loadout %1: %2", s_iOYB_LoadoutSlot + 1, name));
+		m_wOYB_LoadoutText.SetText(string.Format("%1: %2", s_iOYB_LoadoutSlot + 1, name));
 	}
 
 	protected void OYB_OnNextLoadoutSlot(SCR_ButtonBaseComponent button)
 	{
 		s_iOYB_LoadoutSlot = (s_iOYB_LoadoutSlot + 1) % SCR_PlayerController.OYB_LOADOUT_SLOTS;
+		OYB_UpdateLoadoutText();
+	}
+
+	protected void OYB_OnPreviousLoadoutSlot(SCR_ButtonBaseComponent button)
+	{
+		int slots = SCR_PlayerController.OYB_LOADOUT_SLOTS;
+		s_iOYB_LoadoutSlot = (s_iOYB_LoadoutSlot + slots - 1) % slots;
 		OYB_UpdateLoadoutText();
 	}
 
@@ -402,6 +431,69 @@ modded class SCR_InventoryStorageBaseUI
 		}
 
 		controller.OYB_LoadLoadout(s_iOYB_LoadoutSlot, Replication.FindItemId(resourceComponent));
+	}
+
+	// "<  text  >": arrow buttons either side of a centred label that fills the
+	// rest of the row.
+	protected TextWidget OYB_BuildSwitcher(Widget parent, out SCR_ButtonTextComponent previous, out SCR_ButtonTextComponent next)
+	{
+		WorkspaceWidget workspace = GetGame().GetWorkspace();
+		Widget box = workspace.CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, parent);
+		if (!box)
+			return null;
+		LayoutSlot.SetSizeMode(box, LayoutSizeMode.Fill);
+		AlignableSlot.SetVerticalAlign(box, LayoutVerticalAlign.Center);
+		AlignableSlot.SetPadding(box, 4, 0, 6, 0);
+
+		previous = OYB_CreateTextButton(box, "<");
+		if (previous)
+			OYB_StyleArrowButton(previous);
+
+		TextWidget text;
+		Widget label = workspace.CreateWidgets(OYB_LABEL_LAYOUT, box);
+		if (label)
+		{
+			text = TextWidget.Cast(OYB_FindWidgetOfType(label, TextWidget));
+			LayoutSlot.SetSizeMode(label, LayoutSizeMode.Fill);
+			AlignableSlot.SetHorizontalAlign(label, LayoutHorizontalAlign.Center);
+			AlignableSlot.SetVerticalAlign(label, LayoutVerticalAlign.Center);
+		}
+
+		next = OYB_CreateTextButton(box, ">");
+		if (next)
+			OYB_StyleArrowButton(next);
+
+		OYB_KeepCreationOrder(box);
+		return text;
+	}
+
+	protected static ref Color OYB_ORANGE = new Color(0.898, 0.541, 0.184, 1);
+
+	// Category list rows: dark, light grey text, a lighter row and white text for
+	// the one selected.
+	protected void OYB_StyleListButton(SCR_ButtonTextComponent button)
+	{
+		button.SetBackgroundColors(new Color(1, 1, 1, 0.02), new Color(1, 1, 1, 0.1), new Color(1, 1, 1, 0.14), new Color(1, 1, 1, 0.2), new Color(0.898, 0.541, 0.184, 0.5));
+		button.m_bUseTextColorization = true;
+		button.m_TextDefault = new Color(0.7, 0.7, 0.7, 1);
+		button.m_TextToggled = new Color(1, 1, 1, 1);
+		button.ColorizeBackground(false);
+	}
+
+	protected void OYB_StyleArrowButton(SCR_ButtonTextComponent button)
+	{
+		button.SetBackgroundColors(new Color(1, 1, 1, 0.04), new Color(1, 1, 1, 0.15), null, null, new Color(0.898, 0.541, 0.184, 0.5));
+		button.m_bUseTextColorization = true;
+		button.m_TextDefault = OYB_ORANGE;
+		button.ColorizeBackground(false);
+		if (button.GetTextWidget())
+			button.GetTextWidget().SetColor(OYB_ORANGE);
+	}
+
+	protected void OYB_StyleActionButton(SCR_ButtonTextComponent button)
+	{
+		button.SetBackgroundColors(new Color(1, 1, 1, 0.08), new Color(0.898, 0.541, 0.184, 0.35), null, null, new Color(0.898, 0.541, 0.184, 0.7));
+		button.ColorizeBackground(false);
 	}
 
 	protected SCR_ButtonTextComponent OYB_CreateTextButton(Widget parent, string text)
@@ -457,13 +549,52 @@ modded class SCR_InventoryStorageBaseUI
 				button = SCR_ButtonTextComponent.Cast(buttonRoot.FindHandler(SCR_ButtonTextComponent));
 			}
 
+			TextWidget countText;
+			Widget accent;
 			if (button)
 			{
 				button.SetText(OYB_ArsenalCategories.GetName(category));
 				button.SetToggleable(true);
 				button.m_OnClicked.Insert(OYB_OnCategoryClicked);
+				OYB_StyleListButton(button);
+				OYB_AddCountAndAccent(button, countText, accent);
 			}
 			m_aOYB_CategoryButtons.Insert(button);
+			m_aOYB_CategoryCountTexts.Insert(countText);
+			m_aOYB_CategoryAccents.Insert(accent);
+		}
+	}
+
+	// Puts the name on the left, the count on the right and a thin orange edge
+	// for the selected row. Only possible when the button's text sits in an
+	// overlay; otherwise the count goes after the name.
+	protected void OYB_AddCountAndAccent(SCR_ButtonTextComponent button, out TextWidget countText, out Widget accent)
+	{
+		TextWidget name = button.GetTextWidget();
+		if (!name || !name.GetParent() || name.GetParent().GetTypeID() != WidgetType.OverlayWidgetTypeID)
+			return;
+
+		Widget overlay = name.GetParent();
+		AlignableSlot.SetHorizontalAlign(name, LayoutHorizontalAlign.Left);
+		AlignableSlot.SetPadding(name, 10, 0, 0, 0);
+
+		WorkspaceWidget workspace = GetGame().GetWorkspace();
+		Widget label = workspace.CreateWidgets(OYB_LABEL_LAYOUT, overlay);
+		if (label)
+		{
+			AlignableSlot.SetHorizontalAlign(label, LayoutHorizontalAlign.Right);
+			AlignableSlot.SetVerticalAlign(label, LayoutVerticalAlign.Center);
+			AlignableSlot.SetPadding(label, 0, 0, 8, 0);
+			countText = TextWidget.Cast(OYB_FindWidgetOfType(label, TextWidget));
+		}
+
+		ImageWidget edge = ImageWidget.Cast(workspace.CreateWidget(WidgetType.ImageWidgetTypeID, WidgetFlags.VISIBLE, OYB_ORANGE, 0, overlay));
+		if (edge)
+		{
+			edge.SetSize(3, 1);
+			AlignableSlot.SetHorizontalAlign(edge, LayoutHorizontalAlign.Left);
+			AlignableSlot.SetVerticalAlign(edge, LayoutVerticalAlign.Stretch);
+			accent = edge;
 		}
 	}
 
@@ -515,16 +646,13 @@ modded class SCR_InventoryStorageBaseUI
 		}
 		counts[OYB_EArsenalCategory.FITS_WEAPON] = m_iOYB_FitCount;
 
-		if (m_OYB_WeaponButton)
+		if (m_wOYB_WeaponText)
 		{
-			string weaponLabel = "Weapon";
+			string weaponLabel = "No weapon";
 			if (!m_sOYB_WeaponName.IsEmpty())
-				weaponLabel = "Weapon: " + m_sOYB_WeaponName;
-			m_OYB_WeaponButton.SetLabel(weaponLabel);
+				weaponLabel = "Customising: " + m_sOYB_WeaponName;
+			m_wOYB_WeaponText.SetText(weaponLabel);
 		}
-
-		if (m_wOYB_CategoryText)
-			m_wOYB_CategoryText.SetText(string.Format("%1 (%2)", OYB_CategoryName(s_iOYB_Category), counts[s_iOYB_Category]));
 
 		// Categories this arsenal has nothing in get no button.
 		foreach (int category, SCR_ButtonTextComponent button : m_aOYB_CategoryButtons)
@@ -533,17 +661,46 @@ modded class SCR_InventoryStorageBaseUI
 				continue;
 
 			bool hasItems = category == OYB_EArsenalCategory.ALL || counts[category] > 0;
+			bool selected = category == s_iOYB_Category;
 			button.GetRootWidget().SetVisible(hasItems);
-			button.SetText(string.Format("%1 (%2)", OYB_CategoryName(category), counts[category]));
-			button.SetToggled(category == s_iOYB_Category, false, false, true);
+			button.SetToggled(selected, false, false, true);
+
+			TextWidget countText = m_aOYB_CategoryCountTexts[category];
+			if (countText)
+			{
+				button.SetText(OYB_CategoryName(category));
+				countText.SetText(counts[category].ToString());
+				if (selected)
+					countText.SetColor(OYB_ORANGE);
+				else
+					countText.SetColor(new Color(0.5, 0.5, 0.5, 1));
+			}
+			else
+			{
+				button.SetText(string.Format("%1 (%2)", OYB_CategoryName(category), counts[category]));
+			}
+
+			Widget accent = m_aOYB_CategoryAccents[category];
+			if (accent)
+				accent.SetVisible(selected);
 		}
 	}
 
-	protected void OYB_OnNextWeapon(SCR_InputButtonComponent button, string action)
+	protected void OYB_OnNextWeapon(SCR_ButtonBaseComponent button)
 	{
-		OYB_TargetWeapon.Next(SCR_PlayerController.GetLocalControlledEntity());
-		if (s_iOYB_Category != OYB_EArsenalCategory.FITS_WEAPON)
-			s_iOYB_Category = OYB_EArsenalCategory.FITS_WEAPON;
+		OYB_TargetWeapon.Next(SCR_PlayerController.GetLocalControlledEntity(), 1);
+		OYB_ShowFits();
+	}
+
+	protected void OYB_OnPreviousWeapon(SCR_ButtonBaseComponent button)
+	{
+		OYB_TargetWeapon.Next(SCR_PlayerController.GetLocalControlledEntity(), -1);
+		OYB_ShowFits();
+	}
+
+	protected void OYB_ShowFits()
+	{
+		s_iOYB_Category = OYB_EArsenalCategory.FITS_WEAPON;
 		OYB_ApplyFilters();
 	}
 

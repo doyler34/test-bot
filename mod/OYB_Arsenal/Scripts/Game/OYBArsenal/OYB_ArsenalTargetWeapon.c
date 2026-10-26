@@ -17,8 +17,9 @@ class OYB_TargetWeapon
 		return GetHeld(player);
 	}
 
-	// Moves to the next weapon the player carries, starting from the one in use.
-	static void Next(IEntity player)
+	// Moves to the next (step 1) or previous (step -1) weapon the player carries,
+	// starting from the one in use.
+	static void Next(IEntity player, int step = 1)
 	{
 		array<IEntity> carried = GetCarried(player);
 		if (carried.IsEmpty())
@@ -28,7 +29,8 @@ class OYB_TargetWeapon
 		}
 
 		int index = carried.Find(Get(player));
-		s_Chosen = carried[(index + 1) % carried.Count()];
+		int count = carried.Count();
+		s_Chosen = carried[((index + step) % count + count) % count];
 	}
 
 	static array<IEntity> GetCarried(IEntity player)
