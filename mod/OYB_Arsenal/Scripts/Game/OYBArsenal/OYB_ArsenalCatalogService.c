@@ -120,6 +120,8 @@ class OYB_ArsenalCatalogService
 		arsenal.GetFilteredArsenalItems(items);
 
 		SCR_EArsenalSupplyCostType costType = arsenal.GetSupplyCostType();
+		SCR_Faction faction = arsenal.GetAssignedFaction();
+		SCR_EntityCatalogManagerComponent catalogManager = SCR_EntityCatalogManagerComponent.GetInstance();
 		map<ResourceName, bool> seen = new map<ResourceName, bool>();
 		int unnamed;
 
@@ -141,8 +143,11 @@ class OYB_ArsenalCatalogService
 			entry.m_iSupplyCost = item.GetSupplyCost(costType);
 			entry.m_eRank = item.GetRequiredRank();
 
-			string name;
-			SCR_EntityCatalogEntry catalogEntry = item.OYB_GetCatalogEntry();
+			// The display name lives on the catalogue entry, not on the arsenal item.
+			string name = string.Empty;
+			SCR_EntityCatalogEntry catalogEntry = null;
+			if (catalogManager)
+				catalogEntry = catalogManager.GetEntryWithPrefabFromAnyCatalog(EEntityCatalogType.ITEM, prefab, faction);
 			if (catalogEntry)
 				name = WidgetManager.Translate(catalogEntry.GetEntityName());
 

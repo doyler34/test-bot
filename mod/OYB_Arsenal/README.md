@@ -91,7 +91,7 @@ Workbench disagrees, Workbench wins.
 | `GetArsenalSaveType()`, `IsArsenalEnabled()`, `GetSupplyCostType()` | same file `:174`, `:98`, `:154` | yes |
 | `SCR_EArsenalSaveType` (0, 10, 20, 21, 30) | same file `:624` | yes |
 | `SCR_ArsenalItem.GetItemResourceName / GetItemType / GetItemMode / GetRequiredRank / GetSupplyCost(costType)` | `Game/Components/Arsenal/SCR_ArsenalItem.c` | yes |
-| Item display name | `SCR_EntityCatalogEntry.GetEntityName()`, `SCR_EntityCatalogEntry.c:85` | **differs**: `SCR_ArsenalItem` has no public link to its entry, so `OYB_ArsenalItemEntry.c` adds a read-only getter. Items with no UI info are named `MISSING` by the game; those show their file name instead |
+| Item display name | `SCR_EntityCatalogManagerComponent.GetEntryWithPrefabFromAnyCatalog(ITEM, prefab, faction)` then `GetEntityName()` | **differs**: `SCR_ArsenalItem` has no public link to its entry, so the name is looked up by prefab. (Modding `SCR_ArsenalItem` to reach it broke config loading in Workbench: `Unknown class 'SCR_ArsenalItem'`.) Items with no UI info are named `MISSING` by the game; those show their file name instead |
 | `ScriptedUserAction` with `PerformAction`, `CanBeShownScript`, `CanBePerformedScript`, `HasLocalEffectOnlyScript` | `Game/generated/UserAction/ScriptedUserAction.c` | yes |
 | Adding the action without editing a prefab | `BaseActionsManagerComponent` has no add-action call | **no**: it has to go on the prefab (setup step 5) |
 | `MenuManager.OpenMenu(preset, userId, unique, hideParent)`, `modded enum ChimeraMenuPreset` | `GameLib/generated/Menu/MenuManager.c:44`, `Game/UI/Menu/ChimeraMenuBase.c:3` | yes; the menu also needs its entry in `chimeraMenus.conf` (setup step 4) |
