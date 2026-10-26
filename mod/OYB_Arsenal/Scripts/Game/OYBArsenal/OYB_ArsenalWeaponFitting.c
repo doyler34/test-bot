@@ -14,7 +14,7 @@ modded class SCR_InventoryMenuUI
 {
 	override protected bool MoveBetweenFromVicinity_VirtualArsenal()
 	{
-		if (OYB_FitToHeldWeapon())
+		if (OYB_FitToHeldWeapon("quick move"))
 			return true;
 
 		return super.MoveBetweenFromVicinity_VirtualArsenal();
@@ -22,13 +22,32 @@ modded class SCR_InventoryMenuUI
 
 	override protected bool EquipDraggedItem_VirtualArsenal(bool forceEquip = false)
 	{
-		if (OYB_FitToHeldWeapon())
+		if (OYB_FitToHeldWeapon("drag onto character"))
 			return true;
 
 		return super.EquipDraggedItem_VirtualArsenal(forceEquip);
 	}
 
-	protected bool OYB_FitToHeldWeapon()
+	// The equip action works on the focused slot rather than a selected one.
+	override protected void Action_EquipItem()
+	{
+		if (SCR_ArsenalInventorySlotUI.Cast(m_pFocusedSlotUI))
+		{
+			SCR_InventorySlotUI selected = m_pSelectedSlotUI;
+			m_pSelectedSlotUI = m_pFocusedSlotUI;
+			bool fitted = OYB_FitToHeldWeapon("equip");
+			m_pSelectedSlotUI = selected;
+			if (fitted)
+			{
+				NavigationBarUpdate();
+				return;
+			}
+		}
+
+		super.Action_EquipItem();
+	}
+
+	protected bool OYB_FitToHeldWeapon(string via)
 	{
 		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);
 		if (!arsenalSlot || !arsenalSlot.IsAvailable() || !arsenalSlot.GetInventoryItemComponent())
@@ -40,12 +59,18 @@ modded class SCR_InventoryMenuUI
 
 		IEntity weaponEntity = OYB_GetHeldWeaponEntity();
 		if (!weaponEntity)
+		{
+			PrintFormat("OYB_ARSENAL fit (%1): no weapon in hands, taking it the vanilla way", via);
 			return false;
+		}
 
 		BaseWeaponComponent weapon = BaseWeaponComponent.Cast(weaponEntity.FindComponent(BaseWeaponComponent));
 		WeaponAttachmentsStorageComponent weaponStorage = WeaponAttachmentsStorageComponent.Cast(weaponEntity.FindComponent(WeaponAttachmentsStorageComponent));
 		if (!weapon || !weaponStorage)
+		{
+			PrintFormat("OYB_ARSENAL fit (%1): the held weapon has no attachment storage", via);
 			return false;
+		}
 
 		array<AttachmentSlotComponent> slots = {};
 		weapon.GetAttachments(slots);
@@ -59,7 +84,10 @@ modded class SCR_InventoryMenuUI
 			}
 		}
 		if (!target)
+		{
+			PrintFormat("OYB_ARSENAL fit (%1): %2 doesn't fit any of the %3 slots on the held weapon, taking it the vanilla way", via, arsenalSlot.GetItemResource().GetPath(), slots.Count());
 			return false;
+		}
 
 		IEntity arsenalEntity = SCR_InventoryStorageBaseUI.ARSENAL_SLOT_STORAGES.Get(arsenalSlot);
 		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(arsenalEntity);
@@ -73,9 +101,12 @@ modded class SCR_InventoryMenuUI
 		IEntity fitted = target.GetAttachedEntity();
 		if (!fitted)
 		{
+			PrintFormat("OYB_ARSENAL fit (%1): slot empty, requesting %2", via, resource.GetPath());
 			OYB_RequestFromArsenal(resourceId, storageId, resource);
 			return true;
 		}
+
+		PrintFormat("OYB_ARSENAL fit (%1): returning the fitted part to the arsenal, then requesting %2", via, resource.GetPath());
 
 		// The same checks the server makes before it takes a part back.
 		InventoryItemComponent fittedItem = InventoryItemComponent.Cast(fitted.FindComponent(InventoryItemComponent));
@@ -166,6 +197,7 @@ class OYB_PendingFit
 
 		if (!m_Slot.GetAttachedEntity())
 		{
+			Print("OYB_ARSENAL fit: old part is off, requesting the new one");
 			SCR_InventoryMenuUI.OYB_RequestFromArsenal(m_ResourceId, m_StorageId, m_Resource);
 			Stop();
 			return;
