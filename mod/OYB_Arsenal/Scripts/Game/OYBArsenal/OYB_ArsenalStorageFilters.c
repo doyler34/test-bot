@@ -14,7 +14,6 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected static int s_iOYB_Category = OYB_EArsenalCategory.ALL;
 	protected static string s_sOYB_Search;
-	protected static bool s_bOYB_TreeLogged;
 
 	protected Widget m_wOYB_FilterBar;
 	protected Widget m_wOYB_CategoryColumn;
@@ -248,13 +247,6 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_BuildFilterBar()
 	{
-		if (!s_bOYB_TreeLogged)
-		{
-			s_bOYB_TreeLogged = true;
-			PrintFormat("OYB_ARSENAL arsenal shown in %1, panel structure:", ClassName());
-			OYB_LogTree(m_widget, 0);
-		}
-
 		if (!m_wGrid || !m_wGrid.GetParent())
 		{
 			Print("OYB_ARSENAL no item grid found, filter bar not added", LogLevel.WARNING);
@@ -533,25 +525,6 @@ modded class SCR_InventoryStorageBaseUI
 			child = child.GetSibling();
 		}
 		return null;
-	}
-
-	// Logged once, so the panel's real structure is on record for the next layout pass.
-	protected void OYB_LogTree(Widget w, int depth)
-	{
-		if (!w || depth > 5)
-			return;
-
-		string indent;
-		for (int i = 0; i < depth; i++)
-			indent += "  ";
-		PrintFormat("OYB_ARSENAL ui %1%2 (%3)", indent, w.GetName(), w.GetTypeName());
-
-		Widget child = w.GetChildren();
-		while (child)
-		{
-			OYB_LogTree(child, depth + 1);
-			child = child.GetSibling();
-		}
 	}
 }
 

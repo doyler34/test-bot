@@ -69,9 +69,8 @@ will complain about a class that no longer exists:
 3. Open the arsenal the normal way. The filter bar sits above the item grid.
    Switch categories and search (the search applies when you press Enter or
    leave the box).
-4. In the **Log Console** filter `OYB_ARSENAL` and send every line, with a
-   screenshot. The first time, it logs the arsenal panel's widget structure
-   (`OYB_ARSENAL ui ...`), which shows exactly where the bar went.
+4. In the **Log Console** filter `OYB_ARSENAL`: searches, filter problems and
+   every attachment fit are logged there.
 
 ## How it works
 
@@ -106,7 +105,9 @@ display names and search text, and caches it until the arsenal's offer changes.
   inventory attributes, so that's what OYB uses.
 - Working in Workbench: the category column on the left with counts, filtering
   by category, the search box (each word, display names only), the filter bar
-  and column hiding outside an arsenal.
+  and column hiding outside an arsenal, and fitting attachments by double-click
+  (the game's quick-move path), including swapping scopes and suppressors with
+  the old part going back into the arsenal.
 - Opening an arsenal from Vicinity doesn't use
   `SCR_InventoryOpenedStorageArsenalUI` at all, so modding only that class did
   nothing; the filter now lives in the shared base class.

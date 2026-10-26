@@ -59,10 +59,7 @@ modded class SCR_InventoryMenuUI
 
 		IEntity weaponEntity = OYB_GetHeldWeaponEntity();
 		if (!weaponEntity)
-		{
-			PrintFormat("OYB_ARSENAL fit (%1): no weapon in hands, taking it the vanilla way", via);
 			return false;
-		}
 
 		BaseWeaponComponent weapon = BaseWeaponComponent.Cast(weaponEntity.FindComponent(BaseWeaponComponent));
 		WeaponAttachmentsStorageComponent weaponStorage = WeaponAttachmentsStorageComponent.Cast(weaponEntity.FindComponent(WeaponAttachmentsStorageComponent));
@@ -84,10 +81,7 @@ modded class SCR_InventoryMenuUI
 			}
 		}
 		if (!target)
-		{
-			PrintFormat("OYB_ARSENAL fit (%1): %2 doesn't fit any of the %3 slots on the held weapon, taking it the vanilla way", via, arsenalSlot.GetItemResource().GetPath(), slots.Count());
 			return false;
-		}
 
 		IEntity arsenalEntity = SCR_InventoryStorageBaseUI.ARSENAL_SLOT_STORAGES.Get(arsenalSlot);
 		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(arsenalEntity);
