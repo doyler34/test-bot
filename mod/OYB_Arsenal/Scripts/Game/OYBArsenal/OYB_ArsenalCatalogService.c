@@ -81,6 +81,7 @@ class OYB_ArsenalCatalogService
 
 	protected SCR_ArsenalComponent m_CachedArsenal;
 	protected ref array<ref OYB_ArsenalEntry> m_aCachedEntries;
+	protected ref map<ResourceName, OYB_ArsenalEntry> m_mCachedByPrefab = new map<ResourceName, OYB_ArsenalEntry>();
 
 	static OYB_ArsenalCatalogService GetInstance()
 	{
@@ -104,13 +105,26 @@ class OYB_ArsenalCatalogService
 
 		m_CachedArsenal = arsenal;
 		m_aCachedEntries = Build(arsenal);
+
+		m_mCachedByPrefab.Clear();
+		foreach (OYB_ArsenalEntry entry : m_aCachedEntries)
+			m_mCachedByPrefab.Insert(entry.m_sPrefab, entry);
+
 		return m_aCachedEntries;
+	}
+
+	OYB_ArsenalEntry FindEntry(notnull SCR_ArsenalComponent arsenal, ResourceName prefab)
+	{
+		bool fromCache;
+		GetEntries(arsenal, fromCache);
+		return m_mCachedByPrefab.Get(prefab);
 	}
 
 	protected void OnArsenalUpdated(array<ResourceName> arsenalItems)
 	{
-		Print("OYB_ARSENAL_UI arsenal offer changed, item list will be rebuilt on next open");
+		Print("OYB_ARSENAL arsenal offer changed, item list will be rebuilt on next open");
 		m_aCachedEntries = null;
+		m_mCachedByPrefab.Clear();
 	}
 
 	protected array<ref OYB_ArsenalEntry> Build(SCR_ArsenalComponent arsenal)
@@ -167,7 +181,7 @@ class OYB_ArsenalCatalogService
 			entries.Insert(entry);
 		}
 
-		PrintFormat("OYB_ARSENAL_UI built item list: %1 entries from arsenal, %2 unique, %3 without a display name", items.Count(), entries.Count(), unnamed);
+		PrintFormat("OYB_ARSENAL built item list: %1 entries from arsenal, %2 unique, %3 without a display name", items.Count(), entries.Count(), unnamed);
 		return entries;
 	}
 }
