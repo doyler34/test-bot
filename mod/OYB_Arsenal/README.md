@@ -34,6 +34,15 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   changes. The new part is requested with the game's
   own arsenal request, so the server's checks and supply cost still apply.
   Magazines and other items keep the vanilla behaviour.
+- **Saved loadouts** (`OYB_ArsenalLoadouts.c`): a row under the search box
+  with five slots. Tap the slot button to pick a slot, **Save** to store the
+  kit you're wearing, **Load** to put it on at this arsenal. Slots are named
+  after the guns in the kit. The server keeps them in
+  `$profile:OYB_Arsenal/<player id>.json`, using the game's own arsenal
+  loadout format. Loading only charges for items you don't already carry,
+  refuses if this arsenal doesn't offer one of them or you lack supplies, and
+  refunds what the kit drops the way the arsenal normally refunds. A kit saved
+  for another faction won't load. Military supply allocation isn't counted.
 - **A bar above the grid:** a **Category** button that cycles the same
   categories (the game's `MenuFilter` action, X on keyboard), the current
   category and count, and the game's own search box, which matches each word
@@ -119,6 +128,8 @@ display names and search text, and caches it until the arsenal's offer changes.
 
 ## Not tested yet
 
+- Saved loadouts: saving, loading, the supply charge and refund, and the
+  file on a dedicated server.
 - Whether X (`MenuFilter`) also triggers the inventory's own X actions inside
   an arsenal; meds and armour in a weapons-only box; dragging to equip after
   filtering; a controller and its on-screen keyboard; a dedicated server.

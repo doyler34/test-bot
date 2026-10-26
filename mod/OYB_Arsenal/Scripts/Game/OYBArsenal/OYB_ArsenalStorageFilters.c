@@ -14,12 +14,14 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected static int s_iOYB_Category = OYB_EArsenalCategory.ALL;
 	protected static string s_sOYB_Search;
+	protected static int s_iOYB_LoadoutSlot;
 
 	protected Widget m_wOYB_FilterBar;
 	protected Widget m_wOYB_CategoryColumn;
 	protected TextWidget m_wOYB_CategoryText;
 	protected SCR_InputButtonComponent m_OYB_WeaponButton;
 	protected SCR_EditBoxComponent m_OYB_Search;
+	protected SCR_ButtonTextComponent m_OYB_LoadoutSlotButton;
 	protected ref array<SCR_ButtonTextComponent> m_aOYB_CategoryButtons = {};
 	protected ref array<int> m_aOYB_CategoryCounts = {};
 	protected SCR_ArsenalComponent m_OYB_Arsenal;
@@ -302,8 +304,105 @@ modded class SCR_InventoryStorageBaseUI
 			}
 		}
 
+		OYB_BuildLoadoutRow(bar);
 		OYB_BuildCategoryColumn();
+	}
 
+	// Pick a slot (the first button cycles them), then save the current kit to it
+	// or load it here. The server keeps the slots and charges for what's missing.
+	protected void OYB_BuildLoadoutRow(Widget bar)
+	{
+		Widget row = GetGame().GetWorkspace().CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, bar);
+		if (!row)
+			return;
+		AlignableSlot.SetHorizontalAlign(row, LayoutHorizontalAlign.Stretch);
+		AlignableSlot.SetPadding(row, 0, 4, 0, 0);
+
+		m_OYB_LoadoutSlotButton = OYB_CreateTextButton(row, "Loadout 1");
+		if (m_OYB_LoadoutSlotButton)
+		{
+			LayoutSlot.SetSizeMode(m_OYB_LoadoutSlotButton.GetRootWidget(), LayoutSizeMode.Fill);
+			m_OYB_LoadoutSlotButton.m_OnClicked.Insert(OYB_OnNextLoadoutSlot);
+		}
+
+		SCR_ButtonTextComponent save = OYB_CreateTextButton(row, "Save");
+		if (save)
+			save.m_OnClicked.Insert(OYB_OnSaveLoadout);
+
+		SCR_ButtonTextComponent load = OYB_CreateTextButton(row, "Load");
+		if (load)
+			load.m_OnClicked.Insert(OYB_OnLoadLoadout);
+
+		OYB_KeepCreationOrder(row);
+
+		SCR_PlayerController.OYB_GetOnLoadoutNames().Insert(OYB_UpdateLoadoutText);
+		OYB_UpdateLoadoutText();
+
+		SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (controller)
+			controller.OYB_RequestLoadoutNames();
+	}
+
+	override event void HandlerDeattached(Widget w)
+	{
+		SCR_PlayerController.OYB_GetOnLoadoutNames().Remove(OYB_UpdateLoadoutText);
+		super.HandlerDeattached(w);
+	}
+
+	protected void OYB_UpdateLoadoutText()
+	{
+		if (!m_OYB_LoadoutSlotButton)
+			return;
+
+		string name = "empty";
+		array<string> names = SCR_PlayerController.OYB_GetLoadoutNames();
+		if (names.IsIndexValid(s_iOYB_LoadoutSlot) && !names[s_iOYB_LoadoutSlot].IsEmpty())
+			name = names[s_iOYB_LoadoutSlot];
+
+		m_OYB_LoadoutSlotButton.SetText(string.Format("Loadout %1: %2", s_iOYB_LoadoutSlot + 1, name));
+	}
+
+	protected void OYB_OnNextLoadoutSlot(SCR_ButtonBaseComponent button)
+	{
+		s_iOYB_LoadoutSlot = (s_iOYB_LoadoutSlot + 1) % SCR_PlayerController.OYB_LOADOUT_SLOTS;
+		OYB_UpdateLoadoutText();
+	}
+
+	protected void OYB_OnSaveLoadout(SCR_ButtonBaseComponent button)
+	{
+		SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (controller)
+			controller.OYB_SaveLoadout(s_iOYB_LoadoutSlot);
+	}
+
+	protected void OYB_OnLoadLoadout(SCR_ButtonBaseComponent button)
+	{
+		SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (!controller || !m_OYB_Arsenal)
+			return;
+
+		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(m_OYB_Arsenal.GetOwner());
+		if (!resourceComponent)
+		{
+			Print("OYB_ARSENAL this arsenal has no supply component, can't load a kit from it", LogLevel.WARNING);
+			return;
+		}
+
+		controller.OYB_LoadLoadout(s_iOYB_LoadoutSlot, Replication.FindItemId(resourceComponent));
+	}
+
+	protected SCR_ButtonTextComponent OYB_CreateTextButton(Widget parent, string text)
+	{
+		Widget root = GetGame().GetWorkspace().CreateWidgets(OYB_TAB_BUTTON_LAYOUT, parent);
+		if (!root)
+			return null;
+
+		AlignableSlot.SetVerticalAlign(root, LayoutVerticalAlign.Center);
+		AlignableSlot.SetPadding(root, 0, 0, 6, 0);
+		SCR_ButtonTextComponent button = SCR_ButtonTextComponent.Cast(root.FindHandler(SCR_ButtonTextComponent));
+		if (button)
+			button.SetText(text);
+		return button;
 	}
 
 	// A column of category buttons to the left of the item grid. The grid is
