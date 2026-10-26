@@ -18,6 +18,7 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected Widget m_wOYB_FilterBar;
 	protected Widget m_wOYB_CategoryColumn;
+	protected Widget m_wOYB_LoadoutRow;
 	protected TextWidget m_wOYB_CategoryText;
 	protected SCR_InputButtonComponent m_OYB_WeaponButton;
 	protected SCR_EditBoxComponent m_OYB_Search;
@@ -239,6 +240,8 @@ modded class SCR_InventoryStorageBaseUI
 			m_wOYB_FilterBar.SetVisible(show);
 		if (m_wOYB_CategoryColumn)
 			m_wOYB_CategoryColumn.SetVisible(show);
+		if (m_wOYB_LoadoutRow)
+			m_wOYB_LoadoutRow.SetVisible(show);
 	}
 
 	protected void OYB_BuildFilterBar()
@@ -304,19 +307,29 @@ modded class SCR_InventoryStorageBaseUI
 			}
 		}
 
-		OYB_BuildLoadoutRow(bar);
 		OYB_BuildCategoryColumn();
+		OYB_BuildLoadoutRow();
 	}
 
-	// Pick a slot (the first button cycles them), then save the current kit to it
-	// or load it here. The server keeps the slots and charges for what's missing.
-	protected void OYB_BuildLoadoutRow(Widget bar)
+	// Under the item grid: pick a slot (the first button cycles them), then save
+	// the current kit to it or load it here. The server keeps the slots and
+	// charges for what's missing.
+	protected void OYB_BuildLoadoutRow()
 	{
-		Widget row = GetGame().GetWorkspace().CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, bar);
+		Widget gridRow = m_wGrid.GetParent();
+		if (!gridRow || !gridRow.GetParent())
+			return;
+
+		Widget row = GetGame().GetWorkspace().CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, gridRow.GetParent());
 		if (!row)
 			return;
+		row.SetName("OYB_LoadoutRow");
+		m_wOYB_LoadoutRow = row;
 		AlignableSlot.SetHorizontalAlign(row, LayoutHorizontalAlign.Stretch);
-		AlignableSlot.SetPadding(row, 0, 4, 0, 0);
+		AlignableSlot.SetPadding(row, 0, 6, 0, 0);
+		Widget afterGrid = gridRow.GetSibling();
+		if (afterGrid && afterGrid != row)
+			OYB_MoveBefore(row, afterGrid);
 
 		m_OYB_LoadoutSlotButton = OYB_CreateTextButton(row, "Loadout 1");
 		if (m_OYB_LoadoutSlotButton)

@@ -34,7 +34,7 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   changes. The new part is requested with the game's
   own arsenal request, so the server's checks and supply cost still apply.
   Magazines and other items keep the vanilla behaviour.
-- **Saved loadouts** (`OYB_ArsenalLoadouts.c`): a row under the search box
+- **Saved loadouts** (`OYB_ArsenalLoadouts.c`): a row under the item grid
   with five slots. Tap the slot button to pick a slot, **Save** to store the
   kit you're wearing, **Load** to put it on at this arsenal. Slots are named
   after the guns in the kit. The server keeps them in
