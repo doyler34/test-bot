@@ -86,11 +86,18 @@ display names and search text, and caches it until the arsenal's offer changes.
   `ArsenalBox_Base`.
 - Q / E (`MenuTabLeft` / `MenuTabRight`) turn the inventory grid's pages, so
   they can't switch categories.
+- Weapon variants share the weapon component's name (an M16A2 carbine is
+  "M16A2" in the catalogue); the name the tooltip shows comes from the item's
+  inventory attributes, so that's what OYB uses.
+- Working in Workbench: the category column on the left with counts, filtering
+  by category, the search box (each word, display names only), the filter bar
+  and column hiding outside an arsenal.
 - Opening an arsenal from Vicinity doesn't use
   `SCR_InventoryOpenedStorageArsenalUI` at all, so modding only that class did
   nothing; the filter now lives in the shared base class.
 
 ## Not tested yet
 
-- Which key `MenuFilter` is on, and whether it reaches the inventory; search;
-  the controller's on-screen keyboard for search.
+- Whether X (`MenuFilter`) also triggers the inventory's own X actions inside
+  an arsenal; meds and armour in a weapons-only box; dragging to equip after
+  filtering; a controller and its on-screen keyboard; a dedicated server.
