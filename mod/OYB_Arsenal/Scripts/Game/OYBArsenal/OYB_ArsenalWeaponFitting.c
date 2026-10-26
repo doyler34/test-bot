@@ -1,8 +1,10 @@
 // Double-clicking an attachment in the arsenal (or dragging it onto the character)
 // fits it straight onto the weapon in the player's hands. If that slot already has
-// something in it, say a muzzle brake when fitting a suppressor, the old part is
-// first moved into the player's kit; only once that has worked is the new one
-// requested. If there's no room for the old part, nothing changes.
+// something in it, say a muzzle brake when fitting a suppressor, the old part goes
+// back into the arsenal with the game's own refund, and the new one is requested
+// only once the slot is seen to be empty. The server takes the supplies before it
+// spawns the item, so asking while the slot is still full would cost supplies for
+// nothing; if the refund is refused, nothing new is requested.
 //
 // The new part is asked for with the same arsenal request the game uses when an
 // item is dragged onto a weapon, so the server still checks the storage belongs to
@@ -10,8 +12,6 @@
 // everything else keep the vanilla behaviour.
 modded class SCR_InventoryMenuUI
 {
-	protected ref OYB_FitAfterRemovalCallback m_OYB_FitCallback;
-
 	override protected bool MoveBetweenFromVicinity_VirtualArsenal()
 	{
 		if (OYB_FitToHeldWeapon())
@@ -77,24 +77,25 @@ modded class SCR_InventoryMenuUI
 			return true;
 		}
 
-		BaseInventoryStorageComponent keep = m_InventoryManager.FindStorageForItem(fitted, EStoragePurpose.PURPOSE_DEPOSIT);
-		if (!keep)
+		// The same checks the server makes before it takes a part back.
+		InventoryItemComponent fittedItem = InventoryItemComponent.Cast(fitted.FindComponent(InventoryItemComponent));
+		SCR_ItemAttributeCollection fittedAttributes;
+		if (fittedItem)
+			fittedAttributes = SCR_ItemAttributeCollection.Cast(fittedItem.GetAttributes());
+		SCR_ArsenalComponent arsenal = SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity);
+		if (!fittedAttributes || !fittedAttributes.IsRefundable() || !arsenal || !arsenal.IsRefundEnabled())
 		{
-			Print("OYB_ARSENAL no room in the player's kit for the part being replaced, nothing changed");
+			Print("OYB_ARSENAL the fitted part can't go back into this arsenal, nothing changed");
 			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.SOUND_INV_DROP_ERROR);
 			return true;
 		}
 
-		m_OYB_FitCallback = new OYB_FitAfterRemovalCallback();
-		m_OYB_FitCallback.m_ResourceId = resourceId;
-		m_OYB_FitCallback.m_StorageId = storageId;
-		m_OYB_FitCallback.m_Resource = resource;
+		SCR_ResourcePlayerControllerInventoryComponent requests = SCR_ResourcePlayerControllerInventoryComponent.Cast(GetGame().GetPlayerController().FindComponent(SCR_ResourcePlayerControllerInventoryComponent));
+		if (!requests)
+			return true;
 
-		if (!m_InventoryManager.TryMoveItemToStorage(fitted, keep, -1, m_OYB_FitCallback))
-		{
-			Print("OYB_ARSENAL the part being replaced couldn't be moved, nothing changed");
-			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.SOUND_INV_DROP_ERROR);
-		}
+		requests.RpcAsk_ArsenalRefundItem(resourceId, Replication.FindItemId(fittedItem), EResourceType.SUPPLIES);
+		OYB_PendingFit.Start(target, resourceId, storageId, resource);
 		return true;
 	}
 
@@ -126,19 +127,62 @@ modded class SCR_InventoryMenuUI
 	}
 }
 
-class OYB_FitAfterRemovalCallback : ScriptedInventoryOperationCallback
+// Waits for a refunded part to leave its slot, then asks for the new one. Kept
+// apart from the menu so closing the inventory mid-wait is harmless.
+class OYB_PendingFit
 {
-	RplId m_ResourceId;
-	RplId m_StorageId;
-	ResourceName m_Resource;
+	protected static const int CHECK_EVERY_MS = 100;
+	protected static const int GIVE_UP_AFTER_CHECKS = 30;
 
-	override protected void OnComplete()
+	protected static ref OYB_PendingFit s_Pending;
+
+	protected AttachmentSlotComponent m_Slot;
+	protected RplId m_ResourceId;
+	protected RplId m_StorageId;
+	protected ResourceName m_Resource;
+	protected int m_iChecks;
+
+	static void Start(AttachmentSlotComponent slot, RplId resourceId, RplId storageId, ResourceName resource)
 	{
-		SCR_InventoryMenuUI.OYB_RequestFromArsenal(m_ResourceId, m_StorageId, m_Resource);
+		if (s_Pending)
+			s_Pending.Stop();
+
+		s_Pending = new OYB_PendingFit();
+		s_Pending.m_Slot = slot;
+		s_Pending.m_ResourceId = resourceId;
+		s_Pending.m_StorageId = storageId;
+		s_Pending.m_Resource = resource;
+		GetGame().GetCallqueue().CallLater(s_Pending.Check, CHECK_EVERY_MS, true);
 	}
 
-	override protected void OnFailed()
+	protected void Check()
 	{
-		Print("OYB_ARSENAL the part being replaced couldn't be moved, nothing was fitted");
+		m_iChecks++;
+		if (!m_Slot)
+		{
+			Stop();
+			return;
+		}
+
+		if (!m_Slot.GetAttachedEntity())
+		{
+			SCR_InventoryMenuUI.OYB_RequestFromArsenal(m_ResourceId, m_StorageId, m_Resource);
+			Stop();
+			return;
+		}
+
+		if (m_iChecks >= GIVE_UP_AFTER_CHECKS)
+		{
+			Print("OYB_ARSENAL the arsenal didn't take the old part back, nothing new was requested");
+			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.SOUND_INV_DROP_ERROR);
+			Stop();
+		}
+	}
+
+	protected void Stop()
+	{
+		GetGame().GetCallqueue().Remove(Check);
+		if (s_Pending == this)
+			s_Pending = null;
 	}
 }

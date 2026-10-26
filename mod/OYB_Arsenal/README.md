@@ -22,9 +22,11 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
 - **Fit attachments in one go** (`OYB_ArsenalWeaponFitting.c`): double-click
   an attachment in the arsenal, or drag it onto the character, and it goes
   straight onto the matching slot of the weapon in your hands. Whatever was in
-  that slot (a muzzle brake when fitting a suppressor) is moved into your kit
-  first, and the new part is only requested once that has worked; with no room
-  for the old part nothing changes. The new part is requested with the game's
+  that slot (a muzzle brake when fitting a suppressor) goes back into the
+  arsenal with the game's own refund, and the new part is only requested once
+  the slot is seen to be empty (the server takes supplies before it spawns, so
+  this avoids paying for nothing). If the old part can't be refunded, nothing
+  changes. The new part is requested with the game's
   own arsenal request, so the server's checks and supply cost still apply.
   Magazines and other items keep the vanilla behaviour.
 - **A bar above the grid:** a **Category** button that cycles the same
