@@ -387,12 +387,12 @@ modded class SCR_InventoryStorageBaseUI
 		if (!m_wOYB_LoadoutText)
 			return;
 
-		string name = "empty";
+		string text = string.Format("Loadout %1", s_iOYB_LoadoutSlot + 1);
 		array<string> names = SCR_PlayerController.OYB_GetLoadoutNames();
-		if (names.IsIndexValid(s_iOYB_LoadoutSlot) && !names[s_iOYB_LoadoutSlot].IsEmpty())
-			name = names[s_iOYB_LoadoutSlot];
+		if (!names.IsIndexValid(s_iOYB_LoadoutSlot) || names[s_iOYB_LoadoutSlot].IsEmpty())
+			text += " (empty)";
 
-		m_wOYB_LoadoutText.SetText(string.Format("%1: %2", s_iOYB_LoadoutSlot + 1, name));
+		m_wOYB_LoadoutText.SetText(text);
 	}
 
 	protected void OYB_OnNextLoadoutSlot(SCR_ButtonBaseComponent button)
@@ -443,9 +443,14 @@ modded class SCR_InventoryStorageBaseUI
 		AlignableSlot.SetVerticalAlign(box, LayoutVerticalAlign.Center);
 		AlignableSlot.SetPadding(box, 4, 0, 6, 0);
 
+		// Buttons and labels made from layout files bring their own z-order, which
+		// is what a layout sorts by, so the order is set by hand.
 		previous = OYB_CreateTextButton(box, "<");
 		if (previous)
+		{
 			OYB_StyleArrowButton(previous);
+			previous.GetRootWidget().SetZOrder(0);
+		}
 
 		TextWidget text;
 		Widget label = workspace.CreateWidgets(OYB_LABEL_LAYOUT, box);
@@ -455,11 +460,15 @@ modded class SCR_InventoryStorageBaseUI
 			LayoutSlot.SetSizeMode(label, LayoutSizeMode.Fill);
 			AlignableSlot.SetHorizontalAlign(label, LayoutHorizontalAlign.Center);
 			AlignableSlot.SetVerticalAlign(label, LayoutVerticalAlign.Center);
+			label.SetZOrder(1);
 		}
 
 		next = OYB_CreateTextButton(box, ">");
 		if (next)
+		{
 			OYB_StyleArrowButton(next);
+			next.GetRootWidget().SetZOrder(2);
+		}
 
 		return text;
 	}
@@ -574,7 +583,7 @@ modded class SCR_InventoryStorageBaseUI
 
 		Widget overlay = name.GetParent();
 		AlignableSlot.SetHorizontalAlign(name, LayoutHorizontalAlign.Left);
-		AlignableSlot.SetPadding(name, 10, 0, 0, 0);
+		AlignableSlot.SetPadding(name, 10, 0, 34, 0);
 
 		WorkspaceWidget workspace = GetGame().GetWorkspace();
 		Widget label = workspace.CreateWidgets(OYB_LABEL_LAYOUT, overlay);

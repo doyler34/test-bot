@@ -89,7 +89,7 @@ modded class SCR_PlayerController
 
 		PrintFormat("OYB_ARSENAL loadout %1 saved for player %2: %3", slot + 1, GetPlayerId(), names[slot]);
 		OYB_SendNames(names);
-		OYB_SendMessage(string.Format("Saved to slot %1: %2", slot + 1, names[slot]));
+		OYB_SendMessage(string.Format("Saved to loadout %1.", slot + 1));
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
@@ -221,7 +221,7 @@ modded class SCR_PlayerController
 
 		PrintFormat("OYB_ARSENAL loadout %1 loaded for player %2 (applied %3): cost %4, refund %5", slot + 1, GetPlayerId(), applied, cost, refund);
 		if (applied)
-			OYB_SendMessage(string.Format("Loaded %1.", names[slot]));
+			OYB_SendMessage(string.Format("Loaded loadout %1.", slot + 1));
 		else
 			OYB_SendMessage("Only part of the kit could be loaded.");
 	}

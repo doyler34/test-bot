@@ -35,9 +35,9 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   own arsenal request, so the server's checks and supply cost still apply.
   Magazines and other items keep the vanilla behaviour.
 - **Saved loadouts** (`OYB_ArsenalLoadouts.c`): under the item grid, a
-  "Saved loadouts" heading, "< 1: M16A2 + M9 >" to pick one of five slots,
+  "Saved loadouts" heading, "< Loadout 1 >" to pick one of five slots,
   **Save** to store the kit you're wearing and **Load** to put it on at this
-  arsenal. Slots are named after the guns in the kit. The server keeps them in
+  arsenal. Empty slots say so. The server keeps them in
   `$profile:OYB_Arsenal/<player id>.json`, using the game's own arsenal
   loadout format. Loading only charges for items you don't already carry, at
   the arsenal's price (or the item catalogue's for things it doesn't sell,
