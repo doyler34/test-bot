@@ -17,6 +17,7 @@ modded class SCR_InventoryStorageBaseUI
 	protected static bool s_bOYB_TreeLogged;
 
 	protected Widget m_wOYB_FilterBar;
+	protected Widget m_wOYB_CategoryColumn;
 	protected TextWidget m_wOYB_CategoryText;
 	protected SCR_EditBoxComponent m_OYB_Search;
 	protected ref array<SCR_ButtonTextComponent> m_aOYB_CategoryButtons = {};
@@ -133,6 +134,8 @@ modded class SCR_InventoryStorageBaseUI
 
 		if (m_wOYB_FilterBar)
 			m_wOYB_FilterBar.SetVisible(show);
+		if (m_wOYB_CategoryColumn)
+			m_wOYB_CategoryColumn.SetVisible(show);
 	}
 
 	protected void OYB_BuildFilterBar()
@@ -227,6 +230,7 @@ modded class SCR_InventoryStorageBaseUI
 		if (!column)
 			return;
 		column.SetName("OYB_CategoryColumn");
+		m_wOYB_CategoryColumn = column;
 		AlignableSlot.SetPadding(column, 8, 0, 0, 0);
 		AlignableSlot.SetVerticalAlign(column, LayoutVerticalAlign.Top);
 
