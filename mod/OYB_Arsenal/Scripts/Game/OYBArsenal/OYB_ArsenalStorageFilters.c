@@ -109,10 +109,15 @@ modded class SCR_InventoryOpenedStorageArsenalUI
 	//------------------------------------------------------------------------------------------------
 	// Filter bar
 
+	// Init runs before the panel's items are read, so m_bIsArsenal isn't set yet;
+	// this class is only created for arsenals anyway.
 	protected void OYB_BuildFilterBar()
 	{
-		if (!m_bIsArsenal || !m_wGrid)
+		if (!m_wGrid)
+		{
+			Print("OYB_ARSENAL no item grid found, filter bar not added", LogLevel.WARNING);
 			return;
+		}
 
 		Widget gridParent = m_wGrid.GetParent();
 		if (!gridParent)
