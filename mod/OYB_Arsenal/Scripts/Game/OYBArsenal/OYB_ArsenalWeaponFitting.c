@@ -231,9 +231,12 @@ modded class SCR_InventoryMenuUI
 			return true;
 		}
 
-		InventoryStorageSlot slot = m_pWeaponStorageComp.FindSuitableSlotForItem(preview);
-		if (!slot || !slot.GetAttachedEntity())
+		InventoryStorageSlot slot = OYB_FindWeaponToReplace(preview, type);
+		if (!slot)
+		{
+			Print("OYB_ARSENAL weapon: no carried weapon can make way for this one, using the game's own move");
 			return false;
+		}
 
 		IEntity old = slot.GetAttachedEntity();
 		PrintFormat("OYB_ARSENAL weapon (%1): taking off %2 to equip %3", via, FilePath.StripPath(old.GetPrefabData().GetPrefabName().GetPath()), resource.GetPath());
@@ -246,6 +249,35 @@ modded class SCR_InventoryMenuUI
 
 		OYB_PendingSwap.Start(m_InventoryManager, m_pWeaponStorageComp, slot, old, resourceId, resource, SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity), false);
 		return true;
+	}
+
+	// The weapon slot to swap: the one with the gun in hand if the new weapon can
+	// take its place, otherwise the first carried gun it can replace. A slot
+	// counts if the inventory says the new weapon can replace what's there, or
+	// if what's there is the same kind of weapon (rifle for rifle, pistol for
+	// pistol), since weapon slots are set up by kind.
+	protected InventoryStorageSlot OYB_FindWeaponToReplace(IEntity preview, EWeaponType type)
+	{
+		IEntity held = OYB_TargetWeapon.GetHeld(m_Player);
+		InventoryStorageSlot fallback;
+		for (int i = 0; i < m_pWeaponStorageComp.GetSlotsCount(); i++)
+		{
+			InventoryStorageSlot slot = m_pWeaponStorageComp.GetSlot(i);
+			if (!slot || !slot.GetAttachedEntity())
+				continue;
+
+			BaseWeaponComponent current = BaseWeaponComponent.Cast(slot.GetAttachedEntity().FindComponent(BaseWeaponComponent));
+			bool sameKind = current && current.GetWeaponType() == type;
+			if (!sameKind && !m_InventoryManager.CanReplaceItem(preview, m_pWeaponStorageComp, i))
+				continue;
+
+			if (slot.GetAttachedEntity() == held)
+				return slot;
+
+			if (!fallback)
+				fallback = slot;
+		}
+		return fallback;
 	}
 
 	// See OYB_ArsenalClothing.c.
