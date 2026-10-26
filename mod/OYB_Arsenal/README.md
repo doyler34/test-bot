@@ -54,7 +54,7 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   game picks as usual.
 - **Saved loadouts** (`OYB_ArsenalLoadouts.c`): under the item grid, a
   "Saved loadouts" heading, "< Loadout 1 >" to pick one of five slots,
-  **Save** (`MenuSave`) to store the kit you're wearing and **Load**
+  **Save** (`MenuFavourite`) to store the kit you're wearing and **Load**
   (`MenuDeploy`) to put it on at this
   arsenal. Empty slots say so. The server keeps them in
   `$profile:OYB_Arsenal/<player id>.json`, using the game's own arsenal
@@ -100,8 +100,8 @@ server or with a controller yet.
 - OYB uses the game's own menu actions through its Input Manager, so the
   game's key settings and controller layouts apply and no extra input file
   is needed. Each key button shows its prompt and can also be clicked:
-  Category `MenuFilter`, Weapon `MenuRefresh`, Save `MenuSave`, Load
-  `MenuDeploy`. Which keys these are inside the inventory isn't known yet;
+  Category `MenuFilter` (X), Weapon `MenuRefresh` (R), Save `MenuFavourite`, Load
+  `MenuDeploy` (Space). `MenuSave` was tried for Save but is X, the same key as Category;
   a crossed circle on a prompt means the action has no key there, and every
   press is logged as `OYB_ARSENAL key`.
 - Q / E (LB / RB) page the grid, also right after switching category, and

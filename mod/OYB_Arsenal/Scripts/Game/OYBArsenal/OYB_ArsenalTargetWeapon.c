@@ -1,6 +1,6 @@
 // Which weapon the arsenal's "Fits" list and attachment fitting work on: the one in
-// the player's hands, unless they've picked another weapon they carry with the
-// Weapon button. Grenades and empty slots are skipped.
+// the player's hands (or the first one carried if the hands are empty), unless
+// they've picked another weapon they carry with the Weapon button. Grenades and empty slots are skipped.
 class OYB_TargetWeapon
 {
 	protected static IEntity s_Chosen;
@@ -14,7 +14,17 @@ class OYB_TargetWeapon
 			return s_Chosen;
 
 		s_Chosen = null;
-		return GetHeld(player);
+		IEntity held = GetHeld(player);
+		if (held)
+			return held;
+
+		// Nothing in hands: the first gun carried, so slung weapons can still be
+		// customised.
+		array<IEntity> carried = GetCarried(player);
+		if (carried.IsEmpty())
+			return null;
+
+		return carried[0];
 	}
 
 	// Moves to the next (step 1) or previous (step -1) weapon the player carries,

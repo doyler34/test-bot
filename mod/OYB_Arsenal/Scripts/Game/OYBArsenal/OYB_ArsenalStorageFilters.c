@@ -374,7 +374,8 @@ modded class SCR_InventoryStorageBaseUI
 
 		// Key buttons, so they work from a keyboard or controller with their
 		// prompt shown, and can still be clicked.
-		SCR_InputButtonComponent save = OYB_CreateNavButton(row, "MenuSave", "Save");
+		// MenuSave shares X with Category inside the inventory.
+		SCR_InputButtonComponent save = OYB_CreateNavButton(row, "MenuFavourite", "Save");
 		if (save)
 			save.m_OnActivated.Insert(OYB_OnSaveKey);
 
