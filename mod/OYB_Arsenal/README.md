@@ -1,69 +1,41 @@
-# OYB Arsenal (phase 1: look, don't equip)
+# OYB Arsenal
 
-The first runnable step of the OYB arsenal. Walk up to an arsenal, pick **Open
-OYB Arsenal**, and a window lists exactly what that arsenal offers: by
-category, with search, paging, and a details panel (supply cost, required rank,
-arsenal type and mode). It works with a mouse and a controller.
+The game's own arsenal screen, improved. OYB doesn't add a second menu: when you
+open an arsenal you get the normal Reforger inventory, with the same item cards,
+real icons, supply costs, dragging, equipping and controller prompts, plus OYB's
+additions built into the arsenal panel.
 
-It only reads. Nothing is equipped, spawned, charged or saved from this menu
-yet, and the vanilla arsenal actions are left as they are. It's for testing in
-Workbench on your own PC. It doesn't go on the live servers.
+It's for testing in Workbench on your own PC. It doesn't go on the live servers.
 
-The item list comes from the arsenal's own filtered list
-(`SCR_ArsenalComponent.GetFilteredArsenalItems`): its overwrite config if it has
-one, otherwise its faction catalogue limited to its item types and modes. An
-item that's installed but not offered by that arsenal never shows up.
+## What's in so far
+
+- **Category and search filtering** of the arsenal panel (Weapons, Ammo,
+  Attachments, Clothing, Vests / Bags, Medical, Grenades / Explosives, Tools,
+  Other). The filtering code is done; the filter bar that you click goes into
+  the arsenal panel's layout next, built from the game's own layout so it
+  matches. Until then the panel looks and works exactly like vanilla.
+- The item list comes from the arsenal's own filtered list
+  (`SCR_ArsenalComponent.GetAvailablePrefabs`), the same one vanilla shows, so
+  faction, item type and mode rules are the game's own.
 
 ## Set up (once)
 
-Three of these steps are done in Workbench because they create files with IDs
-that only Workbench can make. Each one takes a minute.
+1. On GitHub press **Code → Download ZIP**, unzip it, and copy
+   `mod/OYB_Arsenal` to `Documents\OYB_Arsenal`.
+2. Launch Arma Reforger Tools, press **Add Existing**, pick
+   `OYB_Arsenal.gproj`, and open it.
 
-1. **Get this folder.** On GitHub press **Code → Download ZIP**, unzip it, and
-   copy `mod/OYB_Arsenal` to `Documents\OYB_Arsenal`.
-2. **Open it.** Launch Arma Reforger Tools, press **Add Existing**, pick
-   `OYB_Arsenal.gproj`, and double-click it. If a red error box appears,
-   screenshot it and send it over: it names the exact line.
-3. **Make the empty layout.** In the **Resource Browser**, right-click the
-   `Ui` folder inside `OYB_Arsenal`, create a new **Layout**, and call it
-   `OYB_ArsenalMain`. It comes with one empty FrameWidget called `rootFrame`;
-   leave it as it is and save. The menu builds everything inside it.
-4. **Register the menu.** Search the Resource Browser for `chimeraMenus`,
-   right-click `chimeraMenus.conf` → **Override in 'OYB_Arsenal'**. Workbench
-   won't open the copy for editing, so do it in Notepad:
-   - open `Documents\OYB_Arsenal\Ui\OYB_ArsenalMain.layout.meta` and copy the
-     `Name` value, e.g. `{F6E4A4D4C839150B}Ui/OYB_ArsenalMain.layout`;
-   - open `Documents\OYB_Arsenal\Configs\System\chimeraMenus.conf` and replace
-     everything with:
+No layouts, configs or prefabs need making by hand.
 
-   ```
-   MenuManager {
-    MenuPresets {
-     MenuPreset OYB_ArsenalMenu {
-      Layout "{F6E4A4D4C839150B}Ui/OYB_ArsenalMain.layout"
-      Class "OYB_ArsenalMenu"
-     }
-    }
-   }
-   ```
+### If you tried the earlier version
 
-   using your own `Name` value as `Layout`. Restart Workbench.
-5. **Put the action on every arsenal box.** Open the **World Editor**. In its
-   Resource Browser go to `ArmaReforger → Prefabs → Props → Military → Arsenal
-   → ArsenalBoxes`, right-click **`ArsenalBox_Base.et`** → **Override in
-   'OYB_Arsenal'**, and double-click the copy. Click the top line in the
-   Hierarchy, then in **Object Properties** pick **ActionsManagerComponent**.
-   Under **Additional Actions** press **+** and choose
-   `OYB_OpenArsenalUserAction`. Set **Parent Context List** to `default` and
-   **UIInfo → Name** to `Open OYB Arsenal`, then **File → Save**. Ctrl+S
-   doesn't save here. Check by opening the copy in Notepad: it should contain
-   `OYB_OpenArsenalUserAction`.
+The earlier version had its own menu and an action on the arsenal box. With
+Workbench closed, delete these from `Documents\OYB_Arsenal`, or Workbench
+will complain about a class that no longer exists:
 
-   Use `ArsenalBox_Base`, not the US box: the Game Master arsenals aren't built
-   from `ArsenalBox_US`, but they and the faction boxes all share the base.
-
-If any of these menus look different from the description, send a screenshot
-of what you see.
+- the `Prefabs` folder
+- `Configs\System\chimeraMenus.conf` and its `.meta`
+- `Ui\OYB_ArsenalMain.layout` and its `.meta`
 
 ## Run it
 
@@ -71,67 +43,31 @@ of what you see.
    (not `worlds/Eden/Eden.ent`, which has no game mode), and press **F5**.
 2. As Game Master, place the US **Arsenal** and a US soldier, and take control
    of the soldier.
-3. Walk up to the box and pick **Open OYB Arsenal**.
-4. Try it with the mouse, then with a controller:
-   - Categories down the left; LB / RB also switch category.
-   - Hover or move onto an item to see its details on the right.
-   - Search filters as you type (on a controller, select the box to type).
-   - **Previous page** / **Next page** under the list.
-   - Back (Esc / B) closes it.
-5. In the **Log Console** type `OYB_ARSENAL_UI` in the filter, copy every
-   line, and send them over, with a screenshot of the window.
+3. Open the arsenal the normal way.
 
-## What the log tells us
+## How it works
 
-- `built item list`: how many entries the arsenal gave, how many were
-  different items, and how many had no display name in the game.
-- `opened`: how many items, how long the window took to open in ms, and
-  whether the list came from the cache (it should on the second open).
-- `arsenal offer changed`: the arsenal changed what it offers, so the list is
-  rebuilt next time.
-- `arsenal was removed or disabled while open`: the window closed itself.
+`OYB_ArsenalStorageFilters.c` is a `modded class` of the vanilla arsenal panel,
+`SCR_InventoryOpenedStorageArsenalUI`. It lets the game build its item list,
+then keeps only the items in the chosen category that match the search, and
+refreshes the panel. The game creates one card per offered prefab, in the
+arsenal's order, so each card's prefab is found by position; if the counts
+ever differ it logs `OYB_ARSENAL filter skipped` and shows everything.
 
-## Phase 0: the game's API, checked against 1.8.0.13
+`OYB_ArsenalCatalogService.c` turns the arsenal's offer into categories,
+display names and search text, and caches it until the arsenal's offer changes.
 
-Checked against Bohemia's published scripts for 1.8.0.13
-(`BohemiaInteractive/Arma-Reforger-Script-Diff`, 3 September 2026). That is the
-game's own source, but it is not the same as compiling in Workbench: if
-Workbench disagrees, Workbench wins.
+## Found in testing (Workbench, 1.8.0.13)
 
-| Used here | Found in | Matches the brief |
-|---|---|---|
-| `SCR_ArsenalComponent.FindArsenalComponent(notnull IEntity, bool getFromSlotted = true)` | `Game/Components/Arsenal/SCR_ArsenalComponent.c:242` | yes |
-| `GetFilteredArsenalItems(out notnull array<SCR_ArsenalItem>, EArsenalItemDisplayType = -1)` | same file `:351` | yes; it handles the overwrite config itself |
-| `GetOnArsenalUpdated()` → `ScriptInvokerArsenalUpdated`, callback `(array<ResourceName>)` | same file `:471`, `:5` | yes |
-| `GetAssignedFaction()` → `SCR_Faction` | same file `:323` | yes |
-| `GetArsenalSaveType()`, `IsArsenalEnabled()`, `GetSupplyCostType()` | same file `:174`, `:98`, `:154` | yes |
-| `SCR_EArsenalSaveType` (0, 10, 20, 21, 30) | same file `:624` | yes |
-| `SCR_ArsenalItem.GetItemResourceName / GetItemType / GetItemMode / GetRequiredRank / GetSupplyCost(costType)` | `Game/Components/Arsenal/SCR_ArsenalItem.c` | yes |
-| Item display name | `SCR_EntityCatalogManagerComponent.GetEntryWithPrefabFromAnyCatalog(ITEM, prefab, faction)` then `GetEntityName()` | **differs**: `SCR_ArsenalItem` has no public link to its entry, so the name is looked up by prefab. (Modding `SCR_ArsenalItem` to reach it broke config loading in Workbench: `Unknown class 'SCR_ArsenalItem'`.) Items with no UI info are named `MISSING` by the game; those show their file name instead |
-| `ScriptedUserAction` with `PerformAction`, `CanBeShownScript`, `CanBePerformedScript`, `HasLocalEffectOnlyScript` | `Game/generated/UserAction/ScriptedUserAction.c` | yes |
-| Adding the action without editing a prefab | `BaseActionsManagerComponent` has no add-action call | **no**: it has to go on the prefab (setup step 5) |
-| `MenuManager.OpenMenu(preset, userId, unique, hideParent)`, `modded enum ChimeraMenuPreset` | `GameLib/generated/Menu/MenuManager.c:44`, `Game/UI/Menu/ChimeraMenuBase.c:3` | yes; the menu also needs its entry in `chimeraMenus.conf` (setup step 4) |
-| Widgets made in script: `WorkspaceWidget.CreateWidget`, `FrameSlot`, `LayoutSlot`, `AlignableSlot`, `EditBoxWidget` | `Core/generated/UI/` | yes; the game itself makes text and image widgets this way |
-| `MenuBack`, `MenuTabLeft`, `MenuTabRight` input actions | used by vanilla menus | yes |
-| `SCR_PlayerArsenalLoadout.ReadLoadoutString(IEntity, SaveContext)` / `ApplyLoadoutString(IEntity, LoadContext)` | `Game/GameMode/Loadout/SCR_PlayerArsenalLoadout.c:200`, `:383` | yes, both static; not used until the saved-kits phase |
+- The scripts compile and the catalogues load without errors.
+- Modding `SCR_ArsenalItem` (a class used in config files) made the game reject
+  every arsenal entry (`Unknown class 'SCR_ArsenalItem'`). Item names are now
+  looked up through `SCR_EntityCatalogManagerComponent` instead.
+- A `ButtonWidget` holds one child widget only.
+- The Game Master arsenals aren't built from `ArsenalBox_US`; they share
+  `ArsenalBox_Base`.
 
-## Tested and not tested
+## Not tested yet
 
-- **Tested in Workbench (1.8.0.13):** the scripts compile; the catalogues load
-  without errors; the setup steps above work; **Open OYB Arsenal** shows on a
-  Game Master US arsenal and opens the menu.
-- **Found and fixed in testing:** modding `SCR_ArsenalItem` broke catalogue
-  loading; a button can hold only one child widget, so each row's background
-  and label now sit in an overlay.
-- Not tried yet: the window itself after that fix; how it looks at other
-  resolutions; controller focus between the three columns; the on-screen
-  keyboard for search.
-
-## What this does not do yet
-
-- Equip anything. That's phase 2, done on the server with proper checks and
-  error messages.
-- Weight, calibre and ammo type. The details panel says "not read yet" rather
-  than guessing.
-- Saved kits, restock, weapon building, admin diagnostics. Later phases.
-- Nothing from Bacon or WCS is used or copied.
+- The filtering inside the vanilla panel. It needs the filter bar to switch
+  category or search, which comes next.
