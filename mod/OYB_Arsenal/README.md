@@ -14,6 +14,11 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   bags, Medical, Grenades & explosives, Tools, Other, each with its item count.
   Only categories the arsenal has items in get a button. Built from the game's
   own `WLib_ButtonTextUnderlined` buttons.
+- **"Fits <weapon>" category** at the top of the column: the attachments,
+  magazines and underbarrel rounds in this arsenal that fit the weapon in your
+  hands, using the game's own checks (`AttachmentSlotComponent.CanSetAttachment`
+  and matching magazine wells on each muzzle). Drag them onto the weapon the
+  vanilla way. Hidden when you hold nothing or nothing fits.
 - **A bar above the grid:** a **Category** button that cycles the same
   categories (the game's `MenuFilter` action, X on keyboard), the current
   category and count, and the game's own search box, which matches each word

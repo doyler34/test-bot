@@ -1,6 +1,7 @@
 enum OYB_EArsenalCategory
 {
 	ALL,
+	FITS_WEAPON,
 	RIFLES,
 	MACHINE_GUNS,
 	SNIPER_RIFLES,
@@ -18,13 +19,14 @@ enum OYB_EArsenalCategory
 
 class OYB_ArsenalCategories
 {
-	static const int COUNT = 14;
+	static const int COUNT = 15;
 
 	static string GetName(int category)
 	{
 		switch (category)
 		{
 			case OYB_EArsenalCategory.ALL: return "All";
+			case OYB_EArsenalCategory.FITS_WEAPON: return "Fits weapon";
 			case OYB_EArsenalCategory.RIFLES: return "Rifles";
 			case OYB_EArsenalCategory.MACHINE_GUNS: return "Machine guns";
 			case OYB_EArsenalCategory.SNIPER_RIFLES: return "Sniper rifles";
@@ -143,7 +145,8 @@ class OYB_ArsenalCatalogService
 		m_mCachedByPrefab.Clear();
 	}
 
-	protected string OYB_ReadInventoryName(ResourceName prefab)
+	// The name the inventory tooltip shows for a prefab.
+	static string OYB_ReadInventoryName(ResourceName prefab)
 	{
 		Resource resource = Resource.Load(prefab);
 		if (!resource || !resource.IsValid())

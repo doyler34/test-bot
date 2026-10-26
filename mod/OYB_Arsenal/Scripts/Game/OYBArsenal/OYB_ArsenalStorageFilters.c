@@ -23,6 +23,8 @@ modded class SCR_InventoryStorageBaseUI
 	protected ref array<SCR_ButtonTextComponent> m_aOYB_CategoryButtons = {};
 	protected ref array<int> m_aOYB_CategoryCounts = {};
 	protected SCR_ArsenalComponent m_OYB_Arsenal;
+	protected int m_iOYB_FitCount;
+	protected string m_sOYB_WeaponName;
 
 	//------------------------------------------------------------------------------------------------
 	// Filtering
@@ -44,6 +46,9 @@ modded class SCR_InventoryStorageBaseUI
 			return;
 
 		m_OYB_Arsenal = listed;
+
+		array<bool> fits = {};
+		m_iOYB_FitCount = OYB_FindFits(pItemsInStorage, fits);
 		OYB_UpdateCategoryText();
 
 		if (s_iOYB_Category == OYB_EArsenalCategory.ALL && s_sOYB_Search.IsEmpty())
@@ -74,8 +79,15 @@ modded class SCR_InventoryStorageBaseUI
 			OYB_ArsenalEntry entry = catalog.FindEntry(arsenal, prefabs[i]);
 			if (!entry)
 				continue;
-			if (s_iOYB_Category != OYB_EArsenalCategory.ALL && entry.m_iCategory != s_iOYB_Category)
+			if (s_iOYB_Category == OYB_EArsenalCategory.FITS_WEAPON)
+			{
+				if (!fits[i])
+					continue;
+			}
+			else if (s_iOYB_Category != OYB_EArsenalCategory.ALL && entry.m_iCategory != s_iOYB_Category)
+			{
 				continue;
+			}
 			if (!OYB_MatchesAll(entry.m_sSearch, words))
 				continue;
 			kept.Insert(item);
@@ -88,6 +100,81 @@ modded class SCR_InventoryStorageBaseUI
 
 		pItemsInStorage.Clear();
 		pItemsInStorage.InsertAll(kept);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// Weapon fit
+
+	// Marks each item that fits the weapon in the player's hands, using the
+	// game's own checks: an attachment slot that accepts it, or a muzzle whose
+	// magazine well matches the magazine's (which covers underbarrel launchers).
+	protected int OYB_FindFits(notnull array<IEntity> items, notnull array<bool> fits)
+	{
+		fits.Clear();
+		m_sOYB_WeaponName = string.Empty;
+
+		BaseWeaponComponent weapon = OYB_GetHeldWeapon();
+		array<AttachmentSlotComponent> slots = {};
+		array<BaseMuzzleComponent> muzzles = {};
+		if (weapon)
+		{
+			weapon.GetAttachments(slots);
+			weapon.GetMuzzlesList(muzzles);
+
+			EntityPrefabData prefabData = weapon.GetOwner().GetPrefabData();
+			if (prefabData)
+				m_sOYB_WeaponName = OYB_ArsenalCatalogService.OYB_ReadInventoryName(prefabData.GetPrefabName());
+		}
+
+		int count;
+		foreach (IEntity item : items)
+		{
+			bool fit = weapon != null && item != null && OYB_Fits(item, slots, muzzles);
+			fits.Insert(fit);
+			if (fit)
+				count++;
+		}
+		return count;
+	}
+
+	protected bool OYB_Fits(IEntity item, array<AttachmentSlotComponent> slots, array<BaseMuzzleComponent> muzzles)
+	{
+		MagazineComponent magazine = MagazineComponent.Cast(item.FindComponent(MagazineComponent));
+		if (magazine && magazine.GetMagazineWell())
+		{
+			typename well = magazine.GetMagazineWell().Type();
+			foreach (BaseMuzzleComponent muzzle : muzzles)
+			{
+				if (muzzle && muzzle.GetMagazineWell() && muzzle.GetMagazineWell().Type() == well)
+					return true;
+			}
+			return false;
+		}
+
+		foreach (AttachmentSlotComponent slot : slots)
+		{
+			if (slot && slot.CanSetAttachment(item))
+				return true;
+		}
+		return false;
+	}
+
+	protected BaseWeaponComponent OYB_GetHeldWeapon()
+	{
+		IEntity player = SCR_PlayerController.GetLocalControlledEntity();
+		if (!player)
+			return null;
+
+		BaseWeaponManagerComponent weapons = BaseWeaponManagerComponent.Cast(player.FindComponent(BaseWeaponManagerComponent));
+		if (!weapons)
+			return null;
+
+		BaseWeaponComponent weapon = weapons.GetCurrentWeapon();
+		WeaponSlotComponent slot = WeaponSlotComponent.Cast(weapon);
+		if (slot && slot.GetWeaponEntity())
+			weapon = BaseWeaponComponent.Cast(slot.GetWeaponEntity().FindComponent(BaseWeaponComponent));
+
+		return weapon;
 	}
 
 	protected bool OYB_MatchesAll(string text, array<string> words)
@@ -324,9 +411,10 @@ modded class SCR_InventoryStorageBaseUI
 				counts[entry.m_iCategory] = counts[entry.m_iCategory] + 1;
 			counts[OYB_EArsenalCategory.ALL] = entries.Count();
 		}
+		counts[OYB_EArsenalCategory.FITS_WEAPON] = m_iOYB_FitCount;
 
 		if (m_wOYB_CategoryText)
-			m_wOYB_CategoryText.SetText(string.Format("%1 (%2)", OYB_ArsenalCategories.GetName(s_iOYB_Category), counts[s_iOYB_Category]));
+			m_wOYB_CategoryText.SetText(string.Format("%1 (%2)", OYB_CategoryName(s_iOYB_Category), counts[s_iOYB_Category]));
 
 		// Categories this arsenal has nothing in get no button.
 		foreach (int category, SCR_ButtonTextComponent button : m_aOYB_CategoryButtons)
@@ -336,9 +424,18 @@ modded class SCR_InventoryStorageBaseUI
 
 			bool hasItems = category == OYB_EArsenalCategory.ALL || counts[category] > 0;
 			button.GetRootWidget().SetVisible(hasItems);
-			button.SetText(string.Format("%1 (%2)", OYB_ArsenalCategories.GetName(category), counts[category]));
+			button.SetText(string.Format("%1 (%2)", OYB_CategoryName(category), counts[category]));
 			button.SetToggled(category == s_iOYB_Category, false, false, true);
 		}
+	}
+
+	// "Fits weapon" names the weapon in the player's hands.
+	protected string OYB_CategoryName(int category)
+	{
+		if (category == OYB_EArsenalCategory.FITS_WEAPON && !m_sOYB_WeaponName.IsEmpty())
+			return "Fits " + m_sOYB_WeaponName;
+
+		return OYB_ArsenalCategories.GetName(category);
 	}
 
 	// Skips categories this arsenal has nothing in, like the button column does.
