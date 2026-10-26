@@ -157,9 +157,11 @@ modded class SCR_InventoryStorageBaseUI
 		Widget categoryRow = workspace.CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, bar);
 		AlignableSlot.SetHorizontalAlign(categoryRow, LayoutHorizontalAlign.Stretch);
 
-		SCR_InputButtonComponent previous = OYB_CreateNavButton(categoryRow, "MenuTabLeft", "Previous");
-		if (previous)
-			previous.m_OnActivated.Insert(OYB_OnPreviousCategory);
+		// The inventory already uses MenuTabLeft / MenuTabRight (Q / E, LB / RB) to
+		// turn the grid's pages, so categories cycle on MenuFilter instead.
+		SCR_InputButtonComponent cycle = OYB_CreateNavButton(categoryRow, "MenuFilter", "Category");
+		if (cycle)
+			cycle.m_OnActivated.Insert(OYB_OnNextCategory);
 
 		Widget label = workspace.CreateWidgets(OYB_LABEL_LAYOUT, categoryRow);
 		if (label)
@@ -169,10 +171,6 @@ modded class SCR_InventoryStorageBaseUI
 			AlignableSlot.SetHorizontalAlign(label, LayoutHorizontalAlign.Center);
 			AlignableSlot.SetVerticalAlign(label, LayoutVerticalAlign.Center);
 		}
-
-		SCR_InputButtonComponent next = OYB_CreateNavButton(categoryRow, "MenuTabRight", "Next");
-		if (next)
-			next.m_OnActivated.Insert(OYB_OnNextCategory);
 
 		OYB_KeepCreationOrder(categoryRow);
 
@@ -230,11 +228,6 @@ modded class SCR_InventoryStorageBaseUI
 		}
 
 		m_wOYB_CategoryText.SetText(string.Format("%1 (%2)", OYB_ArsenalCategories.GetName(s_iOYB_Category), count));
-	}
-
-	protected void OYB_OnPreviousCategory(SCR_InputButtonComponent button, string action)
-	{
-		OYB_SetCategory((s_iOYB_Category + OYB_ArsenalCategories.COUNT - 1) % OYB_ArsenalCategories.COUNT);
 	}
 
 	protected void OYB_OnNextCategory(SCR_InputButtonComponent button, string action)

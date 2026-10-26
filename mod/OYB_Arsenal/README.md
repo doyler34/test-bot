@@ -9,9 +9,10 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
 
 ## What's in so far
 
-- **A filter bar above the arsenal grid:** previous / next category with
-  controller prompts (LB / RB), the category name and how many items it has,
-  and a search box. Categories: All, Weapons, Ammo, Attachments, Clothing,
+- **A filter bar above the arsenal grid:** a **Category** button that cycles
+  through the categories (bound to the game's `MenuFilter` action, with its
+  prompt shown), the category name and how many items it has, and a search
+  box. Q / E (LB / RB) stay the inventory's own page buttons. Categories: All, Weapons, Ammo, Attachments, Clothing,
   Vests / Bags, Medical, Grenades / Explosives, Tools, Other. The bar is built
   in code from the game's own widget library layouts (`WLib_NavigationButton`,
   `WLib_Label`, `WLib_EditBox`), the same pieces the vanilla inventory uses for
@@ -76,12 +77,13 @@ display names and search text, and caches it until the arsenal's offer changes.
 - A `ButtonWidget` holds one child widget only.
 - The Game Master arsenals aren't built from `ArsenalBox_US`; they share
   `ArsenalBox_Base`.
+- Q / E (`MenuTabLeft` / `MenuTabRight`) turn the inventory grid's pages, so
+  they can't switch categories.
 - Opening an arsenal from Vicinity doesn't use
   `SCR_InventoryOpenedStorageArsenalUI` at all, so modding only that class did
   nothing; the filter now lives in the shared base class.
 
 ## Not tested yet
 
-- Everything in the filter bar: where it sits, how it looks, whether LB / RB
-  are free in the inventory or already used for something else, and the
-  controller's on-screen keyboard for search.
+- Which key `MenuFilter` is on, and whether it reaches the inventory; search;
+  the controller's on-screen keyboard for search.
