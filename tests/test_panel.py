@@ -1469,6 +1469,42 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.db.open_warning(identity))
         self.assertEqual(self.db.audit()[0]["action"], "withdrew warning")
 
+    async def test_warnings_are_changed_by_their_giver_and_only_higher_roles(self):
+        self.db.add_user("adm1", auth.hash_password("adm1-password"), "admin")
+        self.db.add_user("adm2", auth.hash_password("adm2-password"), "admin")
+        self.db.add_user("chief", auth.hash_password("chief-password"), "manager")
+        identity = "11111111-2222-4333-8444-555555555555"
+        base = f"/player/{identity}/warn"
+        by_admin = self.db.add_warning(identity, "P", "adm1", "first")
+        by_senior = self.db.add_warning(identity, "P", "boss", "second")
+        by_manager = self.db.add_warning(identity, "P", "chief", "third")
+
+        async def act(user, warning, action, **data):
+            await self.login(user, f"{user}-password" if user != "boss" else "boss-password")
+            token = await self.csrf(f"/player/{identity}")
+            response = await self.client.post(f"{base}/{warning}/{action}", data={"csrf": token, **data})
+            await self.client.post("/logout", data={"csrf": token})
+            return response.status
+        # An admin changes their own, not another admin's, and never a senior admin's.
+        self.assertEqual(await act("adm2", by_admin, "edit", reason="hijack"), 403)
+        self.assertEqual(await act("adm2", by_admin, "delete"), 403)
+        self.assertEqual(self.db.warning(by_admin)["reason"], "first")
+        self.assertEqual(await act("adm1", by_senior, "delete"), 403)
+        await act("adm1", by_admin, "edit", reason="mine, changed")
+        self.assertEqual(self.db.warning(by_admin)["reason"], "mine, changed")
+        self.assertEqual(self.db.warning(by_admin)["edited_by"], "adm1")
+        # A senior admin changes an admin's and their own, not a manager's.
+        await act("boss", by_admin, "edit", reason="senior edit")
+        self.assertEqual(self.db.warning(by_admin)["edited_by"], "boss")
+        self.assertEqual(await act("boss", by_manager, "delete"), 403)
+        await act("boss", by_senior, "delete")
+        self.assertIsNone(self.db.warning(by_senior))
+        # A manager changes everyone's below them and their own.
+        await act("chief", by_admin, "delete")
+        self.assertIsNone(self.db.warning(by_admin))
+        self.assertIsNotNone(self.db.warning(by_manager))
+        self.assertEqual(self.db.audit()[0]["action"], "deleted warning")
+
     async def test_a_note_can_only_be_deleted_from_its_own_players_page(self):
         note = self.db.add_note("11111111-2222-4333-8444-555555555555", "mod", "hello")
         await self.login("mod", "mod-password")

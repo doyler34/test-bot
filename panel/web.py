@@ -1495,7 +1495,8 @@ async def player_page(request):
                   ips=db.ips(identity) if allowed(request, "ips") else [],
                   banned_ips=db.banned_ips() if allowed(request, "ips") else set(),
                   alts=db.alts(identity) if allowed(request, "ips") else [],
-                  names=db.player_names(identity), notes=db.notes(identity), warnings=db.warnings(identity), bans=bans,
+                  names=db.player_names(identity), notes=db.notes(identity), warnings=db.warnings(identity),
+                  warn_manage={w["id"] for w in db.warnings(identity) if may_manage_warning(request, w)}, bans=bans,
                   platform=db.platform(identity),
                   same_steam=db.same_steam((db.platform(identity) or {"steam_id": ""})["steam_id"], identity)
                   if allowed(request, "ips") else [],
@@ -1550,12 +1551,64 @@ async def add_warning(request):
     raise web.HTTPFound(f"/player/{identity}")
 
 
-async def withdraw_warning(request):
-    require(request, "warn")
+def may_manage_warning(request, warning):
+    """Your own warnings, always. Other people's only from a senior admin or manager, and only
+    when the person who gave it holds a lower role than you."""
+    if not allowed(request, "warn"):
+        return False
+    me = request[USER]
+    if warning["author"].lower() == me["username"].lower():
+        return True
+    if me["role"] not in ("owner", "manager"):
+        return False
+    given_by = request.app[DB].user_by_name(warning["author"])
+    below = auth.ROLES.index(given_by["role"]) if given_by and given_by["role"] in auth.ROLES else -1
+    return auth.ROLES.index(me["role"]) > below
+
+
+def find_warning(request):
     identity = request.match_info["identity"].lower()
     warning = request.app[DB].warning(int(request.match_info["warning"])) if request.match_info["warning"].isdigit() else None
     if not valid_identity(identity) or warning is None or warning["identity"] != identity:
         raise web.HTTPNotFound(text="No such warning.")
+    return identity, warning
+
+
+async def edit_warning(request):
+    require(request, "warn")
+    identity, warning = find_warning(request)
+    if not may_manage_warning(request, warning):
+        audit(request, "warning edit refused", target=identity, detail=f"warning by {warning['author']}", ok=False)
+        raise web.HTTPForbidden(text="You can't change that warning.")
+    reason = (await request.post()).get("reason", "").strip()[:500]
+    if reason != warning["reason"]:
+        request.app[DB].edit_warning(warning["id"], reason, request[USER]["username"])
+        audit(request, "edited warning", target=warning["name"] or identity,
+              detail=clean(f"given by {warning['author']}. Was: {warning['reason']} | Now: {reason}", 1000))
+        flash(request, "Warning changed.")
+    raise web.HTTPFound(f"/player/{identity}")
+
+
+async def delete_warning(request):
+    require(request, "warn")
+    identity, warning = find_warning(request)
+    if not may_manage_warning(request, warning):
+        audit(request, "warning delete refused", target=identity, detail=f"warning by {warning['author']}", ok=False)
+        raise web.HTTPForbidden(text="You can't delete that warning.")
+    request.app[DB].delete_warning(warning["id"])
+    audit(request, "deleted warning", target=warning["name"] or identity,
+          detail=clean(f"given by {warning['author']} on {note_stamp(warning['created_at'])}: {warning['reason']}"
+                       f"{' (it had been used)' if warning['used_at'] else ''}", 1000))
+    flash(request, "Warning deleted.")
+    raise web.HTTPFound(f"/player/{identity}")
+
+
+async def withdraw_warning(request):
+    require(request, "warn")
+    identity, warning = find_warning(request)
+    if not may_manage_warning(request, warning):
+        audit(request, "warning withdraw refused", target=identity, detail=f"warning by {warning['author']}", ok=False)
+        raise web.HTTPForbidden(text="You can't withdraw that warning.")
     if request.app[DB].withdraw_warning(warning["id"], request[USER]["username"]):
         audit(request, "withdrew warning", target=warning["name"] or identity,
               detail=clean(f"given by {warning['author']}: {warning['reason']}", 200))
@@ -4001,6 +4054,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/player/{identity}", player_page)
     app.router.add_post("/player/{identity}/warn", add_warning)
     app.router.add_post("/player/{identity}/warn/{warning}/withdraw", withdraw_warning)
+    app.router.add_post("/player/{identity}/warn/{warning}/edit", edit_warning)
+    app.router.add_post("/player/{identity}/warn/{warning}/delete", delete_warning)
     app.router.add_post("/player/{identity}/notes", add_note)
     app.router.add_post("/player/{identity}/notes/{note}/edit", edit_note)
     app.router.add_post("/player/{identity}/notes/{note}/delete", delete_note)

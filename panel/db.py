@@ -8,7 +8,7 @@ FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"),
               "rcon": ("rcon", "server"), "admin": ()}
 
 # Columns added after their table first shipped: older databases get them on start.
-ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("notes", "edited_by", "TEXT"), ("notes", "edited_at", "INTEGER"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
+ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("notes", "edited_by", "TEXT"), ("notes", "edited_at", "INTEGER"), ("warnings", "edited_by", "TEXT"), ("warnings", "edited_at", "INTEGER"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
                  *(("kills", c, "REAL") for c in ("victim_x", "victim_y", "killer_x", "killer_y")),
                  *(("box_samples", c, "REAL") for c in ("disk_pct", "disk_read", "disk_write", "temp", "conntrack",
                                                         "tcp_retrans", "softnet_drop", "nic_errors")))
@@ -1147,6 +1147,13 @@ class PanelDB:
                               " AND used_at IS NULL AND withdrawn_at IS NULL", (now(), used_for, warning_id))
         self.db.commit()
         return cur.rowcount == 1
+
+    def edit_warning(self, warning_id: int, reason: str, editor: str):
+        self.write("UPDATE warnings SET reason = ?, edited_by = ?, edited_at = ? WHERE id = ?",
+                   reason, editor, now(), warning_id)
+
+    def delete_warning(self, warning_id: int):
+        self.write("DELETE FROM warnings WHERE id = ?", warning_id)
 
     def withdraw_warning(self, warning_id: int, by: str) -> bool:
         cur = self.db.execute("UPDATE warnings SET withdrawn_by = ?, withdrawn_at = ? WHERE id = ?"

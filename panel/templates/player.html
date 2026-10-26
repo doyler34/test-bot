@@ -68,10 +68,25 @@
   {% for w in warnings %}
   <div class="note"><p>{% if w.used_at %}Used: {{ w.used_for }}{% elif w.withdrawn_at %}Withdrawn by {{ w.withdrawn_by }}{% else %}<b>Waiting</b>: the next close-range teamkill bans them.{% endif %}{% if w.reason %} · {{ w.reason }}{% endif %}</p>
     <span class="muted">{{ w.author }} · {{ w.created_at|ts }}{% if w.used_at %} · used {{ w.used_at|ts }}{% endif %}</span>
-    {% if can("warn") and not w.used_at and not w.withdrawn_at %}
+    {% if w.edited_at %}<span class="muted"> · edited by {{ w.edited_by }} {{ w.edited_at|ts }}</span>{% endif %}
+    {% if w.id in warn_manage %}
+    <details class="edit-note">
+      <summary class="button small ghost">Edit</summary>
+      <form method="post" action="/player/{{ identity }}/warn/{{ w.id }}/edit">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input name="reason" maxlength="500" value="{{ w.reason }}" placeholder="Why">
+        <button class="small">Save</button>
+      </form>
+    </details>
+    {% if not w.used_at and not w.withdrawn_at %}
     <form method="post" action="/player/{{ identity }}/warn/{{ w.id }}/withdraw" data-confirm="Take this warning back?">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="small ghost">Withdraw</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/player/{{ identity }}/warn/{{ w.id }}/delete" data-confirm="Delete this warning? It stays in the audit log.">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="small ghost">Delete</button>
     </form>
     {% endif %}
   </div>
