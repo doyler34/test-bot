@@ -9,14 +9,15 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
 
 ## What's in so far
 
-- **A filter bar above the arsenal grid:** a **Category** button that cycles
-  through the categories (bound to the game's `MenuFilter` action, with its
-  prompt shown), the category name and how many items it has, and a search
-  box. Q / E (LB / RB) stay the inventory's own page buttons. Categories: All, Weapons, Ammo, Attachments, Clothing,
-  Vests / Bags, Medical, Grenades / Explosives, Tools, Other. The bar is built
-  in code from the game's own widget library layouts (`WLib_NavigationButton`,
-  `WLib_Label`, `WLib_EditBox`), the same pieces the vanilla inventory uses for
-  its prompts, so it matches without any layout files.
+- **A category column beside the arsenal grid:** All, Rifles, Machine guns,
+  Sniper rifles, Pistols, Launchers, Ammo, Attachments, Clothing, Vests &
+  bags, Medical, Grenades & explosives, Tools, Other, each with its item count.
+  Only categories the arsenal has items in get a button. Built from the game's
+  own `WLib_ButtonTextUnderlined` buttons.
+- **A bar above the grid:** a **Category** button that cycles the same
+  categories (the game's `MenuFilter` action, X on keyboard), the current
+  category and count, and the game's own search box. Q / E stay the
+  inventory's page buttons.
 - The item list comes from the arsenal's own filtered list
   (`SCR_ArsenalComponent.GetAvailablePrefabs`), the same one vanilla shows, so
   faction, item type and mode rules are the game's own.

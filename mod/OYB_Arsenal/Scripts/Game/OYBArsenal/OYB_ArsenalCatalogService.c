@@ -1,7 +1,11 @@
 enum OYB_EArsenalCategory
 {
 	ALL,
-	WEAPONS,
+	RIFLES,
+	MACHINE_GUNS,
+	SNIPER_RIFLES,
+	PISTOLS,
+	LAUNCHERS,
 	AMMO,
 	ATTACHMENTS,
 	CLOTHING,
@@ -14,20 +18,24 @@ enum OYB_EArsenalCategory
 
 class OYB_ArsenalCategories
 {
-	static const int COUNT = 10;
+	static const int COUNT = 14;
 
 	static string GetName(int category)
 	{
 		switch (category)
 		{
 			case OYB_EArsenalCategory.ALL: return "All";
-			case OYB_EArsenalCategory.WEAPONS: return "Weapons";
+			case OYB_EArsenalCategory.RIFLES: return "Rifles";
+			case OYB_EArsenalCategory.MACHINE_GUNS: return "Machine guns";
+			case OYB_EArsenalCategory.SNIPER_RIFLES: return "Sniper rifles";
+			case OYB_EArsenalCategory.PISTOLS: return "Pistols";
+			case OYB_EArsenalCategory.LAUNCHERS: return "Launchers";
 			case OYB_EArsenalCategory.AMMO: return "Ammo";
 			case OYB_EArsenalCategory.ATTACHMENTS: return "Attachments";
 			case OYB_EArsenalCategory.CLOTHING: return "Clothing";
-			case OYB_EArsenalCategory.VESTS_BAGS: return "Vests / Bags";
+			case OYB_EArsenalCategory.VESTS_BAGS: return "Vests & bags";
 			case OYB_EArsenalCategory.MEDICAL: return "Medical";
-			case OYB_EArsenalCategory.THROWABLES: return "Grenades / Explosives";
+			case OYB_EArsenalCategory.THROWABLES: return "Grenades & explosives";
 			case OYB_EArsenalCategory.EQUIPMENT: return "Tools";
 		}
 		return "Other";
@@ -39,8 +47,16 @@ class OYB_ArsenalCategories
 		if (mode == SCR_EArsenalItemMode.AMMUNITION)
 			return OYB_EArsenalCategory.AMMO;
 
-		if (type & (SCR_EArsenalItemType.RIFLE | SCR_EArsenalItemType.PISTOL | SCR_EArsenalItemType.MACHINE_GUN | SCR_EArsenalItemType.SNIPER_RIFLE | SCR_EArsenalItemType.ROCKET_LAUNCHER))
-			return OYB_EArsenalCategory.WEAPONS;
+		if (type & SCR_EArsenalItemType.RIFLE)
+			return OYB_EArsenalCategory.RIFLES;
+		if (type & SCR_EArsenalItemType.MACHINE_GUN)
+			return OYB_EArsenalCategory.MACHINE_GUNS;
+		if (type & SCR_EArsenalItemType.SNIPER_RIFLE)
+			return OYB_EArsenalCategory.SNIPER_RIFLES;
+		if (type & SCR_EArsenalItemType.PISTOL)
+			return OYB_EArsenalCategory.PISTOLS;
+		if (type & SCR_EArsenalItemType.ROCKET_LAUNCHER)
+			return OYB_EArsenalCategory.LAUNCHERS;
 		if (type & SCR_EArsenalItemType.WEAPON_ATTACHMENT)
 			return OYB_EArsenalCategory.ATTACHMENTS;
 		if (type & (SCR_EArsenalItemType.HEADWEAR | SCR_EArsenalItemType.TORSO | SCR_EArsenalItemType.LEGS | SCR_EArsenalItemType.FOOTWEAR | SCR_EArsenalItemType.HANDWEAR))

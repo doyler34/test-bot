@@ -10,6 +10,7 @@ modded class SCR_InventoryStorageBaseUI
 	protected static const ResourceName OYB_NAV_BUTTON_LAYOUT = "{08CF3B69CB1ACBC4}UI/layouts/WidgetLibrary/WLib_NavigationButton.layout";
 	protected static const ResourceName OYB_LABEL_LAYOUT = "{829BC1189A899017}UI/layouts/WidgetLibrary/WLibRefined/WLib_Label.layout";
 	protected static const ResourceName OYB_EDIT_BOX_LAYOUT = "{0022F0B45ADBC5AC}UI/layouts/WidgetLibrary/EditBox/WLib_EditBox.layout";
+	protected static const ResourceName OYB_TAB_BUTTON_LAYOUT = "{D27D044A8145DC7C}UI/layouts/WidgetLibrary/Buttons/WLib_ButtonTextUnderlined.layout";
 
 	protected static int s_iOYB_Category = OYB_EArsenalCategory.ALL;
 	protected static string s_sOYB_Search;
@@ -18,6 +19,8 @@ modded class SCR_InventoryStorageBaseUI
 	protected Widget m_wOYB_FilterBar;
 	protected TextWidget m_wOYB_CategoryText;
 	protected SCR_EditBoxComponent m_OYB_Search;
+	protected ref array<SCR_ButtonTextComponent> m_aOYB_CategoryButtons = {};
+	protected ref array<int> m_aOYB_CategoryCounts = {};
 	protected SCR_ArsenalComponent m_OYB_Arsenal;
 
 	//------------------------------------------------------------------------------------------------
@@ -192,6 +195,66 @@ modded class SCR_InventoryStorageBaseUI
 			}
 		}
 
+		OYB_BuildCategoryColumn();
+
+	}
+
+	// A column of category buttons to the right of the item grid. The grid is
+	// moved into a row with the column so the rest of the panel is untouched.
+	protected void OYB_BuildCategoryColumn()
+	{
+		Widget container = m_wGrid.GetParent();
+		WorkspaceWidget workspace = GetGame().GetWorkspace();
+
+		Widget row = workspace.CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, container);
+		if (!row)
+			return;
+		row.SetName("OYB_GridRow");
+		OYB_MoveBefore(row, m_wGrid);
+		container.RemoveChild(m_wGrid);
+		row.AddChild(m_wGrid);
+
+		Widget column = workspace.CreateWidget(WidgetType.VerticalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, row);
+		if (!column)
+			return;
+		column.SetName("OYB_CategoryColumn");
+		AlignableSlot.SetPadding(column, 8, 0, 0, 0);
+		AlignableSlot.SetVerticalAlign(column, LayoutVerticalAlign.Top);
+
+		for (int category = 0; category < OYB_ArsenalCategories.COUNT; category++)
+		{
+			Widget buttonRoot = workspace.CreateWidgets(OYB_TAB_BUTTON_LAYOUT, column);
+			SCR_ButtonTextComponent button = null;
+			if (buttonRoot)
+			{
+				AlignableSlot.SetHorizontalAlign(buttonRoot, LayoutHorizontalAlign.Stretch);
+				AlignableSlot.SetPadding(buttonRoot, 0, 1, 0, 1);
+				button = SCR_ButtonTextComponent.Cast(buttonRoot.FindHandler(SCR_ButtonTextComponent));
+			}
+
+			if (button)
+			{
+				button.SetText(OYB_ArsenalCategories.GetName(category));
+				button.SetToggleable(true);
+				button.m_OnClicked.Insert(OYB_OnCategoryClicked);
+			}
+			m_aOYB_CategoryButtons.Insert(button);
+		}
+	}
+
+	protected void OYB_OnCategoryClicked(SCR_ButtonBaseComponent clicked)
+	{
+		foreach (int category, SCR_ButtonTextComponent button : m_aOYB_CategoryButtons)
+		{
+			if (button && button == clicked)
+			{
+				OYB_SetCategory(category);
+				break;
+			}
+		}
+
+		// A toggle button flips itself on click; show the real selection again.
+		OYB_UpdateCategoryText();
 	}
 
 	protected SCR_InputButtonComponent OYB_CreateNavButton(Widget parent, string action, string label)
@@ -212,27 +275,47 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_UpdateCategoryText()
 	{
-		if (!m_wOYB_CategoryText)
-			return;
+		array<int> counts = m_aOYB_CategoryCounts;
+		counts.Clear();
+		for (int c = 0; c < OYB_ArsenalCategories.COUNT; c++)
+			counts.Insert(0);
 
-		int count;
 		if (m_OYB_Arsenal)
 		{
 			bool fromCache;
 			array<ref OYB_ArsenalEntry> entries = OYB_ArsenalCatalogService.GetInstance().GetEntries(m_OYB_Arsenal, fromCache);
 			foreach (OYB_ArsenalEntry entry : entries)
-			{
-				if (s_iOYB_Category == OYB_EArsenalCategory.ALL || entry.m_iCategory == s_iOYB_Category)
-					count++;
-			}
+				counts[entry.m_iCategory] = counts[entry.m_iCategory] + 1;
+			counts[OYB_EArsenalCategory.ALL] = entries.Count();
 		}
 
-		m_wOYB_CategoryText.SetText(string.Format("%1 (%2)", OYB_ArsenalCategories.GetName(s_iOYB_Category), count));
+		if (m_wOYB_CategoryText)
+			m_wOYB_CategoryText.SetText(string.Format("%1 (%2)", OYB_ArsenalCategories.GetName(s_iOYB_Category), counts[s_iOYB_Category]));
+
+		// Categories this arsenal has nothing in get no button.
+		foreach (int category, SCR_ButtonTextComponent button : m_aOYB_CategoryButtons)
+		{
+			if (!button)
+				continue;
+
+			bool hasItems = category == OYB_EArsenalCategory.ALL || counts[category] > 0;
+			button.GetRootWidget().SetVisible(hasItems);
+			button.SetText(string.Format("%1 (%2)", OYB_ArsenalCategories.GetName(category), counts[category]));
+			button.SetToggled(category == s_iOYB_Category, false, false, true);
+		}
 	}
 
+	// Skips categories this arsenal has nothing in, like the button column does.
 	protected void OYB_OnNextCategory(SCR_InputButtonComponent button, string action)
 	{
-		OYB_SetCategory((s_iOYB_Category + 1) % OYB_ArsenalCategories.COUNT);
+		int category = s_iOYB_Category;
+		for (int i = 0; i < OYB_ArsenalCategories.COUNT; i++)
+		{
+			category = (category + 1) % OYB_ArsenalCategories.COUNT;
+			if (category == OYB_EArsenalCategory.ALL || !m_aOYB_CategoryCounts.IsIndexValid(category) || m_aOYB_CategoryCounts[category] > 0)
+				break;
+		}
+		OYB_SetCategory(category);
 	}
 
 	protected void OYB_OnSearchConfirmed(SCR_EditBoxComponent box, string text)
