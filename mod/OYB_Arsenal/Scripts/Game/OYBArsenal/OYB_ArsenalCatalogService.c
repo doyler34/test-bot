@@ -37,7 +37,7 @@ class OYB_ArsenalCategories
 			case OYB_EArsenalCategory.CLOTHING: return "Clothing";
 			case OYB_EArsenalCategory.VESTS_BAGS: return "Vests & bags";
 			case OYB_EArsenalCategory.MEDICAL: return "Medical";
-			case OYB_EArsenalCategory.THROWABLES: return "Grenades & explosives";
+			case OYB_EArsenalCategory.THROWABLES: return "Explosives";
 			case OYB_EArsenalCategory.EQUIPMENT: return "Tools";
 		}
 		return "Other";

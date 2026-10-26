@@ -368,8 +368,6 @@ modded class SCR_InventoryStorageBaseUI
 			load.m_OnClicked.Insert(OYB_OnLoadLoadout);
 		}
 
-		OYB_KeepCreationOrder(row);
-
 		SCR_PlayerController.OYB_GetOnLoadoutNames().Insert(OYB_UpdateLoadoutText);
 		OYB_UpdateLoadoutText();
 
@@ -463,7 +461,6 @@ modded class SCR_InventoryStorageBaseUI
 		if (next)
 			OYB_StyleArrowButton(next);
 
-		OYB_KeepCreationOrder(box);
 		return text;
 	}
 
@@ -482,8 +479,9 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_StyleArrowButton(SCR_ButtonTextComponent button)
 	{
-		button.SetBackgroundColors(new Color(1, 1, 1, 0.04), new Color(1, 1, 1, 0.15), null, null, new Color(0.898, 0.541, 0.184, 0.5));
+		button.SetBackgroundColors(new Color(1, 1, 1, 0.06), new Color(1, 1, 1, 0.16), new Color(1, 1, 1, 0.06), new Color(1, 1, 1, 0.16), new Color(1, 1, 1, 0.3));
 		button.m_bUseTextColorization = true;
+		button.m_TextToggled = OYB_ORANGE;
 		button.m_TextDefault = OYB_ORANGE;
 		button.ColorizeBackground(false);
 		if (button.GetTextWidget())
