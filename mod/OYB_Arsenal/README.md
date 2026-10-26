@@ -34,6 +34,14 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   changes. The new part is requested with the game's
   own arsenal request, so the server's checks and supply cost still apply.
   Magazines and other items keep the vanilla behaviour.
+- **Put clothing on in one go** (`OYB_ArsenalClothing.c`): double-click a
+  uniform, vest, helmet, backpack or other worn item in the arsenal and it is
+  worn, not packed. Whatever was worn there comes off, the new piece is
+  requested straight into that slot, the old piece's contents move into the
+  new one (or anywhere else they fit) and the old piece goes back into the
+  arsenal with the game's own refund. If the new piece doesn't arrive, the old
+  one goes back on; if something doesn't fit or the arsenal won't take it
+  back, the old piece is left on the ground with its contents.
 - **Saved loadouts** (`OYB_ArsenalLoadouts.c`): under the item grid, a
   "Saved loadouts" heading, "< Loadout 1 >" to pick one of five slots,
   **Save** to store the kit you're wearing and **Load** to put it on at this
@@ -132,6 +140,8 @@ display names and search text, and caches it until the arsenal's offer changes.
 
 ## Not tested yet
 
+- Putting clothing on by double-click, including moving pocket contents and
+  swapping a backpack.
 - Saved loadouts: the supply charge and refund at an arsenal that uses
   supplies (the Game Master arsenal charged 0), and the file on a dedicated
   server.

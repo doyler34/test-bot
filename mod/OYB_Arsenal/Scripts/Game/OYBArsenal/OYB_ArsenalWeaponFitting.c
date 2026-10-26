@@ -15,7 +15,7 @@ modded class SCR_InventoryMenuUI
 {
 	override protected bool MoveBetweenFromVicinity_VirtualArsenal()
 	{
-		if (OYB_FitToHeldWeapon("quick move"))
+		if (OYB_FitToHeldWeapon("quick move") || OYB_EquipClothing("quick move"))
 			return true;
 
 		return super.MoveBetweenFromVicinity_VirtualArsenal();
@@ -23,7 +23,7 @@ modded class SCR_InventoryMenuUI
 
 	override protected bool EquipDraggedItem_VirtualArsenal(bool forceEquip = false)
 	{
-		if (OYB_FitToHeldWeapon("drag onto character"))
+		if (OYB_FitToHeldWeapon("drag onto character") || OYB_EquipClothing("drag onto character"))
 			return true;
 
 		return super.EquipDraggedItem_VirtualArsenal(forceEquip);
@@ -36,7 +36,7 @@ modded class SCR_InventoryMenuUI
 		{
 			SCR_InventorySlotUI selected = m_pSelectedSlotUI;
 			m_pSelectedSlotUI = m_pFocusedSlotUI;
-			bool fitted = OYB_FitToHeldWeapon("equip");
+			bool fitted = OYB_FitToHeldWeapon("equip") || OYB_EquipClothing("equip");
 			m_pSelectedSlotUI = selected;
 			if (fitted)
 			{
