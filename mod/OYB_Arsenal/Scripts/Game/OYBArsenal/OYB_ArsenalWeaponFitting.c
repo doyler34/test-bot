@@ -97,7 +97,7 @@ modded class SCR_InventoryMenuUI
 		if (!fitted)
 		{
 			PrintFormat("OYB_ARSENAL fit (%1): slot empty, requesting %2", via, resource.GetPath());
-			OYB_RequestFromArsenal(resourceId, storageId, resource);
+			OYB_ArsenalRequest.Request(resourceId, storageId, resource);
 			return true;
 		}
 
@@ -125,7 +125,60 @@ modded class SCR_InventoryMenuUI
 		return true;
 	}
 
-	static void OYB_RequestFromArsenal(RplId resourceId, RplId storageId, ResourceName resource)
+
+	protected bool OYB_EquipClothing(string via)
+	{
+		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);
+		if (!arsenalSlot || !arsenalSlot.IsAvailable() || !arsenalSlot.GetInventoryItemComponent())
+			return false;
+
+		IEntity preview = arsenalSlot.GetInventoryItemComponent().GetOwner();
+		if (!preview || !preview.FindComponent(BaseLoadoutClothComponent) || !m_InventoryManager)
+			return false;
+
+		SCR_CharacterInventoryStorageComponent wearing = m_InventoryManager.GetCharacterStorage();
+		if (!wearing)
+			return false;
+
+		InventoryStorageSlot slot = wearing.FindSuitableSlotForItem(preview);
+		if (!slot)
+			return false;
+
+		IEntity arsenalEntity = SCR_InventoryStorageBaseUI.ARSENAL_SLOT_STORAGES.Get(arsenalSlot);
+		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(arsenalEntity);
+		if (!resourceComponent)
+			return false;
+
+		RplId resourceId = Replication.FindItemId(resourceComponent);
+		ResourceName resource = arsenalSlot.GetItemResource();
+
+		IEntity worn = slot.GetAttachedEntity();
+		if (!worn)
+		{
+			PrintFormat("OYB_ARSENAL wear (%1): slot empty, requesting %2", via, resource.GetPath());
+			OYB_ArsenalRequest.Request(resourceId, Replication.FindItemId(wearing), resource);
+			return true;
+		}
+
+		PrintFormat("OYB_ARSENAL wear (%1): taking off %2 to put on %3", via, FilePath.StripPath(worn.GetPrefabData().GetPrefabName().GetPath()), resource.GetPath());
+		if (!m_InventoryManager.TryRemoveItemFromStorage(worn, slot.GetStorage()))
+		{
+			Print("OYB_ARSENAL the worn piece can't be taken off, nothing changed");
+			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.SOUND_INV_DROP_ERROR);
+			return true;
+		}
+
+		OYB_PendingClothing.Start(m_InventoryManager, wearing, slot, worn, resourceId, resource, SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity));
+		return true;
+	}
+}
+
+// The game's own arsenal request, as used when an item is dragged out of an
+// arsenal. A plain class rather than part of the modded menu, so every OYB file
+// can call it whatever order the files are compiled in.
+class OYB_ArsenalRequest
+{
+	static void Request(RplId resourceId, RplId storageId, ResourceName resource)
 	{
 		SCR_ResourcePlayerControllerInventoryComponent requests = SCR_ResourcePlayerControllerInventoryComponent.Cast(GetGame().GetPlayerController().FindComponent(SCR_ResourcePlayerControllerInventoryComponent));
 		if (requests)
@@ -173,7 +226,7 @@ class OYB_PendingFit
 		if (!m_Slot.GetAttachedEntity())
 		{
 			Print("OYB_ARSENAL fit: old part is off, requesting the new one");
-			SCR_InventoryMenuUI.OYB_RequestFromArsenal(m_ResourceId, m_StorageId, m_Resource);
+			OYB_ArsenalRequest.Request(m_ResourceId, m_StorageId, m_Resource);
 			Stop();
 			return;
 		}

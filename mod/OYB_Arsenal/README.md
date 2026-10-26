@@ -34,7 +34,7 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   changes. The new part is requested with the game's
   own arsenal request, so the server's checks and supply cost still apply.
   Magazines and other items keep the vanilla behaviour.
-- **Put clothing on in one go** (`OYB_ArsenalClothing.c`): double-click a
+- **Put clothing on in one go** (`OYB_ArsenalClothing.c`, hooked in `OYB_ArsenalWeaponFitting.c`): double-click a
   uniform, vest, helmet, backpack or other worn item in the arsenal and it is
   worn, not packed. Whatever was worn there comes off, the new piece is
   requested straight into that slot, the old piece's contents move into the

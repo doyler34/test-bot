@@ -1,3 +1,6 @@
+// The steps of putting on clothing from the arsenal; the double-click itself is
+// handled in OYB_ArsenalWeaponFitting.c.
+//
 // Double-clicking clothing in the arsenal (a uniform, vest, helmet, backpack...)
 // puts it on instead of packing it into the backpack. If something is already
 // worn there, it is taken off first, the new piece is asked for with the game's
@@ -7,55 +10,6 @@
 // arrive (no supplies, say), the old one is put back on. If some of its contents
 // don't fit anywhere, or the arsenal won't take it back, it stays on the ground
 // next to the player with everything still in it.
-modded class SCR_InventoryMenuUI
-{
-	protected bool OYB_EquipClothing(string via)
-	{
-		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);
-		if (!arsenalSlot || !arsenalSlot.IsAvailable() || !arsenalSlot.GetInventoryItemComponent())
-			return false;
-
-		IEntity preview = arsenalSlot.GetInventoryItemComponent().GetOwner();
-		if (!preview || !preview.FindComponent(BaseLoadoutClothComponent) || !m_InventoryManager)
-			return false;
-
-		SCR_CharacterInventoryStorageComponent wearing = m_InventoryManager.GetCharacterStorage();
-		if (!wearing)
-			return false;
-
-		InventoryStorageSlot slot = wearing.FindSuitableSlotForItem(preview);
-		if (!slot)
-			return false;
-
-		IEntity arsenalEntity = SCR_InventoryStorageBaseUI.ARSENAL_SLOT_STORAGES.Get(arsenalSlot);
-		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(arsenalEntity);
-		if (!resourceComponent)
-			return false;
-
-		RplId resourceId = Replication.FindItemId(resourceComponent);
-		ResourceName resource = arsenalSlot.GetItemResource();
-
-		IEntity worn = slot.GetAttachedEntity();
-		if (!worn)
-		{
-			PrintFormat("OYB_ARSENAL wear (%1): slot empty, requesting %2", via, resource.GetPath());
-			OYB_RequestFromArsenal(resourceId, Replication.FindItemId(wearing), resource);
-			return true;
-		}
-
-		PrintFormat("OYB_ARSENAL wear (%1): taking off %2 to put on %3", via, FilePath.StripPath(worn.GetPrefabData().GetPrefabName().GetPath()), resource.GetPath());
-		if (!m_InventoryManager.TryRemoveItemFromStorage(worn, slot.GetStorage()))
-		{
-			Print("OYB_ARSENAL the worn piece can't be taken off, nothing changed");
-			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.SOUND_INV_DROP_ERROR);
-			return true;
-		}
-
-		OYB_PendingClothing.Start(m_InventoryManager, wearing, slot, worn, resourceId, resource, SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity));
-		return true;
-	}
-}
-
 enum OYB_EClothingStep
 {
 	TAKING_OFF,
@@ -119,7 +73,7 @@ class OYB_PendingClothing
 			}
 
 			Print("OYB_ARSENAL wear: old piece is off, requesting the new one");
-			SCR_InventoryMenuUI.OYB_RequestFromArsenal(m_ResourceId, Replication.FindItemId(m_Wearing), m_Resource);
+			OYB_ArsenalRequest.Request(m_ResourceId, Replication.FindItemId(m_Wearing), m_Resource);
 			NextStep(OYB_EClothingStep.PUTTING_ON);
 			return;
 		}
