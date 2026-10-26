@@ -26,7 +26,7 @@ modded class SCR_InventoryMenuUI
 
 	override protected bool MoveBetweenFromVicinity_VirtualArsenal()
 	{
-		if (OYB_FitToHeldWeapon("quick move") || OYB_EquipClothing("quick move"))
+		if (OYB_FitToHeldWeapon("quick move") || OYB_EquipClothing("quick move") || OYB_PutWithSameItems("quick move"))
 			return true;
 
 		return super.MoveBetweenFromVicinity_VirtualArsenal();
@@ -34,7 +34,7 @@ modded class SCR_InventoryMenuUI
 
 	override protected bool EquipDraggedItem_VirtualArsenal(bool forceEquip = false)
 	{
-		if (OYB_FitToHeldWeapon("drag onto character") || OYB_EquipClothing("drag onto character"))
+		if (OYB_FitToHeldWeapon("drag onto character") || OYB_EquipClothing("drag onto character") || OYB_PutWithSameItems("drag onto character"))
 			return true;
 
 		return super.EquipDraggedItem_VirtualArsenal(forceEquip);
@@ -133,6 +133,64 @@ modded class SCR_InventoryMenuUI
 
 		requests.RpcAsk_ArsenalRefundItem(resourceId, Replication.FindItemId(fittedItem), EResourceType.SUPPLIES);
 		OYB_PendingFit.Start(target, resourceId, storageId, resource);
+		return true;
+	}
+
+	// An item taken from the arsenal goes into the pouch or pocket that already
+	// holds the most of the same item, so a new magazine joins the others rather
+	// than landing in whichever storage the game finds first. If none of those
+	// has room, the game's own choice applies.
+	protected bool OYB_PutWithSameItems(string via)
+	{
+		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);
+		if (!arsenalSlot || !arsenalSlot.IsAvailable() || !arsenalSlot.GetInventoryItemComponent() || !m_InventoryManager)
+			return false;
+
+		IEntity preview = arsenalSlot.GetInventoryItemComponent().GetOwner();
+		ResourceName resource = arsenalSlot.GetItemResource();
+		if (!preview || resource.IsEmpty())
+			return false;
+
+		map<BaseInventoryStorageComponent, int> holding = new map<BaseInventoryStorageComponent, int>();
+		array<IEntity> items = {};
+		m_InventoryManager.GetItems(items);
+		foreach (IEntity item : items)
+		{
+			if (!item || !item.GetPrefabData() || item.GetPrefabData().GetPrefabName() != resource)
+				continue;
+
+			InventoryItemComponent itemComponent = InventoryItemComponent.Cast(item.FindComponent(InventoryItemComponent));
+			if (!itemComponent || !itemComponent.GetParentSlot())
+				continue;
+
+			// Only pouches, pockets and packs; not a weapon's magazine well.
+			UniversalInventoryStorageComponent storage = UniversalInventoryStorageComponent.Cast(itemComponent.GetParentSlot().GetStorage());
+			if (storage)
+				holding.Set(storage, holding.Get(storage) + 1);
+		}
+
+		BaseInventoryStorageComponent best;
+		int bestCount;
+		foreach (BaseInventoryStorageComponent storage, int count : holding)
+		{
+			if (count > bestCount && m_InventoryManager.CanInsertItemInStorage(preview, storage))
+			{
+				best = storage;
+				bestCount = count;
+			}
+		}
+		if (!best)
+			return false;
+
+		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(SCR_InventoryStorageBaseUI.ARSENAL_SLOT_STORAGES.Get(arsenalSlot));
+		if (!resourceComponent)
+			return false;
+
+		string holder = "storage";
+		if (best.GetOwner().GetPrefabData())
+			holder = FilePath.StripPath(best.GetOwner().GetPrefabData().GetPrefabName().GetPath());
+		PrintFormat("OYB_ARSENAL take (%1): %2 goes in with the %3 already in %4", via, FilePath.StripPath(resource.GetPath()), bestCount, holder);
+		OYB_ArsenalRequest.Request(Replication.FindItemId(resourceComponent), Replication.FindItemId(best), resource);
 		return true;
 	}
 

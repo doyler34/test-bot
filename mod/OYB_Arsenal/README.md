@@ -42,6 +42,10 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   arsenal with the game's own refund. If the new piece doesn't arrive, the old
   one goes back on; if something doesn't fit or the arsenal won't take it
   back, the old piece is left on the ground with its contents.
+- **Items join the ones you already carry**: double-click (or drag onto the
+  character) an item you already have, like a magazine, and it goes into the
+  pouch or pocket holding the most of them, if there's room; otherwise the
+  game picks as usual.
 - **Saved loadouts** (`OYB_ArsenalLoadouts.c`): under the item grid, a
   "Saved loadouts" heading, "< Loadout 1 >" to pick one of five slots,
   **Save** to store the kit you're wearing and **Load** to put it on at this
@@ -135,6 +139,7 @@ display names and search text, and caches it until the arsenal's offer changes.
   and column hiding outside an arsenal, and fitting attachments by double-click
   (the game's quick-move path), including swapping scopes and suppressors with
   the old part going back into the arsenal.
+- Double-clicking clothing swaps it with what's worn and returns the old piece.
 - Saving and loading a loadout works in Workbench, including a kit with an
   M203 fitted and clothing the arsenal doesn't sell. The restyled bar,
   category list and loadout row show as intended.
@@ -144,8 +149,6 @@ display names and search text, and caches it until the arsenal's offer changes.
 
 ## Not tested yet
 
-- Putting clothing on by double-click, including moving pocket contents and
-  swapping a backpack.
 - Saved loadouts: the supply charge and refund at an arsenal that uses
   supplies (the Game Master arsenal charged 0), and the file on a dedicated
   server.
