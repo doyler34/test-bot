@@ -42,6 +42,12 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   arsenal with the game's own refund. If the new piece doesn't arrive, the old
   one goes back on; if something doesn't fit or the arsenal won't take it
   back, the old piece is left on the ground with its contents.
+- **Swap weapons in one go** (also `OYB_ArsenalClothing.c`): double-click a
+  weapon and it goes into a free weapon slot that takes it; with none free,
+  the weapon in its slot comes off and goes back into the arsenal whole
+  (the game's refund covers its fitted parts and loaded magazine) once the
+  new one is on. If the new one doesn't arrive, the old one goes back on.
+  Grenades still go to pouches.
 - **Items join the ones you already carry**: double-click (or drag onto the
   character) an item you already have, like a magazine, and it goes into the
   pouch or pocket holding the most of them, if there's room; otherwise the
@@ -87,12 +93,12 @@ server or with a controller yet.
 - Fixed in the audit, awaiting testing: a category the arsenal has nothing
   in (or Fits after the weapon is put away) now falls back to All instead
   of an empty grid; clothing into an empty slot is only requested if it
-  fits, since the server takes supplies before it spawns; loadout requests
+  fits, since the server takes supplies before it spawns (verified with a
+  helmet); loadout requests
   from dead players or less than a second apart are ignored.
 - Not checked: whether the two `OverlayWidget Frame0 has invalid slot
   GridWidgetSlot` errors also appear without OYB (they look like the game's
-  own item cards); double-clicking a weapon while one is already in that
-  slot still does whatever the game does.
+  own item cards); the weapon swap is awaiting testing.
 
 **2. Keyboard and controller — In progress**
 - Done: Category on the game's `MenuFilter` action with its prompt; Q / E

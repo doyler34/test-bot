@@ -1,5 +1,8 @@
-// The steps of putting on clothing from the arsenal; the double-click itself is
-// handled in OYB_ArsenalWeaponFitting.c.
+// The steps of swapping clothing or a weapon for one from the arsenal; the
+// double-click itself is handled in OYB_ArsenalWeaponFitting.c.
+//
+// Weapons swap the same way, except the old weapon goes back whole: the game's
+// refund for a weapon already covers its fitted parts and loaded magazine.
 //
 // Double-clicking clothing in the arsenal (a uniform, vest, helmet, backpack...)
 // puts it on instead of packing it into the backpack. If something is already
@@ -19,12 +22,12 @@ enum OYB_EClothingStep
 
 // Takes the clothing swap through its steps as each one lands. Kept apart from
 // the menu so closing the inventory mid-swap is harmless.
-class OYB_PendingClothing
+class OYB_PendingSwap
 {
 	protected static const int CHECK_EVERY_MS = 100;
 	protected static const int GIVE_UP_AFTER_CHECKS = 30;
 
-	protected static ref OYB_PendingClothing s_Pending;
+	protected static ref OYB_PendingSwap s_Pending;
 
 	protected SCR_InventoryStorageManagerComponent m_Manager;
 	protected BaseInventoryStorageComponent m_Wearing;
@@ -33,15 +36,16 @@ class OYB_PendingClothing
 	protected RplId m_ResourceId;
 	protected ResourceName m_Resource;
 	protected SCR_ArsenalComponent m_Arsenal;
+	protected bool m_bMoveContents;
 	protected int m_eStep;
 	protected int m_iChecks;
 
-	static void Start(SCR_InventoryStorageManagerComponent manager, BaseInventoryStorageComponent wearing, InventoryStorageSlot slot, IEntity old, RplId resourceId, ResourceName resource, SCR_ArsenalComponent arsenal)
+	static void Start(SCR_InventoryStorageManagerComponent manager, BaseInventoryStorageComponent wearing, InventoryStorageSlot slot, IEntity old, RplId resourceId, ResourceName resource, SCR_ArsenalComponent arsenal, bool moveContents)
 	{
 		if (s_Pending)
 			s_Pending.Stop();
 
-		s_Pending = new OYB_PendingClothing();
+		s_Pending = new OYB_PendingSwap();
 		s_Pending.m_Manager = manager;
 		s_Pending.m_Wearing = wearing;
 		s_Pending.m_iSlotId = slot.GetID();
@@ -49,6 +53,7 @@ class OYB_PendingClothing
 		s_Pending.m_ResourceId = resourceId;
 		s_Pending.m_Resource = resource;
 		s_Pending.m_Arsenal = arsenal;
+		s_Pending.m_bMoveContents = moveContents;
 		s_Pending.m_eStep = OYB_EClothingStep.TAKING_OFF;
 		GetGame().GetCallqueue().CallLater(s_Pending.Check, CHECK_EVERY_MS, true);
 	}
@@ -72,7 +77,7 @@ class OYB_PendingClothing
 				return;
 			}
 
-			Print("OYB_ARSENAL wear: old piece is off, requesting the new one");
+			Print("OYB_ARSENAL swap: old piece is off, requesting the new one");
 			OYB_ArsenalRequest.Request(m_ResourceId, Replication.FindItemId(m_Wearing), m_Resource);
 			NextStep(OYB_EClothingStep.PUTTING_ON);
 			return;
@@ -89,6 +94,13 @@ class OYB_PendingClothing
 					SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.SOUND_INV_DROP_ERROR);
 					Stop();
 				}
+				return;
+			}
+
+			if (!m_bMoveContents)
+			{
+				Refund();
+				Stop();
 				return;
 			}
 
@@ -148,7 +160,7 @@ class OYB_PendingClothing
 				moved++;
 		}
 
-		PrintFormat("OYB_ARSENAL wear: moving %1 of %2 items from the old piece", moved, contents.Count());
+		PrintFormat("OYB_ARSENAL swap: moving %1 of %2 items from the old piece", moved, contents.Count());
 	}
 
 	protected void GetContents(IEntity piece, notnull array<IEntity> contents)
@@ -181,7 +193,7 @@ class OYB_PendingClothing
 
 		if (!attributes || !attributes.IsRefundable() || !m_Arsenal || !m_Arsenal.IsRefundEnabled())
 		{
-			Print("OYB_ARSENAL wear: this arsenal won't take the old piece back, it stays on the ground");
+			Print("OYB_ARSENAL swap: this arsenal won't take the old piece back, it stays on the ground");
 			return;
 		}
 
@@ -189,7 +201,7 @@ class OYB_PendingClothing
 		if (!requests)
 			return;
 
-		Print("OYB_ARSENAL wear: returning the old piece to the arsenal");
+		Print("OYB_ARSENAL swap: returning the old piece to the arsenal");
 		requests.RpcAsk_ArsenalRefundItem(m_ResourceId, Replication.FindItemId(oldItem), EResourceType.SUPPLIES);
 	}
 
@@ -198,7 +210,7 @@ class OYB_PendingClothing
 		if (m_iChecks < GIVE_UP_AFTER_CHECKS)
 			return;
 
-		PrintFormat("OYB_ARSENAL wear: %1", reason);
+		PrintFormat("OYB_ARSENAL swap: %1", reason);
 		SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.SOUND_INV_DROP_ERROR);
 		Stop();
 	}

@@ -26,7 +26,7 @@ modded class SCR_InventoryMenuUI
 
 	override protected bool MoveBetweenFromVicinity_VirtualArsenal()
 	{
-		if (OYB_FitToHeldWeapon("quick move") || OYB_EquipClothing("quick move") || OYB_PutWithSameItems("quick move"))
+		if (OYB_FitToHeldWeapon("quick move") || OYB_EquipClothing("quick move") || OYB_EquipWeapon("quick move") || OYB_PutWithSameItems("quick move"))
 			return true;
 
 		return super.MoveBetweenFromVicinity_VirtualArsenal();
@@ -34,7 +34,7 @@ modded class SCR_InventoryMenuUI
 
 	override protected bool EquipDraggedItem_VirtualArsenal(bool forceEquip = false)
 	{
-		if (OYB_FitToHeldWeapon("drag onto character") || OYB_EquipClothing("drag onto character") || OYB_PutWithSameItems("drag onto character"))
+		if (OYB_FitToHeldWeapon("drag onto character") || OYB_EquipClothing("drag onto character") || OYB_EquipWeapon("drag onto character") || OYB_PutWithSameItems("drag onto character"))
 			return true;
 
 		return super.EquipDraggedItem_VirtualArsenal(forceEquip);
@@ -47,7 +47,7 @@ modded class SCR_InventoryMenuUI
 		{
 			SCR_InventorySlotUI selected = m_pSelectedSlotUI;
 			m_pSelectedSlotUI = m_pFocusedSlotUI;
-			bool fitted = OYB_FitToHeldWeapon("equip") || OYB_EquipClothing("equip");
+			bool fitted = OYB_FitToHeldWeapon("equip") || OYB_EquipClothing("equip") || OYB_EquipWeapon("equip");
 			m_pSelectedSlotUI = selected;
 			if (fitted)
 			{
@@ -194,6 +194,60 @@ modded class SCR_InventoryMenuUI
 		return true;
 	}
 
+	// A weapon goes into a free weapon slot that takes it. With none free, the
+	// weapon in the slot it would go in is taken off and goes back into the
+	// arsenal, scope, magazine and all, once the new one is on. See
+	// OYB_ArsenalClothing.c.
+	protected bool OYB_EquipWeapon(string via)
+	{
+		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);
+		if (!arsenalSlot || !arsenalSlot.IsAvailable() || !arsenalSlot.GetInventoryItemComponent() || !m_InventoryManager || !m_pWeaponStorageComp)
+			return false;
+
+		IEntity preview = arsenalSlot.GetInventoryItemComponent().GetOwner();
+		if (!preview)
+			return false;
+
+		// Grenades are weapons too, but they belong in pouches.
+		BaseWeaponComponent weapon = BaseWeaponComponent.Cast(preview.FindComponent(BaseWeaponComponent));
+		if (!weapon)
+			return false;
+		EWeaponType type = weapon.GetWeaponType();
+		if (type == EWeaponType.WT_NONE || type == EWeaponType.WT_FRAGGRENADE || type == EWeaponType.WT_SMOKEGRENADE)
+			return false;
+
+		IEntity arsenalEntity = SCR_InventoryStorageBaseUI.ARSENAL_SLOT_STORAGES.Get(arsenalSlot);
+		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(arsenalEntity);
+		if (!resourceComponent)
+			return false;
+
+		RplId resourceId = Replication.FindItemId(resourceComponent);
+		ResourceName resource = arsenalSlot.GetItemResource();
+
+		if (m_InventoryManager.CanInsertItemInStorage(preview, m_pWeaponStorageComp))
+		{
+			PrintFormat("OYB_ARSENAL weapon (%1): free slot, requesting %2", via, resource.GetPath());
+			OYB_ArsenalRequest.Request(resourceId, Replication.FindItemId(m_pWeaponStorageComp), resource);
+			return true;
+		}
+
+		InventoryStorageSlot slot = m_pWeaponStorageComp.FindSuitableSlotForItem(preview);
+		if (!slot || !slot.GetAttachedEntity())
+			return false;
+
+		IEntity old = slot.GetAttachedEntity();
+		PrintFormat("OYB_ARSENAL weapon (%1): taking off %2 to equip %3", via, FilePath.StripPath(old.GetPrefabData().GetPrefabName().GetPath()), resource.GetPath());
+		if (!m_InventoryManager.TryRemoveItemFromStorage(old, slot.GetStorage()))
+		{
+			Print("OYB_ARSENAL the weapon can't be taken off, nothing changed");
+			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.SOUND_INV_DROP_ERROR);
+			return true;
+		}
+
+		OYB_PendingSwap.Start(m_InventoryManager, m_pWeaponStorageComp, slot, old, resourceId, resource, SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity), false);
+		return true;
+	}
+
 	// See OYB_ArsenalClothing.c.
 	protected bool OYB_EquipClothing(string via)
 	{
@@ -242,7 +296,7 @@ modded class SCR_InventoryMenuUI
 			return true;
 		}
 
-		OYB_PendingClothing.Start(m_InventoryManager, wearing, slot, worn, resourceId, resource, SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity));
+		OYB_PendingSwap.Start(m_InventoryManager, wearing, slot, worn, resourceId, resource, SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity), true);
 		return true;
 	}
 }
