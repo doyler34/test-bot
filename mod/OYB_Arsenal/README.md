@@ -9,11 +9,13 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
 
 ## What's in so far
 
-- **Category and search filtering** of the arsenal panel (Weapons, Ammo,
-  Attachments, Clothing, Vests / Bags, Medical, Grenades / Explosives, Tools,
-  Other). The filtering code is done; the filter bar that you click goes into
-  the arsenal panel's layout next, built from the game's own layout so it
-  matches. Until then the panel looks and works exactly like vanilla.
+- **A filter bar above the arsenal grid:** previous / next category with
+  controller prompts (LB / RB), the category name and how many items it has,
+  and a search box. Categories: All, Weapons, Ammo, Attachments, Clothing,
+  Vests / Bags, Medical, Grenades / Explosives, Tools, Other. The bar is built
+  in code from the game's own widget library layouts (`WLib_NavigationButton`,
+  `WLib_Label`, `WLib_EditBox`), the same pieces the vanilla inventory uses for
+  its prompts, so it matches without any layout files.
 - The item list comes from the arsenal's own filtered list
   (`SCR_ArsenalComponent.GetAvailablePrefabs`), the same one vanilla shows, so
   faction, item type and mode rules are the game's own.
@@ -43,7 +45,12 @@ will complain about a class that no longer exists:
    (not `worlds/Eden/Eden.ent`, which has no game mode), and press **F5**.
 2. As Game Master, place the US **Arsenal** and a US soldier, and take control
    of the soldier.
-3. Open the arsenal the normal way.
+3. Open the arsenal the normal way. The filter bar sits above the item grid.
+   Switch categories and search (the search applies when you press Enter or
+   leave the box).
+4. In the **Log Console** filter `OYB_ARSENAL` and send every line, with a
+   screenshot. The first time, it logs the arsenal panel's widget structure
+   (`OYB_ARSENAL ui ...`), which shows exactly where the bar went.
 
 ## How it works
 
@@ -69,5 +76,6 @@ display names and search text, and caches it until the arsenal's offer changes.
 
 ## Not tested yet
 
-- The filtering inside the vanilla panel. It needs the filter bar to switch
-  category or search, which comes next.
+- Everything in the filter bar: where it sits, how it looks, whether LB / RB
+  are free in the inventory or already used for something else, and the
+  controller's on-screen keyboard for search.
