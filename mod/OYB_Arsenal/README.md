@@ -19,6 +19,11 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   hands, using the game's own checks (`AttachmentSlotComponent.CanSetAttachment`
   and matching magazine wells on each muzzle). Drag them onto the weapon the
   vanilla way. Hidden when you hold nothing or nothing fits.
+- **Weapon picker**: a **Weapon** button in the bar cycles through the guns
+  you carry (in hands, then each weapon slot; grenades skipped). The "Fits"
+  list and attachment fitting work on the chosen weapon, slung or holstered,
+  without switching to it (`OYB_ArsenalTargetWeapon.c`). It's on the game's
+  `MenuSearch` action.
 - **Fit attachments in one go** (`OYB_ArsenalWeaponFitting.c`): double-click
   an attachment in the arsenal, or drag it onto the character, and it goes
   straight onto the matching slot of the weapon in your hands. Whatever was in

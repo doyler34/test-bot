@@ -18,6 +18,7 @@ modded class SCR_InventoryStorageBaseUI
 	protected Widget m_wOYB_FilterBar;
 	protected Widget m_wOYB_CategoryColumn;
 	protected TextWidget m_wOYB_CategoryText;
+	protected SCR_InputButtonComponent m_OYB_WeaponButton;
 	protected SCR_EditBoxComponent m_OYB_Search;
 	protected ref array<SCR_ButtonTextComponent> m_aOYB_CategoryButtons = {};
 	protected ref array<int> m_aOYB_CategoryCounts = {};
@@ -112,7 +113,7 @@ modded class SCR_InventoryStorageBaseUI
 		fits.Clear();
 		m_sOYB_WeaponName = string.Empty;
 
-		BaseWeaponComponent weapon = OYB_GetHeldWeapon();
+		BaseWeaponComponent weapon = OYB_GetTargetWeapon();
 		array<AttachmentSlotComponent> slots = {};
 		array<BaseMuzzleComponent> muzzles = {};
 		if (weapon)
@@ -158,22 +159,15 @@ modded class SCR_InventoryStorageBaseUI
 		return false;
 	}
 
-	protected BaseWeaponComponent OYB_GetHeldWeapon()
+	// The weapon the fit list works on: the one in hands, or the one picked with
+	// the Weapon button.
+	protected BaseWeaponComponent OYB_GetTargetWeapon()
 	{
-		IEntity player = SCR_PlayerController.GetLocalControlledEntity();
-		if (!player)
+		IEntity weaponEntity = OYB_TargetWeapon.Get(SCR_PlayerController.GetLocalControlledEntity());
+		if (!weaponEntity)
 			return null;
 
-		BaseWeaponManagerComponent weapons = BaseWeaponManagerComponent.Cast(player.FindComponent(BaseWeaponManagerComponent));
-		if (!weapons)
-			return null;
-
-		BaseWeaponComponent weapon = weapons.GetCurrentWeapon();
-		WeaponSlotComponent slot = WeaponSlotComponent.Cast(weapon);
-		if (slot && slot.GetWeaponEntity())
-			weapon = BaseWeaponComponent.Cast(slot.GetWeaponEntity().FindComponent(BaseWeaponComponent));
-
-		return weapon;
+		return BaseWeaponComponent.Cast(weaponEntity.FindComponent(BaseWeaponComponent));
 	}
 
 	protected bool OYB_MatchesAll(string text, array<string> words)
@@ -274,6 +268,10 @@ modded class SCR_InventoryStorageBaseUI
 		SCR_InputButtonComponent cycle = OYB_CreateNavButton(categoryRow, "MenuFilter", "Category");
 		if (cycle)
 			cycle.m_OnActivated.Insert(OYB_OnNextCategory);
+
+		m_OYB_WeaponButton = OYB_CreateNavButton(categoryRow, "MenuSearch", "Weapon");
+		if (m_OYB_WeaponButton)
+			m_OYB_WeaponButton.m_OnActivated.Insert(OYB_OnNextWeapon);
 
 		Widget label = workspace.CreateWidgets(OYB_LABEL_LAYOUT, categoryRow);
 		if (label)
@@ -405,6 +403,14 @@ modded class SCR_InventoryStorageBaseUI
 		}
 		counts[OYB_EArsenalCategory.FITS_WEAPON] = m_iOYB_FitCount;
 
+		if (m_OYB_WeaponButton)
+		{
+			string weaponLabel = "Weapon";
+			if (!m_sOYB_WeaponName.IsEmpty())
+				weaponLabel = "Weapon: " + m_sOYB_WeaponName;
+			m_OYB_WeaponButton.SetLabel(weaponLabel);
+		}
+
 		if (m_wOYB_CategoryText)
 			m_wOYB_CategoryText.SetText(string.Format("%1 (%2)", OYB_CategoryName(s_iOYB_Category), counts[s_iOYB_Category]));
 
@@ -421,7 +427,15 @@ modded class SCR_InventoryStorageBaseUI
 		}
 	}
 
-	// "Fits weapon" names the weapon in the player's hands.
+	protected void OYB_OnNextWeapon(SCR_InputButtonComponent button, string action)
+	{
+		OYB_TargetWeapon.Next(SCR_PlayerController.GetLocalControlledEntity());
+		if (s_iOYB_Category != OYB_EArsenalCategory.FITS_WEAPON)
+			s_iOYB_Category = OYB_EArsenalCategory.FITS_WEAPON;
+		OYB_ApplyFilters();
+	}
+
+	// "Fits weapon" names the weapon the fit list is for.
 	protected string OYB_CategoryName(int category)
 	{
 		if (category == OYB_EArsenalCategory.FITS_WEAPON && !m_sOYB_WeaponName.IsEmpty())

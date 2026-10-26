@@ -1,5 +1,6 @@
 // Double-clicking an attachment in the arsenal (or dragging it onto the character)
-// fits it straight onto the weapon in the player's hands. If that slot already has
+// fits it straight onto the chosen weapon: the one in the player's hands, or the
+// one picked with the arsenal's Weapon button. If that slot already has
 // something in it, say a muzzle brake when fitting a suppressor, the old part goes
 // back into the arsenal with the game's own refund, and the new one is requested
 // only once the slot is seen to be empty. The server takes the supplies before it
@@ -57,7 +58,7 @@ modded class SCR_InventoryMenuUI
 		if (!item || item.FindComponent(BaseMagazineComponent))
 			return false;
 
-		IEntity weaponEntity = OYB_GetHeldWeaponEntity();
+		IEntity weaponEntity = OYB_TargetWeapon.Get(m_Player);
 		if (!weaponEntity)
 			return false;
 
@@ -122,26 +123,6 @@ modded class SCR_InventoryMenuUI
 		requests.RpcAsk_ArsenalRefundItem(resourceId, Replication.FindItemId(fittedItem), EResourceType.SUPPLIES);
 		OYB_PendingFit.Start(target, resourceId, storageId, resource);
 		return true;
-	}
-
-	protected IEntity OYB_GetHeldWeaponEntity()
-	{
-		if (!m_Player)
-			return null;
-
-		BaseWeaponManagerComponent weapons = BaseWeaponManagerComponent.Cast(m_Player.FindComponent(BaseWeaponManagerComponent));
-		if (!weapons)
-			return null;
-
-		BaseWeaponComponent weapon = weapons.GetCurrentWeapon();
-		if (!weapon)
-			return null;
-
-		WeaponSlotComponent slot = WeaponSlotComponent.Cast(weapon);
-		if (slot)
-			return slot.GetWeaponEntity();
-
-		return weapon.GetOwner();
 	}
 
 	static void OYB_RequestFromArsenal(RplId resourceId, RplId storageId, ResourceName resource)
