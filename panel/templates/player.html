@@ -66,7 +66,7 @@
   </form>
   {% endif %}
   {% for w in warnings %}
-  <div class="note"><p>{% if w.used_at %}Used: {{ w.used_for }}{% elif w.withdrawn_at %}Withdrawn by {{ w.withdrawn_by }}{% else %}<b>Waiting</b>: the next close-range teamkill bans them.{% endif %}{% if w.reason %} · {{ w.reason }}{% endif %}</p>
+  <div class="note"><p>{% if w.used_at %}<b>Warning used</b>: {{ w.used_for }}{% elif w.withdrawn_at %}Withdrawn by {{ w.withdrawn_by }}{% else %}<b>Waiting</b>: the next close-range teamkill bans them.{% endif %}{% if w.reason %} · {{ w.reason }}{% endif %}</p>
     <span class="muted">{{ w.author }} · {{ w.created_at|ts }}{% if w.used_at %} · used {{ w.used_at|ts }}{% endif %}</span>
     {% if w.edited_at %}<span class="muted"> · edited by {{ w.edited_by }} {{ w.edited_at|ts }}</span>{% endif %}
     {% if w.id in warn_manage %}

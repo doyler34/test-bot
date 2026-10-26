@@ -1495,8 +1495,8 @@ async def player_page(request):
                   ips=db.ips(identity) if allowed(request, "ips") else [],
                   banned_ips=db.banned_ips() if allowed(request, "ips") else set(),
                   alts=db.alts(identity) if allowed(request, "ips") else [],
-                  names=db.player_names(identity), notes=db.notes(identity), warnings=db.warnings(identity),
-                  warn_manage={w["id"] for w in db.warnings(identity) if may_manage_warning(request, w)}, bans=bans,
+                  names=db.player_names(identity), notes=db.notes(identity), warnings=db.visible_warnings(identity),
+                  warn_manage={w["id"] for w in db.visible_warnings(identity) if may_manage_warning(request, w)}, bans=bans,
                   platform=db.platform(identity),
                   same_steam=db.same_steam((db.platform(identity) or {"steam_id": ""})["steam_id"], identity)
                   if allowed(request, "ips") else [],

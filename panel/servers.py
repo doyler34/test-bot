@@ -443,6 +443,7 @@ class ServerManager:
             return
         reason = "Teamkill after a warning (automatic, 10 hours until an admin reviews it)"
         ban = self.db.ban(self.db.add_ban(identity, name, reason, "Automatic", now() + WARNED_BAN))
+        self.db.set_warning_ban(warning["id"], ban["id"])
         await self.push_ban(ban)
         await self.kick_everywhere(identity)
         text = (f"**{name}** had a warning from {warning['author']} and {what} on {state.config.name}. "

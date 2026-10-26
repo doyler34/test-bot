@@ -8,7 +8,7 @@ FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"),
               "rcon": ("rcon", "server"), "admin": ()}
 
 # Columns added after their table first shipped: older databases get them on start.
-ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("notes", "edited_by", "TEXT"), ("notes", "edited_at", "INTEGER"), ("warnings", "edited_by", "TEXT"), ("warnings", "edited_at", "INTEGER"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
+ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("notes", "edited_by", "TEXT"), ("notes", "edited_at", "INTEGER"), ("warnings", "used_ban", "INTEGER"), ("warnings", "edited_by", "TEXT"), ("warnings", "edited_at", "INTEGER"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
                  *(("kills", c, "REAL") for c in ("victim_x", "victim_y", "killer_x", "killer_y")),
                  *(("box_samples", c, "REAL") for c in ("disk_pct", "disk_read", "disk_write", "temp", "conntrack",
                                                         "tcp_retrans", "softnet_drop", "nic_errors")))
@@ -1147,6 +1147,22 @@ class PanelDB:
                               " AND used_at IS NULL AND withdrawn_at IS NULL", (now(), used_for, warning_id))
         self.db.commit()
         return cur.rowcount == 1
+
+    def set_warning_ban(self, warning_id: int, ban_id: int):
+        self.write("UPDATE warnings SET used_ban = ? WHERE id = ?", ban_id, warning_id)
+
+    def visible_warnings(self, identity: str):
+        """A warning that earned a ban is shown as used while that ban lasts, and goes once they're unbanned."""
+        shown = []
+        for w in self.warnings(identity):
+            if w["used_at"]:
+                ban = self.ban(w["used_ban"]) if w["used_ban"] else self.one(
+                    "SELECT * FROM bans WHERE identity = ? AND created_by = 'Automatic' AND reason LIKE 'Teamkill after a warning%'"
+                    " AND created_at BETWEEN ? AND ? ORDER BY id LIMIT 1", identity, w["used_at"] - 30, w["used_at"] + 120)
+                if ban and (ban["removed_at"] or (ban["expires_at"] and ban["expires_at"] <= now())):
+                    continue
+            shown.append(w)
+        return shown
 
     def edit_warning(self, warning_id: int, reason: str, editor: str):
         self.write("UPDATE warnings SET reason = ?, edited_by = ?, edited_at = ? WHERE id = ?",

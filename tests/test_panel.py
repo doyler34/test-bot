@@ -846,6 +846,26 @@ class AutoPunishTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.db.open_warning(BUFORD))
         self.assertEqual(self.db.audit()[0]["username"], "Automatic")
 
+    async def test_a_used_warning_goes_once_they_are_unbanned(self):
+        self.db.add_warning(BUFORD, "Buford", "gaz", "slurs")
+        await self.manager.ban_warned(self.state, self.close_tk())
+        shown = self.db.visible_warnings(BUFORD)
+        self.assertEqual(len(shown), 1)
+        self.assertIsNotNone(shown[0]["used_at"])
+        self.db.remove_ban(self.db.active_ban(BUFORD)["id"], "gaz")
+        self.assertEqual(self.db.visible_warnings(BUFORD), [])
+        self.assertEqual(len(self.db.warnings(BUFORD)), 1)            # kept in the record
+        self.assertIsNone(self.db.open_warning(BUFORD))              # and no longer in effect
+
+    async def test_an_older_used_warning_is_matched_to_its_ban_by_time(self):
+        warning = self.db.add_warning(BUFORD, "Buford", "gaz", "")
+        self.db.use_warning(warning, "teamkilled someone")
+        ban = self.db.add_ban(BUFORD, "Buford", "Teamkill after a warning (automatic, 10 hours until an admin reviews it)",
+                              "Automatic", now() + 3600)
+        self.assertEqual(len(self.db.visible_warnings(BUFORD)), 1)
+        self.db.remove_ban(ban, "gaz")
+        self.assertEqual(self.db.visible_warnings(BUFORD), [])
+
     async def test_a_withdrawn_or_staff_warning_does_nothing(self):
         warning = self.db.add_warning(BUFORD, "Buford", "gaz", "")
         self.assertTrue(self.db.withdraw_warning(warning, "gaz"))
