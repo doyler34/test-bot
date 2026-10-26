@@ -89,7 +89,7 @@ server or with a controller yet.
 **1. Core functionality — Verified complete** (Workbench, local host)
 - Arsenal opens and closes; the item list loads from the arsenal's own
   offer; categories, counts and search; attachment fitting and part swaps;
-  clothing and weapon swaps; items joining the same items already carried;
+  clothing and weapon swaps (including with both weapon slots full); items joining the same items already carried;
   saving and loading kits; an empty category falling back to All; clothing
   for an empty slot only requested when it fits.
 - Left open: the two `OverlayWidget Frame0 has invalid slot GridWidgetSlot`
