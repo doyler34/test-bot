@@ -141,40 +141,51 @@ modded class SCR_InventoryStorageBaseUI
 			return;
 		}
 
+		// Two rows: the category switcher, then a full-width search box. The panel
+		// is only three cards wide, so one row squeezes the search box.
 		WorkspaceWidget workspace = GetGame().GetWorkspace();
-		Widget bar = workspace.CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, m_wGrid.GetParent());
+		Widget bar = workspace.CreateWidget(WidgetType.VerticalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, m_wGrid.GetParent());
 		if (!bar)
 			return;
 		bar.SetName("OYB_FilterBar");
+		AlignableSlot.SetHorizontalAlign(bar, LayoutHorizontalAlign.Stretch);
+		AlignableSlot.SetPadding(bar, 0, 4, 0, 4);
 		OYB_MoveBefore(bar, m_wGrid);
 		m_wOYB_FilterBar = bar;
 		PrintFormat("OYB_ARSENAL filter bar added above %1 in %2", m_wGrid.GetName(), m_wGrid.GetParent().GetName());
 
-		SCR_InputButtonComponent previous = OYB_CreateNavButton(bar, "MenuTabLeft", "Previous");
+		Widget categoryRow = workspace.CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, bar);
+		AlignableSlot.SetHorizontalAlign(categoryRow, LayoutHorizontalAlign.Stretch);
+
+		SCR_InputButtonComponent previous = OYB_CreateNavButton(categoryRow, "MenuTabLeft", "Previous");
 		if (previous)
 			previous.m_OnActivated.Insert(OYB_OnPreviousCategory);
 
-		Widget label = workspace.CreateWidgets(OYB_LABEL_LAYOUT, bar);
+		Widget label = workspace.CreateWidgets(OYB_LABEL_LAYOUT, categoryRow);
 		if (label)
 		{
 			m_wOYB_CategoryText = TextWidget.Cast(OYB_FindWidgetOfType(label, TextWidget));
+			LayoutSlot.SetSizeMode(label, LayoutSizeMode.Fill);
+			AlignableSlot.SetHorizontalAlign(label, LayoutHorizontalAlign.Center);
 			AlignableSlot.SetVerticalAlign(label, LayoutVerticalAlign.Center);
-			AlignableSlot.SetPadding(label, 8, 0, 8, 0);
 		}
 
-		SCR_InputButtonComponent next = OYB_CreateNavButton(bar, "MenuTabRight", "Next");
+		SCR_InputButtonComponent next = OYB_CreateNavButton(categoryRow, "MenuTabRight", "Next");
 		if (next)
 			next.m_OnActivated.Insert(OYB_OnNextCategory);
+
+		OYB_KeepCreationOrder(categoryRow);
 
 		Widget search = workspace.CreateWidgets(OYB_EDIT_BOX_LAYOUT, bar);
 		if (search)
 		{
-			LayoutSlot.SetSizeMode(search, LayoutSizeMode.Fill);
-			AlignableSlot.SetPadding(search, 12, 0, 0, 0);
+			AlignableSlot.SetHorizontalAlign(search, LayoutHorizontalAlign.Stretch);
+			AlignableSlot.SetPadding(search, 0, 4, 0, 0);
 			m_OYB_Search = SCR_EditBoxComponent.Cast(OYB_FindHandler(search, SCR_EditBoxComponent));
 			if (m_OYB_Search)
 			{
-				m_OYB_Search.SetPlaceholderText("Search");
+				m_OYB_Search.UseLabel(false);
+				m_OYB_Search.SetPlaceholderText("Search items");
 				m_OYB_Search.SetValue(s_sOYB_Search);
 				// Applied when typing ends, so refreshing the grid never takes
 				// focus away from the box mid-word.
@@ -265,6 +276,20 @@ modded class SCR_InventoryStorageBaseUI
 		{
 			parent.RemoveChild(moved);
 			parent.AddChild(moved);
+		}
+	}
+
+	// Layouts sort children by z-order, and widgets made from layout files bring
+	// their own, so the order they were added in is set explicitly.
+	protected void OYB_KeepCreationOrder(Widget parent)
+	{
+		int order;
+		Widget child = parent.GetChildren();
+		while (child)
+		{
+			child.SetZOrder(order);
+			order++;
+			child = child.GetSibling();
 		}
 	}
 
