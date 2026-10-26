@@ -123,14 +123,18 @@ display names and search text, and caches it until the arsenal's offer changes.
   and column hiding outside an arsenal, and fitting attachments by double-click
   (the game's quick-move path), including swapping scopes and suppressors with
   the old part going back into the arsenal.
+- Saving and loading a loadout works in Workbench, including a kit with an
+  M203 fitted and clothing the arsenal doesn't sell. The restyled bar,
+  category list and loadout row show as intended.
 - Opening an arsenal from Vicinity doesn't use
   `SCR_InventoryOpenedStorageArsenalUI` at all, so modding only that class did
   nothing; the filter now lives in the shared base class.
 
 ## Not tested yet
 
-- Saved loadouts: saving, loading, the supply charge and refund, and the
-  file on a dedicated server.
+- Saved loadouts: the supply charge and refund at an arsenal that uses
+  supplies (the Game Master arsenal charged 0), and the file on a dedicated
+  server.
 - Whether X (`MenuFilter`) also triggers the inventory's own X actions inside
   an arsenal; meds and armour in a weapons-only box; dragging to equip after
   filtering; a controller and its on-screen keyboard; a dedicated server.
