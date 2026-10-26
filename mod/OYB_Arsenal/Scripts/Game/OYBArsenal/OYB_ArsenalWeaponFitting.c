@@ -13,6 +13,17 @@
 // everything else keep the vanilla behaviour.
 modded class SCR_InventoryMenuUI
 {
+	// The game decides whether Q / E turn pages when the mouse enters a panel.
+	// Switching category changes the page count without leaving the panel, so
+	// it's checked again every frame for the panel under the mouse.
+	override void OnMenuUpdate(float tDelta)
+	{
+		if (m_pActiveHoveredStorageUI)
+			m_bEnablePagingContext = m_pActiveHoveredStorageUI.GetPageCount() > 1;
+
+		super.OnMenuUpdate(tDelta);
+	}
+
 	override protected bool MoveBetweenFromVicinity_VirtualArsenal()
 	{
 		if (OYB_FitToHeldWeapon("quick move") || OYB_EquipClothing("quick move"))

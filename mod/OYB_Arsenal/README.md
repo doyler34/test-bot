@@ -60,6 +60,10 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
 - **Every infantry arsenal also stocks its faction's medical gear, vests and
   helmets**, even a weapons-only box (`OYB_ArsenalAlwaysStocked.c`). Arsenals
   with no infantry gear at all, such as vehicle pylons, are left alone.
+- **Paging inside a category**: the game only turns on Q / E and the page
+  arrows while the mouse is over a panel, and only counts the pages when the
+  mouse enters it. OYB counts them again every frame, so switching to a
+  category with several pages lets you page straight away.
 - The item list comes from the arsenal's own filtered list
   (`SCR_ArsenalComponent.GetAvailablePrefabs`), the same one vanilla shows, so
   faction, item type and mode rules are the game's own.
