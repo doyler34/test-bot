@@ -125,7 +125,7 @@ modded class SCR_InventoryMenuUI
 		return true;
 	}
 
-
+	// See OYB_ArsenalClothing.c.
 	protected bool OYB_EquipClothing(string via)
 	{
 		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);
