@@ -2,7 +2,7 @@
 {% block title %}{{ inst }} vehicles · OYB Control{% endblock %}
 {% block body %}
 {% include "_manage_tabs.html" %}
-<p class="muted">What the vehicle depots offer on this server (OYB Core mod). Hide a vehicle and it's gone from every depot; hide just a variant and the depot stops picking it. Give a vehicle a price and that's what it costs. Give it a limit and each side can only have that many alive at once; empty means unlimited. The server picks changes up within a minute, no restart needed.</p>
+<p class="muted">What the vehicle depots offer on this server (OYB Core mod). Hide a vehicle and it's gone from every depot; hide just a variant and the depot stops picking it. Give a vehicle a price and that's what it costs. Put vehicles in a limit group and each side can only have that many of the whole group alive at once. The server picks changes up within a minute, no restart needed.</p>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
 {% if vehicles is none %}
@@ -13,7 +13,53 @@
 </section>
 {% else %}
 <section class="card">
-  <p class="muted small">{{ vehicles|length }} vehicles and variants{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ hidden|length }} hidden · {{ prices|length }} with a changed price · {{ limits|length }} limited</p>
+  <h2>Limit groups</h2>
+  <p class="muted small">Each group is an allowance per side: with Helicopters at 2, each side can have at most 2 live vehicles from that group at once (a vehicle's variants count as the vehicle). Bought vehicles count for the side whose depot sold them, whoever drives them; wrecked or deleted ones stop counting. Vehicles in no group, and groups with an empty limit, are unlimited; 0 allows none. Game Master vehicles don't count, except that when the server starts every live vehicle already in the world counts once for its own side. Lowering a limit never removes vehicles.</p>
+  <form method="post" action="/vehicles/{{ inst }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="limits">
+    <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="enabled" value="{{ '0' if settings.enabled else '1' }}">
+    Limits are <b>{{ "on" if settings.enabled else "off" }}</b>
+    <button class="small ghost">{{ "Turn off" if settings.enabled else "Turn on" }}</button>
+  </form>
+  {% if settings.groups %}
+  <div class="scroll"><table class="stack">
+    <thead><tr><th>Group</th><th>Vehicles</th><th>Limit per side</th><th></th></tr></thead>
+    <tbody>
+    {% for group_name, limit in settings.groups|dictsort %}
+    <tr>
+      <td class="strong"><a href="/vehicles/{{ inst }}?group={{ group_name|urlencode }}">{{ group_name }}</a></td>
+      <td data-label="Vehicles">{{ members_per_group[group_name] }}</td>
+      <td data-label="Limit per side">
+        <form method="post" action="/vehicles/{{ inst }}" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="group_limit">
+          <input type="hidden" name="name" value="{{ group_name }}"><input type="hidden" name="back" value="{{ back }}">
+          <input name="count" type="number" min="0" max="{{ max_price }}" step="1" value="{{ '' if limit < 0 else limit }}" placeholder="Unlimited" aria-label="Limit for {{ group_name }}" class="price">
+          <button class="small ghost">Set</button>
+        </form>
+      </td>
+      <td>
+        <form method="post" action="/vehicles/{{ inst }}" data-confirm="Delete the group {{ group_name }}? Its vehicles become unlimited.">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="group_delete">
+          <input type="hidden" name="name" value="{{ group_name }}"><input type="hidden" name="back" value="{{ back }}">
+          <button class="small ghost">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  <form method="post" action="/vehicles/{{ inst }}" class="add-item">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="group_add">
+    <input type="hidden" name="back" value="{{ back }}">
+    <label>New group <input name="name" maxlength="30" placeholder="Helicopters" required></label>
+    <label>Limit per side <input name="count" type="number" min="0" max="{{ max_price }}" step="1" placeholder="Unlimited" class="price"></label>
+    <button class="small">Add group</button>
+  </form>
+</section>
+
+<section class="card">
+  <p class="muted small">{{ vehicles|length }} vehicles and variants{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ settings.hidden|length }} hidden · {{ settings.prices|length }} with a changed price · {{ settings.members|length }} in limit groups</p>
   <form method="get" action="/vehicles/{{ inst }}" class="grid">
     <label>Search <input name="q" value="{{ filters.q }}" placeholder="Name, e.g. m998" maxlength="80" autocomplete="off"></label>
     <label>Category
@@ -22,6 +68,11 @@
     <label>Faction
       <select name="faction"><option value="">All</option>{% for f in factions %}<option value="{{ f }}" {% if f == filters.faction %}selected{% endif %}>{{ f }}</option>{% endfor %}</select>
     </label>
+    {% if settings.groups %}
+    <label>Group
+      <select name="group"><option value="">All</option>{% for g in settings.groups|sort %}<option value="{{ g }}" {% if g == filters.group %}selected{% endif %}>{{ g }}</option>{% endfor %}</select>
+    </label>
+    {% endif %}
     <label>Show
       <select name="show">{% for value, label in show_options.items() %}<option value="{{ value }}" {% if value == filters.show %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
     </label>
@@ -33,6 +84,15 @@
   <h2>{{ found }} vehicle{{ "s" if found != 1 }}{% if pages > 1 %} <span class="muted small">page {{ page }} of {{ pages }}</span>{% endif %}</h2>
   {% if found %}
   <div class="row-actions">
+    {% if settings.groups %}
+    <form method="post" action="/vehicles/{{ inst }}" class="inline" data-confirm="Put the {{ found }} vehicles that match this filter in this group?">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="group_found">
+      <input type="hidden" name="back" value="{{ back }}">
+      {% for key, value in filters.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+      <select name="to_group" aria-label="Group"><option value="">No group</option>{% for g in settings.groups|sort %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select>
+      <button class="small ghost">Group all {{ found }}</button>
+    </form>
+    {% endif %}
     {% for action, label in (("hide_found", "Hide all " ~ found), ("show_found", "Show all " ~ found)) %}
     <form method="post" action="/vehicles/{{ inst }}" class="inline" data-confirm="{{ label }} vehicles that match this filter?">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ action }}">
@@ -43,10 +103,11 @@
     {% endfor %}
   </div>
   <div class="scroll"><table class="stack">
-    <thead><tr><th>Vehicle</th><th>Category</th><th>Factions</th><th>Price</th><th>Limit per side</th><th></th></tr></thead>
+    <thead><tr><th>Vehicle</th><th>Category</th><th>Factions</th><th>Price</th><th>Limit group</th><th></th></tr></thead>
     <tbody>
     {% for v in shown %}
-    {% set is_hidden = v.prefab in hidden %}
+    {% set is_hidden = v.prefab in settings.hidden %}
+    {% set group = vehicle_group(v, settings.members) %}
     <tr>
       <td class="strong">{% if v.variant_of %}<span class="muted">↳</span> {% endif %}{{ v.name }}{% if is_hidden %} <span class="pill down">Hidden</span>{% endif %}
         {% if v.variant_of %}<div class="muted small">variant of {{ names.get(v.variant_of, v.variant_of.rsplit("/", 1)[-1]) }}</div>{% endif %}
@@ -58,10 +119,10 @@
         <form method="post" action="/vehicles/{{ inst }}" class="inline">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="price">
           <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ prices.get(v.prefab, v.price) }}" aria-label="Price of {{ v.name }}" class="price">
+          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ settings.prices.get(v.prefab, v.price) }}" aria-label="Price of {{ v.name }}" class="price">
           <button class="small">Set</button>
         </form>
-        {% if v.prefab in prices %}
+        {% if v.prefab in settings.prices %}
         <span class="muted small">normally {{ v.price }}</span>
         <form method="post" action="/vehicles/{{ inst }}" class="inline">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reset">
@@ -70,15 +131,16 @@
         </form>
         {% endif %}{% endif %}
       </td>
-      <td data-label="Limit per side">
-        {% if v.variant_of %}<span class="muted small">counts as its vehicle</span>{% else %}
+      <td data-label="Limit group">
+        {% if v.variant_of %}<span class="muted small">{{ group or "none" }} (as its vehicle)</span>
+        {% elif settings.groups %}
         <form method="post" action="/vehicles/{{ inst }}" class="inline">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="limit">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set_group">
           <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <input name="count" type="number" min="0" max="{{ max_price }}" step="1" value="{{ limits.get(v.prefab, '') }}" placeholder="Unlimited" aria-label="Limit for {{ v.name }}" class="price">
+          <select name="group" aria-label="Limit group for {{ v.name }}"><option value="">None</option>{% for g in settings.groups|sort %}<option value="{{ g }}" {% if g == group %}selected{% endif %}>{{ g }}</option>{% endfor %}</select>
           <button class="small ghost">Set</button>
         </form>
-        {% endif %}
+        {% else %}<span class="muted small">make a group above</span>{% endif %}
       </td>
       <td>
         <form method="post" action="/vehicles/{{ inst }}">

@@ -436,22 +436,33 @@ def vehicle_list_age(base):
     return path.stat().st_mtime if path and path.is_file() else None
 
 
+VEHICLE_UNLIMITED = -1
+VEHICLE_GROUP_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,29}")
+
+
 def vehicle_settings(base):
-    """(hidden prefabs, {prefab: price}, {prefab: limit}) from the server's vehicle settings."""
+    """The server's vehicle settings: {"hidden": set of prefabs, "prices": {prefab: price},
+    "enabled": limits on or off, "groups": {name: limit, -1 unlimited, 0 none},
+    "members": {prefab: group name}}."""
+    settings = {"hidden": set(), "prices": {}, "enabled": True, "groups": {}, "members": {}}
     profile = profile_folder(base)
     path = profile / VEHICLE_FOLDER / "vehicles.json" if profile else None
     if not path or not path.is_file():
-        return set(), {}, {}
+        return settings
     data = json.loads(path.read_text(encoding="utf-8") or "{}")
-    hidden = {prefab for prefab in data.get("hidden") or [] if isinstance(prefab, str)}
-    prices = {prefab: cost for prefab, cost in zip(data.get("priceItems") or [], data.get("priceCosts") or [])
-              if isinstance(prefab, str) and prefab and arsenal_price(cost)}
-    limits = {prefab: count for prefab, count in zip(data.get("limitItems") or [], data.get("limitCounts") or [])
-              if isinstance(prefab, str) and prefab and arsenal_price(count)}
-    return hidden, prices, limits
+    settings["hidden"] = {prefab for prefab in data.get("hidden") or [] if isinstance(prefab, str)}
+    settings["prices"] = {prefab: cost for prefab, cost in zip(data.get("priceItems") or [], data.get("priceCosts") or [])
+                          if isinstance(prefab, str) and prefab and arsenal_price(cost)}
+    settings["enabled"] = data.get("limitsEnabled") is not False
+    settings["groups"] = {name: limit for name, limit in zip(data.get("groupNames") or [], data.get("groupLimits") or [])
+                          if isinstance(name, str) and VEHICLE_GROUP_NAME.fullmatch(name) and isinstance(limit, int)
+                          and not isinstance(limit, bool) and VEHICLE_UNLIMITED <= limit <= ARSENAL_MAX_PRICE}
+    settings["members"] = {prefab: group for prefab, group in zip(data.get("groupItems") or [], data.get("groupOf") or [])
+                           if isinstance(prefab, str) and prefab and group in settings["groups"]}
+    return settings
 
 
-def save_vehicle_settings(base, hidden, prices, limits):
+def save_vehicle_settings(base, settings):
     """Write the settings the OYB Core mod reads; the server picks them up within a minute."""
     profile = profile_folder(base)
     if profile is None:
@@ -460,10 +471,13 @@ def save_vehicle_settings(base, hidden, prices, limits):
     if not folder.exists():
         folder.mkdir()
         hand_over(folder)
-    priced, limited = sorted(prices.items()), sorted(limits.items())
-    data = {"version": 1, "hidden": sorted(hidden),
+    priced, groups = sorted(settings["prices"].items()), sorted(settings["groups"].items())
+    members = sorted((prefab, group) for prefab, group in settings["members"].items() if group in settings["groups"])
+    data = {"version": 2, "hidden": sorted(settings["hidden"]),
             "priceItems": [prefab for prefab, _ in priced], "priceCosts": [cost for _, cost in priced],
-            "limitItems": [prefab for prefab, _ in limited], "limitCounts": [count for _, count in limited]}
+            "limitsEnabled": bool(settings["enabled"]),
+            "groupNames": [name for name, _ in groups], "groupLimits": [limit for _, limit in groups],
+            "groupItems": [prefab for prefab, _ in members], "groupOf": [group for _, group in members]}
     write_text(folder / "vehicles.json", json.dumps(data, indent=1) + "\n")
 
 

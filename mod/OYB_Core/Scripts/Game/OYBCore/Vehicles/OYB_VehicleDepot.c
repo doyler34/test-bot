@@ -21,26 +21,36 @@ modded class SCR_PlayerController
 		OYB_VehicleSettings.Get().Apply(hidden, priceItems, priceCosts);
 	}
 
-	void OYB_SendVehicleLimitReached(string vehicleName, int limit)
+	void OYB_SendVehicleLimitReached(string group, int count, int limit)
 	{
 		if (GetGame().GetPlayerController() == this)
-			OYB_RpcDo_VehicleLimitReached(vehicleName, limit);
+			OYB_RpcDo_VehicleLimitReached(group, count, limit);
 		else
-			Rpc(OYB_RpcDo_VehicleLimitReached, vehicleName, limit);
+			Rpc(OYB_RpcDo_VehicleLimitReached, group, count, limit);
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
-	protected void OYB_RpcDo_VehicleLimitReached(string vehicleName, int limit)
+	protected void OYB_RpcDo_VehicleLimitReached(string group, int count, int limit)
 	{
 		SCR_PopUpNotification popup = SCR_PopUpNotification.GetInstance();
 		if (popup)
-			popup.PopupMsg(string.Format("Vehicle limit reached (%1)", limit), 4, vehicleName);
+			popup.PopupMsg(string.Format("%1 limit reached: %2/%3", group, count, limit), 4);
 	}
 }
 
 // The depots (the game's catalog spawner) with the panel's settings: hidden
 // vehicles and variants are left out of the list, a set price is what it shows
-// and charges, and a vehicle at its limit for that side isn't spawned.
+// and charges, and a vehicle whose group is at its limit for that side isn't
+// spawned (see OYB_VehicleLimits.c).
+//
+// A depot request runs in one go on the server: the request RPC calls
+// InitiateSpawn, which runs the game's own checks (supplies, side, rank,
+// cooldown) and then PerformSpawn, which finds a slot, spawns the vehicle and
+// only then takes the supplies. The limit is checked in InitiateSpawn before
+// any of that, so a refused request spawns nothing and costs nothing, and the
+// new vehicle is counted as soon as PerformSpawn returns it, before any other
+// request can be handled; a spawn that fails (no free slot, a broken prefab)
+// returns no vehicle and counts nothing.
 modded class SCR_CatalogEntitySpawnerComponent
 {
 	override protected void AddAssetsFromCatalog(notnull SCR_EntityCatalog entityCatalog, bool overwriteOld = false)
@@ -69,15 +79,14 @@ modded class SCR_CatalogEntitySpawnerComponent
 	override void InitiateSpawn(notnull SCR_EntityCatalogEntry entityEntry, int userId, SCR_EntitySpawnerSlotComponent slot)
 	{
 		Faction faction = GetFaction();
-		int limit;
-		if (faction && entityEntry.GetCatalogParent() && entityEntry.GetCatalogParent().GetCatalogType() == EEntityCatalogType.VEHICLE
-			&& OYB_VehicleSettings.Get().GetLimit(entityEntry.GetPrefab(), limit)
-			&& OYB_VehicleLimits.CountAlive(faction.GetFactionKey(), entityEntry.GetPrefab()) >= limit)
+		string group;
+		int count, limit;
+		if (Replication.IsServer() && faction && !OYB_VehicleLimits.Allows(faction.GetFactionKey(), entityEntry.GetPrefab(), group, count, limit))
 		{
-			PrintFormat("OYB_CORE vehicle limit: %1 has %2 of %3 alive, refused for player %4", faction.GetFactionKey(), limit, FilePath.StripPath(entityEntry.GetPrefab().GetPath()), userId);
+			PrintFormat("OYB_CORE vehicle limit: %1 has %2/%3 %4, refused %5 for player %6", faction.GetFactionKey(), count, limit, group, FilePath.StripPath(entityEntry.GetPrefab().GetPath()), userId);
 			SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerManager().GetPlayerController(userId));
 			if (controller)
-				controller.OYB_SendVehicleLimitReached(WidgetManager.Translate(entityEntry.GetEntityName()), limit);
+				controller.OYB_SendVehicleLimitReached(group, count, limit);
 			return;
 		}
 
@@ -88,8 +97,10 @@ modded class SCR_CatalogEntitySpawnerComponent
 	{
 		super.PerformSpawn(entityEntry, user, preferredSlot);
 
+		// Counted for the depot's side; the vehicle's variant prefab maps to the
+		// depot vehicle's group.
 		if (m_SpawnedEntity && m_SpawnedEntity.IsInherited(Vehicle) && GetFaction())
-			OYB_VehicleLimits.Add(GetFaction().GetFactionKey(), entityEntry.GetPrefab(), m_SpawnedEntity);
+			OYB_VehicleLimits.Register(m_SpawnedEntity, GetFaction().GetFactionKey());
 	}
 }
 

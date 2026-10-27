@@ -406,10 +406,9 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("No vehicle list yet", page)
         self.assertIn(">Vehicles</a>", page)
 
-    async def test_vehicles_can_be_hidden_repriced_and_limited(self):
-        folder = self.vehicle_profile()
-        m998, covered, mi8 = ("{V1}Prefabs/Vehicles/Wheeled/M998/M998.et",
-                              "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et", "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et")
+    async def test_vehicles_can_be_hidden_and_repriced(self):
+        self.vehicle_profile()
+        covered, mi8 = "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et", "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et"
         token = await self.login("boss")
         page = await (await self.client.get("/vehicles/Plus01")).text()
         for name in ("M998", "Mi-8MT", "variant of M998"):
@@ -418,28 +417,53 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
 
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide", "prefab": covered})
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": mi8, "cost": "900"})
-        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "limit", "prefab": mi8, "count": "2"})
-        self.assertEqual(files.vehicle_settings(self.root / "Plus01"), ({covered}, {mi8: 900}, {mi8: 2}))
-        saved = json.loads((folder / "vehicles.json").read_text())
-        self.assertEqual((saved["limitItems"], saved["limitCounts"]), ([mi8], [2]))
-
-        # Variants share their vehicle's price and limit; bad numbers change nothing.
-        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "limit", "prefab": covered, "count": "1"})
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": covered, "cost": "1"})
-        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "limit", "prefab": mi8, "count": "-3"})
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide", "prefab": "{X}Nope.et"})
-        self.assertEqual(files.vehicle_settings(self.root / "Plus01"), ({covered}, {mi8: 900}, {mi8: 2}))
-        self.assertIn("Mi-8MT", await (await self.client.get("/vehicles/Plus01", params={"show": "limited"})).text())
-
-        # An empty limit is unlimited again.
-        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "limit", "prefab": mi8, "count": ""})
+        settings = files.vehicle_settings(self.root / "Plus01")
+        self.assertEqual((settings["hidden"], settings["prices"]), ({covered}, {mi8: 900}))
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "reset", "prefab": mi8})
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide_found", "cat": "Helicopters"})
-        self.assertEqual(files.vehicle_settings(self.root / "Plus01"), ({covered, mi8}, {}, {}))
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], {covered, mi8})
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "show_found"})
-        self.assertEqual(files.vehicle_settings(self.root / "Plus01")[0], set())
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], set())
+
+    async def test_vehicles_share_limits_in_groups(self):
+        folder = self.vehicle_profile()
+        m998, covered, mi8 = ("{V1}Prefabs/Vehicles/Wheeled/M998/M998.et",
+                              "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et", "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et")
+        token = await self.login("boss")
+        post = lambda **data: self.client.post("/vehicles/Plus01", data={"csrf": token, **data})
+        await post(action="group_add", name="Helicopters", count="2")
+        await post(action="group_add", name="Cars")                                  # empty: unlimited
+        await post(action="group_add", name="Helicopters", count="5")                # already there
+        await post(action="group_add", name="Bad|name", count="1")
+        await post(action="set_group", prefab=mi8, group="Helicopters")
+        await post(action="set_group", prefab=covered, group="Cars")                 # variants follow their vehicle
+        await post(action="set_group", prefab=m998, group="Nope")
+        settings = files.vehicle_settings(self.root / "Plus01")
+        self.assertEqual(settings["groups"], {"Helicopters": 2, "Cars": files.VEHICLE_UNLIMITED})
+        self.assertEqual(settings["members"], {mi8: "Helicopters"})
+        saved = json.loads((folder / "vehicles.json").read_text())
+        self.assertEqual((saved["groupNames"], saved["groupLimits"], saved["groupItems"], saved["groupOf"], saved["limitsEnabled"]),
+                         (["Cars", "Helicopters"], [-1, 2], [mi8], ["Helicopters"], True))
+
+        await post(action="group_found", cat="Cars", to_group="Cars")                   # the vehicle, not its variant
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["members"], {mi8: "Helicopters", m998: "Cars"})
+        cars = await (await self.client.get("/vehicles/Plus01", params={"group": "Cars"})).text()
+        self.assertIn("M998_covered", cars)                                           # its variant counts there too
+        self.assertNotIn("Mi-8MT", cars)
+
+        await post(action="group_limit", name="Helicopters", count="0")
+        await post(action="limits", enabled="0")
+        settings = files.vehicle_settings(self.root / "Plus01")
+        self.assertEqual((settings["groups"]["Helicopters"], settings["enabled"]), (0, False))
+        await post(action="group_delete", name="Helicopters")
+        await post(action="limits", enabled="1")
+        settings = files.vehicle_settings(self.root / "Plus01")
+        self.assertEqual((settings["groups"], settings["members"], settings["enabled"]),
+                         ({"Cars": -1}, {m998: "Cars"}, True))
         actions = {r["action"] for r in self.db.all("SELECT action FROM audit")}
-        self.assertTrue({"vehicles hide", "vehicles limit", "vehicles price"} <= actions)
+        self.assertTrue({"vehicles group_add", "vehicles set_group", "vehicles group_limit", "vehicles limits"} <= actions)
 
     async def test_items_can_be_moved_to_another_category(self):
         folder = self.arsenal_profile()

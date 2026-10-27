@@ -1,12 +1,13 @@
-// The vehicle limiter's settings, made on the OYB panel's Vehicles page: depot
-// vehicles to hide (whole entries, or single variants of one), price overrides,
-// and how many of a vehicle each side may have alive at once (none set means
-// unlimited).
+// The vehicle settings, made on the OYB panel's Vehicles page: depot vehicles to
+// hide (whole entries, or single variants of one), price overrides, and the
+// limit groups (see OYB_VehicleLimits.c).
 //
 // $profile:OYB_Core/vehicles.json (written by the panel):
 //   { "hidden": [prefab, ...],
 //     "priceItems": [prefab, ...], "priceCosts": [supplies, ...],
-//     "limitItems": [prefab, ...], "limitCounts": [vehicles per side, ...] }
+//     "limitsEnabled": true (false turns every limit off),
+//     "groupNames": [name, ...], "groupLimits": [-1 unlimited, 0 none, or N, ...],
+//     "groupItems": [prefab, ...], "groupOf": [group name, ...] }
 //
 // The server writes $profile:OYB_Core/vehicle_list.json once it has started:
 // every vehicle the factions' depots can offer, mods included, for the panel.
@@ -21,7 +22,6 @@ class OYB_VehicleSettings
 
 	protected ref set<ResourceName> m_Hidden = new set<ResourceName>();
 	protected ref map<ResourceName, int> m_Prices = new map<ResourceName, int>();
-	protected ref map<ResourceName, int> m_Limits = new map<ResourceName, int>();
 	protected string m_sLoadedText;
 	protected bool m_bServerStarted;
 	protected int m_iListed = -1;
@@ -42,12 +42,6 @@ class OYB_VehicleSettings
 	bool GetPrice(ResourceName prefab, out int price)
 	{
 		return m_Prices.Find(prefab, price);
-	}
-
-	// How many of this vehicle each side may have alive; false means unlimited.
-	bool GetLimit(ResourceName prefab, out int limit)
-	{
-		return m_Limits.Find(prefab, limit);
 	}
 
 	void GetLists(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts)
@@ -92,6 +86,7 @@ class OYB_VehicleSettings
 		Reload();
 		GetGame().GetCallqueue().CallLater(Reload, RELOAD_EVERY_MS, true);
 		WriteList();
+		OYB_VehicleLimits.StartServer();
 	}
 
 	// Reads vehicles.json, and only when it changed applies it and sends it on.
@@ -110,8 +105,11 @@ class OYB_VehicleSettings
 		array<string> hidden = {};
 		array<string> priceItems = {};
 		array<int> priceCosts = {};
-		array<string> limitItems = {};
-		array<int> limitCounts = {};
+		bool limitsEnabled = true;
+		array<string> groupNames = {};
+		array<int> groupLimits = {};
+		array<string> groupItems = {};
+		array<string> groupOf = {};
 		if (!text.IsEmpty())
 		{
 			JsonLoadContext context = new JsonLoadContext();
@@ -120,8 +118,12 @@ class OYB_VehicleSettings
 				context.ReadValue("hidden", hidden);
 				context.ReadValue("priceItems", priceItems);
 				context.ReadValue("priceCosts", priceCosts);
-				context.ReadValue("limitItems", limitItems);
-				context.ReadValue("limitCounts", limitCounts);
+				if (!context.ReadValue("limitsEnabled", limitsEnabled))
+					limitsEnabled = true;
+				context.ReadValue("groupNames", groupNames);
+				context.ReadValue("groupLimits", groupLimits);
+				context.ReadValue("groupItems", groupItems);
+				context.ReadValue("groupOf", groupOf);
 			}
 			else
 			{
@@ -129,15 +131,10 @@ class OYB_VehicleSettings
 			}
 		}
 
-		m_Limits.Clear();
-		for (int i = 0; i < Math.Min(limitItems.Count(), limitCounts.Count()); i++)
-		{
-			if (!limitItems[i].IsEmpty() && limitCounts[i] >= 0)
-				m_Limits.Set(limitItems[i], limitCounts[i]);
-		}
+		OYB_VehicleLimits.Configure(limitsEnabled, groupNames, groupLimits, groupItems, groupOf);
 
 		Apply(hidden, priceItems, priceCosts);
-		PrintFormat("OYB_CORE vehicle settings loaded: %1 hidden, %2 priced, %3 limited", m_Hidden.Count(), m_Prices.Count(), m_Limits.Count());
+		PrintFormat("OYB_CORE vehicle settings loaded: %1 hidden, %2 priced, limits %3, %4 groups", m_Hidden.Count(), m_Prices.Count(), limitsEnabled, groupNames.Count());
 		SendToAll();
 	}
 
@@ -247,6 +244,7 @@ class OYB_VehicleSettings
 					if (variant.IsEmpty() || listed.Contains(variant))
 						continue;
 
+					OYB_VehicleLimits.SetVariant(variant, prefab);
 					listed.Insert(variant, prefabs.Count());
 					prefabs.Insert(variant);
 					names.Insert(FilePath.StripExtension(FilePath.StripPath(variant.GetPath())));
@@ -288,46 +286,5 @@ class OYB_VehicleSettings
 		if (entry.HasEditableEntityLabel(EEditableEntityLabel.VEHICLE_CAR))
 			return "Cars";
 		return "Other";
-	}
-}
-
-// Vehicles each side has alive from the depots, by depot entry, so a limit can
-// be checked. Destroyed or deleted vehicles drop out on their own.
-class OYB_VehicleLimits
-{
-	protected static ref map<string, ref array<IEntity>> s_mAlive = new map<string, ref array<IEntity>>();
-
-	static void Add(string factionKey, ResourceName prefab, IEntity vehicle)
-	{
-		string key = factionKey + "|" + prefab;
-		array<IEntity> alive = s_mAlive.Get(key);
-		if (!alive)
-		{
-			alive = {};
-			s_mAlive.Insert(key, alive);
-		}
-		alive.Insert(vehicle);
-	}
-
-	static int CountAlive(string factionKey, ResourceName prefab)
-	{
-		array<IEntity> alive = s_mAlive.Get(factionKey + "|" + prefab);
-		if (!alive)
-			return 0;
-
-		for (int i = alive.Count() - 1; i >= 0; i--)
-		{
-			IEntity vehicle = alive[i];
-			if (!vehicle || vehicle.IsDeleted())
-			{
-				alive.Remove(i);
-				continue;
-			}
-
-			DamageManagerComponent damage = DamageManagerComponent.Cast(vehicle.FindComponent(DamageManagerComponent));
-			if (damage && damage.IsDestroyed())
-				alive.Remove(i);
-		}
-		return alive.Count();
 	}
 }
