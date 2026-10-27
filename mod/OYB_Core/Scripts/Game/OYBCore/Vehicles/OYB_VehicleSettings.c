@@ -24,6 +24,7 @@ class OYB_VehicleSettings
 	protected ref map<ResourceName, int> m_Limits = new map<ResourceName, int>();
 	protected string m_sLoadedText;
 	protected bool m_bServerStarted;
+	protected int m_iListed = -1;
 
 	static OYB_VehicleSettings Get()
 	{
@@ -96,6 +97,11 @@ class OYB_VehicleSettings
 	// Reads vehicles.json, and only when it changed applies it and sends it on.
 	protected void Reload()
 	{
+		// The factions' catalogues may not be ready when the game starts; until
+		// the list has vehicles in it, it's written again each time.
+		if (m_iListed == 0)
+			WriteList();
+
 		string text = ReadFile(SETTINGS_FILE);
 		if (text == m_sLoadedText)
 			return;
@@ -186,7 +192,11 @@ class OYB_VehicleSettings
 
 		FactionManager factionManager = GetGame().GetFactionManager();
 		if (!factionManager)
+		{
+			m_iListed = 0;
+			Print("OYB_CORE vehicles: no factions yet, the list will be written later");
 			return;
+		}
 
 		array<Faction> allFactions = {};
 		factionManager.GetFactionsList(allFactions);
@@ -198,10 +208,16 @@ class OYB_VehicleSettings
 
 			SCR_EntityCatalog catalog = scrFaction.GetFactionEntityCatalogOfType(EEntityCatalogType.VEHICLE, false);
 			if (!catalog)
+			{
+				PrintFormat("OYB_CORE vehicles: %1 has no vehicle catalogue", scrFaction.GetFactionKey());
 				continue;
+			}
 
+			array<SCR_EntityCatalogEntry> all = {};
 			array<SCR_EntityCatalogEntry> entries = {};
+			catalog.GetEntityList(all);
 			catalog.GetEntityListWithData(SCR_EntityCatalogSpawnerData, entries);
+			PrintFormat("OYB_CORE vehicles: %1 has %2 vehicles in its catalogue, %3 of them for depots", scrFaction.GetFactionKey(), all.Count(), entries.Count());
 			foreach (SCR_EntityCatalogEntry entry : entries)
 			{
 				ResourceName prefab = entry.GetPrefab();
@@ -250,6 +266,7 @@ class OYB_VehicleSettings
 		context.WriteValue("factions", factions);
 		context.WriteValue("prices", prices);
 		context.WriteValue("variantOf", variantOf);
+		m_iListed = prefabs.Count();
 		if (context.SaveToFile(LIST_FILE))
 			PrintFormat("OYB_CORE wrote %1 vehicles to %2", prefabs.Count(), LIST_FILE);
 		else
