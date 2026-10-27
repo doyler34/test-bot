@@ -140,7 +140,7 @@ server or with a controller yet.
 - Left open: the two `OverlayWidget Frame0 has invalid slot GridWidgetSlot`
   errors may be the game's own (check with the mod off).
 
-**2. Keyboard and controller — Keyboard verified; controller tested on the live server**
+**2. Keyboard and controller — Keyboard verified; controller partly tested**
 - OYB uses the game's own menu actions, so players change the keys in the
   game's own key settings. Verified in Workbench, one action each, no
   clashes: Category X (`MenuFilter`), Weapon R (`MenuRefresh`), Save F
@@ -152,9 +152,9 @@ server or with a controller yet.
   settings (needs the game's input and key-settings configs from Workbench
   as a template); inspecting an arsenal item; a controller button for
   Weapon (X is Requisition there, so it's hidden on a controller).
-- Controller (live server): Category on the menu button, Save on Y, Load on
-  the right stick work; Weapon on X clashed with Requisition and is now
-  keyboard only.
+- Controller (live server): the prompts show Category on the menu button,
+  Save on Y and Load on the right stick (not yet confirmed working); Weapon
+  on X clashed with Requisition and is now keyboard only.
 
 **3. Loadouts — Verified in Workbench; dedicated server awaiting testing**
 - Five slots per player, saved on the server under `$profile:` by player
