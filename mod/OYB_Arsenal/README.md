@@ -128,8 +128,11 @@ server or with a controller yet.
 - Not wanted: deleting and renaming slots (saving over a slot replaces it).
 - Verified: the last saved or loaded kit becomes the respawn kit; the
   respawn screen offers it as "Saved loadout" (Game Master, Workbench).
-- Not done: a clear message naming items that no longer exist (a removed
-  mod); a reconnect / restart test on a dedicated server.
+- Implemented — awaiting testing: a kit holding items that no longer exist
+  (a removed mod) isn't loaded; the player is told which items, before any
+  supplies are taken. The character itself is no longer counted as an item
+  when a kit is priced.
+- Not done: a reconnect / restart test on a dedicated server.
 
 **4. Modded equipment — Implemented — awaiting testing**
 - Items come from the arsenal's own filtered catalogue, categories from
@@ -138,8 +141,15 @@ server or with a controller yet.
   by hand. Items without a name are logged and shown by file name.
 - Not tested with any mod's items.
 
-**5. Performance — Not started** (the item list is already cached per
-arsenal until its offer changes; nothing has been measured).
+**5. Performance — In progress (awaiting testing)**
+- Cached: the item list (names, categories, costs) per arsenal until its
+  offer changes; which items fit the chosen weapon, until the weapon or its
+  fitted parts change; the arsenal's prefab list is read once per refresh.
+- Search no longer logs every matching name on each refresh.
+- Widgets are built once per panel and only shown or hidden afterwards.
+- Not measured: large modded arsenals (500-1,000 items). The first opening
+  of an arsenal reads each item's name from its prefab once; that is the
+  part most likely to stall on a big list.
 
 **6. Security — In progress**
 - Item requests and refunds go through the game's own server checks

@@ -31,6 +31,9 @@ modded class SCR_InventoryStorageBaseUI
 	protected ref array<int> m_aOYB_CategoryCounts = {};
 	protected SCR_ArsenalComponent m_OYB_Arsenal;
 	protected int m_iOYB_FitCount;
+	protected IEntity m_OYB_FitWeapon;
+	protected int m_iOYB_FitParts = -1;
+	protected ref map<IEntity, bool> m_mOYB_Fits = new map<IEntity, bool>();
 	protected string m_sOYB_WeaponName;
 
 	//------------------------------------------------------------------------------------------------
@@ -78,8 +81,7 @@ modded class SCR_InventoryStorageBaseUI
 
 		// The panel's items are resolved one per prefab, in the order the arsenal
 		// lists them, so the prefab for each item is found by position.
-		array<ResourceName> prefabs = {};
-		arsenal.GetAvailablePrefabs(prefabs);
+		array<ResourceName> prefabs = offered;
 		if (prefabs.Count() != pItemsInStorage.Count())
 		{
 			PrintFormat("OYB_ARSENAL filter skipped: %1 items shown but %2 offered", pItemsInStorage.Count(), prefabs.Count());
@@ -93,7 +95,6 @@ modded class SCR_InventoryStorageBaseUI
 
 		OYB_ArsenalCatalogService catalog = OYB_ArsenalCatalogService.GetInstance();
 		array<IEntity> kept = {};
-		string matched;
 		foreach (int i, IEntity item : pItemsInStorage)
 		{
 			OYB_ArsenalEntry entry = catalog.FindEntry(arsenal, prefabs[i]);
@@ -111,12 +112,10 @@ modded class SCR_InventoryStorageBaseUI
 			if (!OYB_MatchesAll(entry.m_sSearch, words))
 				continue;
 			kept.Insert(item);
-			if (!words.IsEmpty())
-				matched += entry.m_sName + "; ";
 		}
 
 		if (!words.IsEmpty())
-			PrintFormat("OYB_ARSENAL search '%1' matched %2: %3", s_sOYB_Search, kept.Count(), matched);
+			PrintFormat("OYB_ARSENAL search '%1' matched %2", s_sOYB_Search, kept.Count());
 
 		pItemsInStorage.Clear();
 		pItemsInStorage.InsertAll(kept);
@@ -131,31 +130,53 @@ modded class SCR_InventoryStorageBaseUI
 	protected int OYB_FindFits(notnull array<IEntity> items, notnull array<bool> fits)
 	{
 		fits.Clear();
-		m_sOYB_WeaponName = string.Empty;
 
 		BaseWeaponComponent weapon = OYB_GetTargetWeapon();
 		array<AttachmentSlotComponent> slots = {};
 		array<BaseMuzzleComponent> muzzles = {};
+		IEntity weaponEntity;
+		int fitted;
 		if (weapon)
 		{
+			weaponEntity = weapon.GetOwner();
 			weapon.GetAttachments(slots);
 			weapon.GetMuzzlesList(muzzles);
+			foreach (AttachmentSlotComponent slot : slots)
+			{
+				if (slot && slot.GetAttachedEntity())
+					fitted++;
+			}
+		}
 
-			EntityPrefabData prefabData = weapon.GetOwner().GetPrefabData();
-			if (prefabData)
-				m_sOYB_WeaponName = OYB_ArsenalCatalogService.OYB_ReadInventoryName(prefabData.GetPrefabName());
+		// The answers only change with the weapon or what's fitted to it, so
+		// they're kept between refreshes instead of being worked out for every
+		// item each time the grid redraws.
+		if (weaponEntity != m_OYB_FitWeapon || fitted != m_iOYB_FitParts)
+		{
+			m_OYB_FitWeapon = weaponEntity;
+			m_iOYB_FitParts = fitted;
+			m_mOYB_Fits.Clear();
+			m_sOYB_WeaponName = string.Empty;
+			if (weaponEntity && weaponEntity.GetPrefabData())
+				m_sOYB_WeaponName = OYB_ArsenalCatalogService.OYB_ReadInventoryName(weaponEntity.GetPrefabData().GetPrefabName());
 		}
 
 		int count;
 		foreach (IEntity item : items)
 		{
-			bool fit = weapon != null && item != null && OYB_Fits(item, slots, muzzles);
+			bool fit;
+			if (weapon && item && !m_mOYB_Fits.Find(item, fit))
+			{
+				fit = OYB_Fits(item, slots, muzzles);
+				m_mOYB_Fits.Insert(item, fit);
+			}
 			fits.Insert(fit);
 			if (fit)
 				count++;
 		}
 		return count;
 	}
+
 
 	protected bool OYB_Fits(IEntity item, array<AttachmentSlotComponent> slots, array<BaseMuzzleComponent> muzzles)
 	{

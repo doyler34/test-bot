@@ -142,6 +142,23 @@ modded class SCR_PlayerController
 		OYB_CountPrefabs(saved, wanted);
 		OYB_CountPrefabs(OYB_WriteKit(character), carried);
 
+		// Items from a mod that's no longer loaded can't be spawned, and the game
+		// would stop halfway through the kit after the supplies were taken.
+		array<string> vanished = {};
+		foreach (ResourceName kitPrefab, int kitCount : wanted)
+		{
+			Resource kitResource = Resource.Load(kitPrefab);
+			if (!kitResource || !kitResource.IsValid())
+				vanished.Insert(FilePath.StripExtension(FilePath.StripPath(kitPrefab.GetPath())));
+		}
+		if (!vanished.IsEmpty())
+		{
+			string vanishedList = SCR_StringHelper.Join(", ", vanished);
+			PrintFormat("OYB_ARSENAL loadout %1 has items that no longer exist: %2", slot + 1, vanishedList, level: LogLevel.WARNING);
+			OYB_SendMessage(string.Format("Loadout %1 can't load. These items no longer exist (a removed mod?): %2. Save the slot again.", slot + 1, vanishedList));
+			return;
+		}
+
 		map<ResourceName, float> prices = new map<ResourceName, float>();
 		array<SCR_ArsenalItem> offered = {};
 		arsenal.GetFilteredArsenalItems(offered);
