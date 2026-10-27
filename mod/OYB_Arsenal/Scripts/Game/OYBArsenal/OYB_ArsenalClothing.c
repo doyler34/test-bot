@@ -3,6 +3,7 @@
 //
 // Weapons swap the same way, except the old weapon goes back whole: the game's
 // refund for a weapon already covers its fitted parts and loaded magazine.
+// Accessories on worn gear (a helmet light, NVGs) swap the same way too.
 //
 // Double-clicking clothing in the arsenal (a uniform, vest, helmet, backpack...)
 // puts it on instead of packing it into the backpack. If something is already

@@ -321,18 +321,68 @@ modded class SCR_InventoryMenuUI
 			if (target)
 				break;
 		}
+
+		// No free spot: one already holding an accessory of this kind gets it
+		// swapped, the way clothing is.
+		InventoryStorageSlot taken;
 		if (!target)
-			return false;
+		{
+			foreach (IEntity wornPiece : worn)
+			{
+				taken = OYB_FindTakenAccessorySpot(wornPiece, preview);
+				if (taken)
+					break;
+			}
+			if (!taken)
+				return false;
+		}
 
 		IEntity arsenalEntity = SCR_InventoryStorageBaseUI.ARSENAL_SLOT_STORAGES.Get(arsenalSlot);
 		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(arsenalEntity);
 		if (!resourceComponent)
 			return false;
 
+		RplId resourceId = Replication.FindItemId(resourceComponent);
 		ResourceName resource = arsenalSlot.GetItemResource();
-		PrintFormat("OYB_ARSENAL accessory (%1): putting %2 on worn gear", via, resource.GetPath());
-		OYB_ArsenalRequest.Request(Replication.FindItemId(resourceComponent), Replication.FindItemId(target), resource);
+		if (target)
+		{
+			PrintFormat("OYB_ARSENAL accessory (%1): putting %2 on worn gear", via, resource.GetPath());
+			OYB_ArsenalRequest.Request(resourceId, Replication.FindItemId(target), resource);
+			return true;
+		}
+
+		IEntity old = taken.GetAttachedEntity();
+		BaseInventoryStorageComponent spot = taken.GetStorage();
+		PrintFormat("OYB_ARSENAL accessory (%1): taking off %2 to put on %3", via, FilePath.StripPath(old.GetPrefabData().GetPrefabName().GetPath()), resource.GetPath());
+		if (!m_InventoryManager.TryRemoveItemFromStorage(old, spot))
+		{
+			Print("OYB_ARSENAL the old accessory can't be taken off, nothing changed");
+			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.SOUND_INV_DROP_ERROR);
+			return true;
+		}
+
+		OYB_PendingSwap.Start(m_InventoryManager, spot, taken, old, resourceId, resource, SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity), false);
 		return true;
+	}
+
+	protected InventoryStorageSlot OYB_FindTakenAccessorySpot(IEntity piece, IEntity accessory)
+	{
+		if (!piece)
+			return null;
+
+		array<Managed> found = {};
+		piece.FindComponents(BaseInventoryStorageComponent, found);
+		foreach (Managed component : found)
+		{
+			BaseInventoryStorageComponent storage = BaseInventoryStorageComponent.Cast(component);
+			if (!storage || (!BaseEquipmentStorageComponent.Cast(storage) && !ClothNodeStorageComponent.Cast(storage)))
+				continue;
+
+			InventoryStorageSlot slot = storage.FindSuitableSlotForItem(accessory);
+			if (slot && slot.GetAttachedEntity() && slot.GetAttachedEntity().GetPrefabData())
+				return slot;
+		}
+		return null;
 	}
 
 	protected void OYB_GetMounted(IEntity piece, notnull array<IEntity> mounted)
