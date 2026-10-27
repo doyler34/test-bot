@@ -3,6 +3,8 @@
 // they've picked another weapon they carry with the Weapon button. Grenades and empty slots are skipped.
 class OYB_TargetWeapon
 {
+	protected static const int MAX_SLOTS = 64;
+
 	protected static IEntity s_Chosen;
 
 	static IEntity Get(IEntity player)
@@ -72,6 +74,48 @@ class OYB_TargetWeapon
 			carried.Insert(weaponEntity);
 		}
 		return carried;
+	}
+
+	// The weapon's attachment slots, and the slots on what's fitted to them (a
+	// rail adapter's own slot for a scope, say), however deep.
+	static void GetSlots(IEntity weaponEntity, notnull array<AttachmentSlotComponent> slots)
+	{
+		if (!weaponEntity)
+			return;
+
+		BaseWeaponComponent weapon = BaseWeaponComponent.Cast(weaponEntity.FindComponent(BaseWeaponComponent));
+		if (weapon)
+			weapon.GetAttachments(slots);
+
+		for (int i = 0; i < slots.Count() && slots.Count() < MAX_SLOTS; i++)
+		{
+			if (!slots[i] || !slots[i].GetAttachedEntity())
+				continue;
+
+			array<Managed> found = {};
+			slots[i].GetAttachedEntity().FindComponents(AttachmentSlotComponent, found);
+			foreach (Managed component : found)
+			{
+				AttachmentSlotComponent nested = AttachmentSlotComponent.Cast(component);
+				if (nested && !slots.Contains(nested))
+					slots.Insert(nested);
+			}
+		}
+	}
+
+	// The storage an arsenal request goes to for a part meant for this slot: the
+	// one on whatever the slot belongs to, the weapon or a fitted part.
+	static BaseInventoryStorageComponent GetSlotStorage(AttachmentSlotComponent slot)
+	{
+		if (!slot || !slot.GetOwner())
+			return null;
+
+		IEntity owner = slot.GetOwner();
+		WeaponAttachmentsStorageComponent attachments = WeaponAttachmentsStorageComponent.Cast(owner.FindComponent(WeaponAttachmentsStorageComponent));
+		if (attachments)
+			return attachments;
+
+		return BaseInventoryStorageComponent.Cast(owner.FindComponent(BaseInventoryStorageComponent));
 	}
 
 	static IEntity GetHeld(IEntity player)

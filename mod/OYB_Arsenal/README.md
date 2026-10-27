@@ -40,6 +40,8 @@ below. Ownership: `NOTICE.md`.
   this avoids paying for nothing). If the old part can't be refunded, nothing
   changes. The new part is requested with the game's
   own arsenal request, so the server's checks and supply cost still apply.
+  Slots on fitted parts count too (a rail adapter's own scope slot), for both
+  fitting and the Fits list.
   Magazines and other items keep the vanilla behaviour.
 - **Put clothing on in one go** (`OYB_ArsenalClothing.c`, hooked in `OYB_ArsenalWeaponFitting.c`): double-click a
   uniform, vest, helmet, backpack or other worn item in the arsenal and it is
@@ -354,6 +356,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Full arsenal | Open a clothing-only box | Weapons, ammo, equipment and clothing all listed | ✅ |
 | Sides | In the panel, tick USSR on a US rifle, wait a minute, open a USSR arsenal | Rifle listed at its usual price; untick US and the US arsenal loses it | ✅ |
 | Rename | Rename an item in the panel, wait a minute, open an arsenal | New name on the card, hover box and in the inventory; `settings loaded: … 1 renamed` | ⏳ |
+| Nested slots | Fit a rail adapter, then double-click a scope that only fits the rail | Scope in Fits and fitted onto the rail | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ✅ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |

@@ -74,20 +74,25 @@ modded class SCR_InventoryMenuUI
 			return false;
 
 		BaseWeaponComponent weapon = BaseWeaponComponent.Cast(weaponEntity.FindComponent(BaseWeaponComponent));
-		WeaponAttachmentsStorageComponent weaponStorage = WeaponAttachmentsStorageComponent.Cast(weaponEntity.FindComponent(WeaponAttachmentsStorageComponent));
-		if (!weapon || !weaponStorage)
+		if (!weapon || !weaponEntity.FindComponent(WeaponAttachmentsStorageComponent))
 		{
 			PrintFormat("OYB_ARSENAL fit (%1): the held weapon has no attachment storage", via);
 			return false;
 		}
 
+		// Slots on fitted parts too, so a scope can go on a rail adapter.
 		array<AttachmentSlotComponent> slots = {};
-		weapon.GetAttachments(slots);
+		OYB_TargetWeapon.GetSlots(weaponEntity, slots);
 		AttachmentSlotComponent target;
+		BaseInventoryStorageComponent targetStorage;
 		foreach (AttachmentSlotComponent slot : slots)
 		{
 			if (slot && slot.CanSetAttachment(item))
 			{
+				targetStorage = OYB_TargetWeapon.GetSlotStorage(slot);
+				if (!targetStorage)
+					continue;
+
 				target = slot;
 				break;
 			}
@@ -101,7 +106,7 @@ modded class SCR_InventoryMenuUI
 			return false;
 
 		RplId resourceId = Replication.FindItemId(resourceComponent);
-		RplId storageId = Replication.FindItemId(weaponStorage);
+		RplId storageId = Replication.FindItemId(targetStorage);
 		ResourceName resource = arsenalSlot.GetItemResource();
 
 		IEntity fitted = target.GetAttachedEntity();
