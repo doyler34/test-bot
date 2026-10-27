@@ -298,7 +298,9 @@ modded class SCR_InventoryMenuUI
 			return false;
 
 		IEntity preview = arsenalSlot.GetInventoryItemComponent().GetOwner();
-		if (!preview || preview.FindComponent(BaseLoadoutClothComponent) || preview.FindComponent(BaseWeaponComponent) || preview.FindComponent(BaseMagazineComponent))
+		// Wearables count too: NVGs are worn items, but with no body slot for them
+		// they go on the helmet's mount.
+		if (!preview || preview.FindComponent(BaseWeaponComponent) || preview.FindComponent(BaseMagazineComponent))
 			return false;
 
 		SCR_CharacterInventoryStorageComponent wearing = m_InventoryManager.GetCharacterStorage();
