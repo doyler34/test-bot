@@ -2,7 +2,7 @@
 {% block title %}{{ inst }} arsenal · OYB Control{% endblock %}
 {% block body %}
 {% include "_manage_tabs.html" %}
-<p class="muted">What the OYB Arsenal offers on this server. Hide an item and it's gone from every arsenal; give it a price and that's what it costs and refunds. The server picks changes up within a minute, no restart needed.</p>
+<p class="muted">What the OYB Arsenal offers on this server. Hide an item and it's gone from every arsenal; give it a price and that's what it costs and refunds. Items a mod forgot to list for any faction are found by a scan and can be added. The server picks changes up within a minute, no restart needed.</p>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
 {% if items is none %}
@@ -13,7 +13,7 @@
 </section>
 {% else %}
 <section class="card">
-  <p class="muted small">{{ items|length }} items{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ hidden|length }} hidden · {{ prices|length }} with a changed price</p>
+  <p class="muted small">{{ items|length }} items{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ hidden|length }} hidden · {{ prices|length }} with a changed price · {{ unlisted }} unlisted (found by scan) · {{ extras|length }} added</p>
   <form method="get" action="/arsenal/{{ inst }}" class="grid">
     <label>Search <input name="q" value="{{ filters.q }}" placeholder="Name, e.g. m16 carbine" maxlength="80" autocomplete="off"></label>
     <label>Category
@@ -47,16 +47,28 @@
     <tbody>
     {% for item in shown %}
     {% set is_hidden = item.prefab in hidden %}
+    {% set added = extras.get(item.prefab) %}
     <tr>
       <td class="strong">{{ item.name }}{% if is_hidden %} <span class="pill down">Hidden</span>{% endif %}
+        {% if added %}<span class="pill on">Added</span>{% elif item.found %}<span class="pill alt">Unlisted</span>{% endif %}
         <div class="muted small mono">{{ item.prefab.rsplit("/", 1)[-1] }}</div></td>
-      <td data-label="Category">{{ item.category }}</td>
-      <td data-label="Factions">{{ item.factions|replace(",", ", ") }}</td>
+      <td data-label="Category">{{ added.category if added else item.category }}</td>
+      <td data-label="Factions">{% if added %}{{ added.factions or "All" }}{% elif item.found %}<span class="muted">none</span>{% else %}{{ item.factions|replace(",", ", ") }}{% endif %}</td>
       <td data-label="Price">
+        {% if item.found and not added %}
+        <form method="post" action="/arsenal/{{ inst }}" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add">
+          <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="10" class="price" aria-label="Price of {{ item.name }}">
+          <select name="category" aria-label="Category for {{ item.name }}">{% for c in add_categories %}<option value="{{ c }}" {% if c == item.category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+          <select name="faction" aria-label="Which arsenals offer {{ item.name }}"><option value="">Every faction</option>{% for f in factions %}<option value="{{ f }}">{{ f }}</option>{% endfor %}</select>
+          <button class="small">Add to arsenal</button>
+        </form>
+        {% else %}
         <form method="post" action="/arsenal/{{ inst }}" class="inline">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="price">
           <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ prices.get(item.prefab, item.price) }}" aria-label="Price of {{ item.name }}" class="price">
+          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ added.cost if added else prices.get(item.prefab, item.price) }}" aria-label="Price of {{ item.name }}" class="price">
           <button class="small">Set</button>
         </form>
         {% if item.prefab in prices %}
@@ -67,13 +79,23 @@
           <button class="small ghost">Reset</button>
         </form>
         {% endif %}
+        {% endif %}
       </td>
       <td>
+        {% if added %}
+        <form method="post" action="/arsenal/{{ inst }}" data-confirm="Take {{ item.name }} out of the arsenal?">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="remove_added">
+          <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <button class="small ghost">Remove</button>
+        </form>
+        {% endif %}
+        {% if not item.found or added %}
         <form method="post" action="/arsenal/{{ inst }}">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ 'show' if is_hidden else 'hide' }}">
           <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
           <button class="small {{ '' if is_hidden else 'ghost' }}">{{ "Show" if is_hidden else "Hide" }}</button>
         </form>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}

@@ -82,6 +82,110 @@ class OYB_ArsenalCategories
 
 		return OYB_EArsenalCategory.OTHER;
 	}
+
+	// For items added from the panel, which have no arsenal type of their own:
+	// which kinds of arsenal carry each category.
+	static int ToArsenalTypes(int category)
+	{
+		switch (category)
+		{
+			case OYB_EArsenalCategory.RIFLES: return SCR_EArsenalItemType.RIFLE;
+			case OYB_EArsenalCategory.MACHINE_GUNS: return SCR_EArsenalItemType.MACHINE_GUN;
+			case OYB_EArsenalCategory.SNIPER_RIFLES: return SCR_EArsenalItemType.SNIPER_RIFLE;
+			case OYB_EArsenalCategory.PISTOLS: return SCR_EArsenalItemType.PISTOL;
+			case OYB_EArsenalCategory.LAUNCHERS: return SCR_EArsenalItemType.ROCKET_LAUNCHER;
+			case OYB_EArsenalCategory.AMMO: return SCR_EArsenalItemType.RIFLE | SCR_EArsenalItemType.PISTOL | SCR_EArsenalItemType.MACHINE_GUN | SCR_EArsenalItemType.SNIPER_RIFLE | SCR_EArsenalItemType.ROCKET_LAUNCHER;
+			case OYB_EArsenalCategory.ATTACHMENTS: return SCR_EArsenalItemType.WEAPON_ATTACHMENT;
+			case OYB_EArsenalCategory.CLOTHING: return SCR_EArsenalItemType.HEADWEAR | SCR_EArsenalItemType.TORSO | SCR_EArsenalItemType.LEGS | SCR_EArsenalItemType.FOOTWEAR | SCR_EArsenalItemType.HANDWEAR;
+			case OYB_EArsenalCategory.VESTS_BAGS: return SCR_EArsenalItemType.VEST_AND_WAIST | SCR_EArsenalItemType.BACKPACK | SCR_EArsenalItemType.RADIO_BACKPACK;
+			case OYB_EArsenalCategory.MEDICAL: return SCR_EArsenalItemType.HEAL;
+			case OYB_EArsenalCategory.THROWABLES: return SCR_EArsenalItemType.LETHAL_THROWABLE | SCR_EArsenalItemType.NON_LETHAL_THROWABLE | SCR_EArsenalItemType.EXPLOSIVES;
+		}
+		return SCR_EArsenalItemType.EQUIPMENT;
+	}
+
+	static int FromName(string name)
+	{
+		for (int category = 0; category < COUNT; category++)
+		{
+			if (GetName(category) == name)
+				return category;
+		}
+		return OYB_EArsenalCategory.OTHER;
+	}
+
+	// A scanned prefab's category, from the parts it's built from, with its file
+	// path settling what kind of gun or clothing it is. -1: not something that
+	// can be carried (or a base prefab other items are made from); -2: broken.
+	static int FromPrefab(ResourceName prefab)
+	{
+		string file = FilePath.StripExtension(FilePath.StripPath(prefab.GetPath()));
+		file.ToLower();
+		if (file.EndsWith("_base") || file.StartsWith("base_") || file.Contains("_base_"))
+			return -1;
+
+		Resource resource = Resource.Load(prefab);
+		if (!resource || !resource.IsValid())
+			return -2;
+
+		IEntitySource source = SCR_BaseContainerTools.FindEntitySource(resource);
+		if (!source || !SCR_ComponentHelper.GetInventoryItemComponentSource(source))
+			return -1;
+
+		bool weapon, magazine, cloth, medical, grenade;
+		for (int i = 0; i < source.GetComponentCount(); i++)
+		{
+			IEntityComponentSource component = source.GetComponent(i);
+			if (!component)
+				continue;
+
+			typename type = component.GetClassName().ToType();
+			if (!type)
+				continue;
+
+			if (type.IsInherited(BaseMagazineComponent))
+				magazine = true;
+			else if (type.IsInherited(BaseWeaponComponent))
+				weapon = true;
+			else if (type.IsInherited(BaseLoadoutClothComponent))
+				cloth = true;
+			else if (type.IsInherited(SCR_ConsumableItemComponent))
+				medical = true;
+			else if (type.IsInherited(GrenadeMoveComponent))
+				grenade = true;
+		}
+
+		string path = prefab.GetPath();
+		path.ToLower();
+		if (magazine)
+			return OYB_EArsenalCategory.AMMO;
+		if (path.Contains("attachment") || path.Contains("optic") || path.Contains("suppressor") || path.Contains("scope"))
+			return OYB_EArsenalCategory.ATTACHMENTS;
+		if (grenade || path.Contains("grenade") || path.Contains("explosive"))
+			return OYB_EArsenalCategory.THROWABLES;
+		if (weapon)
+		{
+			if (path.Contains("pistol") || path.Contains("handgun"))
+				return OYB_EArsenalCategory.PISTOLS;
+			if (path.Contains("sniper") || path.Contains("marksman"))
+				return OYB_EArsenalCategory.SNIPER_RIFLES;
+			if (path.Contains("machinegun") || path.Contains("lmg") || path.Contains("/mg"))
+				return OYB_EArsenalCategory.MACHINE_GUNS;
+			if (path.Contains("launcher") || path.Contains("rocket") || path.Contains("rpg"))
+				return OYB_EArsenalCategory.LAUNCHERS;
+			return OYB_EArsenalCategory.RIFLES;
+		}
+		if (cloth)
+		{
+			if (path.Contains("vest") || path.Contains("backpack") || path.Contains("bag") || path.Contains("rig") || path.Contains("pouch") || path.Contains("carrier"))
+				return OYB_EArsenalCategory.VESTS_BAGS;
+			return OYB_EArsenalCategory.CLOTHING;
+		}
+		if (medical || path.Contains("medic") || path.Contains("bandage"))
+			return OYB_EArsenalCategory.MEDICAL;
+
+		return OYB_EArsenalCategory.OTHER;
+	}
 }
 
 class OYB_ArsenalEntry
@@ -179,6 +283,13 @@ class OYB_ArsenalCatalogService
 		return m_mCachedByPrefab.Get(prefab);
 	}
 
+	// The panel's settings changed; every arsenal's list is rebuilt next time.
+	void Invalidate()
+	{
+		m_aCachedEntries = null;
+		m_mCachedByPrefab.Clear();
+	}
+
 	protected void OnArsenalUpdated(array<ResourceName> arsenalItems)
 	{
 		Print("OYB_ARSENAL arsenal offer changed, item list will be rebuilt on next open");
@@ -263,7 +374,31 @@ class OYB_ArsenalCatalogService
 			entries.Insert(entry);
 		}
 
-		PrintFormat("OYB_ARSENAL built item list: %1 entries from arsenal, %2 unique, %3 without a display name", items.Count(), entries.Count(), unnamed);
+		// Items added in the panel follow, in the same order the arsenal lists them.
+		array<ResourceName> extras = {};
+		OYB_ArsenalSettings.Get().GetExtrasFor(arsenal, extras);
+		foreach (ResourceName extraPrefab : extras)
+		{
+			if (seen.Contains(extraPrefab))
+				continue;
+			seen.Insert(extraPrefab, true);
+
+			OYB_ArsenalExtra extra = OYB_ArsenalSettings.Get().GetExtra(extraPrefab);
+			OYB_ArsenalEntry added = new OYB_ArsenalEntry();
+			added.m_sPrefab = extraPrefab;
+			added.m_iCategory = extra.m_iCategory;
+			added.m_iSupplyCost = extra.m_iCost;
+			added.m_sName = OYB_ReadInventoryName(extraPrefab);
+			added.m_bHasName = !added.m_sName.IsEmpty() && added.m_sName != "MISSING";
+			if (!added.m_bHasName)
+				added.m_sName = FilePath.StripExtension(FilePath.StripPath(extraPrefab.GetPath()));
+			string addedSearch = added.m_sName;
+			addedSearch.ToLower();
+			added.m_sSearch = addedSearch;
+			entries.Insert(added);
+		}
+
+		PrintFormat("OYB_ARSENAL built item list: %1 entries from arsenal, %2 added in the panel, %3 unique, %4 without a display name", items.Count(), extras.Count(), entries.Count(), unnamed);
 		return entries;
 	}
 }

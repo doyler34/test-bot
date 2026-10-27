@@ -31,6 +31,7 @@ modded class SCR_InventoryStorageBaseUI
 	protected ref array<int> m_aOYB_CategoryCounts = {};
 	protected SCR_ArsenalComponent m_OYB_Arsenal;
 	protected int m_iOYB_FitCount;
+	protected bool m_bOYB_SkipLogged;
 	protected IEntity m_OYB_FitWeapon;
 	protected int m_iOYB_FitParts = -1;
 	protected ref map<IEntity, bool> m_mOYB_Fits = new map<IEntity, bool>();
@@ -84,7 +85,9 @@ modded class SCR_InventoryStorageBaseUI
 		array<ResourceName> prefabs = offered;
 		if (prefabs.Count() != pItemsInStorage.Count())
 		{
-			PrintFormat("OYB_ARSENAL filter skipped: %1 items shown but %2 offered", pItemsInStorage.Count(), prefabs.Count());
+			if (!m_bOYB_SkipLogged)
+				PrintFormat("OYB_ARSENAL filter skipped: %1 items shown but %2 offered", pItemsInStorage.Count(), prefabs.Count());
+			m_bOYB_SkipLogged = true;
 			return;
 		}
 
@@ -114,8 +117,6 @@ modded class SCR_InventoryStorageBaseUI
 			kept.Insert(item);
 		}
 
-		if (!words.IsEmpty())
-			PrintFormat("OYB_ARSENAL search '%1' matched %2", s_sOYB_Search, kept.Count());
 
 		pItemsInStorage.Clear();
 		pItemsInStorage.InsertAll(kept);
@@ -468,13 +469,11 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_OnSaveKey(SCR_InputButtonComponent button, string action)
 	{
-		PrintFormat("OYB_ARSENAL key %1 (%2)", action, "SaveKey");
 		OYB_OnSaveLoadout(null);
 	}
 
 	protected void OYB_OnLoadKey(SCR_InputButtonComponent button, string action)
 	{
-		PrintFormat("OYB_ARSENAL key %1 (%2)", action, "LoadKey");
 		OYB_OnLoadLoadout(null);
 	}
 
@@ -777,7 +776,6 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_OnWeaponKey(SCR_InputButtonComponent button, string action)
 	{
-		PrintFormat("OYB_ARSENAL key %1 (%2)", action, "WeaponKey");
 		OYB_OnNextWeapon(null);
 	}
 
@@ -805,7 +803,6 @@ modded class SCR_InventoryStorageBaseUI
 	// Skips categories this arsenal has nothing in, like the button column does.
 	protected void OYB_OnNextCategory(SCR_InputButtonComponent button, string action)
 	{
-		PrintFormat("OYB_ARSENAL key %1 (%2)", action, "NextCategory");
 		int category = s_iOYB_Category;
 		for (int i = 0; i < OYB_ArsenalCategories.COUNT; i++)
 		{

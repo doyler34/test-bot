@@ -63,6 +63,21 @@ below. Ownership: `NOTICE.md`.
   without a restart. Hidden items drop out of every arsenal and the server
   refuses them, even in a saved kit; a changed price is what the arsenal
   charges, refunds, shows on the item card and charges for a kit.
+- **Mod scan**: on start the server also searches every loaded (non-base)
+  mod's `Prefabs` folder for items no faction catalogue lists (a mod that
+  wasn't set up properly), a few at a time so it doesn't hold the server up,
+  and guesses each one's category from its parts and file path. They show in
+  the panel as **Unlisted**; **Add to arsenal** with a price, category and
+  faction (or every faction) puts one into the arsenals that carry that kind
+  of item. The game's own arsenal won't hand out an item no catalogue lists,
+  so OYB hands these out itself with the same checks (reach, ownership,
+  supplies first) and refunds them at the arsenal's usual share.
+- **Network use**: a player asks for the panel settings and their loadout
+  names once per session, the first time they open an arsenal; after that
+  the server only sends settings when the panel actually changed something
+  (once per player, at most once a minute) and names after a save. The
+  server ignores a player asking again within five seconds. Checking the
+  settings file is a local read once a minute.
 - **Saved loadouts** (`OYB_ArsenalLoadouts.c`): under the item grid, a
   "Saved loadouts" heading, "< Loadout 1 >" to pick one of five slots,
   **Save** (`MenuFavourite`) to store the kit you're wearing and **Load**
@@ -227,8 +242,10 @@ Nothing needs setting up. What there is:
 - **The panel's Arsenal tab** for each server: hide items and change prices
   (see above). The same file can be edited by hand if needed:
   `{"version": 1, "hidden": [prefab, ...], "priceItems": [prefab, ...],
-  "priceCosts": [cost, ...]}`, prefabs written as `{GUID}Prefabs/....et`
-  the way `items.json` lists them.
+  "priceCosts": [cost, ...], "extraItems": [prefab, ...], "extraCosts":
+  [cost, ...], "extraFactions": ["" or "US,FIA", ...], "extraCategories":
+  [category name, ...]}`, prefabs written as `{GUID}Prefabs/....et` the
+  way `items.json` lists them.
 
 - **The game's own arsenal settings** on each arsenal (faction, item types,
   supply use, refunds, whether kits may be saved) apply as usual. An arsenal
@@ -269,8 +286,13 @@ Nothing needs setting up. What there is:
   hold enough for both the game's price and the new one for a moment; the
   refund of an item with a changed price is worked out as the same share of
   the new price as the game gives of the old one.
-- Items a mod never adds to a faction's item catalogue can't appear in any
-  arsenal (the game's rule), so they don't show in the panel either.
+- The mod scan uses the game's resource search, which has only been seen
+  in Workbench tools; if a dedicated server reports `scan: 0 prefabs` for a
+  mod, the scan doesn't work there and only catalogued items are listed.
+- A scanned item's category is a guess from its parts and file path; pick
+  the right one when adding it. Items added in the panel don't count
+  military supply allocation and aren't offered by the game's own respawn
+  loadout pricing.
 - After adding a mod, the server has to start once before the panel lists
   its items.
 
@@ -303,6 +325,9 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Hide from panel | Hide an item, wait a minute, open an arsenal | Item gone; `settings loaded: 1 hidden` | ⏳ |
 | Price from panel | Set a price, wait, open an arsenal that uses supplies | Card shows the new price; that's what's taken and refunded | ⏳ |
 | Hidden in a kit | Save a kit, hide one of its items, load at an arsenal without it on you | Refused, item named | ⏳ |
+| Mod scan | Load a weapon mod, start | `scan: N prefabs in <mod>`; its uncatalogued items show as Unlisted in the panel | ⏳ |
+| Added item | Add an unlisted gun for US at 20, open a US arsenal | Gun listed at 20; taking it charges 20; putting it back refunds | ⏳ |
+| Network | Open and close an arsenal many times | Settings asked once per session (no repeat in the server log) | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ⏳ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |

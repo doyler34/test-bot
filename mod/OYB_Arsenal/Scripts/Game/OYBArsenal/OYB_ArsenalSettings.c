@@ -1,21 +1,25 @@
-// Server settings made in the OYB panel's Arsenal page: items to hide and price
-// overrides. The server reads them from its profile folder, re-reads them every
-// minute so a change applies without a restart, and passes them to each player
-// so the arsenal screen matches what the server enforces.
+// Server settings made in the OYB panel's Arsenal page: items to hide, price
+// overrides, and items to add that no faction catalogue lists (found by scanning
+// the loaded mods). The server reads them from its profile folder, re-reads the
+// file every minute so a change applies without a restart, and only sends them
+// to players when something actually changed.
 //
 // $profile:OYB_Arsenal/settings.json (written by the panel):
 //   { "version": 1, "hidden": [prefab, ...],
-//     "priceItems": [prefab, ...], "priceCosts": [cost, ...] }
+//     "priceItems": [prefab, ...], "priceCosts": [cost, ...],
+//     "extraItems": [prefab, ...], "extraCosts": [cost, ...],
+//     "extraFactions": ["" for all, or "US,FIA", ...],
+//     "extraCategories": [category name, ...] }
 //
-// The server also writes $profile:OYB_Arsenal/items.json, every item the
-// arsenals can offer with its name, category, factions and default price, so the
-// panel can list them (modded items included).
+// The server also writes $profile:OYB_Arsenal/items.json once it has started:
+// every item the faction catalogues offer, plus every item prefab in a loaded mod
+// that no catalogue lists ("found" 1), so the panel can list them.
 //
 // The game classes come first in this file so their additions exist by the time
 // OYB_ArsenalSettings uses them.
 
-// Hidden items drop out of every arsenal's list, on the server and on each
-// player's screen alike.
+// Hidden items drop out of every arsenal's list and added items join it, on the
+// server and on each player's screen alike.
 modded class SCR_ArsenalComponent
 {
 	protected static ref array<SCR_ArsenalComponent> s_aOYB_All = {};
@@ -36,6 +40,11 @@ modded class SCR_ArsenalComponent
 		OYB_ArsenalSettings.Get().StartServer();
 	}
 
+	SCR_EArsenalItemType OYB_GetSupportedTypes()
+	{
+		return m_eSupportedArsenalItemTypes;
+	}
+
 	override bool GetFilteredArsenalItems(out notnull array<SCR_ArsenalItem> filteredArsenalItems, EArsenalItemDisplayType requiresDisplayType = -1)
 	{
 		bool found = super.GetFilteredArsenalItems(filteredArsenalItems, requiresDisplayType);
@@ -49,6 +58,19 @@ modded class SCR_ArsenalComponent
 		}
 
 		return found;
+	}
+
+	// Added items go after the catalogue's, in the order OYB's item list also
+	// appends them, so the arsenal screen's cards and OYB's list stay aligned.
+	override bool GetAvailablePrefabs(out notnull array<ResourceName> availablePrefabs)
+	{
+		bool found = super.GetAvailablePrefabs(availablePrefabs);
+
+		array<ResourceName> extras = {};
+		OYB_ArsenalSettings.Get().GetExtrasFor(this, extras);
+		availablePrefabs.InsertAll(extras);
+
+		return found || !extras.IsEmpty();
 	}
 
 	// Has every arsenal tell its listeners (the arsenal screen's items, OYB's item
@@ -93,8 +115,9 @@ modded class SCR_ArsenalManagerComponent
 }
 
 // The server's side: hidden items can't be taken however the request was made,
-// and overridden prices are what's charged and refunded. The game's own checks
-// run first; OYB only settles the difference to the new price afterwards.
+// overridden prices are what's charged and refunded, and added items (which the
+// game's own handler would refuse, having no catalogue entry) are handed out by
+// OYB with the same checks the game makes.
 modded class SCR_ResourcePlayerControllerInventoryComponent
 {
 	protected float m_fOYB_Charged;
@@ -109,8 +132,14 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 			return;
 		}
 
-		int price;
 		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.Cast(Replication.FindItem(resourceComponentRplId));
+		if (settings.IsExtra(resourceNameItem))
+		{
+			OYB_GiveExtra(resourceComponent, storageComponentRplId, resourceNameItem, resourceType);
+			return;
+		}
+
+		int price;
 		if (!settings.GetPrice(resourceNameItem, price) || resourceType != EResourceType.SUPPLIES || !resourceComponent)
 		{
 			super.RpcAsk_ArsenalRequestItem_(resourceComponentRplId, storageComponentRplId, resourceNameItem, resourceType);
@@ -146,6 +175,70 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 		m_fOYB_Charged = resourceValue;
 	}
 
+	// An added item, with the checks the game's own handler makes: the buyer is
+	// alive, the storage is theirs or within reach, the arsenal is within reach
+	// and offers the item, and the supplies are there before anything spawns.
+	protected void OYB_GiveExtra(SCR_ResourceComponent resourceComponent, RplId storageComponentRplId, ResourceName prefab, EResourceType resourceType)
+	{
+		SCR_PlayerController controller = SCR_PlayerController.Cast(GetOwner());
+		SCR_ChimeraCharacter buyer;
+		if (controller)
+			buyer = SCR_ChimeraCharacter.Cast(controller.GetControlledEntity());
+		if (!buyer || !resourceComponent || !resourceComponent.GetOwner() || resourceType != EResourceType.SUPPLIES)
+			return;
+
+		SCR_InventoryStorageManagerComponent inventory = SCR_InventoryStorageManagerComponent.Cast(buyer.GetCharacterController().GetInventoryStorageManager());
+		BaseInventoryStorageComponent storage = BaseInventoryStorageComponent.Cast(Replication.FindItem(storageComponentRplId));
+		if (!inventory || !storage)
+			return;
+
+		IEntity storageParent = storage.GetOwner();
+		vector storagePosition = storageParent.GetOrigin();
+		while (storageParent)
+		{
+			if (ChimeraCharacter.Cast(storageParent))
+			{
+				if (storageParent != buyer)
+					return;
+				break;
+			}
+			storageParent = storageParent.GetParent();
+		}
+
+		IEntity arsenalEntity = resourceComponent.GetOwner();
+		if (!storageParent && vector.DistanceSq(buyer.GetOrigin(), storagePosition) > MAX_REFUNDING_DISTANCE_SQ)
+			return;
+		if (vector.DistanceSq(arsenalEntity.GetOrigin(), storagePosition) > MAX_REFUNDING_DISTANCE_SQ || !inventory.ValidateStorageRequest(arsenalEntity))
+			return;
+
+		SCR_ArsenalComponent arsenal = SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity);
+		if (!arsenal)
+			return;
+
+		array<ResourceName> offered = {};
+		OYB_ArsenalSettings.Get().GetExtrasFor(arsenal, offered);
+		if (!offered.Contains(prefab))
+		{
+			PrintFormat("OYB_ARSENAL refused an added item this arsenal doesn't offer: %1", FilePath.StripPath(prefab.GetPath()), level: LogLevel.WARNING);
+			return;
+		}
+
+		int price;
+		OYB_ArsenalSettings.Get().GetPrice(prefab, price);
+		SCR_ResourceConsumer consumer = resourceComponent.GetConsumer(EResourceGeneratorID.DEFAULT, resourceType);
+		if (arsenal.IsArsenalUsingSupplies() && price > 0)
+		{
+			if (!consumer)
+				return;
+
+			float cost = price * consumer.GetBuyMultiplier();
+			if (consumer.RequestConsumtion(cost).GetReason() != EResourceReason.SUFFICIENT)
+				return;
+		}
+
+		inventory.TrySpawnPrefabToStorage(prefab, storage, cb: new SCR_PrefabSpawnCallback(storage));
+	}
+
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
 	override protected void RpcAsk_ArsenalRefundItem_(RplId resourceComponentRplId, RplId inventoryItemRplId, EResourceType resourceType)
 	{
@@ -162,21 +255,37 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 			return;
 		}
 
-		// The game's refund is a share of the item's catalogue price; the same
-		// share of the new price is what's due.
+		ResourceName prefab = item.GetPrefabData().GetPrefabName();
 		SCR_ArsenalComponent arsenal = SCR_ArsenalComponent.FindArsenalComponent(resourceComponent.GetOwner());
 		float gameRefund = SCR_ArsenalManagerComponent.GetItemRefundAmount(item, arsenal, false);
-		float catalogPrice = OYB_ArsenalSettings.CatalogPrice(item.GetPrefabData().GetPrefabName(), arsenal);
+		float catalogPrice = OYB_ArsenalSettings.CatalogPrice(prefab, arsenal);
+		bool extra = OYB_ArsenalSettings.Get().IsExtra(prefab);
 
 		super.RpcAsk_ArsenalRefundItem_(resourceComponentRplId, inventoryItemRplId, resourceType);
 
 		if (item && !item.IsDeleted())
 			return;
-		if (gameRefund <= 0 || catalogPrice <= 0)
+		if (!arsenal || !arsenal.IsArsenalUsingSupplies())
 			return;
 
-		float share = Math.Min(gameRefund / catalogPrice, 1);
-		float delta = (price - catalogPrice) * share;
+		// An added item has no catalogue price, so the game gave nothing back; it
+		// gets the arsenal's usual refund share of its price. Otherwise the
+		// game's refund is a share of the catalogue price, and the same share of
+		// the new price is what's due.
+		float delta;
+		if (extra || catalogPrice <= 0)
+		{
+			SCR_ResourceGenerator generator = resourceComponent.GetGenerator(EResourceGeneratorID.DEFAULT, resourceType);
+			float share = 1;
+			if (generator)
+				share = generator.GetResourceMultiplier();
+			delta = price * share - Math.Max(gameRefund, 0);
+		}
+		else if (gameRefund > 0)
+		{
+			delta = (price - catalogPrice) * Math.Min(gameRefund / catalogPrice, 1);
+		}
+
 		OYB_Settle(resourceComponent, resourceComponent.GetConsumer(EResourceGeneratorID.DEFAULT, resourceType), -delta);
 	}
 
@@ -196,7 +305,8 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 	}
 }
 
-// The price on an arsenal item card follows the override.
+// The price on an arsenal item card follows the override or the added item's
+// price.
 modded class SCR_ArsenalInventorySlotUI
 {
 	override float GetTotalResources()
@@ -222,19 +332,42 @@ modded class SCR_ArsenalInventorySlotUI
 	}
 }
 
+class OYB_ArsenalExtra
+{
+	ResourceName m_sPrefab;
+	int m_iCost;
+	string m_sFactions;
+	int m_iCategory;
+}
+
 class OYB_ArsenalSettings
 {
 	protected static const string SETTINGS_FILE = "$profile:OYB_Arsenal/settings.json";
 	protected static const string ITEMS_FILE = "$profile:OYB_Arsenal/items.json";
 	protected static const string FOLDER = "$profile:OYB_Arsenal";
 	protected static const int RELOAD_EVERY_MS = 60000;
+	protected static const int SCAN_BATCH = 20;
+	protected static const int SCAN_BATCH_GAP_MS = 20;
 
 	protected static ref OYB_ArsenalSettings s_Instance;
 
 	protected ref set<ResourceName> m_Hidden = new set<ResourceName>();
 	protected ref map<ResourceName, int> m_Prices = new map<ResourceName, int>();
+	protected ref map<ResourceName, ref OYB_ArsenalExtra> m_Extras = new map<ResourceName, ref OYB_ArsenalExtra>();
+	protected ref array<ResourceName> m_aExtraOrder = {};
 	protected string m_sLoadedText;
 	protected bool m_bServerStarted;
+
+	// The item list being put together for items.json.
+	protected ref map<ResourceName, int> m_mListed;
+	protected ref array<string> m_aPrefabs;
+	protected ref array<string> m_aNames;
+	protected ref array<string> m_aCategories;
+	protected ref array<string> m_aFactions;
+	protected ref array<int> m_aPrices;
+	protected ref array<int> m_aFound;
+	protected ref array<ResourceName> m_aScanQueue;
+	protected int m_iScanUnusable;
 
 	static OYB_ArsenalSettings Get()
 	{
@@ -249,26 +382,84 @@ class OYB_ArsenalSettings
 		return m_Hidden.Contains(prefab);
 	}
 
-	bool GetPrice(ResourceName prefab, out int price)
+	bool IsExtra(ResourceName prefab)
 	{
-		return m_Prices.Find(prefab, price);
+		return m_Extras.Contains(prefab) && !m_Hidden.Contains(prefab);
 	}
 
-	void GetLists(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts)
+	// A price set in the panel, or an added item's price.
+	bool GetPrice(ResourceName prefab, out int price)
 	{
-		foreach (ResourceName prefab : m_Hidden)
-			hidden.Insert(prefab);
+		if (m_Prices.Find(prefab, price))
+			return true;
 
-		foreach (ResourceName prefab, int cost : m_Prices)
+		OYB_ArsenalExtra extra = m_Extras.Get(prefab);
+		if (!extra)
+			return false;
+
+		price = extra.m_iCost;
+		return true;
+	}
+
+	// The added items this arsenal offers: its faction, and the kinds of item it
+	// was set up to carry.
+	void GetExtrasFor(SCR_ArsenalComponent arsenal, notnull array<ResourceName> extras)
+	{
+		if (m_aExtraOrder.IsEmpty() || !arsenal)
+			return;
+
+		string factionKey;
+		if (arsenal.GetAssignedFaction())
+			factionKey = arsenal.GetAssignedFaction().GetFactionKey();
+		SCR_EArsenalItemType supported = arsenal.OYB_GetSupportedTypes();
+
+		foreach (ResourceName prefab : m_aExtraOrder)
 		{
-			priceItems.Insert(prefab);
-			priceCosts.Insert(cost);
+			OYB_ArsenalExtra extra = m_Extras.Get(prefab);
+			if (!extra || m_Hidden.Contains(prefab))
+				continue;
+			if (!(OYB_ArsenalCategories.ToArsenalTypes(extra.m_iCategory) & supported))
+				continue;
+			if (!extra.m_sFactions.IsEmpty())
+			{
+				array<string> keys = {};
+				extra.m_sFactions.Split(",", keys, true);
+				if (!keys.Contains(factionKey))
+					continue;
+			}
+			extras.Insert(prefab);
 		}
 	}
 
-	// Takes new settings and has every arsenal rebuild its list, so hidden items
-	// drop out of open arsenal screens too.
-	void Apply(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts)
+	OYB_ArsenalExtra GetExtra(ResourceName prefab)
+	{
+		return m_Extras.Get(prefab);
+	}
+
+	void GetLists(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts, notnull array<string> extraItems, notnull array<int> extraCosts, notnull array<string> extraFactions, notnull array<string> extraCategories)
+	{
+		foreach (ResourceName hiddenPrefab : m_Hidden)
+			hidden.Insert(hiddenPrefab);
+
+		foreach (ResourceName pricedPrefab, int cost : m_Prices)
+		{
+			priceItems.Insert(pricedPrefab);
+			priceCosts.Insert(cost);
+		}
+
+		foreach (ResourceName extraPrefab : m_aExtraOrder)
+		{
+			OYB_ArsenalExtra extra = m_Extras.Get(extraPrefab);
+			extraItems.Insert(extraPrefab);
+			extraCosts.Insert(extra.m_iCost);
+			extraFactions.Insert(extra.m_sFactions);
+			extraCategories.Insert(OYB_ArsenalCategories.GetName(extra.m_iCategory));
+		}
+	}
+
+	// Takes new settings and has every arsenal rebuild its list, so hidden and
+	// added items show (or go) on open arsenal screens too.
+	void Apply(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts, notnull array<string> extraItems, notnull array<int> extraCosts, notnull array<string> extraFactions, notnull array<string> extraCategories)
 	{
 		m_Hidden.Clear();
 		foreach (string prefab : hidden)
@@ -282,6 +473,24 @@ class OYB_ArsenalSettings
 				m_Prices.Set(priceItems[i], priceCosts[i]);
 		}
 
+		m_Extras.Clear();
+		m_aExtraOrder.Clear();
+		int extraCount = Math.Min(Math.Min(extraItems.Count(), extraCosts.Count()), Math.Min(extraFactions.Count(), extraCategories.Count()));
+		for (int e = 0; e < extraCount; e++)
+		{
+			if (extraItems[e].IsEmpty() || extraCosts[e] < 0 || m_Extras.Contains(extraItems[e]))
+				continue;
+
+			OYB_ArsenalExtra extra = new OYB_ArsenalExtra();
+			extra.m_sPrefab = extraItems[e];
+			extra.m_iCost = extraCosts[e];
+			extra.m_sFactions = extraFactions[e];
+			extra.m_iCategory = OYB_ArsenalCategories.FromName(extraCategories[e]);
+			m_Extras.Insert(extra.m_sPrefab, extra);
+			m_aExtraOrder.Insert(extra.m_sPrefab);
+		}
+
+		OYB_ArsenalCatalogService.GetInstance().Invalidate();
 		SCR_ArsenalComponent.OYB_RefreshAll();
 	}
 
@@ -321,12 +530,15 @@ class OYB_ArsenalSettings
 		m_bServerStarted = true;
 
 		FileIO.MakeDirectory(FOLDER);
-		ExportItems();
 		Reload();
 		GetGame().GetCallqueue().CallLater(Reload, RELOAD_EVERY_MS, true);
+		ListCatalogItems();
+		StartScan();
 	}
 
-	// Reads settings.json if it changed and sends the result to every player.
+	// Reads settings.json, and only when its text changed applies it and sends it
+	// to the players, once each. Reading a small local file once a minute costs
+	// nothing on the network.
 	protected void Reload()
 	{
 		string text = ReadFile(SETTINGS_FILE);
@@ -337,6 +549,10 @@ class OYB_ArsenalSettings
 		array<string> hidden = {};
 		array<string> priceItems = {};
 		array<int> priceCosts = {};
+		array<string> extraItems = {};
+		array<int> extraCosts = {};
+		array<string> extraFactions = {};
+		array<string> extraCategories = {};
 		if (!text.IsEmpty())
 		{
 			JsonLoadContext context = new JsonLoadContext();
@@ -345,22 +561,19 @@ class OYB_ArsenalSettings
 				context.ReadValue("hidden", hidden);
 				context.ReadValue("priceItems", priceItems);
 				context.ReadValue("priceCosts", priceCosts);
+				context.ReadValue("extraItems", extraItems);
+				context.ReadValue("extraCosts", extraCosts);
+				context.ReadValue("extraFactions", extraFactions);
+				context.ReadValue("extraCategories", extraCategories);
 			}
 			else
 			{
-				PrintFormat("OYB_ARSENAL %1 isn't valid JSON, keeping no hidden items or prices", SETTINGS_FILE, level: LogLevel.WARNING);
+				PrintFormat("OYB_ARSENAL %1 isn't valid JSON, keeping no hidden, priced or added items", SETTINGS_FILE, level: LogLevel.WARNING);
 			}
 		}
 
-		if (priceItems.Count() != priceCosts.Count())
-		{
-			PrintFormat("OYB_ARSENAL %1 has %2 priced items but %3 prices, prices ignored", SETTINGS_FILE, priceItems.Count(), priceCosts.Count(), level: LogLevel.WARNING);
-			priceItems.Clear();
-			priceCosts.Clear();
-		}
-
-		Apply(hidden, priceItems, priceCosts);
-		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced", m_Hidden.Count(), m_Prices.Count());
+		Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraFactions, extraCategories);
+		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count());
 
 		array<int> players = {};
 		GetGame().GetPlayerManager().GetPlayers(players);
@@ -389,28 +602,28 @@ class OYB_ArsenalSettings
 		return text;
 	}
 
-	// Every item any faction's arsenal can offer in this game mode, for the
-	// panel's list. Hidden items are included so they can be shown again.
-	protected void ExportItems()
+	// Every item any faction's arsenal can offer in this game mode. Hidden items
+	// are included so the panel can show them again.
+	protected void ListCatalogItems()
 	{
+		m_mListed = new map<ResourceName, int>();
+		m_aPrefabs = {};
+		m_aNames = {};
+		m_aCategories = {};
+		m_aFactions = {};
+		m_aPrices = {};
+		m_aFound = {};
+
 		SCR_EntityCatalogManagerComponent catalogManager = SCR_EntityCatalogManagerComponent.GetInstance();
 		FactionManager factionManager = GetGame().GetFactionManager();
 		if (!catalogManager || !factionManager)
 		{
-			Print("OYB_ARSENAL no item catalogue or factions yet, items.json not written", LogLevel.WARNING);
+			Print("OYB_ARSENAL no item catalogue or factions yet, only scanned items will be listed", LogLevel.WARNING);
 			return;
 		}
 
 		array<Faction> factions = {};
 		factionManager.GetFactionsList(factions);
-
-		map<ResourceName, int> index = new map<ResourceName, int>();
-		array<string> prefabs = {};
-		array<string> names = {};
-		array<string> categories = {};
-		array<string> factionKeys = {};
-		array<int> prices = {};
-
 		SCR_EArsenalGameModeType gameModeType = SCR_ArsenalManagerComponent.GetArsenalGameModeType_Static();
 		foreach (Faction faction : factions)
 		{
@@ -424,43 +637,127 @@ class OYB_ArsenalSettings
 
 			foreach (SCR_ArsenalItem item : items)
 			{
-				if (!item)
+				if (!item || item.GetItemResourceName().IsEmpty())
 					continue;
 
 				ResourceName prefab = item.GetItemResourceName();
-				if (prefab.IsEmpty())
-					continue;
-
 				int at;
-				if (index.Find(prefab, at))
+				if (m_mListed.Find(prefab, at))
 				{
-					factionKeys[at] = factionKeys[at] + "," + scrFaction.GetFactionKey();
+					m_aFactions[at] = m_aFactions[at] + "," + scrFaction.GetFactionKey();
 					continue;
 				}
 
-				string name = OYB_ArsenalCatalogService.OYB_ReadInventoryName(prefab);
-				if (name.IsEmpty() || name == "MISSING")
-					name = FilePath.StripExtension(FilePath.StripPath(prefab.GetPath()));
-
-				index.Insert(prefab, prefabs.Count());
-				prefabs.Insert(prefab);
-				names.Insert(name);
-				categories.Insert(OYB_ArsenalCategories.GetName(OYB_ArsenalCategories.FromItem(item.GetItemType(), item.GetItemMode())));
-				factionKeys.Insert(scrFaction.GetFactionKey());
-				prices.Insert(item.GetSupplyCost(SCR_EArsenalSupplyCostType.DEFAULT, false));
+				int category = OYB_ArsenalCategories.FromItem(item.GetItemType(), item.GetItemMode());
+				AddListed(prefab, category, scrFaction.GetFactionKey(), item.GetSupplyCost(SCR_EArsenalSupplyCostType.DEFAULT, false), 0);
 			}
 		}
+	}
+
+	protected void AddListed(ResourceName prefab, int category, string factions, int price, int found)
+	{
+		string name = OYB_ArsenalCatalogService.OYB_ReadInventoryName(prefab);
+		if (name.IsEmpty() || name == "MISSING")
+			name = FilePath.StripExtension(FilePath.StripPath(prefab.GetPath()));
+
+		m_mListed.Insert(prefab, m_aPrefabs.Count());
+		m_aPrefabs.Insert(prefab);
+		m_aNames.Insert(name);
+		m_aCategories.Insert(OYB_ArsenalCategories.GetName(category));
+		m_aFactions.Insert(factions);
+		m_aPrices.Insert(price);
+		m_aFound.Insert(found);
+	}
+
+	// Every prefab in the loaded mods' Prefabs folders, so items a mod never put in
+	// a faction catalogue can still be found. Base game addons are skipped: their
+	// items are all catalogued.
+	protected void StartScan()
+	{
+		m_aScanQueue = {};
+		m_iScanUnusable = 0;
+
+		array<string> addons = {};
+		GameProject.GetLoadedAddons(addons);
+		foreach (string guid : addons)
+		{
+			if (GameProject.IsVanillaAddon(guid))
+				continue;
+
+			string addonId = GameProject.GetAddonID(guid);
+			if (addonId.IsEmpty())
+				continue;
+
+			int before = m_aScanQueue.Count();
+			SearchResourcesFilter filter = new SearchResourcesFilter();
+			filter.rootPath = "$" + addonId + ":Prefabs";
+			filter.fileExtensions = {"et"};
+			ResourceDatabase.SearchResources(filter, OnScanFound);
+			PrintFormat("OYB_ARSENAL scan: %1 prefabs in %2", m_aScanQueue.Count() - before, GameProject.GetAddonTitle(guid));
+		}
+
+		// A bit at a time, so a big modpack doesn't hold the server up.
+		GetGame().GetCallqueue().CallLater(ScanBatch, SCAN_BATCH_GAP_MS);
+	}
+
+	protected void OnScanFound(ResourceName resourceName, string exactPath = "")
+	{
+		if (!m_mListed.Contains(resourceName))
+			m_aScanQueue.Insert(resourceName);
+	}
+
+	protected void ScanBatch()
+	{
+		int done;
+		while (!m_aScanQueue.IsEmpty() && done < SCAN_BATCH)
+		{
+			ResourceName prefab = m_aScanQueue[m_aScanQueue.Count() - 1];
+			m_aScanQueue.Remove(m_aScanQueue.Count() - 1);
+			done++;
+
+			if (m_mListed.Contains(prefab))
+				continue;
+
+			int category = OYB_ArsenalCategories.FromPrefab(prefab);
+			if (category == -1)
+				continue;
+			if (category == -2)
+			{
+				m_iScanUnusable++;
+				continue;
+			}
+
+			AddListed(prefab, category, string.Empty, 0, 1);
+		}
+
+		if (!m_aScanQueue.IsEmpty())
+		{
+			GetGame().GetCallqueue().CallLater(ScanBatch, SCAN_BATCH_GAP_MS);
+			return;
+		}
+
+		WriteItems();
+	}
+
+	protected void WriteItems()
+	{
+		int found;
+		foreach (int flag : m_aFound)
+			found += flag;
 
 		JsonSaveContext context = new JsonSaveContext();
-		context.WriteValue("version", 1);
-		context.WriteValue("prefabs", prefabs);
-		context.WriteValue("names", names);
-		context.WriteValue("categories", categories);
-		context.WriteValue("factions", factionKeys);
-		context.WriteValue("prices", prices);
+		context.WriteValue("version", 2);
+		context.WriteValue("prefabs", m_aPrefabs);
+		context.WriteValue("names", m_aNames);
+		context.WriteValue("categories", m_aCategories);
+		context.WriteValue("factions", m_aFactions);
+		context.WriteValue("prices", m_aPrices);
+		context.WriteValue("found", m_aFound);
 		if (context.SaveToFile(ITEMS_FILE))
-			PrintFormat("OYB_ARSENAL wrote %1 items to %2", prefabs.Count(), ITEMS_FILE);
+			PrintFormat("OYB_ARSENAL wrote %1 items to %2 (%3 found by scan, %4 scanned items skipped as unusable)", m_aPrefabs.Count(), ITEMS_FILE, found, m_iScanUnusable);
 		else
 			PrintFormat("OYB_ARSENAL couldn't write %1", ITEMS_FILE, level: LogLevel.WARNING);
+
+		m_aScanQueue = null;
 	}
 }

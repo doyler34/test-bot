@@ -271,20 +271,28 @@ def profile_folder(base):
 
 ARSENAL_FOLDER = "OYB_Arsenal"
 ARSENAL_MAX_PRICE = 1_000_000
+# The mod's category names, in its order (OYB_ArsenalCategories.GetName).
+ARSENAL_CATEGORIES = ("Rifles", "Machine guns", "Sniper rifles", "Pistols", "Launchers", "Ammo", "Attachments",
+                      "Clothing", "Vests & bags", "Medical", "Explosives", "Tools", "Other")
 
 
 def arsenal_items(base):
     """The items the OYB Arsenal mod listed when the server last started, as
-    [{prefab, name, category, factions, price}] sorted by name, or None when the
-    server hasn't written the list yet."""
+    [{prefab, name, category, factions, price, found}] sorted by name, or None when
+    the server hasn't written the list yet. "found" items are ones the mod's scan
+    of the loaded mods turned up that no faction catalogue lists."""
     profile = profile_folder(base)
     path = profile / ARSENAL_FOLDER / "items.json" if profile else None
     if not path or not path.is_file():
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
     columns = [data.get(key) or [] for key in ("prefabs", "names", "categories", "factions", "prices")]
-    items = [{"prefab": prefab, "name": name or prefab, "category": category, "factions": factions, "price": price}
-             for prefab, name, category, factions, price in zip(*columns) if isinstance(prefab, str) and prefab]
+    found = list(data.get("found") or [])
+    found += [0] * (len(columns[0]) - len(found))
+    items = [{"prefab": prefab, "name": name or prefab, "category": category, "factions": factions or "",
+              "price": price, "found": bool(scanned)}
+             for prefab, name, category, factions, price, scanned in zip(*columns, found)
+             if isinstance(prefab, str) and prefab]
     return sorted(items, key=lambda item: (item["name"].lower(), item["prefab"]))
 
 
@@ -295,22 +303,34 @@ def arsenal_items_age(base):
     return path.stat().st_mtime if path and path.is_file() else None
 
 
+def arsenal_price(cost):
+    return isinstance(cost, int) and not isinstance(cost, bool) and 0 <= cost <= ARSENAL_MAX_PRICE
+
+
 def arsenal_settings(base):
-    """(hidden prefabs, {prefab: price}) from the server's OYB Arsenal settings."""
+    """(hidden prefabs, {prefab: price}, {prefab: {cost, factions, category}}) from the
+    server's OYB Arsenal settings. The last are items added to the arsenal that no
+    faction catalogue lists."""
     profile = profile_folder(base)
     path = profile / ARSENAL_FOLDER / "settings.json" if profile else None
     if not path or not path.is_file():
-        return set(), {}
+        return set(), {}, {}
     data = json.loads(path.read_text(encoding="utf-8") or "{}")
     hidden = {prefab for prefab in data.get("hidden") or [] if isinstance(prefab, str)}
     prices = {}
     for prefab, cost in zip(data.get("priceItems") or [], data.get("priceCosts") or []):
-        if isinstance(prefab, str) and isinstance(cost, int) and 0 <= cost <= ARSENAL_MAX_PRICE:
+        if isinstance(prefab, str) and arsenal_price(cost):
             prices[prefab] = cost
-    return hidden, prices
+    extras = {}
+    for prefab, cost, factions, category in zip(data.get("extraItems") or [], data.get("extraCosts") or [],
+                                                data.get("extraFactions") or [], data.get("extraCategories") or []):
+        if isinstance(prefab, str) and prefab and arsenal_price(cost) and isinstance(factions, str):
+            extras[prefab] = {"cost": cost, "factions": factions,
+                              "category": category if category in ARSENAL_CATEGORIES else "Other"}
+    return hidden, prices, extras
 
 
-def save_arsenal_settings(base, hidden, prices):
+def save_arsenal_settings(base, hidden, prices, extras=None):
     """Write the settings the OYB Arsenal mod reads; the server picks them up within a minute."""
     profile = profile_folder(base)
     if profile is None:
@@ -320,8 +340,12 @@ def save_arsenal_settings(base, hidden, prices):
         folder.mkdir()
         hand_over(folder)
     priced = sorted(prices.items())
+    added = sorted((extras or {}).items())
     data = {"version": 1, "hidden": sorted(hidden),
-            "priceItems": [prefab for prefab, _ in priced], "priceCosts": [cost for _, cost in priced]}
+            "priceItems": [prefab for prefab, _ in priced], "priceCosts": [cost for _, cost in priced],
+            "extraItems": [prefab for prefab, _ in added], "extraCosts": [extra["cost"] for _, extra in added],
+            "extraFactions": [extra["factions"] for _, extra in added],
+            "extraCategories": [extra["category"] for _, extra in added]}
     write_text(folder / "settings.json", json.dumps(data, indent=1) + "\n")
 
 

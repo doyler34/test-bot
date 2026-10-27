@@ -18,6 +18,13 @@ modded class SCR_PlayerController
 
 	protected float m_fOYB_LastRequestTime = -OYB_REQUEST_COOLDOWN_MS;
 
+	protected static const int OYB_QUESTION_COOLDOWN_MS = 5000;
+	protected float m_fOYB_LastSettingsQuestion = -OYB_QUESTION_COOLDOWN_MS;
+	protected float m_fOYB_LastNamesQuestion = -OYB_QUESTION_COOLDOWN_MS;
+	// Per controller, so joining another server asks again.
+	protected bool m_bOYB_SettingsAsked;
+	protected bool m_bOYB_NamesAsked;
+
 	// What the local player sees in the slot list, sent by the server.
 	protected static ref array<string> s_aOYB_LoadoutNames = {};
 	protected static ref ScriptInvokerVoid s_OYB_OnLoadoutNames;
@@ -38,8 +45,13 @@ modded class SCR_PlayerController
 	//------------------------------------------------------------------------------------------------
 	// Asked for by the arsenal panel
 
+	// Asked once per session; after that the server sends the names whenever a
+	// save changes them.
 	void OYB_RequestLoadoutNames()
 	{
+		if (m_bOYB_NamesAsked)
+			return;
+		m_bOYB_NamesAsked = true;
 		Rpc(OYB_RpcAsk_LoadoutNames);
 	}
 
@@ -53,20 +65,27 @@ modded class SCR_PlayerController
 		Rpc(OYB_RpcAsk_LoadLoadout, slot, arsenalResourceId);
 	}
 
-	// The panel's hidden items and prices (see OYB_ArsenalSettings.c).
+	// The panel's hidden, priced and added items (see OYB_ArsenalSettings.c).
+	// Asked once per session, the first time an arsenal is opened; after that the
+	// server only sends them when the panel changes something. The host shares the
+	// server's copy and never asks.
 	void OYB_RequestSettings()
 	{
-		if (!OYB_IsLocal() || !Replication.IsServer())
-			Rpc(OYB_RpcAsk_Settings);
+		if (m_bOYB_SettingsAsked || (OYB_IsLocal() && Replication.IsServer()))
+			return;
+		m_bOYB_SettingsAsked = true;
+		Rpc(OYB_RpcAsk_Settings);
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
 	protected void OYB_RpcAsk_Settings()
 	{
+		if (OYB_TooSoon(m_fOYB_LastSettingsQuestion))
+			return;
+
 		OYB_SendSettings();
 	}
 
-	// The host shares the server's copy, so only remote players are sent one.
 	void OYB_SendSettings()
 	{
 		if (OYB_IsLocal())
@@ -75,14 +94,30 @@ modded class SCR_PlayerController
 		array<string> hidden = {};
 		array<string> priceItems = {};
 		array<int> priceCosts = {};
-		OYB_ArsenalSettings.Get().GetLists(hidden, priceItems, priceCosts);
-		Rpc(OYB_RpcDo_Settings, hidden, priceItems, priceCosts);
+		array<string> extraItems = {};
+		array<int> extraCosts = {};
+		array<string> extraFactions = {};
+		array<string> extraCategories = {};
+		OYB_ArsenalSettings.Get().GetLists(hidden, priceItems, priceCosts, extraItems, extraCosts, extraFactions, extraCategories);
+		Rpc(OYB_RpcDo_Settings, hidden, priceItems, priceCosts, extraItems, extraCosts, extraFactions, extraCategories);
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
-	protected void OYB_RpcDo_Settings(array<string> hidden, array<string> priceItems, array<int> priceCosts)
+	protected void OYB_RpcDo_Settings(array<string> hidden, array<string> priceItems, array<int> priceCosts, array<string> extraItems, array<int> extraCosts, array<string> extraFactions, array<string> extraCategories)
 	{
-		OYB_ArsenalSettings.Get().Apply(hidden, priceItems, priceCosts);
+		OYB_ArsenalSettings.Get().Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraFactions, extraCategories);
+	}
+
+	// Questions a client asks once per session; a client asking again within a
+	// few seconds gets nothing, so a modified one can't make the server spam.
+	protected bool OYB_TooSoon(inout float lastAsked)
+	{
+		float now = GetGame().GetWorld().GetWorldTime();
+		if (now - lastAsked < OYB_QUESTION_COOLDOWN_MS)
+			return true;
+
+		lastAsked = now;
+		return false;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -91,6 +126,9 @@ modded class SCR_PlayerController
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
 	protected void OYB_RpcAsk_LoadoutNames()
 	{
+		if (OYB_TooSoon(m_fOYB_LastNamesQuestion))
+			return;
+
 		array<string> names = {};
 		array<string> loadouts = {};
 		OYB_ReadSlots(names, loadouts);
@@ -200,14 +238,7 @@ modded class SCR_PlayerController
 				prices.Set(item.GetItemResourceName(), item.GetSupplyCost(arsenal.GetSupplyCostType()));
 		}
 
-		// Prices set in the panel replace the catalogue's.
 		OYB_ArsenalSettings settings = OYB_ArsenalSettings.Get();
-		array<string> hidden = {};
-		array<string> priceItems = {};
-		array<int> priceCosts = {};
-		settings.GetLists(hidden, priceItems, priceCosts);
-		foreach (int p, string pricedItem : priceItems)
-			prices.Set(pricedItem, priceCosts[p]);
 
 		// Parts that come fitted to something being bought, like the M203 on an
 		// M16A2 M203, arrive with it, so they aren't paid for again.
@@ -405,6 +436,11 @@ modded class SCR_PlayerController
 	// respawn kit: from the item catalogue, or free if it isn't listed there.
 	protected float OYB_GetPrice(ResourceName prefab, map<ResourceName, float> prices, SCR_ArsenalComponent arsenal)
 	{
+		// A price set in the panel (or an added item's) comes first.
+		int panelPrice;
+		if (OYB_ArsenalSettings.Get().GetPrice(prefab, panelPrice))
+			return panelPrice;
+
 		if (prices.Contains(prefab))
 			return prices.Get(prefab);
 
@@ -533,10 +569,17 @@ modded class SCR_PlayerController
 					float refund = Math.Max(SCR_ArsenalManagerComponent.GetItemRefundAmount(child, arsenal, false), 0);
 
 					// The same share of a price set in the panel.
+					// The same share of a price set in the panel; an added item (no
+					// catalogue price) gets the arsenal's usual refund share.
 					int price;
 					float catalogPrice = OYB_ArsenalSettings.CatalogPrice(prefab, arsenal);
-					if (refund > 0 && catalogPrice > 0 && OYB_ArsenalSettings.Get().GetPrice(prefab, price))
-						refund = price * Math.Min(refund / catalogPrice, 1);
+					if (OYB_ArsenalSettings.Get().GetPrice(prefab, price))
+					{
+						if (refund > 0 && catalogPrice > 0)
+							refund = price * Math.Min(refund / catalogPrice, 1);
+						else if (OYB_ArsenalSettings.Get().IsExtra(prefab))
+							refund = price * OYB_RefundShare(arsenal);
+					}
 
 					refunds.Set(prefab, refund);
 				}
@@ -545,6 +588,19 @@ modded class SCR_PlayerController
 			OYB_FindRefunds(child, arsenal, refunds);
 			child = child.GetSibling();
 		}
+	}
+
+	protected float OYB_RefundShare(SCR_ArsenalComponent arsenal)
+	{
+		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(arsenal.GetOwner());
+		if (!resourceComponent)
+			return 1;
+
+		SCR_ResourceGenerator generator = resourceComponent.GetGenerator(EResourceGeneratorID.DEFAULT, EResourceType.SUPPLIES);
+		if (!generator)
+			return 1;
+
+		return generator.GetResourceMultiplier();
 	}
 
 	// Named after the guns in the kit, so slots can be told apart without typing.
