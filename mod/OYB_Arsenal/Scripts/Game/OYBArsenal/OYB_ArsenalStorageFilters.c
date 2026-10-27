@@ -307,6 +307,22 @@ modded class SCR_InventoryStorageBaseUI
 		m_wOYB_FilterBar = bar;
 		PrintFormat("OYB_ARSENAL filter bar added above %1 in %2", m_wGrid.GetName(), m_wGrid.GetParent().GetName());
 
+		Widget title = workspace.CreateWidgets(OYB_LABEL_LAYOUT, bar);
+		if (title)
+		{
+			AlignableSlot.SetPadding(title, 0, 0, 0, 4);
+			TextWidget titleText = TextWidget.Cast(OYB_FindWidgetOfType(title, TextWidget));
+			if (titleText)
+			{
+				titleText.SetText("OYB ARSENAL");
+				titleText.SetExactFontSize(18);
+				titleText.SetColor(OYB_ORANGE);
+			}
+		}
+
+		if (m_wStorageName && Type() == SCR_InventoryOpenedStorageArsenalUI)
+			m_wStorageName.SetText("OYB Arsenal");
+
 		Widget categoryRow = workspace.CreateWidget(WidgetType.HorizontalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, bar);
 		AlignableSlot.SetHorizontalAlign(categoryRow, LayoutHorizontalAlign.Stretch);
 

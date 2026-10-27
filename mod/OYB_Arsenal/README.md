@@ -10,6 +10,8 @@ below. Ownership: `NOTICE.md`.
 
 ## What's in so far
 
+- **OYB branding** (`OYB_ArsenalPrompt.c`): every arsenal's open prompt reads
+  "OYB Arsenal", and an orange "OYB ARSENAL" title sits above the grid.
 - **A category list to the left of the arsenal grid** (dark rows, name on the
   left, count on the right, the selected row lit with an orange edge): All, Rifles, Machine guns,
   Sniper rifles, Pistols, Launchers, Ammo, Attachments, Clothing, Vests &
@@ -327,6 +329,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Added item | Add an unlisted gun for US at 20, open a US arsenal | Gun listed at 20; taking it charges 20; putting it back refunds | ⏳ |
 | Network | Open and close an arsenal many times | Settings asked once per session (no repeat in the server log) | ⏳ |
 | Move category | Move an item to another category in the panel, wait a minute | It shows under the new category; `settings loaded: … 1 moved` | ⏳ |
+| Branding | Walk up to any arsenal, open it | Prompt says "OYB Arsenal"; orange "OYB ARSENAL" above the grid | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ✅ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |
