@@ -10,7 +10,10 @@
 //     "groupItems": [prefab, ...], "groupOf": [group name, ...] }
 //
 // The server writes $profile:OYB_Core/vehicle_list.json once it has started:
-// every vehicle the factions' depots can offer, mods included, for the panel.
+// every vehicle the factions' depots sell or their building menus place, mods
+// included, for the panel. "prices" is the depot price (-1 when not sold at a
+// depot), "buildCosts" the building menu's supply cost (-1 when not in it or
+// left to the game's default), "menus" where it's offered.
 class OYB_VehicleSettings
 {
 	protected static const string FOLDER = "$profile:OYB_Core";
@@ -25,6 +28,17 @@ class OYB_VehicleSettings
 	protected string m_sLoadedText;
 	protected bool m_bServerStarted;
 	protected int m_iListed = -1;
+	protected bool m_bLogged;
+
+	protected ref array<string> m_aPrefabs = {};
+	protected ref array<string> m_aNames = {};
+	protected ref array<string> m_aCategories = {};
+	protected ref array<string> m_aFactions = {};
+	protected ref array<int> m_aPrices = {};
+	protected ref array<int> m_aBuildCosts = {};
+	protected ref array<string> m_aMenus = {};
+	protected ref array<string> m_aVariantOf = {};
+	protected ref map<string, int> m_mListed = new map<string, int>();
 
 	static OYB_VehicleSettings Get()
 	{
@@ -176,17 +190,14 @@ class OYB_VehicleSettings
 		return text;
 	}
 
-	// Every vehicle any faction's depots can offer, and each one's variants.
+	// Every vehicle the factions offer, mods included, and each one's variants:
+	// a catalogue vehicle is on the list when a depot can sell it (it has depot
+	// data) or the building menu can place it (it's in the building manager's
+	// prefab list, or its editor data allows building mode). Whether a player
+	// could get one right now (rank, supplies, a free slot, a limit) doesn't
+	// matter here.
 	protected void WriteList()
 	{
-		array<string> prefabs = {};
-		array<string> names = {};
-		array<string> categories = {};
-		array<string> factions = {};
-		array<int> prices = {};
-		array<string> variantOf = {};
-		map<string, int> listed = new map<string, int>();
-
 		FactionManager factionManager = GetGame().GetFactionManager();
 		if (!factionManager)
 		{
@@ -195,6 +206,26 @@ class OYB_VehicleSettings
 			return;
 		}
 
+		m_aPrefabs.Clear();
+		m_aNames.Clear();
+		m_aCategories.Clear();
+		m_aFactions.Clear();
+		m_aPrices.Clear();
+		m_aBuildCosts.Clear();
+		m_aMenus.Clear();
+		m_aVariantOf.Clear();
+		m_mListed.Clear();
+
+		set<ResourceName> buildable = BuildingMenuPrefabs();
+		if (!m_bLogged)
+		{
+			if (buildable)
+				PrintFormat("OYB_CORE vehicles: the building manager lists %1 prefabs", buildable.Count());
+			else
+				Print("OYB_CORE vehicles: this game mode has no building manager");
+		}
+
+		int inCatalogues;
 		array<Faction> allFactions = {};
 		factionManager.GetFactionsList(allFactions);
 		foreach (Faction faction : allFactions)
@@ -203,72 +234,248 @@ class OYB_VehicleSettings
 			if (!scrFaction)
 				continue;
 
+			string factionKey = scrFaction.GetFactionKey();
 			SCR_EntityCatalog catalog = scrFaction.GetFactionEntityCatalogOfType(EEntityCatalogType.VEHICLE, false);
 			if (!catalog)
 			{
-				PrintFormat("OYB_CORE vehicles: %1 has no vehicle catalogue", scrFaction.GetFactionKey());
+				if (!m_bLogged)
+					PrintFormat("OYB_CORE vehicles: %1 has no vehicle catalogue", factionKey);
 				continue;
 			}
 
-			array<SCR_EntityCatalogEntry> all = {};
 			array<SCR_EntityCatalogEntry> entries = {};
-			catalog.GetEntityList(all);
-			catalog.GetEntityListWithData(SCR_EntityCatalogSpawnerData, entries);
-			PrintFormat("OYB_CORE vehicles: %1 has %2 vehicles in its catalogue, %3 of them for depots", scrFaction.GetFactionKey(), all.Count(), entries.Count());
+			catalog.GetEntityList(entries);
+			inCatalogues += entries.Count();
+
+			int depot = 0;
+			int building = 0;
+			int neither = 0;
+			int logged = 0;
 			foreach (SCR_EntityCatalogEntry entry : entries)
 			{
 				ResourceName prefab = entry.GetPrefab();
 				if (prefab.IsEmpty())
 					continue;
 
-				int at;
-				if (listed.Find(prefab, at))
+				SCR_EntityCatalogSpawnerData spawnerData = SCR_EntityCatalogSpawnerData.Cast(entry.GetEntityDataOfType(SCR_EntityCatalogSpawnerData));
+				SCR_EntityCatalogEditorData editorData = SCR_EntityCatalogEditorData.Cast(entry.GetEntityDataOfType(SCR_EntityCatalogEditorData));
+				bool inBuildingList = buildable && buildable.Contains(prefab);
+				bool buildingMode = editorData && editorData.IsValidInEditorMode(EEditorMode.BUILDING);
+				bool inBuilding = inBuildingList || buildingMode;
+
+				if (!m_bLogged && logged < 3)
 				{
-					factions[at] = factions[at] + "," + scrFaction.GetFactionKey();
+					logged++;
+					PrintFormat("OYB_CORE vehicles: %1 %2 | data: %3 | depot data %4, in building list %5, building-mode editor data %6", factionKey, prefab, entry.OYB_DescribeData(), spawnerData != null, inBuildingList, buildingMode);
+				}
+
+				if (spawnerData)
+					depot++;
+				if (inBuilding)
+					building++;
+				if (!spawnerData && !inBuilding)
+				{
+					neither++;
 					continue;
 				}
 
-				SCR_EntityCatalogSpawnerData data = SCR_EntityCatalogSpawnerData.Cast(entry.GetEntityDataOfType(SCR_EntityCatalogSpawnerData));
-				listed.Insert(prefab, prefabs.Count());
-				prefabs.Insert(prefab);
-				names.Insert(WidgetManager.Translate(entry.GetEntityName()));
-				categories.Insert(Category(entry));
-				factions.Insert(scrFaction.GetFactionKey());
-				prices.Insert(data.OYB_GetOwnSupplyCost());
-				variantOf.Insert(string.Empty);
-
-				array<ResourceName> variants = {};
-				data.GetVariantPrefabList(variants);
-				foreach (ResourceName variant : variants)
+				string menus = string.Empty;
+				if (spawnerData)
+					menus = "depot";
+				if (inBuilding)
 				{
-					if (variant.IsEmpty() || listed.Contains(variant))
-						continue;
+					if (!menus.IsEmpty())
+						menus += ",";
+					menus += "building";
+				}
 
-					OYB_VehicleLimits.SetVariant(variant, prefab);
-					listed.Insert(variant, prefabs.Count());
-					prefabs.Insert(variant);
-					names.Insert(FilePath.StripExtension(FilePath.StripPath(variant.GetPath())));
-					categories.Insert(categories[categories.Count() - 1]);
-					factions.Insert(scrFaction.GetFactionKey());
-					prices.Insert(0);
-					variantOf.Insert(prefab);
+				int depotPrice = -1;
+				if (spawnerData)
+					depotPrice = spawnerData.OYB_GetOwnSupplyCost();
+
+				int buildCost = -1;
+				if (inBuilding)
+					buildCost = BuildCost(prefab);
+
+				string category = Category(entry);
+				if (!AddVehicle(prefab, WidgetManager.Translate(entry.GetEntityName()), category, factionKey, depotPrice, buildCost, menus, string.Empty))
+					continue;
+
+				if (spawnerData)
+				{
+					array<ResourceName> depotVariants = {};
+					spawnerData.GetVariantPrefabList(depotVariants);
+					foreach (ResourceName depotVariant : depotVariants)
+						AddVariant(depotVariant, prefab, category, factionKey, "depot");
+				}
+
+				if (inBuilding)
+				{
+					array<ResourceName> buildVariants = {};
+					EditableVariants(prefab, buildVariants);
+					foreach (ResourceName buildVariant : buildVariants)
+						AddVariant(buildVariant, prefab, category, factionKey, "building");
 				}
 			}
+
+			if (!m_bLogged)
+				PrintFormat("OYB_CORE vehicles: %1 has %2 vehicles in its catalogue: %3 sold at depots, %4 in the building menu, %5 in neither", factionKey, entries.Count(), depot, building, neither);
+		}
+		// Until the catalogues have filled, the next try logs the details again.
+		if (inCatalogues > 0)
+			m_bLogged = true;
+
+		m_iListed = m_aPrefabs.Count();
+		if (m_iListed == 0)
+		{
+			// An empty list never replaces one already written.
+			if (inCatalogues == 0)
+				Print("OYB_CORE vehicles: the vehicle catalogues are empty or not ready yet, vehicle_list.json left as it was; trying again in a minute");
+			else
+				PrintFormat("OYB_CORE vehicles: %1 catalogue vehicles but none sold at a depot or in the building menu, vehicle_list.json left as it was", inCatalogues, level: LogLevel.WARNING);
+			return;
 		}
 
 		JsonSaveContext context = new JsonSaveContext();
-		context.WriteValue("version", 1);
-		context.WriteValue("prefabs", prefabs);
-		context.WriteValue("names", names);
-		context.WriteValue("categories", categories);
-		context.WriteValue("factions", factions);
-		context.WriteValue("prices", prices);
-		context.WriteValue("variantOf", variantOf);
-		m_iListed = prefabs.Count();
+		context.WriteValue("version", 2);
+		context.WriteValue("prefabs", m_aPrefabs);
+		context.WriteValue("names", m_aNames);
+		context.WriteValue("categories", m_aCategories);
+		context.WriteValue("factions", m_aFactions);
+		context.WriteValue("prices", m_aPrices);
+		context.WriteValue("buildCosts", m_aBuildCosts);
+		context.WriteValue("menus", m_aMenus);
+		context.WriteValue("variantOf", m_aVariantOf);
 		if (context.SaveToFile(LIST_FILE))
-			PrintFormat("OYB_CORE wrote %1 vehicles to %2", prefabs.Count(), LIST_FILE);
+			PrintFormat("OYB_CORE wrote %1 vehicles to %2", m_iListed, LIST_FILE);
 		else
 			PrintFormat("OYB_CORE couldn't write %1", LIST_FILE, level: LogLevel.WARNING);
+	}
+
+	// False when the prefab was already listed (another faction has it too).
+	protected bool AddVehicle(ResourceName prefab, string name, string category, string factionKey, int depotPrice, int buildCost, string menus, ResourceName variantOf)
+	{
+		int at;
+		if (m_mListed.Find(prefab, at))
+		{
+			m_aFactions[at] = MergeList(m_aFactions[at], factionKey);
+			m_aMenus[at] = MergeList(m_aMenus[at], menus);
+			if (m_aPrices[at] < 0)
+				m_aPrices[at] = depotPrice;
+			if (m_aBuildCosts[at] < 0)
+				m_aBuildCosts[at] = buildCost;
+			return false;
+		}
+
+		m_mListed.Insert(prefab, m_aPrefabs.Count());
+		m_aPrefabs.Insert(prefab);
+		m_aNames.Insert(name);
+		m_aCategories.Insert(category);
+		m_aFactions.Insert(factionKey);
+		m_aPrices.Insert(depotPrice);
+		m_aBuildCosts.Insert(buildCost);
+		m_aMenus.Insert(menus);
+		m_aVariantOf.Insert(variantOf);
+		return true;
+	}
+
+	// "a,b" with each of "b,c" not already in it: "a,b,c".
+	protected static string MergeList(string list, string items)
+	{
+		array<string> have = {};
+		list.Split(",", have, true);
+		array<string> adding = {};
+		items.Split(",", adding, true);
+		foreach (string item : adding)
+		{
+			if (!have.Contains(item))
+				have.Insert(item);
+		}
+
+		string merged;
+		foreach (int i, string piece : have)
+		{
+			if (i > 0)
+				merged += ",";
+			merged += piece;
+		}
+		return merged;
+	}
+
+	protected void AddVariant(ResourceName variant, ResourceName vehicle, string category, string factionKey, string menus)
+	{
+		if (variant.IsEmpty() || variant == vehicle)
+			return;
+
+		int at;
+		if (m_mListed.Find(variant, at) && m_aVariantOf[at].IsEmpty())
+			return;
+
+		OYB_VehicleLimits.SetVariant(variant, vehicle);
+		AddVehicle(variant, FilePath.StripExtension(FilePath.StripPath(variant.GetPath())), category, factionKey, -1, -1, menus, vehicle);
+	}
+
+	// What the building manager offers (the same list the building menu is
+	// filled from), or null in a game mode without one.
+	protected static set<ResourceName> BuildingMenuPrefabs()
+	{
+		BaseGameMode gameMode = GetGame().GetGameMode();
+		if (!gameMode)
+			return null;
+
+		SCR_CampaignBuildingManagerComponent manager = SCR_CampaignBuildingManagerComponent.Cast(gameMode.FindComponent(SCR_CampaignBuildingManagerComponent));
+		if (!manager)
+			return null;
+
+		set<ResourceName> prefabs = new set<ResourceName>();
+		array<ResourceName> placeable = manager.GetPlaceablePrefabs();
+		if (placeable)
+		{
+			foreach (ResourceName prefab : placeable)
+				prefabs.Insert(prefab);
+		}
+		return prefabs;
+	}
+
+	// The supplies the building menu shows and charges for the vehicle (its own
+	// cost and its children's), or -1 when the prefab sets none and the game
+	// falls back to a cost for the entity type.
+	protected static int BuildCost(ResourceName prefab)
+	{
+		SCR_EditableEntityUIInfo info = SCR_EditableEntityUIInfo.ExtractEditableUIInfoFromPrefab(prefab);
+		if (!info)
+			return -1;
+
+		array<ref SCR_EntityBudgetValue> budgets = {};
+		info.GetEntityAndChildrenBudgetCost(budgets);
+		foreach (SCR_EntityBudgetValue budget : budgets)
+		{
+			if (budget.GetBudgetType() == EEditableEntityBudget.CAMPAIGN)
+				return budget.GetBudgetValue();
+		}
+		return -1;
+	}
+
+	// The variants the building menu picks from at random when placing it.
+	protected static void EditableVariants(ResourceName prefab, notnull array<ResourceName> variants)
+	{
+		Resource resource = Resource.Load(prefab);
+		if (!resource || !resource.IsValid())
+			return;
+
+		IEntityComponentSource source = SCR_BaseContainerTools.FindComponentSource(resource, SCR_EditableEntityComponent);
+		if (!source)
+			return;
+
+		SCR_EditableEntityVariantData variantData;
+		source.Get("m_VariantData", variantData);
+		if (!variantData)
+			return;
+
+		array<SCR_EditableEntityVariant> all = {};
+		variantData.GetVariants(all);
+		foreach (SCR_EditableEntityVariant variant : all)
+			variants.Insert(variant.m_sVariantPrefab);
 	}
 
 	protected static string Category(SCR_EntityCatalogEntry entry)

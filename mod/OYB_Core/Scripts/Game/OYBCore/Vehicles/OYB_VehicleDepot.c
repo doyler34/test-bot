@@ -174,3 +174,32 @@ modded class SCR_BaseGameMode
 		OYB_VehicleSettings.Get().SendTo(playerId);
 	}
 }
+
+// Every data block on a catalogue entry, disabled ones too, for the server log
+// when the vehicle list is written.
+modded class SCR_EntityCatalogEntry
+{
+	string OYB_DescribeData()
+	{
+		if (!m_aEntityDataList || m_aEntityDataList.IsEmpty())
+			return "none";
+
+		string text;
+		foreach (SCR_BaseEntityCatalogData data : m_aEntityDataList)
+		{
+			if (!data)
+				continue;
+
+			if (!text.IsEmpty())
+				text += ", ";
+			text += data.Type().ToString();
+			if (!data.IsEnabled())
+				text += " (disabled)";
+
+			SCR_EntityCatalogEditorData editorData = SCR_EntityCatalogEditorData.Cast(data);
+			if (editorData)
+				text += string.Format(" modes %1", editorData.GetValidEditorModes());
+		}
+		return text;
+	}
+}

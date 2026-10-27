@@ -2,7 +2,7 @@
 {% block title %}{{ inst }} vehicles · OYB Control{% endblock %}
 {% block body %}
 {% include "_manage_tabs.html" %}
-<p class="muted">What the vehicle depots offer on this server (OYB Core mod). Hide a vehicle and it's gone from every depot; hide just a variant and the depot stops picking it. Give a vehicle a price and that's what it costs. Put vehicles in a limit group and each side can only have that many of the whole group alive at once. The server picks changes up within a minute, no restart needed.</p>
+<p class="muted">The vehicles this server offers in the building menu and at vehicle depots (OYB Core mod). Hide a vehicle and it's gone from both; hiding just a variant only works at depots. A depot vehicle's price can be changed; building menu costs are shown but can't be changed yet. Put vehicles in a limit group and each side can only have that many of the whole group alive at once. The server picks changes up within a minute, no restart needed.</p>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
 {% if vehicles is none %}
@@ -14,7 +14,7 @@
 {% else %}
 <section class="card">
   <h2>Limit groups</h2>
-  <p class="muted small">Each group is an allowance per side: with Helicopters at 2, each side can have at most 2 live vehicles from that group at once (a vehicle's variants count as the vehicle). Bought vehicles count for the side whose depot sold them, whoever drives them; wrecked or deleted ones stop counting. Vehicles in no group, and groups with an empty limit, are unlimited; 0 allows none. Game Master vehicles don't count, except that when the server starts every live vehicle already in the world counts once for its own side. Lowering a limit never removes vehicles.</p>
+  <p class="muted small">Each group is an allowance per side: with Helicopters at 2, each side can have at most 2 live vehicles from that group at once (a vehicle's variants count as the vehicle). A vehicle counts for the side of the player who placed it from the building menu, or of the depot that sold it, whoever drives it; wrecked or deleted ones stop counting. Vehicles in no group, and groups with an empty limit, are unlimited; 0 allows none. Game Master vehicles don't count, except that when the server starts every live vehicle already in the world counts once for its own side. Lowering a limit never removes vehicles.</p>
   <form method="post" action="/vehicles/{{ inst }}" class="inline">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="limits">
     <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="enabled" value="{{ '0' if settings.enabled else '1' }}">
@@ -103,7 +103,7 @@
     {% endfor %}
   </div>
   <div class="scroll"><table class="stack">
-    <thead><tr><th>Vehicle</th><th>Category</th><th>Factions</th><th>Price</th><th>Limit group</th><th></th></tr></thead>
+    <thead><tr><th>Vehicle</th><th>Category</th><th>Factions</th><th>Offered</th><th>Price</th><th>Limit group</th><th></th></tr></thead>
     <tbody>
     {% for v in shown %}
     {% set is_hidden = v.prefab in settings.hidden %}
@@ -114,16 +114,18 @@
         <div class="muted small mono">{{ v.prefab.rsplit("/", 1)[-1] }}</div></td>
       <td data-label="Category">{{ v.category }}</td>
       <td data-label="Factions">{{ v.factions|replace(",", ", ") }}</td>
+      <td data-label="Offered">{{ v.menus|map("replace", "building", "building menu")|join(", ") }}</td>
       <td data-label="Price">
-        {% if v.variant_of %}<span class="muted small">as its vehicle</span>{% else %}
+        {% if v.build_cost is not none and not v.variant_of %}<div class="small">building menu: {{ v.build_cost }}</div>{% endif %}
+        {% if v.variant_of %}<span class="muted small">as its vehicle</span>{% elif "depot" not in v.menus %}{% if v.build_cost is none %}<span class="muted small">the game's default</span>{% endif %}{% else %}
         <form method="post" action="/vehicles/{{ inst }}" class="inline">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="price">
           <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ settings.prices.get(v.prefab, v.price) }}" aria-label="Price of {{ v.name }}" class="price">
+          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ settings.prices.get(v.prefab, v.price or 0) }}" aria-label="Depot price of {{ v.name }}" class="price">
           <button class="small">Set</button>
         </form>
         {% if v.prefab in settings.prices %}
-        <span class="muted small">normally {{ v.price }}</span>
+        <span class="muted small">normally {{ v.price or 0 }}</span>
         <form method="post" action="/vehicles/{{ inst }}" class="inline">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reset">
           <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">

@@ -3513,7 +3513,7 @@ def limit_text(limit):
 
 
 async def vehicles_page(request):
-    """Hide depot vehicles, change what they cost and limit how many each side may have."""
+    """Hide vehicles, change what depot vehicles cost and limit how many each side may have."""
     require(request, "vehicles")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
@@ -3599,13 +3599,15 @@ async def vehicles_change(request):
 
     if action == "hide":
         hidden.add(prefab)
-        message = f"{name} is hidden from every depot."
+        message = f"{name} is hidden from the building menu and every depot."
     elif action == "show":
         hidden.discard(prefab)
-        message = f"{name} is back in the depots."
+        message = f"{name} is back in the building menu and depots."
     elif action == "price":
         if by_prefab.get(prefab, {}).get("variant_of"):
             fail("A variant costs what its vehicle costs.")
+        if prefab in by_prefab and "depot" not in by_prefab[prefab]["menus"]:
+            fail(f"{name} isn't sold at depots; the building menu's cost can't be changed yet.")
         prices[prefab] = read_number("cost", "A price")
         message = f"{name} now costs {prices[prefab]}."
     elif action == "reset":

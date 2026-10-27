@@ -427,6 +427,37 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "show_found"})
         self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], set())
 
+    async def test_building_menu_vehicles_are_listed_with_their_cost(self):
+        folder = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "profile" / "OYB_Core"
+        folder.mkdir(parents=True, exist_ok=True)
+        humvee, variant, uaz = ("{B1}Prefabs/Vehicles/Wheeled/M1025/M1025.et", "{B2}Prefabs/Vehicles/Wheeled/M1025/M1025_MERDC.et",
+                                "{B3}Prefabs/Vehicles/Wheeled/UAZ469/UAZ469.et")
+        (folder / "vehicle_list.json").write_text(json.dumps({
+            "version": 2, "prefabs": [humvee, variant, uaz], "names": ["M1025", "M1025_MERDC", "UAZ-469"],
+            "categories": ["Cars", "Cars", "Cars"], "factions": ["US", "US", "USSR"], "prices": [-1, -1, 150],
+            "buildCosts": [300, -1, -1], "menus": ["building", "building", "depot,building"],
+            "variantOf": ["", humvee, ""]}))
+        vehicles = {v["prefab"]: v for v in files.vehicle_list(self.root / "Plus01")}
+        self.assertEqual((vehicles[humvee]["menus"], vehicles[humvee]["price"], vehicles[humvee]["build_cost"]),
+                         (["building"], None, 300))
+        self.assertEqual((vehicles[uaz]["menus"], vehicles[uaz]["price"], vehicles[uaz]["build_cost"]),
+                         (["depot", "building"], 150, None))
+        token = await self.login("boss")
+        page = await (await self.client.get("/vehicles/Plus01")).text()
+        self.assertIn("building menu: 300", page)
+        self.assertIn("variant of M1025", page)
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": humvee, "cost": "50"})
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": uaz, "cost": "90"})
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide", "prefab": humvee})
+        settings = files.vehicle_settings(self.root / "Plus01")
+        self.assertEqual((settings["prices"], settings["hidden"]), ({uaz: 90}, {humvee}))
+
+    def test_an_old_vehicle_list_is_all_depot_vehicles(self):
+        self.vehicle_profile()
+        vehicles = files.vehicle_list(self.root / "Plus01")
+        self.assertEqual({tuple(v["menus"]) for v in vehicles}, {("depot",)})
+        self.assertEqual({v["name"]: v["price"] for v in vehicles}, {"M998": 100, "M998_covered": 0, "Mi-8MT": 1500})
+
     async def test_vehicles_share_limits_in_groups(self):
         folder = self.vehicle_profile()
         m998, covered, mi8 = ("{V1}Prefabs/Vehicles/Wheeled/M998/M998.et",

@@ -26,11 +26,16 @@ so the GUID stays.
 
 ## Vehicles: hiding, prices and limits
 
-`Scripts/Game/OYBCore/Vehicles/`, driven from the OYB panel's **Vehicles** tab:
+`Scripts/Game/OYBCore/Vehicles/`, driven from the OYB panel's **Vehicles** tab.
+In Conflict (game 1.8.0.13) vehicles come from the **building menu**; the old
+catalogue **depots** are still handled for maps and mods that use them.
 
-- **Hide** a depot vehicle and it's left out of every depot's list; hide a
-  variant and the depot stops picking that version.
-- **Price**: a set price is what the depot shows, checks and takes.
+- **Hide**: a hidden vehicle is left out of the building menu and refused by the
+  server, and left out of every depot's list. Hiding a single variant only
+  works at depots; the building menu picks its random variant after the
+  request is checked.
+- **Price**: depots only. A set price is what the depot shows, checks and takes.
+  The building menu's cost is listed on the panel but not changed.
 - **Limit groups**: named groups of exact vehicle prefabs, each with a limit per
   side on live vehicles (a vehicle's variants count as the vehicle).
 
@@ -43,34 +48,48 @@ unlimited, 0 allows none. A prefab in no group is unlimited.
 
 ### How a limit is enforced
 
-The depot request is handled in one go on the server (game 1.8.0.13):
-`SCR_SpawnerRequestComponent.RPC_DoRequestCatalogSpawn` →
-`SCR_CatalogEntitySpawnerComponent.InitiateSpawn` (the game's supply, side,
-rank and cooldown checks via `GetRequestState`) → `PerformSpawn` (slot, spawn,
-and only then the supply cost). OYB checks the limit in `InitiateSpawn` before
-any of that, so a refused request spawns and costs nothing, and the player
-gets "<group> limit reached: N/N". A vehicle is counted as soon as
-`PerformSpawn` returns it, inside the same call, so a second request for the
-last slot already sees it; a failed spawn returns nothing and counts nothing.
+**Building menu** (`SCR_CampaignBuildingPlacingEditorComponent`), one server
+RPC: `SCR_PlacingEditorComponent.CreateEntityServer` → `CanPlaceEntityServer`
+(the game's side, cooldown and budget checks) → `IsThereEnoughBudgetToSpawn`
+(supplies) → `SpawnEntityResource` → `OnEntityCreatedServer`; the supplies are
+taken afterwards, when the new entity's budget is registered
+(`SCR_CampaignBuildingManagerComponent.OnEntityCoreBudgetUpdated`). OYB checks
+the limit at the end of `CanPlaceEntityServer`, so a refused vehicle spawns and
+costs nothing, and counts the new vehicle in `OnEntityCreatedServer`, inside the
+same call.
 
-- **Ownership**: a depot vehicle counts for the depot's side (the game only
-  sells to that side), whoever drives it later.
+**Depot** (`SCR_CatalogEntitySpawnerComponent`), one server RPC:
+`SCR_SpawnerRequestComponent.RPC_DoRequestCatalogSpawn` → `InitiateSpawn` (the
+game's supply, side, rank and cooldown checks via `GetRequestState`) →
+`PerformSpawn` (slot, spawn, and only then the supply cost). OYB checks the
+limit in `InitiateSpawn` and counts the vehicle when `PerformSpawn` returns it.
+
+Either way the player gets "<group> limit reached: N/N", a second request for
+the last slot already sees the first vehicle, and a failed spawn counts
+nothing.
+
+- **Ownership**: a building-menu vehicle counts for the placing player's side, a
+  depot vehicle for the depot's side, whoever drives it later.
 - **Counted until** it's wrecked (`SCR_VehicleDamageManagerComponent`'s damage
   state event, and a check on every count) or deleted. Empty or abandoned
-  vehicles still count. Depot previews are never counted.
+  vehicles still count. Previews are never counted.
 - **After a start or a restored save**, every live vehicle already in the world
   is counted once for its own side (its default faction), as the game doesn't
   record which side bought what. That includes HQ starting vehicles and
   map-placed vehicles of a limited group.
-- **Not limited or counted**: Game Master and building-mode placements, the
-  ambient vehicle spawns, and other mods' own spawners (not inspected).
+- **Not limited or counted**: Game Master placements, the ambient vehicle
+  spawns, and other mods' own spawners (not inspected).
 - A lowered limit never removes vehicles.
 
-The server writes `$profile:OYB_Core/vehicle_list.json` (every depot vehicle
-and its variants, mods included) for the panel, retrying each minute until
-the factions' catalogues are ready.
+The server writes `$profile:OYB_Core/vehicle_list.json` for the panel: every
+faction catalogue vehicle that a depot sells (depot data) or the building menu
+places (in the building manager's prefab list, or editor data for building
+mode), with its variants, factions, depot price and building cost. The log
+shows, per faction, how many catalogue vehicles were found and how many are in
+each menu, plus the data on a few entries. An empty result never replaces a
+list already written; it's tried again each minute.
 
 Files: `OYB_VehicleDepot.c` (depot, catalogue data, game mode and player
 controller additions; named to compile first, as the others call it),
-`OYB_VehicleLimits.c` (counting and limits) and `OYB_VehicleSettings.c`
-(settings and the panel's list).
+`OYB_VehicleLimits.c` (counting and limits), `OYB_VehicleMenu.c` (the building
+menu) and `OYB_VehicleSettings.c` (settings and the panel's list).

@@ -2,8 +2,10 @@
 // variants, say, or every helicopter) can share one allowance. Set on the OYB
 // panel and only ever decided on the server.
 //
-// - Ownership: a vehicle bought at a depot belongs to the depot's side (the game
-//   only lets a player buy at their own side's depot), whoever drives it later.
+// - Ownership: a vehicle placed from the building menu belongs to the side of
+//   the player who placed it, and one bought at a depot to the depot's side
+//   (the game only lets a player buy at their own side's depot), whoever
+//   drives it later.
 // - Counted: live vehicles of a limited group, empty or abandoned ones too.
 //   A destroyed (wrecked) or deleted vehicle stops counting.
 // - Not counted: Game Master vehicles, map-placed vehicles and HQ starting
@@ -14,7 +16,8 @@
 //
 // Settings (from OYB_VehicleSettings): limits on or off; each group's limit,
 // where -1 is unlimited and 0 allows none; and which exact prefabs are in which
-// group. A depot vehicle's variants count as the vehicle. A prefab in no group
+// group. A vehicle's variants (the depot's, or the building menu's random
+// ones) count as the vehicle. A prefab in no group
 // is unlimited.
 class OYB_VehicleLimits
 {
@@ -23,7 +26,7 @@ class OYB_VehicleLimits
 	protected static bool s_bEnabled;
 	protected static ref map<string, int> s_mGroupLimits = new map<string, int>();
 	protected static ref map<ResourceName, string> s_mPrefabGroups = new map<ResourceName, string>();
-	// Depot variant -> the depot vehicle it's a variant of, from the catalogues.
+	// Variant -> the vehicle it's a variant of (depot or building menu variants).
 	protected static ref map<ResourceName, ResourceName> s_mVariantOf = new map<ResourceName, ResourceName>();
 
 	// Live vehicles being followed, with the side each counts for. The group

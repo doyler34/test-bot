@@ -410,21 +410,36 @@ VEHICLE_FOLDER = "OYB_Core"
 
 
 def vehicle_list(base):
-    """The depot vehicles the OYB Core mod listed when the server last started, as
-    [{prefab, name, category, factions, price, variant_of}] sorted by name (each
-    vehicle followed by its variants), or None before the server has listed them."""
+    """The vehicles the OYB Core mod listed when the server last started (the ones
+    sold at depots or placed from the building menu), as [{prefab, name, category,
+    factions, price, build_cost, menus, variant_of}] sorted by name (each vehicle
+    followed by its variants), or None before the server has listed them. price is
+    the depot price and build_cost the building menu's, each None when not offered
+    there or not known; menus is a list of "depot" and "building"."""
     profile = profile_folder(base)
     path = profile / VEHICLE_FOLDER / "vehicle_list.json" if profile else None
     if not path or not path.is_file():
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
-    columns = [data.get(key) or [] for key in ("prefabs", "names", "categories", "factions", "prices")]
-    variant_of = list(data.get("variantOf") or [])
-    variant_of += [""] * (len(columns[0]) - len(variant_of))
-    vehicles = [{"prefab": prefab, "name": name or prefab.rsplit("/", 1)[-1], "category": category or "Other",
-                 "factions": factions or "", "price": price if isinstance(price, int) else 0, "variant_of": parent or ""}
-                for prefab, name, category, factions, price, parent in zip(*columns, variant_of)
-                if isinstance(prefab, str) and prefab]
+    prefabs = data.get("prefabs") or []
+
+    def column(key, fill):
+        values = list(data.get(key) or [])
+        return values + [fill] * (len(prefabs) - len(values))
+
+    # Lists from before building-menu vehicles were listed have only depot vehicles.
+    old = "menus" not in data
+    vehicles = []
+    for prefab, name, category, factions, price, build_cost, menus, parent in zip(
+            prefabs, column("names", ""), column("categories", ""), column("factions", ""), column("prices", -1),
+            column("buildCosts", -1), column("menus", "depot" if old else ""), column("variantOf", "")):
+        if not isinstance(prefab, str) or not prefab:
+            continue
+        vehicles.append({"prefab": prefab, "name": name or prefab.rsplit("/", 1)[-1], "category": category or "Other",
+                         "factions": factions or "", "variant_of": parent or "",
+                         "price": price if isinstance(price, int) and not isinstance(price, bool) and price >= 0 else None,
+                         "build_cost": build_cost if isinstance(build_cost, int) and not isinstance(build_cost, bool) and build_cost >= 0 else None,
+                         "menus": [menu for menu in (menus or "").split(",") if menu in ("depot", "building")]})
     names = {v["prefab"]: v["name"].lower() for v in vehicles if not v["variant_of"]}
     return sorted(vehicles, key=lambda v: (names.get(v["variant_of"] or v["prefab"], v["name"].lower()),
                                            v["variant_of"] or v["prefab"], bool(v["variant_of"]), v["name"].lower()))
