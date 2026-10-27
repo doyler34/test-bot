@@ -585,6 +585,23 @@ def kvp_mods(base):
     raise FileError(f"No game settings in {KVP}.")
 
 
+def mods_on_other_servers(root, inst):
+    """{mod ID: {"name", "servers": [...]}} for every mod the other servers load,
+    from their settings files."""
+    found = {}
+    for other in instances(root):
+        if other == inst:
+            continue
+        try:
+            mods = parse_mods(kvp_mods(Path(root) / other))
+        except (FileError, OSError, ValueError):
+            continue
+        for mod in mods:
+            entry = found.setdefault(mod["modId"], {"name": mod.get("name") or mod["modId"], "servers": []})
+            entry["servers"].append(other)
+    return found
+
+
 def set_kvp_mods(base, change):
     """Change the mod list in the settings file. Only safe while that instance's AMP
     is stopped: a running one keeps its own copy and writes it back."""

@@ -603,6 +603,23 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.app[web_module.SETUPS]["Arland02"]["step"], "Started")
         self.assertIn("Setting up Arland02", await (await self.client.get("/manage")).text())
 
+    async def test_mods_from_our_other_servers_can_be_listed_and_added(self):
+        (self.root / "Arland02").mkdir()
+        (self.root / "Arland02" / "GenericModule.kvp").write_text('App.AppSettings={"mods":"' + json.dumps(
+            [{"modId": "6898FB528382C1E4", "name": "AK74 RIS Rail"}, {"modId": "60C4CE4888FF4621", "name": "ACE Core"}]
+        ).replace('"', '\\"') + '"}')
+        token = await self.login("chief")
+        page = await (await self.client.get("/mods/Plus01", params={"tag": "ours"})).text()
+        self.assertIn("AK74 RIS Rail", page)
+        self.assertIn("on Arland02", page)
+        searched = await (await self.client.get("/mods/Plus01", params={"tag": "ours", "q": "ace"})).text()
+        self.assertIn("ACE Core", searched)
+        self.assertNotIn("AK74 RIS Rail", searched)
+        await self.client.post("/mods/Plus01", data=[("csrf", token), ("action", "add_many"),
+                                                     ("pick", "6898FB528382C1E4:AK74 RIS Rail")])
+        self.assertEqual([m["modId"] for m in files.parse_mods(files.kvp_mods(self.root / "Plus01"))], ["6898FB528382C1E4"])
+        self.assertIn("On this server", await (await self.client.get("/mods/Plus01", params={"tag": "ours"})).text())
+
     async def test_ticking_several_mods_adds_them_in_one_go(self):
         token = await self.login("chief")
         picks = [("pick", "6A263A54663F2EDB:AdvancedFlashBangSystem"), ("pick", "not-an-id:Nope"),

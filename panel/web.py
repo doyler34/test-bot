@@ -3252,6 +3252,9 @@ async def manage_admins(request):
     raise web.HTTPFound(back)
 
 
+OURS = "ours"
+
+
 async def mods_page(request):
     require(request, "mods")
     inst = request.match_info["inst"]
@@ -3274,22 +3277,32 @@ async def mods_page(request):
         page = max(1, int(request.query.get("page", "1")))
     except ValueError:
         page = 1
-    tag = request.query.get("tag", "") if request.query.get("tag", "") in workshop.CATEGORIES else ""
-    browse, browse_error, links = None, "", {}
-    try:
-        browse = await request.app[WORKSHOP].search(query, sort, page, tag)
-        links = workshop.paging(browse, f"/mods/{inst}")
-    except workshop.WorkshopError as exc:
-        browse_error = str(exc)
+    tag = request.query.get("tag", "")
+    tag = tag if tag in workshop.CATEGORIES or tag == OURS else ""
+    browse, browse_error, links, ours = None, "", {}, None
+    if tag == OURS:
+        # The mods our other servers load, to try them here without searching.
+        words = query.lower().split()
+        found = files.mods_on_other_servers(request.app[FILES_ROOT], inst)
+        ours = sorted(((mod_id, info) for mod_id, info in found.items()
+                       if all(word in (info["name"] + " " + mod_id).lower() for word in words)),
+                      key=lambda item: item[1]["name"].lower())
+    else:
+        try:
+            browse = await request.app[WORKSHOP].search(query, sort, page, tag)
+            links = workshop.paging(browse, f"/mods/{inst}")
+        except workshop.WorkshopError as exc:
+            browse_error = str(exc)
 
     def mods_link(**changes):
         values = {"q": query, "sort": sort, "tag": tag, **changes}
         return f"/mods/{inst}?" + urlencode({k: v for k, v in values.items() if v})
     sort_links = {value: mods_link(sort=value) for value in workshop.SORTS}
-    category_links = {"": mods_link(tag="")} | {value: mods_link(tag=value) for value in workshop.CATEGORIES}
+    category_links = ({"": mods_link(tag="")} | {value: mods_link(tag=value) for value in workshop.CATEGORIES}
+                      | {OURS: mods_link(tag=OURS)})
     return render(request, "mods.html", inst=inst, mods=mods, on_disk=on_disk, spare=spare, error=error,
                   running=running, can_files=allowed(request, "files"), tabs=manage_tabs(request, inst, "mods"),
-                  using=using, browse=browse, browse_error=browse_error, browse_q=query, browse_sort=sort,
+                  using=using, browse=browse, browse_error=browse_error, browse_q=query, browse_sort=sort, ours=ours,
                   browse_tag=tag, categories=workshop.CATEGORIES, category_links=category_links,
                   sorts=workshop.SORTS, sort_links=sort_links, links=links,
                   csp="default-src 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' https:")

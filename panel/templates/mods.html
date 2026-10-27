@@ -47,11 +47,45 @@
   <nav class="sort-chips" aria-label="Categories">
     <a href="{{ category_links[''] }}" {% if not browse_tag %}class="on" aria-current="true"{% endif %}>All</a>
     {% for value, label in categories.items() %}<a href="{{ category_links[value] }}" {% if value == browse_tag %}class="on" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}
+    <a href="{{ category_links['ours'] }}" {% if browse_tag == 'ours' %}class="on" aria-current="true"{% endif %}>On our servers</a>
   </nav>
   <nav class="sort-chips" aria-label="Sort mods">
     {% for value, label in sorts.items() %}<a href="{{ sort_links[value] }}" {% if value == browse_sort %}class="on" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}
   </nav>
-  {% if browse_error %}
+  {% if ours is not none %}
+    <p class="muted small">The mods our other servers load{% if browse_q %}, matching "{{ browse_q }}"{% endif %}: {{ ours|length }}.</p>
+    {% if ours %}
+    <ul class="mod-results">
+      {% for mod_id, info in ours %}
+      <li class="mod-result">
+        <div>
+          <b>{{ info.name }}</b>
+          <p class="muted small mono">{{ mod_id }} · on {{ info.servers|join(", ") }}</p>
+          <div class="row-actions">
+            {% if mod_id in using %}<span class="pill on">On this server</span>{% else %}
+            <form method="post" action="/mods/{{ inst }}" class="inline">
+              <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add">
+              <input type="hidden" name="mod_id" value="{{ mod_id }}"><input type="hidden" name="name" value="{{ info.name }}">
+              <button class="small">Add</button>
+            </form>
+            <label class="pick"><input type="checkbox" name="pick" value="{{ mod_id }}:{{ info.name }}" form="pick-find"> Select</label>
+            {% endif %}
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    <form id="pick-find" class="pick-bar" method="post" action="/mods/{{ inst }}" data-pick>
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add_many">
+      <span class="muted" data-pick-count>None selected</span>
+      <button type="button" class="small ghost" data-pick-all>Select all</button>
+      <button type="button" class="small ghost" data-pick-none>Clear</button>
+      <button class="small" data-pick-go disabled>Add selected</button>
+    </form>
+    {% else %}
+    <p class="muted">Nothing matched.</p>
+    {% endif %}
+  {% elif browse_error %}
   <div class="flash error">{{ browse_error }}</div>
   {% elif browse %}
     <p class="muted small">{% if browse.total is not none %}{{ browse.total }} mods · {% endif %}page {{ browse.page }} of {{ browse.pages }}</p>
