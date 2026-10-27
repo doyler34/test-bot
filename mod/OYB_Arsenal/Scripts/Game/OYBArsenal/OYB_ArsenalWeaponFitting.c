@@ -376,7 +376,7 @@ modded class SCR_InventoryMenuUI
 		foreach (Managed component : found)
 		{
 			BaseInventoryStorageComponent storage = BaseInventoryStorageComponent.Cast(component);
-			if (!storage || (!BaseEquipmentStorageComponent.Cast(storage) && !ClothNodeStorageComponent.Cast(storage)))
+			if (!OYB_IsMount(storage))
 				continue;
 
 			InventoryStorageSlot slot = storage.FindSuitableSlotForItem(accessory);
@@ -386,6 +386,20 @@ modded class SCR_InventoryMenuUI
 		return null;
 	}
 
+	// A storage that holds something on a piece of gear rather than in a pocket:
+	// the game's equipment and cloth node storages, or any storage set up for
+	// attachments or gadgets (how a helmet's NVG mount is often made).
+	protected bool OYB_IsMount(BaseInventoryStorageComponent storage)
+	{
+		if (!storage)
+			return false;
+		if (BaseEquipmentStorageComponent.Cast(storage) || ClothNodeStorageComponent.Cast(storage) || SCR_FilteredInventoryStorageComponent.Cast(storage))
+			return true;
+
+		EStoragePurpose purpose = storage.GetPurpose();
+		return purpose == EStoragePurpose.PURPOSE_EQUIPMENT_ATTACHMENT || purpose == EStoragePurpose.PURPOSE_GADGET_PROXY || purpose == EStoragePurpose.PURPOSE_ATTACHMENT_PROXY;
+	}
+
 	protected void OYB_GetMounted(IEntity piece, notnull array<IEntity> mounted)
 	{
 		array<Managed> found = {};
@@ -393,7 +407,7 @@ modded class SCR_InventoryMenuUI
 		foreach (Managed component : found)
 		{
 			BaseInventoryStorageComponent storage = BaseInventoryStorageComponent.Cast(component);
-			if (!storage || (!BaseEquipmentStorageComponent.Cast(storage) && !ClothNodeStorageComponent.Cast(storage)))
+			if (!OYB_IsMount(storage))
 				continue;
 
 			array<IEntity> items = {};
@@ -427,10 +441,16 @@ modded class SCR_InventoryMenuUI
 		foreach (Managed component : found)
 		{
 			BaseInventoryStorageComponent storage = BaseInventoryStorageComponent.Cast(component);
-			if (!storage || (!BaseEquipmentStorageComponent.Cast(storage) && !ClothNodeStorageComponent.Cast(storage)))
+			if (!storage || !m_InventoryManager.CanInsertItemInStorage(accessory, storage, -1))
 				continue;
-			if (m_InventoryManager.CanInsertItemInStorage(accessory, storage, -1))
+			if (OYB_IsMount(storage))
 				return storage;
+
+			// Seen in testing so a mod's own mount can be recognised.
+			string pieceName;
+			if (piece.GetPrefabData())
+				pieceName = FilePath.StripPath(piece.GetPrefabData().GetPrefabName().GetPath());
+			PrintFormat("OYB_ARSENAL accessory: %1 on %2 takes it but isn't counted as a mount (purpose %3)", storage.ClassName(), pieceName, typename.EnumToString(EStoragePurpose, storage.GetPurpose()));
 		}
 
 		array<Managed> slots = {};
