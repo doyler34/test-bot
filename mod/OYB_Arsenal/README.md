@@ -151,12 +151,19 @@ server or with a controller yet.
   of an arsenal reads each item's name from its prefab once; that is the
   part most likely to stall on a big list.
 
-**6. Security — In progress**
-- Item requests and refunds go through the game's own server checks
-  (ownership, distance, faction catalogue, supplies). Loadouts are built
-  and checked on the server from its own copy, with a one-second limit.
-- Not done: an ownership / licence notice; a review of the military supply
-  allocation, which loadout loading doesn't count.
+**6. Security — Implemented — awaiting testing**
+- Every item, fit, swap and refund goes through the game's own arsenal
+  requests, so the server checks ownership, distance, the arsenal's faction
+  catalogue and supplies. Loadouts are saved, checked and priced on the
+  server from its own copy, refuse dead players, other factions, items that
+  no longer exist and requests less than a second apart, and charge before
+  anything spawns.
+- Military supply allocation is not used on OYB servers, so loading a kit
+  only charges the arsenal's supplies (single items still go through the
+  game's own checks either way).
+- Ownership notice: `NOTICE.md`. No licence keys, online authentication or
+  allowlists.
+- Not tested: several players at one arsenal; a dedicated server.
 
 **7. Release — Not started.**
 
