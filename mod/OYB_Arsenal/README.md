@@ -346,6 +346,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Clothing swap | Double-click a jacket with full pockets | Worn, pockets moved, old one returned | ✅ |
 | Clothing into empty slot | Take helmet off, double-click a helmet | Goes on the head | ✅ |
 | Weapon swap | Both weapon slots full, double-click a rifle | Gun in hands replaced, old one returned | ✅ |
+| Picked weapon swap | Pick the tomahawk with the arrows, double-click another melee weapon | Tomahawk replaced, rifle kept | ✅ (Workbench) |
 | Same items together | Double-click a magazine you carry | Goes into the pouch holding the most | ✅ |
 | Save / load | Save a slot, change kit, Load | Kit restored; one log line per press | ✅ |
 | Load key | Press V over the arsenal | Loads the selected slot once; R only switches weapon | ✅ |
@@ -365,7 +366,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Full arsenal | Open a clothing-only box | Weapons, ammo, equipment and clothing all listed | ✅ |
 | Sides | In the panel, tick USSR on a US rifle, wait a minute, open a USSR arsenal | Rifle listed at its usual price; untick US and the US arsenal loses it | ✅ |
 | Rename | Rename an item in the panel, wait a minute, open an arsenal | New name on the card, hover box and in the inventory; `settings loaded: … 1 renamed` | ⏳ |
-| Nested slots | Fit a rail adapter, then double-click a scope that only fits the rail | Scope in Fits and fitted onto the rail | ⏳ |
+| Nested slots | Fit a rail adapter, then double-click a scope that only fits the rail | Scope in Fits and fitted onto the rail | ✅ AK74 RIS Rail + Aimpoint (Workbench) |
 | Accessories | Wear a helmet with a free mount, double-click a helmet light or NVGs | Goes onto the helmet; log `accessory … putting … on worn gear` | ✅ PVS-31 onto the OPS Core helmet, and swapped for a GPNVG-18 (Workbench) |
 | Body slots | Double-click NVGs (with a night vision slot, e.g. NV-System), a watch or binoculars | Goes into its slot on the body; a taken slot is swapped | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
