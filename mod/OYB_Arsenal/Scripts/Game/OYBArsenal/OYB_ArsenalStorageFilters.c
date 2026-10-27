@@ -438,8 +438,20 @@ modded class SCR_InventoryStorageBaseUI
 	protected void OYB_OnSaveLoadout(SCR_ButtonBaseComponent button)
 	{
 		SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerController());
-		if (controller)
-			controller.OYB_SaveLoadout(s_iOYB_LoadoutSlot);
+		if (!controller)
+			return;
+
+		// The arsenal goes along so the saved kit can also become the respawn kit
+		// under that arsenal's own save rules.
+		RplId arsenalResourceId = RplId.Invalid();
+		if (m_OYB_Arsenal)
+		{
+			SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(m_OYB_Arsenal.GetOwner());
+			if (resourceComponent)
+				arsenalResourceId = Replication.FindItemId(resourceComponent);
+		}
+
+		controller.OYB_SaveLoadout(s_iOYB_LoadoutSlot, arsenalResourceId);
 	}
 
 	protected void OYB_OnLoadLoadout(SCR_ButtonBaseComponent button)

@@ -62,7 +62,12 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
   the arsenal's price (or the item catalogue's for things it doesn't sell,
   such as the uniform you spawned in, as the game does for a saved respawn
   kit), refuses if you lack supplies, and refunds what the kit drops the way the arsenal normally refunds. A kit saved
-  for another faction won't load. Military supply allocation isn't counted.
+  for another faction won't load. The kit you last saved or loaded also
+  becomes your respawn kit, through the game's own saved arsenal loadout
+  (what the arsenal's "Save loadout" action does): the respawn screen offers
+  it wherever the game mode supports that, with the game's respawn cost and
+  the arsenal's own save rules. An arsenal with saving turned off doesn't set
+  it. Military supply allocation isn't counted.
 - **A bar above the grid:** a **Category** button that cycles the same
   categories (the game's `MenuFilter` action, X on keyboard), the weapon
   picker, and the game's own search box, which matches each word
@@ -117,9 +122,11 @@ server or with a controller yet.
   what's missing and refunds what's dropped; clothing, weapons,
   attachments, magazines and pocket contents use the game's own loadout
   format.
-- Not done: deleting and renaming slots; a clear message naming items that
-  no longer exist (a removed mod); a reconnect / restart test on a
-  dedicated server.
+- Not wanted: deleting and renaming slots (saving over a slot replaces it).
+- Implemented — awaiting testing: the last saved or loaded kit becomes the
+  respawn kit.
+- Not done: a clear message naming items that no longer exist (a removed
+  mod); a reconnect / restart test on a dedicated server.
 
 **4. Modded equipment — Implemented — awaiting testing**
 - Items come from the arsenal's own filtered catalogue, categories from

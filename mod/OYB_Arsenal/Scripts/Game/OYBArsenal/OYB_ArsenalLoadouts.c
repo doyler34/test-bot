@@ -5,6 +5,10 @@
 // the arsenal's price, or the catalogue's for items it doesn't sell. Whatever the
 // kit throws away is refunded the way the arsenal refunds it when an item is put
 // back.
+//
+// The kit last saved or loaded also becomes the player's respawn kit, through the
+// game's own saved arsenal loadout (what the arsenal's "Save loadout" action
+// does), so the respawn screen offers it wherever the game mode supports that.
 modded class SCR_PlayerController
 {
 	static const int OYB_LOADOUT_SLOTS = 5;
@@ -39,9 +43,9 @@ modded class SCR_PlayerController
 		Rpc(OYB_RpcAsk_LoadoutNames);
 	}
 
-	void OYB_SaveLoadout(int slot)
+	void OYB_SaveLoadout(int slot, RplId arsenalResourceId)
 	{
-		Rpc(OYB_RpcAsk_SaveLoadout, slot);
+		Rpc(OYB_RpcAsk_SaveLoadout, slot, arsenalResourceId);
 	}
 
 	void OYB_LoadLoadout(int slot, RplId arsenalResourceId)
@@ -62,7 +66,7 @@ modded class SCR_PlayerController
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
-	protected void OYB_RpcAsk_SaveLoadout(int slot)
+	protected void OYB_RpcAsk_SaveLoadout(int slot, RplId arsenalResourceId)
 	{
 		SCR_ChimeraCharacter character = OYB_GetLoadoutCharacter(slot);
 		if (!character)
@@ -90,6 +94,10 @@ modded class SCR_PlayerController
 		PrintFormat("OYB_ARSENAL loadout %1 saved for player %2: %3", slot + 1, GetPlayerId(), names[slot]);
 		OYB_SendNames(names);
 		OYB_SendMessage(string.Format("Saved to loadout %1.", slot + 1));
+
+		SCR_ArsenalComponent arsenal = OYB_FindArsenalInReach(character, arsenalResourceId);
+		if (arsenal)
+			OYB_SetRespawnKit(arsenal);
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
@@ -103,11 +111,8 @@ modded class SCR_PlayerController
 		if (!resourceComponent || !resourceComponent.GetOwner())
 			return;
 
-		// The same reach checks the game makes when an item is taken from an arsenal.
-		IEntity arsenalEntity = resourceComponent.GetOwner();
-		SCR_ArsenalComponent arsenal = SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity);
-		InventoryStorageManagerComponent inventory = character.GetCharacterController().GetInventoryStorageManager();
-		if (!arsenal || !inventory || !inventory.ValidateStorageRequest(arsenalEntity) || vector.DistanceSq(character.GetOrigin(), arsenalEntity.GetOrigin()) > OYB_MAX_ARSENAL_DISTANCE_SQ)
+		SCR_ArsenalComponent arsenal = OYB_FindArsenalInReach(character, arsenalResourceId);
+		if (!arsenal)
 		{
 			PrintFormat("OYB_ARSENAL player %1 tried to load a kit away from an arsenal", GetPlayerId(), level: LogLevel.WARNING);
 			return;
@@ -221,6 +226,43 @@ modded class SCR_PlayerController
 			OYB_SendMessage(string.Format("Loaded loadout %1.", slot + 1));
 		else
 			OYB_SendMessage("Only part of the kit could be loaded.");
+
+		// Items spawned into the kit can take a moment to land, so the respawn kit
+		// is read once they have.
+		GetGame().GetCallqueue().CallLater(OYB_SetRespawnKit, 1000, false, arsenal);
+	}
+
+	// The same reach checks the game makes when an item is taken from an arsenal.
+	protected SCR_ArsenalComponent OYB_FindArsenalInReach(SCR_ChimeraCharacter character, RplId arsenalResourceId)
+	{
+		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.Cast(Replication.FindItem(arsenalResourceId));
+		if (!resourceComponent || !resourceComponent.GetOwner())
+			return null;
+
+		IEntity arsenalEntity = resourceComponent.GetOwner();
+		SCR_ArsenalComponent arsenal = SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity);
+		InventoryStorageManagerComponent inventory = character.GetCharacterController().GetInventoryStorageManager();
+		if (!arsenal || !inventory || !inventory.ValidateStorageRequest(arsenalEntity) || vector.DistanceSq(character.GetOrigin(), arsenalEntity.GetOrigin()) > OYB_MAX_ARSENAL_DISTANCE_SQ)
+			return null;
+
+		return arsenal;
+	}
+
+	// Makes what the player is wearing their respawn kit, the way the arsenal's
+	// own "Save loadout" action does, unless that arsenal has saving turned off.
+	// The game checks its own save rules and tells the player whether it worked.
+	protected void OYB_SetRespawnKit(SCR_ArsenalComponent arsenal)
+	{
+		GameEntity character = GameEntity.Cast(GetControlledEntity());
+		if (!character || !arsenal || arsenal.GetArsenalSaveType() == SCR_EArsenalSaveType.SAVING_DISABLED)
+			return;
+
+		SCR_ArsenalManagerComponent arsenalManager;
+		if (!SCR_ArsenalManagerComponent.GetArsenalManager(arsenalManager))
+			return;
+
+		PrintFormat("OYB_ARSENAL respawn kit set for player %1", GetPlayerId());
+		arsenalManager.SetPlayerArsenalLoadout(GetPlayerId(), character, arsenal, SCR_EArsenalSupplyCostType.RESPAWN_COST);
 	}
 
 	// The living character a save or load applies to. Bad slots, dead players
