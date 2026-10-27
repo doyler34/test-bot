@@ -96,6 +96,9 @@ below. Ownership: `NOTICE.md`.
   a backpack stuffed with gear can't be turned into a pile of supplies; a
   loadout swap's refund is capped the same way. Supplies the arsenal's storage
   has no room for are thrown away instead of being dropped as crates.
+  Each item can also be given its own refund on the panel, used in place of
+  the game's (whatever is fitted to it or packed in it), still within the
+  limit.
 - **Mod scan**: on start the server also searches every loaded (non-base)
   mod's `Prefabs` folder for items no faction catalogue lists (a mod that
   wasn't set up properly), a few at a time so it doesn't hold the server up,
@@ -280,7 +283,8 @@ Nothing needs setting up. What there is:
   [category name, ...], "categoryItems": [prefab, ...], "categoryNames":
   [category name, ...], "sideItems": [prefab, ...], "sideFactions":
   ["US,USSR", ...], "renameItems": [prefab, ...], "renameNames": [new name,
-  ...], "refundCap": 350}`, prefabs written as `{GUID}Prefabs/....et` the
+  ...], "refundCap": 350, "refundItems": [prefab, ...], "refundCosts":
+  [supplies, ...]}`, prefabs written as `{GUID}Prefabs/....et` the
   way `items.json` lists them.
 
 - **The game's own arsenal settings** on each arsenal (faction, item types,
@@ -375,6 +379,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Accessories | Wear a helmet with a free mount, double-click a helmet light or NVGs | Goes onto the helmet; log `accessory … putting … on worn gear` | ✅ PVS-31 onto the OPS Core helmet, and swapped for a GPNVG-18 (Workbench) |
 | Body slots | Double-click NVGs (with a night vision slot, e.g. NV-System), a watch or binoculars | Goes into its slot on the body; a taken slot is swapped | ⏳ |
 | Refund limit | Fill a backpack with gear, hand it to an arsenal that uses supplies | At most 350 back; log `refund cut from … to 350`; no supply crates appear | ⏳ |
+| Set refund | Give a rifle a refund of 5 in the panel, wait a minute, hand one back | 5 supplies back | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ✅ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |

@@ -374,6 +374,20 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
                                                         "prefab": "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"})
         self.assertEqual(files.arsenal_refund_cap(self.root / "Plus01"), 200)
 
+    async def test_items_can_be_given_their_own_refund(self):
+        folder = self.arsenal_profile()
+        m16 = "{AAAA000000000001}Prefabs/Weapons/Rifles/M16/Rifle_M16A2.et"
+        token = await self.login("boss")
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "refund", "prefab": m16, "cost": "5"})
+        saved = self.arsenal_saved(folder)
+        self.assertEqual((saved["refundItems"], saved["refundCosts"]), ([m16], [5]))
+        self.assertIn('value="5" placeholder="Refund"', await (await self.client.get("/arsenal/Plus01", params={"q": "m16"})).text())
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "refund", "prefab": m16, "cost": "-1"})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "price", "prefab": m16, "cost": "40"})
+        self.assertEqual(files.arsenal_refunds(self.root / "Plus01"), {m16: 5})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "refund", "prefab": m16, "cost": ""})
+        self.assertEqual(files.arsenal_refunds(self.root / "Plus01"), {})
+
     async def test_items_can_be_moved_to_another_category(self):
         folder = self.arsenal_profile()
         m9 = "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"

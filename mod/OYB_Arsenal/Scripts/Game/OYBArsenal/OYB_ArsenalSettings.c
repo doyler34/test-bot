@@ -13,7 +13,8 @@
 //     "categoryItems": [prefab, ...], "categoryNames": [category name, ...],
 //     "sideItems": [prefab, ...], "sideFactions": ["US,USSR", ...],
 //     "renameItems": [prefab, ...], "renameNames": [new name, ...],
-//     "refundCap": most supplies one refund gives back (350 if left out) }
+//     "refundCap": most supplies one refund gives back (350 if left out),
+//     "refundItems": [prefab, ...], "refundCosts": [supplies given back, ...] }
 //
 // categoryItems moves catalogued items to another category in the arsenal.
 // sideItems gives a catalogued item to exactly those factions' arsenals, whatever
@@ -275,6 +276,29 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 		if (resourceComponent)
 			arsenal = SCR_ArsenalComponent.FindArsenalComponent(resourceComponent.GetOwner());
 
+		// A refund set in the panel is what the item gives back, whatever the
+		// game would have given for it (fitted parts and contents included).
+		int refundSet;
+		if (item && item.GetPrefabData() && resourceComponent && resourceType == EResourceType.SUPPLIES && OYB_ArsenalSettings.Get().GetRefund(item.GetPrefabData().GetPrefabName(), refundSet))
+		{
+			OYB_Refunds.SetFixed(refundSet);
+			super.RpcAsk_ArsenalRefundItem_(resourceComponentRplId, inventoryItemRplId, resourceType);
+
+			// The game gives nothing for an item it has no price for; then the
+			// set refund is given here, once the item has gone.
+			float notGiven = OYB_Refunds.TakeFixed();
+			if (notGiven > 0 && (!item || item.IsDeleted()))
+			{
+				SCR_ResourceGenerator refundGenerator = resourceComponent.GetGenerator(EResourceGeneratorID.DEFAULT, resourceType);
+				float allowedRefund = OYB_Refunds.Take(refundGenerator, notGiven);
+				if (refundGenerator && allowedRefund > 0)
+					refundGenerator.RequestGeneration(allowedRefund);
+			}
+
+			OYB_Refunds.Stop();
+			return;
+		}
+
 		int price;
 		if (!item || !item.GetPrefabData() || !resourceComponent || resourceType != EResourceType.SUPPLIES || !OYB_ArsenalSettings.Get().GetPriceAt(item.GetPrefabData().GetPrefabName(), arsenal, price))
 		{
@@ -324,6 +348,10 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 	{
 		if (!OYB_Refunds.IsOn())
 			return super.TryPerformResourceGeneration(actor, resourceValue);
+
+		float setRefund = OYB_Refunds.TakeFixed();
+		if (setRefund >= 0)
+			resourceValue = setRefund;
 
 		float allowed = OYB_Refunds.Take(SCR_ResourceGenerator.Cast(actor), resourceValue);
 		if (allowed <= 0)
@@ -394,12 +422,29 @@ class OYB_Refunds
 	protected static bool s_bOn;
 	protected static float s_fLeft;
 	protected static float s_fStartedAt;
+	protected static float s_fFixed = -1;
 
 	static void Start(float limit)
 	{
 		s_bOn = true;
 		s_fLeft = limit;
+		s_fFixed = -1;
 		s_fStartedAt = Now();
+	}
+
+	// The refund set in the panel for the item being handed back, used in place
+	// of the game's own amount.
+	static void SetFixed(float amount)
+	{
+		s_fFixed = amount;
+	}
+
+	// The set refund, once; -1 if there's none or it's been used.
+	static float TakeFixed()
+	{
+		float amount = s_fFixed;
+		s_fFixed = -1;
+		return amount;
 	}
 
 	static void Stop()
@@ -488,6 +533,7 @@ class OYB_ArsenalSettings
 	protected ref map<ResourceName, string> m_Renames = new map<ResourceName, string>();
 	protected static const int DEFAULT_REFUND_CAP = 350;
 	protected int m_iRefundCap = DEFAULT_REFUND_CAP;
+	protected ref map<ResourceName, int> m_Refunds = new map<ResourceName, int>();
 	protected string m_sLoadedText;
 	protected bool m_bServerStarted;
 
@@ -681,6 +727,12 @@ class OYB_ArsenalSettings
 			items.Insert(prefab);
 			factions.Insert(SCR_StringHelper.Join(",", sides));
 		}
+	}
+
+	// A refund set in the panel for this item, in place of the game's.
+	bool GetRefund(ResourceName prefab, out int refund)
+	{
+		return m_Refunds.Find(prefab, refund);
 	}
 
 	// The most one refund (or one loadout swap) gives back, from the panel.
@@ -884,6 +936,8 @@ class OYB_ArsenalSettings
 		array<string> renameItems = {};
 		array<string> renameNames = {};
 		int refundCap = DEFAULT_REFUND_CAP;
+		array<string> refundItems = {};
+		array<int> refundCosts = {};
 		if (!text.IsEmpty())
 		{
 			JsonLoadContext context = new JsonLoadContext();
@@ -902,6 +956,8 @@ class OYB_ArsenalSettings
 				context.ReadValue("sideFactions", sideFactions);
 				context.ReadValue("renameItems", renameItems);
 				context.ReadValue("renameNames", renameNames);
+				context.ReadValue("refundItems", refundItems);
+				context.ReadValue("refundCosts", refundCosts);
 				if (!context.ReadValue("refundCap", refundCap) || refundCap < 0)
 					refundCap = DEFAULT_REFUND_CAP;
 			}
@@ -918,8 +974,14 @@ class OYB_ArsenalSettings
 		SetSides(sideItems, sideFactions);
 		SetNames(renameItems, renameNames);
 		m_iRefundCap = refundCap;
+		m_Refunds.Clear();
+		for (int r = 0; r < Math.Min(refundItems.Count(), refundCosts.Count()); r++)
+		{
+			if (!refundItems[r].IsEmpty() && refundCosts[r] >= 0)
+				m_Refunds.Set(refundItems[r], refundCosts[r]);
+		}
 		Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
-		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added, %4 moved, %5 on changed sides, %6 renamed, refunds up to %7", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count(), m_Sides.Count(), m_Renames.Count(), m_iRefundCap);
+		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added, %4 moved, %5 on changed sides, %6 renamed, %8 with a set refund, refunds up to %7", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count(), m_Sides.Count(), m_Renames.Count(), m_iRefundCap, m_Refunds.Count());
 
 		array<int> players = {};
 		GetGame().GetPlayerManager().GetPlayers(players);

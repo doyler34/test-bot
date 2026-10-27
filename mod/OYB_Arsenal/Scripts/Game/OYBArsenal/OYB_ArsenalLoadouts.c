@@ -599,8 +599,11 @@ modded class SCR_PlayerController
 					// The same share of a price set in the panel; an added item (no
 					// catalogue price) gets the arsenal's usual refund share.
 					int price;
+					int refundSet;
 					float catalogPrice = OYB_ArsenalSettings.CatalogPrice(prefab, arsenal);
-					if (OYB_ArsenalSettings.Get().GetPriceAt(prefab, arsenal, price))
+					if (OYB_ArsenalSettings.Get().GetRefund(prefab, refundSet))
+						refund = refundSet;
+					else if (OYB_ArsenalSettings.Get().GetPriceAt(prefab, arsenal, price))
 					{
 						if (refund > 0 && catalogPrice > 0)
 							refund = price * Math.Min(refund / catalogPrice, 1);

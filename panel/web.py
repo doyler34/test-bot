@@ -3466,13 +3466,14 @@ async def arsenal_page(request):
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     error, items, hidden, prices, extras, moved, sides, renames = "", None, set(), {}, {}, {}, {}, {}
-    refund_cap = files.ARSENAL_REFUND_CAP
+    refund_cap, refunds = files.ARSENAL_REFUND_CAP, {}
     try:
         items = files.arsenal_items(base)
         hidden, prices, extras, moved = files.arsenal_settings(base)
         sides = files.arsenal_sides(base)
         renames = files.arsenal_renames(base)
         refund_cap = files.arsenal_refund_cap(base)
+        refunds = files.arsenal_refunds(base)
     except (OSError, ValueError) as exc:
         error = f"Couldn't read the arsenal files: {exc}"
     filters = arsenal_filters(request.query)
@@ -3491,7 +3492,7 @@ async def arsenal_page(request):
     age = files.arsenal_items_age(base)
     return render(request, "arsenal.html", inst=inst, tabs=manage_tabs(request, inst, "arsenal"), error=error,
                   items=items, shown=shown, found=len(found), hidden=hidden, prices=prices, extras=extras, moved=moved,
-                  sides=sides, renames=renames, max_name=ARSENAL_MAX_NAME, refund_cap=refund_cap,
+                  sides=sides, renames=renames, max_name=ARSENAL_MAX_NAME, refund_cap=refund_cap, refunds=refunds,
                   unlisted=unlisted, add_categories=files.ARSENAL_CATEGORIES, filters=filters,
                   categories=categories, factions=factions, show_options=ARSENAL_SHOW, page=page, pages=pages,
                   prev_link=arsenal_link(inst, filters, page - 1) if page > 1 else "",
@@ -3515,6 +3516,7 @@ async def arsenal_change(request):
         sides = files.arsenal_sides(base)
         renames = files.arsenal_renames(base)
         refund_cap = files.arsenal_refund_cap(base)
+        refunds = files.arsenal_refunds(base)
     except (OSError, ValueError) as exc:
         flash(request, f"Couldn't read the arsenal files: {exc}", "error")
         raise web.HTTPFound(back)
@@ -3523,9 +3525,10 @@ async def arsenal_change(request):
     prefab = form.get("prefab", "")
     # Only items the server listed, or ones already in the settings (so a removed
     # mod's leftovers can still be cleared).
-    if (action in ("hide", "show", "price", "reset", "add", "remove_added", "move", "sides", "reset_sides", "rename")
+    if (action in ("hide", "show", "price", "reset", "add", "remove_added", "move", "sides", "reset_sides", "rename",
+                   "refund")
             and prefab not in names and prefab not in hidden and prefab not in prices and prefab not in extras
-            and prefab not in moved and prefab not in sides and prefab not in renames):
+            and prefab not in moved and prefab not in sides and prefab not in renames and prefab not in refunds):
         flash(request, "That item isn't in this server's arsenal list.", "error")
         raise web.HTTPFound(back)
     name = names.get(prefab, prefab.rsplit("/", 1)[-1])
@@ -3628,6 +3631,13 @@ async def arsenal_change(request):
         else:
             renames[prefab] = new_name
             message = f"{name} is now called {new_name}."
+    elif action == "refund":
+        if not form.get("cost", "").strip():
+            refunds.pop(prefab, None)
+            message = f"{name} gives back the game's normal refund again."
+        else:
+            refunds[prefab] = read_cost()
+            message = f"{name} now gives back {refunds[prefab]} when it's returned."
     elif action == "refund_cap":
         refund_cap = read_cost()
         name = "refund limit"
@@ -3647,7 +3657,7 @@ async def arsenal_change(request):
     else:
         raise web.HTTPBadRequest(text="Unknown action.")
     try:
-        files.save_arsenal_settings(base, hidden, prices, extras, moved, sides, renames, refund_cap)
+        files.save_arsenal_settings(base, hidden, prices, extras, moved, sides, renames, refund_cap, refunds)
     except (files.FileError, OSError) as exc:
         audit(request, f"arsenal {action}", inst, name, str(exc), ok=False)
         flash(request, str(exc), "error")

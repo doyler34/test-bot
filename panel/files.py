@@ -370,8 +370,19 @@ def arsenal_refund_cap(base):
     return cap if arsenal_price(cap) else ARSENAL_REFUND_CAP
 
 
+def arsenal_refunds(base):
+    """{prefab: supplies} for items given their own refund in the panel."""
+    profile = profile_folder(base)
+    path = profile / ARSENAL_FOLDER / "settings.json" if profile else None
+    if not path or not path.is_file():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    return {prefab: cost for prefab, cost in zip(data.get("refundItems") or [], data.get("refundCosts") or [])
+            if isinstance(prefab, str) and prefab and arsenal_price(cost)}
+
+
 def save_arsenal_settings(base, hidden, prices, extras=None, moved=None, sides=None, renames=None,
-                          refund_cap=ARSENAL_REFUND_CAP):
+                          refund_cap=ARSENAL_REFUND_CAP, refunds=None):
     """Write the settings the OYB Arsenal mod reads; the server picks them up within a minute."""
     profile = profile_folder(base)
     if profile is None:
@@ -390,7 +401,8 @@ def save_arsenal_settings(base, hidden, prices, extras=None, moved=None, sides=N
             "categoryItems": sorted(moved or {}), "categoryNames": [moved[prefab] for prefab in sorted(moved or {})],
             "sideItems": sorted(sides or {}), "sideFactions": [sides[prefab] for prefab in sorted(sides or {})],
             "renameItems": sorted(renames or {}), "renameNames": [renames[prefab] for prefab in sorted(renames or {})],
-            "refundCap": refund_cap}
+            "refundCap": refund_cap,
+            "refundItems": sorted(refunds or {}), "refundCosts": [refunds[prefab] for prefab in sorted(refunds or {})]}
     write_text(folder / "settings.json", json.dumps(data, indent=1) + "\n")
 
 

@@ -14,7 +14,7 @@
 {% else %}
 <section class="card">
   <h2>Refund limit</h2>
-  <p class="muted small">The most supplies one refund gives back, however much is packed into what's handed in (a full backpack counts as one refund), and the most a loadout swap gives back. Supplies the arsenal has no room for are thrown away, not dropped as crates.</p>
+  <p class="muted small">The most supplies one refund gives back, however much is packed into what's handed in (a full backpack counts as one refund), and the most a loadout swap gives back. Supplies the arsenal has no room for are thrown away, not dropped as crates. Each item can also get its own refund next to its price (empty means the game's normal refund).</p>
   <form method="post" action="/arsenal/{{ inst }}" class="inline">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="refund_cap">
     <input type="hidden" name="back" value="{{ back }}">
@@ -124,6 +124,12 @@
           <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
           <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ added.cost if added else prices.get(item.prefab, item.price) }}" aria-label="Price of {{ item.name }}" class="price">
           <button class="small">Set</button>
+        </form>
+        <form method="post" action="/arsenal/{{ inst }}" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="refund">
+          <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ refunds.get(item.prefab, '') }}" placeholder="Refund" aria-label="Refund for {{ item.name }}" class="price">
+          <button class="small ghost">Refund</button>
         </form>
         {% if item.prefab in prices %}
         <span class="muted small">normally {{ item.price }}</span>
