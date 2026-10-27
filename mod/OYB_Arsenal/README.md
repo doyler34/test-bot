@@ -105,9 +105,10 @@ below. Ownership: `NOTICE.md`.
   picker, and the game's own search box, which matches each word
   against the name shown in-game, in any order. Q / E stay the
   inventory's page buttons.
-- **Every infantry arsenal also stocks its faction's medical gear, vests and
-  helmets**, even a weapons-only box (`OYB_ArsenalAlwaysStocked.c`). Arsenals
-  with no infantry gear at all, such as vehicle pylons, are left alone.
+- **Every infantry arsenal is a full arsenal**: a clothing, equipment or
+  weapons box offers all of its faction's infantry gear
+  (`OYB_ArsenalAlwaysStocked.c`). Arsenals with no infantry gear at all, such
+  as vehicle pylons, are left alone.
 - **Paging inside a category**: the game only turns on Q / E and the page
   arrows while the mouse is over a panel, and only counts the pages when the
   mouse enters it. OYB counts them again every frame, so switching to a
@@ -257,8 +258,8 @@ Nothing needs setting up. What there is:
 - **In the scripts**, if ever needed:
   - `OYB_LOADOUT_SLOTS` (5) and `OYB_REQUEST_COOLDOWN_MS` (1000) in
     `OYB_ArsenalLoadouts.c`;
-  - what every infantry arsenal always stocks, `OYB_ALWAYS_TYPES` in
-    `OYB_ArsenalAlwaysStocked.c` (medical, vests, helmets).
+  - what every infantry arsenal always stocks, `OYB_ALWAYS_TYPES` and
+    `OYB_ALWAYS_MODES` in `OYB_ArsenalAlwaysStocked.c` (all infantry gear).
 
 ## Known limitations
 
@@ -330,6 +331,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Network | Open and close an arsenal many times | Settings asked once per session (no repeat in the server log) | ⏳ |
 | Move category | Move an item to another category in the panel, wait a minute | It shows under the new category; `settings loaded: … 1 moved` | ⏳ |
 | Branding | Walk up to any arsenal, open it | Prompt and the title bar inside say "OYB Arsenal" | ⏳ |
+| Full arsenal | Open a clothing-only box | Weapons, ammo, equipment and clothing all listed | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ✅ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |
@@ -347,7 +349,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | `OYB_ArsenalTargetWeapon.c` | Which carried weapon the Fits list and fitting use |
 | `OYB_ArsenalLoadouts.c` | Server-side loadout slots, pricing, refunds, respawn kit |
 | `OYB_ArsenalSettings.c` | The panel's hidden items and prices: writes `items.json`, reads `settings.json`, hides items in every arsenal, makes the server refuse them and charge, refund and show the new prices |
-| `OYB_ArsenalAlwaysStocked.c` | Every infantry arsenal also offers medical gear, vests and helmets |
+| `OYB_ArsenalAlwaysStocked.c` | Every infantry arsenal offers all infantry gear |
 
 An arsenal is usually shown by the **Vicinity** panel
 (`SCR_InventoryStorageLootUI`) and sometimes as an opened storage; both get
