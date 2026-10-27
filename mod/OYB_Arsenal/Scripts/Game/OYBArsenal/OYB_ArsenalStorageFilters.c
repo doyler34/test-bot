@@ -236,6 +236,17 @@ modded class SCR_InventoryStorageBaseUI
 		return SCR_ArsenalComponent.Cast(owner.FindComponent(SCR_ArsenalComponent));
 	}
 
+	override protected void FindAndSetTitleName(Widget targetTitle, BaseInventoryStorageComponent targetStorage)
+	{
+		super.FindAndSetTitleName(targetTitle, targetStorage);
+		if (!OYB_GetArsenal(targetStorage))
+			return;
+
+		TextWidget titleNameWidget = TextWidget.Cast(targetTitle.FindAnyWidget("TextC"));
+		if (titleNameWidget)
+			titleNameWidget.SetText("OYB Arsenal");
+	}
+
 	void OYB_SetCategory(int category)
 	{
 		if (category == s_iOYB_Category)
@@ -306,19 +317,6 @@ modded class SCR_InventoryStorageBaseUI
 		OYB_MoveBefore(bar, m_wGrid);
 		m_wOYB_FilterBar = bar;
 		PrintFormat("OYB_ARSENAL filter bar added above %1 in %2", m_wGrid.GetName(), m_wGrid.GetParent().GetName());
-
-		Widget title = workspace.CreateWidgets(OYB_LABEL_LAYOUT, bar);
-		if (title)
-		{
-			AlignableSlot.SetPadding(title, 0, 0, 0, 4);
-			TextWidget titleText = TextWidget.Cast(OYB_FindWidgetOfType(title, TextWidget));
-			if (titleText)
-			{
-				titleText.SetText("OYB ARSENAL");
-				titleText.SetExactFontSize(18);
-				titleText.SetColor(OYB_ORANGE);
-			}
-		}
 
 		if (m_wStorageName && Type() == SCR_InventoryOpenedStorageArsenalUI)
 			m_wStorageName.SetText("OYB Arsenal");
