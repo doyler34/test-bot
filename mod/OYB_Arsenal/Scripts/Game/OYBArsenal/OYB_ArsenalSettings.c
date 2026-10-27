@@ -372,6 +372,7 @@ class OYB_ArsenalSettings
 	protected ref array<int> m_aFound;
 	protected ref array<ResourceName> m_aScanQueue;
 	protected int m_iScanUnusable;
+	protected int m_iScanStarted;
 
 	static OYB_ArsenalSettings Get()
 	{
@@ -718,6 +719,7 @@ class OYB_ArsenalSettings
 	{
 		m_aScanQueue = {};
 		m_iScanUnusable = 0;
+		m_iScanStarted = System.GetTickCount();
 
 		array<string> addons = {};
 		GameProject.GetLoadedAddons(addons);
@@ -796,7 +798,7 @@ class OYB_ArsenalSettings
 		context.WriteValue("prices", m_aPrices);
 		context.WriteValue("found", m_aFound);
 		if (context.SaveToFile(ITEMS_FILE))
-			PrintFormat("OYB_ARSENAL wrote %1 items to %2 (%3 found by scan, %4 scanned items skipped as unusable)", m_aPrefabs.Count(), ITEMS_FILE, found, m_iScanUnusable);
+			PrintFormat("OYB_ARSENAL wrote %1 items to %2 (%3 found by scan, %4 scanned items skipped as unusable); the scan took %5 ms spread over many frames", m_aPrefabs.Count(), ITEMS_FILE, found, m_iScanUnusable, System.GetTickCount(m_iScanStarted));
 		else
 			PrintFormat("OYB_ARSENAL couldn't write %1", ITEMS_FILE, level: LogLevel.WARNING);
 

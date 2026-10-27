@@ -337,6 +337,7 @@ class OYB_ArsenalCatalogService
 
 	protected array<ref OYB_ArsenalEntry> Build(SCR_ArsenalComponent arsenal)
 	{
+		int started = System.GetTickCount();
 		array<ref OYB_ArsenalEntry> entries = {};
 		array<SCR_ArsenalItem> items = {};
 		arsenal.GetFilteredArsenalItems(items);
@@ -423,7 +424,7 @@ class OYB_ArsenalCatalogService
 			entries.Insert(added);
 		}
 
-		PrintFormat("OYB_ARSENAL built item list: %1 entries from arsenal, %2 added in the panel, %3 unique, %4 without a display name", items.Count(), extras.Count(), entries.Count(), unnamed);
+		PrintFormat("OYB_ARSENAL built item list: %1 entries from arsenal, %2 added in the panel, %3 unique, %4 without a display name, in %5 ms", items.Count(), extras.Count(), entries.Count(), unnamed, System.GetTickCount(started));
 		return entries;
 	}
 }

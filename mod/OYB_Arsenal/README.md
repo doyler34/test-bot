@@ -124,80 +124,72 @@ server or with a controller yet.
 **1. Core functionality — Verified complete** (Workbench, local host)
 - Arsenal opens and closes; the item list loads from the arsenal's own
   offer; categories, counts and search; attachment fitting and part swaps;
-  clothing and weapon swaps (including with both weapon slots full); items joining the same items already carried;
-  saving and loading kits; an empty category falling back to All; clothing
-  for an empty slot only requested when it fits.
+  clothing and weapon swaps (including with both weapon slots full); items
+  joining the same items already carried; saving and loading kits; an empty
+  category falling back to All; clothing for an empty slot only requested
+  when it fits.
 - Left open: the two `OverlayWidget Frame0 has invalid slot GridWidgetSlot`
-  errors may be the game's own (check with the mod off); the loadout
-  one-second limit hasn't been seen in action.
+  errors may be the game's own (check with the mod off).
 
-**2. Keyboard and controller — In progress (awaiting testing)**
-- OYB uses the game's own menu actions through its Input Manager, so the
-  game's key settings and controller layouts apply and no extra input file
-  is needed. Each key button shows its prompt and can also be clicked:
-  Category `MenuFilter` (X), Weapon `MenuRefresh` (R), Save `MenuFavourite` (F), Load
-  `MenuDelete` (V; `MenuRename` turned out to be R, the Weapon key, and
-  `MenuDeploy`, Space, only works on the respawn screen). `MenuSave` was tried for Save but is X, the same key as Category;
-  a crossed circle on a prompt means the action has no key there, and every
-  press is logged as `OYB_ARSENAL key`.
-- Q / E (LB / RB) page the grid, also right after switching category, and
-  each category remembers its page until the search or weapon changes.
-- Not done: OYB-only rebindable actions (needs an input config the mod
-  would ship; the format couldn't be checked from here); inspecting an
-  arsenal item; controller testing.
+**2. Keyboard and controller — Keyboard verified; controller awaiting testing**
+- OYB uses the game's own menu actions, so players change the keys in the
+  game's own key settings. Verified in Workbench, one action each, no
+  clashes: Category X (`MenuFilter`), Weapon R (`MenuRefresh`), Save F
+  (`MenuFavourite`), Load V (`MenuDelete`); Q / E page the grid, also right
+  after switching category, and each category remembers its page.
+- Tried and dropped: `MenuSave` (X, same as Category), `MenuRename` (R, same
+  as Weapon), `MenuDeploy` (Space, only works on the respawn screen).
+- Not done: OYB-only named actions under their own heading in the key
+  settings (needs the game's input and key-settings configs from Workbench
+  as a template); inspecting an arsenal item; controller testing.
 
-**3. Loadouts — In progress**
-- Done: five slots per player saved on the server under `$profile:`, keyed
-  by the player's identity, so they survive reconnects and restarts; save
-  overwrites; load checks faction, reach and supplies, charges only for
-  what's missing and refunds what's dropped; clothing, weapons,
-  attachments, magazines and pocket contents use the game's own loadout
-  format.
-- Not wanted: deleting and renaming slots (saving over a slot replaces it).
-- Verified: the last saved or loaded kit becomes the respawn kit; the
-  respawn screen offers it as "Saved loadout" (Game Master, Workbench).
-- Implemented — awaiting testing: a kit holding items that no longer exist
-  (a removed mod) isn't loaded; the player is told which items, before any
-  supplies are taken. The character itself is no longer counted as an item
-  when a kit is priced.
-- Not done: a reconnect / restart test on a dedicated server.
+**3. Loadouts — Verified in Workbench; dedicated server awaiting testing**
+- Five slots per player, saved on the server under `$profile:` by player
+  identity; saving overwrites (no rename or delete, by choice). Loading
+  checks faction, reach and supplies, charges only for what's missing,
+  counts parts that come fitted, refunds what's dropped, and sets the
+  respawn kit ("Saved loadout" on the respawn screen). Verified with
+  modded weapons and clothing the arsenal doesn't sell.
+- Awaiting testing: a kit with items from a removed mod (refused, items
+  named); a restart and reconnect on a dedicated server.
 
-**4. Modded equipment — Implemented — awaiting testing**
-- Items come from the arsenal's own filtered catalogue, categories from
-  each item's arsenal type and mode, names from its inventory info, fits
-  from the game's attachment and magazine-well checks. No item is listed
-  by hand. Items without a name are logged and shown by file name.
-- Not tested with any mod's items.
+**4. Modded equipment — Verified in Workbench**
+- Tested with six mods (Bacon Desert Eagle, M110, suppressors, RIS optics,
+  GRS framework and patches): 519 items listed, modded weapons and parts in
+  the right categories, patches in Clothing, 9 uncatalogued items found by
+  the scan. The panel's Arsenal tab hides, reprices, recategorises and adds
+  items.
+- Awaiting testing: the scan on a dedicated server; adding a scanned item
+  and buying it.
 
-**5. Performance — In progress (awaiting testing)**
-- Cached: the item list (names, categories, costs) per arsenal until its
-  offer changes; which items fit the chosen weapon, until the weapon or its
-  fitted parts change; the arsenal's prefab list is read once per refresh.
-- Search no longer logs every matching name on each refresh.
-- Widgets are built once per panel and only shown or hidden afterwards.
-- Not measured: large modded arsenals (500-1,000 items). The first opening
-  of an arsenal reads each item's name from its prefab once; that is the
-  part most likely to stall on a big list.
+**5. Performance — Implemented; measurements needed**
+- Cached: each arsenal's item list until its offer or the panel settings
+  change; weapon fits until the weapon or its parts change. The mod scan
+  runs 20 prefabs at a time. Settings and loadout names are asked once per
+  session and pushed only on change.
+- Measured so far: 257-item arsenal, no visible stall. The log now gives
+  times: `built item list … in N ms` and `the scan took N ms`.
+- Awaiting testing: a big modpack (500-1,000 items).
 
 **6. Security — Implemented — awaiting testing**
 - Every item, fit, swap and refund goes through the game's own arsenal
-  requests, so the server checks ownership, distance, the arsenal's faction
-  catalogue and supplies. Loadouts are saved, checked and priced on the
-  server from its own copy, refuse dead players, other factions, items that
-  no longer exist and requests less than a second apart, and charge before
-  anything spawns.
-- Military supply allocation is not used on OYB servers, so loading a kit
-  only charges the arsenal's supplies (single items still go through the
-  game's own checks either way).
-- Ownership notice: `NOTICE.md`. No licence keys, online authentication or
-  allowlists.
-- Not tested: several players at one arsenal; a dedicated server.
+  requests (ownership, distance, faction catalogue, supplies); hidden items
+  are refused on the server; added items get the same checks from OYB.
+  Loadouts are built and priced on the server from its own copy and refuse
+  dead players, other factions, removed items and repeat requests within a
+  second. Players can't make the server repeat settings or loadout names
+  within five seconds.
+- Military supply allocation isn't used on OYB servers, so kit loading
+  only charges the arsenal's supplies.
+- Ownership notice: `NOTICE.md`. No licence keys or online checks.
+- Awaiting testing: two players at one arsenal; a dedicated server.
 
 **7. Release — In progress**
 - Done: install, server release and configuration guides, known
   limitations, and a test for every feature (see below).
-- Left: the ⏳ tests in the checklist, Workshop publishing, then the mirror
-  sync for the live server.
+- Left: the ⏳ tests (dedicated server, two players, big modpack,
+  controller), Workshop publishing, and the mirror sync so the panel's
+  Arsenal tab reaches the live box.
 
 ## Install for testing (Workbench)
 
