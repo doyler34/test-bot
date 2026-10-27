@@ -20,6 +20,8 @@ class OYB_VehicleSettings
 	protected static const string SETTINGS_FILE = "$profile:OYB_Core/vehicles.json";
 	protected static const string LIST_FILE = "$profile:OYB_Core/vehicle_list.json";
 	protected static const int RELOAD_EVERY_MS = 60000;
+	protected static const int CATALOGUE_RETRY_MS = 5000;
+	protected static const int CATALOGUE_TRIES = 60;
 
 	protected static ref OYB_VehicleSettings s_Instance;
 
@@ -29,6 +31,8 @@ class OYB_VehicleSettings
 	protected bool m_bServerStarted;
 	protected int m_iListed = -1;
 	protected bool m_bLogged;
+	protected int m_iCatalogueTries;
+	protected bool m_bQuiet;
 
 	protected ref array<string> m_aPrefabs = {};
 	protected ref array<string> m_aNames = {};
@@ -218,7 +222,7 @@ class OYB_VehicleSettings
 		m_mListed.Clear();
 
 		set<ResourceName> buildable = BuildingMenuPrefabs();
-		if (!m_bLogged)
+		if (Verbose())
 		{
 			if (buildable)
 				PrintFormat("OYB_CORE vehicles: the building manager lists %1 prefabs", buildable.Count());
@@ -227,6 +231,7 @@ class OYB_VehicleSettings
 		}
 
 		int inCatalogues;
+		array<SCR_Faction> scrFactions = {};
 		array<Faction> allFactions = {};
 		factionManager.GetFactionsList(allFactions);
 		foreach (Faction faction : allFactions)
@@ -235,11 +240,12 @@ class OYB_VehicleSettings
 			if (!scrFaction)
 				continue;
 
+			scrFactions.Insert(scrFaction);
 			string factionKey = scrFaction.GetFactionKey();
 			SCR_EntityCatalog catalog = scrFaction.GetFactionEntityCatalogOfType(EEntityCatalogType.VEHICLE, false);
 			if (!catalog)
 			{
-				if (!m_bLogged)
+				if (Verbose())
 					PrintFormat("OYB_CORE vehicles: %1 has no vehicle catalogue", factionKey);
 				continue;
 			}
@@ -264,7 +270,7 @@ class OYB_VehicleSettings
 				bool buildingMode = editorData && editorData.IsValidInEditorMode(EEditorMode.BUILDING);
 				bool inBuilding = inBuildingList || buildingMode;
 
-				if (!m_bLogged && logged < 3)
+				if (Verbose() && logged < 3)
 				{
 					logged++;
 					PrintFormat("OYB_CORE vehicles: %1 %2 | data: %3 | depot data %4, in building list %5, building-mode editor data %6", factionKey, prefab, entry.OYB_DescribeData(), spawnerData != null, inBuildingList, buildingMode);
@@ -319,16 +325,28 @@ class OYB_VehicleSettings
 				}
 			}
 
-			if (!m_bLogged)
+			if (Verbose())
 				PrintFormat("OYB_CORE vehicles: %1 has %2 vehicles in its catalogue: %3 sold at depots, %4 in the building menu, %5 in neither", factionKey, entries.Count(), depot, building, neither);
 		}
+		int fromBuildingList = AddBuildingMenuVehicles(buildable, scrFactions);
+		if (Verbose() && buildable)
+			PrintFormat("OYB_CORE vehicles: %1 vehicles from the building manager's list that no catalogue has", fromBuildingList);
+
+		// The catalogues fill a little after the game starts; until they have,
+		// look again every few seconds.
+		if (inCatalogues == 0 && m_iCatalogueTries < CATALOGUE_TRIES)
+		{
+			m_iCatalogueTries++;
+			GetGame().GetCallqueue().CallLater(WriteListQuietly, CATALOGUE_RETRY_MS);
+		}
+
 		// The details are logged again on every try until a list is written.
 		if (m_aPrefabs.IsEmpty())
 		{
 			m_iListed = 0;
 			// An empty list never replaces one already written.
 			if (inCatalogues == 0)
-				Print("OYB_CORE vehicles: the vehicle catalogues are empty or not ready yet, vehicle_list.json left as it was; trying again in a minute");
+				Print("OYB_CORE vehicles: no vehicles in the catalogues (empty or not ready yet) or the building manager's list, vehicle_list.json left as it was; trying again shortly");
 			else
 				PrintFormat("OYB_CORE vehicles: %1 catalogue vehicles but none sold at a depot or in the building menu, vehicle_list.json left as it was", inCatalogues, level: LogLevel.WARNING);
 			return;
@@ -351,9 +369,13 @@ class OYB_VehicleSettings
 			return;
 		}
 
+		bool changed = m_iListed != m_aPrefabs.Count();
 		m_iListed = m_aPrefabs.Count();
-		m_bLogged = true;
-		PrintFormat("OYB_CORE wrote %1 vehicles to %2", m_iListed, LIST_FILE);
+		// A list made before the catalogues were ready is made again once they are.
+		if (inCatalogues > 0)
+			m_bLogged = true;
+		if (changed || !m_bQuiet)
+			PrintFormat("OYB_CORE wrote %1 vehicles to %2", m_iListed, LIST_FILE);
 	}
 
 	// False when the prefab was already listed (another faction has it too).
@@ -381,6 +403,19 @@ class OYB_VehicleSettings
 		m_aMenus.Insert(menus);
 		m_aVariantOf.Insert(variantOf);
 		return true;
+	}
+
+	protected bool Verbose()
+	{
+		return !m_bLogged && !m_bQuiet;
+	}
+
+	// The quick retries while the catalogues fill don't repeat the details.
+	protected void WriteListQuietly()
+	{
+		m_bQuiet = true;
+		WriteList();
+		m_bQuiet = false;
 	}
 
 	// "a,b" with each of "b,c" not already in it: "a,b,c".
@@ -417,6 +452,63 @@ class OYB_VehicleSettings
 
 		OYB_VehicleLimits.SetVariant(variant, vehicle);
 		AddVehicle(variant, FilePath.StripExtension(FilePath.StripPath(variant.GetPath())), category, factionKey, -1, -1, menus, vehicle);
+	}
+
+	// Vehicles the building manager offers that no faction catalogue has (added
+	// straight to the menu by a mod, or listed before the catalogues are ready).
+	// The factions are the ones whose label the vehicle carries.
+	protected int AddBuildingMenuVehicles(set<ResourceName> buildable, notnull array<SCR_Faction> factions)
+	{
+		if (!buildable)
+			return 0;
+
+		int added;
+		int logged;
+		foreach (ResourceName prefab : buildable)
+		{
+			if (prefab.IsEmpty() || m_mListed.Contains(prefab))
+				continue;
+
+			Resource resource = Resource.Load(prefab);
+			if (!resource || !resource.IsValid())
+				continue;
+
+			IEntityComponentSource editableSource = SCR_EditableEntityComponentClass.GetEditableEntitySource(resource);
+			if (!editableSource)
+				continue;
+
+			SCR_EditableEntityUIInfo info = SCR_EditableEntityComponentClass.GetInfo(editableSource);
+			if (!info)
+				continue;
+
+			if (Verbose() && logged < 5)
+			{
+				logged++;
+				PrintFormat("OYB_CORE vehicles: building list entry %1 is a %2", prefab, typename.EnumToString(EEditableEntityType, info.GetEntityType()));
+			}
+
+			if (info.GetEntityType() != EEditableEntityType.VEHICLE)
+				continue;
+
+			array<EEditableEntityLabel> labels = {};
+			info.GetEntityLabels(labels);
+			string factionKeys = string.Empty;
+			foreach (SCR_Faction faction : factions)
+			{
+				if (labels.Contains(faction.GetFactionLabel()))
+					factionKeys = MergeList(factionKeys, faction.GetFactionKey());
+			}
+
+			string category = CategoryOf(labels);
+			AddVehicle(prefab, WidgetManager.Translate(info.GetName()), category, factionKeys, -1, BuildCost(prefab), "building", string.Empty);
+			added++;
+
+			array<ResourceName> variants = {};
+			EditableVariants(prefab, variants);
+			foreach (ResourceName variant : variants)
+				AddVariant(variant, prefab, category, factionKeys, "building");
+		}
+		return added;
 	}
 
 	// What the building manager offers (the same list the building menu is
@@ -484,17 +576,24 @@ class OYB_VehicleSettings
 
 	protected static string Category(SCR_EntityCatalogEntry entry)
 	{
-		if (entry.HasEditableEntityLabel(EEditableEntityLabel.VEHICLE_HELICOPTER))
+		array<EEditableEntityLabel> labels = {};
+		entry.GetEditableEntityLabels(labels);
+		return CategoryOf(labels);
+	}
+
+	protected static string CategoryOf(notnull array<EEditableEntityLabel> labels)
+	{
+		if (labels.Contains(EEditableEntityLabel.VEHICLE_HELICOPTER))
 			return "Helicopters";
-		if (entry.HasEditableEntityLabel(EEditableEntityLabel.VEHICLE_AIRPLANE))
+		if (labels.Contains(EEditableEntityLabel.VEHICLE_AIRPLANE))
 			return "Planes";
-		if (entry.HasEditableEntityLabel(EEditableEntityLabel.VEHICLE_APC))
+		if (labels.Contains(EEditableEntityLabel.VEHICLE_APC))
 			return "Armour";
-		if (entry.HasEditableEntityLabel(EEditableEntityLabel.VEHICLE_TRUCK))
+		if (labels.Contains(EEditableEntityLabel.VEHICLE_TRUCK))
 			return "Trucks";
-		if (entry.HasEditableEntityLabel(EEditableEntityLabel.VEHICLE_TURRET))
+		if (labels.Contains(EEditableEntityLabel.VEHICLE_TURRET))
 			return "Turrets";
-		if (entry.HasEditableEntityLabel(EEditableEntityLabel.VEHICLE_CAR))
+		if (labels.Contains(EEditableEntityLabel.VEHICLE_CAR))
 			return "Cars";
 		return "Other";
 	}
