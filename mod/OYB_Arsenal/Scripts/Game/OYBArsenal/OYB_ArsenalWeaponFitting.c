@@ -444,7 +444,8 @@ modded class SCR_InventoryMenuUI
 		return null;
 	}
 
-	// See OYB_ArsenalClothing.c.
+	// See OYB_ArsenalClothing.c. Anything else with its own place on the body
+	// (NVGs in a night vision slot, a watch, binoculars) goes on the same way.
 	protected bool OYB_EquipClothing(string via)
 	{
 		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);
@@ -452,7 +453,7 @@ modded class SCR_InventoryMenuUI
 			return false;
 
 		IEntity preview = arsenalSlot.GetInventoryItemComponent().GetOwner();
-		if (!preview || !preview.FindComponent(BaseLoadoutClothComponent) || !m_InventoryManager)
+		if (!preview || preview.FindComponent(BaseWeaponComponent) || preview.FindComponent(BaseMagazineComponent) || !m_InventoryManager)
 			return false;
 
 		SCR_CharacterInventoryStorageComponent wearing = m_InventoryManager.GetCharacterStorage();

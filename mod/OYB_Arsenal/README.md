@@ -51,6 +51,9 @@ below. Ownership: `NOTICE.md`.
   arsenal with the game's own refund. If the new piece doesn't arrive, the old
   one goes back on; if something doesn't fit or the arsenal won't take it
   back, the old piece is left on the ground with its contents.
+- **Body slots**: anything else with its own slot on the character (NVGs in
+  a night vision slot, a watch, binoculars) goes there on a double-click,
+  swapped like clothing if the slot is taken.
 - **Accessories onto worn gear** (also `OYB_ArsenalWeaponFitting.c`):
   double-click a helmet light, NVGs or a vest flashlight and it goes into a
   free spot for it on what you wear (a helmet's mount, or a mount already on
@@ -364,6 +367,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Rename | Rename an item in the panel, wait a minute, open an arsenal | New name on the card, hover box and in the inventory; `settings loaded: … 1 renamed` | ⏳ |
 | Nested slots | Fit a rail adapter, then double-click a scope that only fits the rail | Scope in Fits and fitted onto the rail | ⏳ |
 | Accessories | Wear a helmet with a free mount, double-click a helmet light or NVGs | Goes onto the helmet; log `accessory … putting … on worn gear` | ⏳ |
+| Body slots | Double-click NVGs (with a night vision slot, e.g. NV-System), a watch or binoculars | Goes into its slot on the body; a taken slot is swapped | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ✅ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |
