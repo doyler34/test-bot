@@ -105,6 +105,25 @@ def write_text(path, text):
         hand_over(path)
 
 
+def write_whole(path, text):
+    """Write a file another program reads while it may be changing: the new text goes
+    to a file beside it that then replaces it, so a reader never sees half of it."""
+    new = not path.exists()
+    mode = None if new else path.stat()
+    temp = path.with_name(path.name + ".new")
+    with open(temp, "w", encoding="utf-8", newline="") as f:
+        f.write(text)
+    if mode is not None:
+        os.chmod(temp, mode.st_mode & 0o7777)
+        try:
+            os.chown(temp, mode.st_uid, mode.st_gid)
+        except PermissionError:
+            pass
+    os.replace(temp, path)
+    if new:
+        hand_over(path)
+
+
 def make_folder(path):
     if path.exists():
         raise FileError(f"{path.name} already exists.")
@@ -410,39 +429,60 @@ VEHICLE_FOLDER = "OYB_Core"
 
 
 def vehicle_list(base):
-    """The vehicles the OYB Core mod listed when the server last started (the ones
-    sold at depots or placed from the building menu), as [{prefab, name, category,
-    factions, price, build_cost, menus, variant_of}] sorted by name (each vehicle
-    followed by its variants), or None before the server has listed them. price is
-    the depot price and build_cost the building menu's, each None when not offered
-    there or not known; menus is a list of "depot" and "building"."""
-    profile = profile_folder(base)
-    path = profile / VEHICLE_FOLDER / "vehicle_list.json" if profile else None
-    if not path or not path.is_file():
+    """The vehicles the OYB Core mod listed when the server last started, as
+    [{prefab, name, category, factions, price, build_cost, menus, sources, variant_of}]
+    sorted by name (each vehicle followed by its variants), or None before the server
+    has listed them. price is the depot price and build_cost the building menu's, each
+    None when not offered there or not known; menus is a list of "depot" and
+    "building" (empty for a vehicle only found by scanning the server's mods);
+    sources is how the server found it ("catalogue", "building", "scan")."""
+    data = vehicle_list_file(base)
+    if data is None:
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
     prefabs = data.get("prefabs") or []
 
     def column(key, fill):
         values = list(data.get(key) or [])
         return values + [fill] * (len(prefabs) - len(values))
 
+    def number(value):
+        return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
     # Lists from before building-menu vehicles were listed have only depot vehicles.
     old = "menus" not in data
     vehicles = []
-    for prefab, name, category, factions, price, build_cost, menus, parent in zip(
+    for prefab, name, category, factions, price, build_cost, menus, sources, parent in zip(
             prefabs, column("names", ""), column("categories", ""), column("factions", ""), column("prices", -1),
-            column("buildCosts", -1), column("menus", "depot" if old else ""), column("variantOf", "")):
+            column("buildCosts", -1), column("menus", "depot" if old else ""),
+            column("sources", "catalogue" if "sources" not in data else ""), column("variantOf", "")):
         if not isinstance(prefab, str) or not prefab:
             continue
         vehicles.append({"prefab": prefab, "name": name or prefab.rsplit("/", 1)[-1], "category": category or "Other",
                          "factions": factions or "", "variant_of": parent or "",
-                         "price": price if isinstance(price, int) and not isinstance(price, bool) and price >= 0 else None,
-                         "build_cost": build_cost if isinstance(build_cost, int) and not isinstance(build_cost, bool) and build_cost >= 0 else None,
-                         "menus": [menu for menu in (menus or "").split(",") if menu in ("depot", "building")]})
+                         "price": number(price), "build_cost": number(build_cost),
+                         "menus": [menu for menu in (menus or "").split(",") if menu in ("depot", "building")],
+                         "sources": [source for source in (sources or "").split(",") if source]})
     names = {v["prefab"]: v["name"].lower() for v in vehicles if not v["variant_of"]}
     return sorted(vehicles, key=lambda v: (names.get(v["variant_of"] or v["prefab"], v["name"].lower()),
                                            v["variant_of"] or v["prefab"], bool(v["variant_of"]), v["name"].lower()))
+
+
+def vehicle_list_file(base):
+    """The raw vehicle_list.json, or None when there's none yet."""
+    profile = profile_folder(base)
+    path = profile / VEHICLE_FOLDER / "vehicle_list.json" if profile else None
+    if not path or not path.is_file():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def vehicle_list_info(base):
+    """What the server said about its last vehicle list: {build, scan_complete,
+    catalogue_entries}, each None when the list is from an older OYB Core."""
+    data = vehicle_list_file(base) or {}
+    return {"build": data.get("build") if isinstance(data.get("build"), str) else None,
+            "scan_complete": data.get("scanComplete") if isinstance(data.get("scanComplete"), bool) else None,
+            "catalogue_entries": data.get("catalogueEntries") if isinstance(data.get("catalogueEntries"), int) else None}
 
 
 def vehicle_list_age(base):
@@ -493,7 +533,7 @@ def save_vehicle_settings(base, settings):
             "limitsEnabled": bool(settings["enabled"]),
             "groupNames": [name for name, _ in groups], "groupLimits": [limit for _, limit in groups],
             "groupItems": [prefab for prefab, _ in members], "groupOf": [group for _, group in members]}
-    write_text(folder / "vehicles.json", json.dumps(data, indent=1) + "\n")
+    write_whole(folder / "vehicles.json", json.dumps(data, indent=1) + "\n")
 
 
 def new_game(root, base):

@@ -111,10 +111,21 @@ modded class SCR_CampaignBuildingPlacingEditorComponent
 
 // Hidden vehicles left out of the building menu itself, on each player's game.
 // The server refuses them anyway (above); this only keeps them off the list.
+// Each card's info also learns its prefab, so a price set on the panel is what
+// the card shows (see OYB_VehicleBudget.c).
 modded class SCR_ContentBrowserEditorComponent
 {
 	override void FilterEntries()
 	{
+		if (m_aInfos)
+		{
+			foreach (int index, SCR_EditableEntityUIInfo info : m_aInfos)
+			{
+				if (info)
+					info.OYB_SetPrefab(GetResourceNamePrefabID(index));
+			}
+		}
+
 		super.FilterEntries();
 
 		if (!FindEditorComponent(SCR_CampaignBuildingPlacingEditorComponent, false, true))

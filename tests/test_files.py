@@ -430,27 +430,43 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
     async def test_building_menu_vehicles_are_listed_with_their_cost(self):
         folder = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "profile" / "OYB_Core"
         folder.mkdir(parents=True, exist_ok=True)
-        humvee, variant, uaz = ("{B1}Prefabs/Vehicles/Wheeled/M1025/M1025.et", "{B2}Prefabs/Vehicles/Wheeled/M1025/M1025_MERDC.et",
-                                "{B3}Prefabs/Vehicles/Wheeled/UAZ469/UAZ469.et")
+        humvee, variant, uaz, mod = ("{B1}Prefabs/Vehicles/Wheeled/M1025/M1025.et", "{B2}Prefabs/Vehicles/Wheeled/M1025/M1025_MERDC.et",
+                                     "{B3}Prefabs/Vehicles/Wheeled/UAZ469/UAZ469.et", "{B4}Prefabs/Vehicles/Tracked/T72/T72_Mod.et")
         (folder / "vehicle_list.json").write_text(json.dumps({
-            "version": 2, "prefabs": [humvee, variant, uaz], "names": ["M1025", "M1025_MERDC", "UAZ-469"],
-            "categories": ["Cars", "Cars", "Cars"], "factions": ["US", "US", "USSR"], "prices": [-1, -1, 150],
-            "buildCosts": [300, -1, -1], "menus": ["building", "building", "depot,building"],
-            "variantOf": ["", humvee, ""]}))
+            "version": 3, "build": "vehicles-test", "scanComplete": True, "catalogueEntries": 0,
+            "prefabs": [humvee, variant, uaz, mod], "names": ["M1025", "M1025_MERDC", "UAZ-469", "T-72 (mod)"],
+            "categories": ["Cars", "Cars", "Cars", "Armour"], "factions": ["US", "US", "USSR", "USSR"],
+            "prices": [-1, -1, 150, -1], "buildCosts": [300, -1, -1, -1],
+            "menus": ["building", "building", "depot,building", ""],
+            "sources": ["building", "building", "catalogue,scan", "scan"],
+            "variantOf": ["", humvee, "", ""]}))
         vehicles = {v["prefab"]: v for v in files.vehicle_list(self.root / "Plus01")}
         self.assertEqual((vehicles[humvee]["menus"], vehicles[humvee]["price"], vehicles[humvee]["build_cost"]),
                          (["building"], None, 300))
-        self.assertEqual((vehicles[uaz]["menus"], vehicles[uaz]["price"], vehicles[uaz]["build_cost"]),
-                         (["depot", "building"], 150, None))
+        self.assertEqual((vehicles[uaz]["menus"], vehicles[uaz]["price"], vehicles[uaz]["sources"]),
+                         (["depot", "building"], 150, ["catalogue", "scan"]))
+        self.assertEqual((vehicles[mod]["menus"], vehicles[mod]["sources"]), ([], ["scan"]))
+        self.assertEqual(files.vehicle_list_info(self.root / "Plus01")["build"], "vehicles-test")
         token = await self.login("boss")
         page = await (await self.client.get("/vehicles/Plus01")).text()
-        self.assertIn("building menu: 300", page)
-        self.assertIn("variant of M1025", page)
-        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": humvee, "cost": "50"})
-        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": uaz, "cost": "90"})
-        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide", "prefab": humvee})
+        for text in ("building menu: 300", "variant of M1025", "T-72 (mod)", "not in a menu", "OYB Core vehicles-test"):
+            self.assertIn(text, page)
+        post = lambda **data: self.client.post("/vehicles/Plus01", data={"csrf": token, **data})
+        await post(action="price", prefab=humvee, cost="50")       # building menu cost of its own
+        await post(action="price", prefab=uaz, cost="90")          # depot
+        await post(action="price", prefab=variant, cost="10")      # a variant costs what its vehicle costs
+        await post(action="price", prefab=mod, cost="10")          # in no menu: a price would do nothing
+        await post(action="hide", prefab=humvee)
+        await post(action="hide", prefab=mod)
         settings = files.vehicle_settings(self.root / "Plus01")
-        self.assertEqual((settings["prices"], settings["hidden"]), ({uaz: 90}, {humvee}))
+        self.assertEqual((settings["prices"], settings["hidden"]), ({humvee: 50, uaz: 90}, {humvee, mod}))
+
+    def test_vehicle_settings_are_replaced_whole(self):
+        folder = self.vehicle_profile()
+        files.save_vehicle_settings(self.root / "Plus01", {"hidden": {"{V1}a.et"}, "prices": {}, "enabled": True,
+                                                           "groups": {"Cars": 2}, "members": {"{V1}a.et": "Cars"}})
+        self.assertEqual(json.loads((folder / "vehicles.json").read_text())["groupLimits"], [2])
+        self.assertFalse((folder / "vehicles.json.new").exists())
 
     def test_an_old_vehicle_list_is_all_depot_vehicles(self):
         self.vehicle_profile()

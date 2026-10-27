@@ -61,6 +61,14 @@ class OYB_VehicleLimits
 		s_mVariantOf.Set(variant, vehicle);
 	}
 
+	// The vehicle a variant belongs to, or empty.
+	static ResourceName VariantOf(ResourceName prefab)
+	{
+		ResourceName vehicle;
+		s_mVariantOf.Find(prefab, vehicle);
+		return vehicle;
+	}
+
 	// The group a prefab counts in, or empty for none.
 	static string GroupOf(ResourceName prefab)
 	{
@@ -74,13 +82,17 @@ class OYB_VehicleLimits
 		return group;
 	}
 
-	// Whether one more of this depot vehicle is allowed for the side; when it
-	// isn't, the group, its live count and its limit, for the message.
+	// Whether one more of this vehicle is allowed for the side; when it isn't,
+	// the group, its live count and its limit, for the message. A limited
+	// vehicle whose side isn't known is refused rather than let through.
 	static bool Allows(string factionKey, ResourceName prefab, out string group, out int count, out int limit)
 	{
 		group = GroupOf(prefab);
 		if (!s_bEnabled || group.IsEmpty() || !s_mGroupLimits.Find(group, limit) || limit == UNLIMITED)
 			return true;
+
+		if (factionKey.IsEmpty())
+			return false;
 
 		count = Count(factionKey, group);
 		return count < limit;
@@ -103,7 +115,7 @@ class OYB_VehicleLimits
 		int count;
 		foreach (int i, IEntity vehicle : s_aVehicles)
 		{
-			if (s_aFactions[i] == factionKey && vehicle.GetPrefabData() && GroupOf(vehicle.GetPrefabData().GetPrefabName()) == group)
+			if (s_aFactions[i] == factionKey && GroupOf(SCR_ResourceNameUtils.GetPrefabName(vehicle)) == group)
 				count++;
 		}
 		return count;
@@ -136,20 +148,32 @@ class OYB_VehicleLimits
 			Prune();
 	}
 
-	// Once, when the server starts: follows vehicles being wrecked, and follows
-	// every live vehicle already in the world (from a save, or placed) for its
-	// own side.
-	static void StartServer()
+	// A new game: forgets the last game's vehicles and stops following its
+	// wrecks.
+	static void ResetSession()
+	{
+		SCR_VehicleDamageManagerComponent.GetOnVehicleDamageStateChanged().Remove(OnVehicleDamageStateChanged);
+		s_aVehicles.Clear();
+		s_aFactions.Clear();
+		s_bStarted = false;
+	}
+
+	// When the server starts: follows vehicles being wrecked, and follows every
+	// live vehicle already in the world (from a save, or placed) for its own
+	// side. False while the editor core isn't up or a saved game is still
+	// loading, to be tried again.
+	static bool StartServer()
 	{
 		if (s_bStarted || !Replication.IsServer())
-			return;
-		s_bStarted = true;
-
-		SCR_VehicleDamageManagerComponent.GetOnVehicleDamageStateChanged().Insert(OnVehicleDamageStateChanged);
+			return true;
 
 		SCR_EditableEntityCore core = SCR_EditableEntityCore.Cast(SCR_EditableEntityCore.GetInstance(SCR_EditableEntityCore));
-		if (!core)
-			return;
+		if (!core || SCR_PersistenceSystem.IsLoadInProgress())
+			return false;
+		s_bStarted = true;
+
+		SCR_VehicleDamageManagerComponent.GetOnVehicleDamageStateChanged().Remove(OnVehicleDamageStateChanged);
+		SCR_VehicleDamageManagerComponent.GetOnVehicleDamageStateChanged().Insert(OnVehicleDamageStateChanged);
 
 		set<SCR_EditableEntityComponent> entities = new set<SCR_EditableEntityComponent>();
 		core.GetAllEntities(entities);
@@ -167,9 +191,13 @@ class OYB_VehicleLimits
 			if (!affiliation || affiliation.GetDefaultFactionKey().IsEmpty())
 				continue;
 
+			if (s_aVehicles.Contains(vehicle))
+				continue;
+
 			Register(vehicle, affiliation.GetDefaultFactionKey());
 			counted++;
 		}
 		PrintFormat("OYB_CORE vehicle limits: following %1 vehicles already in the world", counted);
+		return true;
 	}
 }

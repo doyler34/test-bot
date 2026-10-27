@@ -79,11 +79,20 @@ modded class SCR_CatalogEntitySpawnerComponent
 	override void InitiateSpawn(notnull SCR_EntityCatalogEntry entityEntry, int userId, SCR_EntitySpawnerSlotComponent slot)
 	{
 		Faction faction = GetFaction();
+		if (Replication.IsServer() && OYB_IsHidden(entityEntry))
+		{
+			PrintFormat("OYB_CORE vehicles: %1 is hidden, refused for player %2", FilePath.StripPath(entityEntry.GetPrefab().GetPath()), userId);
+			return;
+		}
+
+		string factionKey;
+		if (faction)
+			factionKey = faction.GetFactionKey();
 		string group;
 		int count, limit;
-		if (Replication.IsServer() && faction && !OYB_VehicleLimits.Allows(faction.GetFactionKey(), entityEntry.GetPrefab(), group, count, limit))
+		if (Replication.IsServer() && !OYB_VehicleLimits.Allows(factionKey, entityEntry.GetPrefab(), group, count, limit))
 		{
-			PrintFormat("OYB_CORE vehicle limit: %1 has %2/%3 %4, refused %5 for player %6", faction.GetFactionKey(), count, limit, group, FilePath.StripPath(entityEntry.GetPrefab().GetPath()), userId);
+			PrintFormat("OYB_CORE vehicle limit: %1 has %2/%3 %4, refused %5 for player %6", factionKey, count, limit, group, FilePath.StripPath(entityEntry.GetPrefab().GetPath()), userId);
 			SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerManager().GetPlayerController(userId));
 			if (controller)
 				controller.OYB_SendVehicleLimitReached(group, count, limit);
@@ -91,6 +100,14 @@ modded class SCR_CatalogEntitySpawnerComponent
 		}
 
 		super.InitiateSpawn(entityEntry, userId, slot);
+	}
+
+	// A hidden vehicle; a request sent from a list made before it was hidden is
+	// refused too. A vehicle that isn't hidden can always be given out as
+	// itself, even when all its variants are hidden.
+	protected bool OYB_IsHidden(notnull SCR_EntityCatalogEntry entityEntry)
+	{
+		return OYB_VehicleSettings.Get().IsHidden(entityEntry.GetPrefab());
 	}
 
 	override protected void PerformSpawn(notnull SCR_EntityCatalogEntry entityEntry, IEntity user = null, SCR_EntitySpawnerSlotComponent preferredSlot = null)
@@ -153,7 +170,11 @@ modded class SCR_BaseGameMode
 		super.OnGameStart();
 
 		if (Replication.IsServer())
+		{
+			OYB_VehicleSettings.Get().ResetSession();
+			GetGame().GetCallqueue().Remove(OYB_StartVehicleSettings);
 			GetGame().GetCallqueue().CallLater(OYB_StartVehicleSettings, 2000);
+		}
 	}
 
 	protected void OYB_StartVehicleSettings()

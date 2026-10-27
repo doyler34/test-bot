@@ -2,7 +2,7 @@
 {% block title %}{{ inst }} vehicles · OYB Control{% endblock %}
 {% block body %}
 {% include "_manage_tabs.html" %}
-<p class="muted">The vehicles this server offers in the building menu and at vehicle depots (OYB Core mod). Hide a vehicle and it's gone from both; hiding just a variant only works at depots. A depot vehicle's price can be changed; building menu costs are shown but can't be changed yet. Put vehicles in a limit group and each side can only have that many of the whole group alive at once. The server picks changes up within a minute, no restart needed.</p>
+<p class="muted">Every vehicle on this server, mods included (OYB Core mod): the ones the building menu and vehicle depots offer, and any other vehicle found in the server's mods. Hide a vehicle and it's gone from both menus; hiding just a variant only works at depots. A price is what the depot or the building menu shows and charges for the vehicle (crew costs come on top in the building menu). Put vehicles in a limit group and each side can only have that many of the whole group alive at once. The server picks changes up within a minute, no restart needed.</p>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
 {% if vehicles is none %}
@@ -59,7 +59,9 @@
 </section>
 
 <section class="card">
-  <p class="muted small">{{ vehicles|length }} vehicles and variants{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ settings.hidden|length }} hidden · {{ settings.prices|length }} with a changed price · {{ settings.members|length }} in limit groups</p>
+  {% if stale %}<div class="flash error">This list is from before the server last started; the running server hasn't written its own yet. Wait a minute and reload. If it stays like this, check the OYB_CORE lines in the server log.</div>{% endif %}
+  {% if list_info.scan_complete is false %}<p class="muted small">The server was still scanning its mods for vehicles when it wrote this list; reload in a minute for the rest.</p>{% endif %}
+  <p class="muted small">{{ vehicles|length }} vehicles and variants{% if listed_at %} · listed {{ listed_at }}{% endif %}{% if list_info.build %} · OYB Core {{ list_info.build }}{% endif %} · {{ settings.hidden|length }} hidden · {{ settings.prices|length }} with a changed price · {{ settings.members|length }} in limit groups</p>
   <form method="get" action="/vehicles/{{ inst }}" class="grid">
     <label>Search <input name="q" value="{{ filters.q }}" placeholder="Name, e.g. m998" maxlength="80" autocomplete="off"></label>
     <label>Category
@@ -114,18 +116,19 @@
         <div class="muted small mono">{{ v.prefab.rsplit("/", 1)[-1] }}</div></td>
       <td data-label="Category">{{ v.category }}</td>
       <td data-label="Factions">{{ v.factions|replace(",", ", ") }}</td>
-      <td data-label="Offered">{{ v.menus|map("replace", "building", "building menu")|join(", ") }}</td>
+      <td data-label="Offered">{% if v.menus %}{{ v.menus|map("replace", "building", "building menu")|join(", ") }}{% else %}<span class="muted small">not in a menu (found in the server's mods)</span>{% endif %}</td>
       <td data-label="Price">
         {% if v.build_cost is not none and not v.variant_of %}<div class="small">building menu: {{ v.build_cost }}</div>{% endif %}
-        {% if v.variant_of %}<span class="muted small">as its vehicle</span>{% elif "depot" not in v.menus %}{% if v.build_cost is none %}<span class="muted small">the game's default</span>{% endif %}{% else %}
+        {% if v.price is not none and not v.variant_of %}<div class="small">depot: {{ v.price }}</div>{% endif %}
+        {% if v.variant_of %}<span class="muted small">as its vehicle</span>{% elif not vehicle_priceable(v) %}<span class="muted small">{{ "the game's default" if v.menus else "not sold" }}</span>{% else %}
         <form method="post" action="/vehicles/{{ inst }}" class="inline">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="price">
           <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ settings.prices.get(v.prefab, v.price or 0) }}" aria-label="Depot price of {{ v.name }}" class="price">
+          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ settings.prices.get(v.prefab, v.price if v.price is not none else v.build_cost or 0) }}" aria-label="Price of {{ v.name }}" class="price">
           <button class="small">Set</button>
         </form>
         {% if v.prefab in settings.prices %}
-        <span class="muted small">normally {{ v.price or 0 }}</span>
+        <span class="muted small">changed on the panel</span>
         <form method="post" action="/vehicles/{{ inst }}" class="inline">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reset">
           <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">

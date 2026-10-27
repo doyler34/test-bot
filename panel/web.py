@@ -3503,6 +3503,12 @@ def vehicle_matches(vehicles, filters, settings):
     return found
 
 
+def vehicle_priceable(vehicle):
+    """Whether a price set on the panel changes anything for this vehicle: it's sold at
+    a depot, or the building menu gives it a supply cost of its own to replace."""
+    return not vehicle["variant_of"] and ("depot" in vehicle["menus"] or vehicle["build_cost"] is not None)
+
+
 def vehicle_link(inst, filters, page=1):
     values = dict(filters, page=page if page > 1 else "")
     return f"/vehicles/{inst}?" + urlencode({k: v for k, v in values.items() if v})
@@ -3536,7 +3542,14 @@ async def vehicles_page(request):
     names = {v["prefab"]: v["name"] for v in vehicles or []}
     members_per_group = {name: sum(1 for group in settings["members"].values() if group == name) for name in settings["groups"]}
     age = files.vehicle_list_age(base)
-    return render(request, "vehicles.html", inst=inst, tabs=manage_tabs(request, inst, "vehicles"), error=error,
+    try:
+        list_info = files.vehicle_list_info(base)
+    except (OSError, ValueError):
+        list_info = {"build": None, "scan_complete": None, "catalogue_entries": None}
+    process = files.game_process(base)
+    # Written before the running game started: the running game hasn't written its own yet.
+    stale = bool(age and process and age < time.time() - process["up"])
+    return render(request, "vehicles.html", list_info=list_info, stale=stale, vehicle_priceable=vehicle_priceable, inst=inst, tabs=manage_tabs(request, inst, "vehicles"), error=error,
                   vehicles=vehicles, shown=shown, found=len(found), settings=settings, names=names,
                   members_per_group=members_per_group, vehicle_group=vehicle_group, limit_text=limit_text,
                   filters=filters, categories=sorted({v["category"] for v in vehicles or []}),
@@ -3606,8 +3619,8 @@ async def vehicles_change(request):
     elif action == "price":
         if by_prefab.get(prefab, {}).get("variant_of"):
             fail("A variant costs what its vehicle costs.")
-        if prefab in by_prefab and "depot" not in by_prefab[prefab]["menus"]:
-            fail(f"{name} isn't sold at depots; the building menu's cost can't be changed yet.")
+        if prefab in by_prefab and not vehicle_priceable(by_prefab[prefab]):
+            fail(f"{name} isn't offered with a price of its own at a depot or in the building menu, so a price wouldn't do anything.")
         prices[prefab] = read_number("cost", "A price")
         message = f"{name} now costs {prices[prefab]}."
     elif action == "reset":
