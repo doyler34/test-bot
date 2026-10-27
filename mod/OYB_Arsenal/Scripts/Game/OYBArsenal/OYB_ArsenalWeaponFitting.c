@@ -82,14 +82,15 @@ modded class SCR_InventoryMenuUI
 
 		// Slots on fitted parts too, so a scope can go on a rail adapter.
 		array<AttachmentSlotComponent> slots = {};
-		OYB_TargetWeapon.GetSlots(weaponEntity, slots);
+		array<IEntity> owners = {};
+		OYB_TargetWeapon.GetSlots(weaponEntity, slots, owners);
 		AttachmentSlotComponent target;
 		BaseInventoryStorageComponent targetStorage;
-		foreach (AttachmentSlotComponent slot : slots)
+		foreach (int index, AttachmentSlotComponent slot : slots)
 		{
 			if (slot && slot.CanSetAttachment(item))
 			{
-				targetStorage = OYB_TargetWeapon.GetSlotStorage(slot);
+				targetStorage = OYB_TargetWeapon.GetSlotStorage(owners[index]);
 				if (!targetStorage)
 					continue;
 
@@ -438,7 +439,7 @@ modded class SCR_InventoryMenuUI
 		{
 			AttachmentSlotComponent slot = AttachmentSlotComponent.Cast(slotComponent);
 			if (slot && !slot.GetAttachedEntity() && slot.CanSetAttachment(accessory))
-				return OYB_TargetWeapon.GetSlotStorage(slot);
+				return OYB_TargetWeapon.GetSlotStorage(piece);
 		}
 		return null;
 	}

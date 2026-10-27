@@ -141,7 +141,8 @@ modded class SCR_InventoryStorageBaseUI
 		if (weapon)
 		{
 			weaponEntity = weapon.GetOwner();
-			OYB_TargetWeapon.GetSlots(weaponEntity, slots);
+			array<IEntity> owners = {};
+			OYB_TargetWeapon.GetSlots(weaponEntity, slots, owners);
 			weapon.GetMuzzlesList(muzzles);
 			foreach (AttachmentSlotComponent slot : slots)
 			{
