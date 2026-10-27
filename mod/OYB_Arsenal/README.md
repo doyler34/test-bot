@@ -54,8 +54,8 @@ below. Ownership: `NOTICE.md`.
 - **Accessories onto worn gear** (also `OYB_ArsenalWeaponFitting.c`):
   double-click a helmet light, NVGs or a vest flashlight and it goes into a
   free spot for it on what you wear (a helmet's mount, or a mount already on
-  the helmet), not into the bag. Pockets and backpacks don't count; a full
-  spot means the usual behaviour.
+  the helmet), not into the bag. Pockets and backpacks don't count. If the
+  spot is taken, the old accessory is swapped out and refunded, like clothing.
 - **Swap weapons in one go** (also `OYB_ArsenalClothing.c`): double-click a
   weapon and it goes into a free weapon slot that takes it; with none free,
   the weapon in its slot comes off and goes back into the arsenal whole
