@@ -40,6 +40,13 @@
       <select name="category" aria-label="Category to move them to">{% for c in add_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
       <button class="small ghost">Move all {{ found }}</button>
     </form>
+    <form method="post" action="/arsenal/{{ inst }}" class="inline sides" data-confirm="Give the {{ found }} items that match this filter to the ticked sides only?">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="sides_found">
+      <input type="hidden" name="back" value="{{ back }}">
+      {% for key, value in filters.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+      {% for f in factions %}<label><input type="checkbox" name="side" value="{{ f }}"> {{ f }}</label>{% endfor %}
+      <button class="small ghost">Set sides for all {{ found }}</button>
+    </form>
     {% for action, label in (("hide_found", "Hide all " ~ found), ("show_found", "Show all " ~ found)) %}
     <form method="post" action="/arsenal/{{ inst }}" class="inline" data-confirm="{{ label }} items that match this filter?">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ action }}">

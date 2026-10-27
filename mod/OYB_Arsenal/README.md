@@ -71,7 +71,7 @@ below. Ownership: `NOTICE.md`.
   the new categories within a minute.
 - **Sides from the panel**: tick which factions get an item, whatever faction
   its mod tagged it with, so a US gun can be in the USSR arsenal too, or only
-  there. A side whose catalogue doesn't list the item gets it at its usual
+  there, one item at a time or everything a filter shows. A side whose catalogue doesn't list the item gets it at its usual
   price; a side it was taken from can't have it, even in a saved kit.
 - **Mod scan**: on start the server also searches every loaded (non-base)
   mod's `Prefabs` folder for items no faction catalogue lists (a mod that

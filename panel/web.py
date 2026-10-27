@@ -3572,8 +3572,8 @@ async def arsenal_change(request):
     elif action == "reset":
         prices.pop(prefab, None)
         message = f"{name} is back to its normal price."
-    elif action == "sides":
-        if prefab in scanned or prefab in extras:
+    elif action in ("sides", "sides_found"):
+        if action == "sides" and (prefab in scanned or prefab in extras):
             flash(request, "An added item's arsenals are set when it's added.", "error")
             raise web.HTTPFound(back)
         known = {key for item in items for key in str(item["factions"]).split(",") if key}
@@ -3581,12 +3581,20 @@ async def arsenal_change(request):
         if not picked or not set(picked) <= known:
             flash(request, "Tick at least one side. To take an item away from everyone, hide it.", "error")
             raise web.HTTPFound(back)
-        own = {item["prefab"]: str(item["factions"]) for item in items}.get(prefab, "")
-        if picked == sorted(key for key in own.split(",") if key):
-            sides.pop(prefab, None)          # back to what the mod made it
+        own = {item["prefab"]: str(item["factions"]) for item in items}
+        targets = ([prefab] if action == "sides" else
+                   [item["prefab"] for item in arsenal_matches(items, arsenal_filters(form), hidden, prices, extras, moved, sides)
+                    if item["prefab"] not in scanned and item["prefab"] not in extras])
+        for target in targets:
+            if picked == sorted(key for key in own.get(target, "").split(",") if key):
+                sides.pop(target, None)          # back to what the mod made it
+            else:
+                sides[target] = ",".join(picked)
+        if action == "sides":
+            message = f"{name} is now in {', '.join(picked)} arsenals."
         else:
-            sides[prefab] = ",".join(picked)
-        message = f"{name} is now in {', '.join(picked)} arsenals."
+            message = f"{len(targets)} item{'s are' if len(targets) != 1 else ' is'} now in {', '.join(picked)} arsenals."
+            name = f"{len(targets)} items to {', '.join(picked)}"
     elif action == "reset_sides":
         sides.pop(prefab, None)
         message = f"{name} is back on its normal sides."

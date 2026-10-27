@@ -317,6 +317,23 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "reset_sides", "prefab": m9})
         self.assertEqual(files.arsenal_sides(self.root / "Plus01"), {})
 
+    async def test_a_whole_filter_can_be_put_on_other_sides(self):
+        folder = self.arsenal_profile(items="scan")
+        m16 = "{AAAA000000000001}Prefabs/Weapons/Rifles/M16/Rifle_M16A2.et"
+        m9 = "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"
+        token = await self.login("boss")
+        # Items found by the scan get their sides when they're added.
+        dressing = "{AAAA000000000003}Prefabs/Items/Medicine/FieldDressing_US_01.et"
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides_found", "faction": "US", "side": "USSR"})
+        self.assertEqual(files.arsenal_sides(self.root / "Plus01"), {m16: "USSR", m9: "USSR", dressing: "USSR"})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides_found", "q": "m16", "side": ["US", "USSR"]})
+        self.assertEqual(files.arsenal_sides(self.root / "Plus01"), {m16: "US,USSR", m9: "USSR", dressing: "USSR"})
+        # Back to their own sides clears the change.
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides_found", "faction": "USSR", "side": "US"})
+        self.assertEqual(files.arsenal_sides(self.root / "Plus01"), {dressing: "US"})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides_found"})
+        self.assertEqual(len(self.arsenal_saved(folder)["sideItems"]), 1)
+
     async def test_items_can_be_moved_to_another_category(self):
         folder = self.arsenal_profile()
         m9 = "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"
