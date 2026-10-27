@@ -287,6 +287,36 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "remove_added", "prefab": g3})
         self.assertEqual(files.arsenal_settings(self.root / "Plus01")[2], {})
 
+    async def test_items_can_be_put_on_other_sides(self):
+        folder = self.arsenal_profile()
+        m9 = "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"
+        token = await self.login("boss")
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides", "prefab": m9, "side": ["US", "USSR"]})
+        saved = self.arsenal_saved(folder)
+        self.assertEqual((saved["sideItems"], saved["sideFactions"]), ([m9], ["US,USSR"]))
+        ussr = await (await self.client.get("/arsenal/Plus01", params={"faction": "USSR"})).text()
+        self.assertIn("Handgun_M9", ussr)
+        self.assertIn("normally US", ussr)
+
+        # Only the other side.
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides", "prefab": m9, "side": "USSR"})
+        self.assertEqual(files.arsenal_sides(self.root / "Plus01"), {m9: "USSR"})
+        self.assertNotIn("Handgun_M9", await (await self.client.get("/arsenal/Plus01", params={"faction": "US"})).text())
+
+        # No side at all, or one no item belongs to, changes nothing; the item's
+        # own sides clear the override; other changes keep it.
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides", "prefab": m9})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides", "prefab": m9, "side": "FIA"})
+        self.assertEqual(files.arsenal_sides(self.root / "Plus01"), {m9: "USSR"})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "hide", "prefab": m9})
+        self.assertEqual(files.arsenal_sides(self.root / "Plus01"), {m9: "USSR"})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides", "prefab": m9, "side": "US"})
+        self.assertEqual(files.arsenal_sides(self.root / "Plus01"), {})
+
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides", "prefab": m9, "side": "USSR"})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "reset_sides", "prefab": m9})
+        self.assertEqual(files.arsenal_sides(self.root / "Plus01"), {})
+
     async def test_items_can_be_moved_to_another_category(self):
         folder = self.arsenal_profile()
         m9 = "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"

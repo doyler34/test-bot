@@ -100,7 +100,19 @@ modded class SCR_PlayerController
 		array<string> categoryItems = {};
 		array<string> categoryNames = {};
 		OYB_ArsenalSettings.Get().GetLists(hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
+
+		// Sides go first; they take effect with the settings that follow.
+		array<string> sideItems = {};
+		array<string> sideFactions = {};
+		OYB_ArsenalSettings.Get().GetSides(sideItems, sideFactions);
+		Rpc(OYB_RpcDo_Sides, sideItems, sideFactions);
 		Rpc(OYB_RpcDo_Settings, hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
+	protected void OYB_RpcDo_Sides(array<string> sideItems, array<string> sideFactions)
+	{
+		OYB_ArsenalSettings.Get().SetSides(sideItems, sideFactions);
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
@@ -256,7 +268,7 @@ modded class SCR_PlayerController
 		array<string> refused = {};
 		foreach (ResourceName missingPrefab, int missingCount : missingCounts)
 		{
-			if (missingCount > comesWith.Get(missingPrefab) && settings.IsHidden(missingPrefab))
+			if (missingCount > comesWith.Get(missingPrefab) && (settings.IsHidden(missingPrefab) || !settings.IsOnSide(missingPrefab, arsenal)))
 				refused.Insert(FilePath.StripExtension(FilePath.StripPath(missingPrefab.GetPath())));
 		}
 		if (!refused.IsEmpty())
@@ -439,7 +451,7 @@ modded class SCR_PlayerController
 	{
 		// A price set in the panel (or an added item's) comes first.
 		int panelPrice;
-		if (OYB_ArsenalSettings.Get().GetPrice(prefab, panelPrice))
+		if (OYB_ArsenalSettings.Get().GetPriceAt(prefab, arsenal, panelPrice))
 			return panelPrice;
 
 		if (prices.Contains(prefab))
@@ -574,11 +586,11 @@ modded class SCR_PlayerController
 					// catalogue price) gets the arsenal's usual refund share.
 					int price;
 					float catalogPrice = OYB_ArsenalSettings.CatalogPrice(prefab, arsenal);
-					if (OYB_ArsenalSettings.Get().GetPrice(prefab, price))
+					if (OYB_ArsenalSettings.Get().GetPriceAt(prefab, arsenal, price))
 					{
 						if (refund > 0 && catalogPrice > 0)
 							refund = price * Math.Min(refund / catalogPrice, 1);
-						else if (OYB_ArsenalSettings.Get().IsExtra(prefab))
+						else if (OYB_ArsenalSettings.Get().IsExtra(prefab) || OYB_ArsenalSettings.Get().IsAddedAt(prefab, arsenal))
 							refund = price * OYB_RefundShare(arsenal);
 					}
 

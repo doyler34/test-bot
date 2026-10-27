@@ -333,7 +333,20 @@ def arsenal_settings(base):
     return hidden, prices, extras, moved
 
 
-def save_arsenal_settings(base, hidden, prices, extras=None, moved=None):
+def arsenal_sides(base):
+    """{prefab: "US,USSR"}: the factions a catalogued item is offered to, where the
+    panel changed them from what the mod made it."""
+    profile = profile_folder(base)
+    path = profile / ARSENAL_FOLDER / "settings.json" if profile else None
+    if not path or not path.is_file():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    return {prefab: factions for prefab, factions in zip(data.get("sideItems") or [], data.get("sideFactions") or [])
+            if isinstance(prefab, str) and prefab and isinstance(factions, str)
+            and re.fullmatch(r"[A-Za-z0-9_]{1,20}(,[A-Za-z0-9_]{1,20})*", factions)}
+
+
+def save_arsenal_settings(base, hidden, prices, extras=None, moved=None, sides=None):
     """Write the settings the OYB Arsenal mod reads; the server picks them up within a minute."""
     profile = profile_folder(base)
     if profile is None:
@@ -349,7 +362,8 @@ def save_arsenal_settings(base, hidden, prices, extras=None, moved=None):
             "extraItems": [prefab for prefab, _ in added], "extraCosts": [extra["cost"] for _, extra in added],
             "extraFactions": [extra["factions"] for _, extra in added],
             "extraCategories": [extra["category"] for _, extra in added],
-            "categoryItems": sorted(moved or {}), "categoryNames": [moved[prefab] for prefab in sorted(moved or {})]}
+            "categoryItems": sorted(moved or {}), "categoryNames": [moved[prefab] for prefab in sorted(moved or {})],
+            "sideItems": sorted(sides or {}), "sideFactions": [sides[prefab] for prefab in sorted(sides or {})]}
     write_text(folder / "settings.json", json.dumps(data, indent=1) + "\n")
 
 

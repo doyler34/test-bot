@@ -1753,3 +1753,5 @@ body.map-open { overflow: hidden; }
 .note details.edit-note summary::-webkit-details-marker { display: none; }
 .note details.edit-note[open] { display: block; margin: 8px 0 0; }
 .note details.edit-note form { display: grid; gap: 6px; margin: 0; }
+form.sides label { display: inline-flex; gap: 4px; align-items: center; margin: 0 10px 0 0; text-transform: none; }
+form.sides input[type=checkbox] { width: auto; margin: 0; }

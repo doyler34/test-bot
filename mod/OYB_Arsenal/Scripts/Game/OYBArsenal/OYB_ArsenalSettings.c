@@ -10,9 +10,13 @@
 //     "extraItems": [prefab, ...], "extraCosts": [cost, ...],
 //     "extraFactions": ["" for all, or "US,FIA", ...],
 //     "extraCategories": [category name, ...],
-//     "categoryItems": [prefab, ...], "categoryNames": [category name, ...] }
+//     "categoryItems": [prefab, ...], "categoryNames": [category name, ...],
+//     "sideItems": [prefab, ...], "sideFactions": ["US,USSR", ...] }
 //
-// The last pair moves catalogued items to another category in the arsenal.
+// categoryItems moves catalogued items to another category in the arsenal.
+// sideItems gives a catalogued item to exactly those factions' arsenals, whatever
+// faction its mod tagged it with; a faction whose catalogue doesn't list it gets
+// it the way an added item is given out.
 //
 // The server also writes $profile:OYB_Arsenal/items.json once it has started:
 // every item the faction catalogues offer, plus every item prefab in a loaded mod
@@ -56,7 +60,7 @@ modded class SCR_ArsenalComponent
 		for (int i = filteredArsenalItems.Count() - 1; i >= 0; i--)
 		{
 			SCR_ArsenalItem item = filteredArsenalItems[i];
-			if (item && settings.IsHidden(item.GetItemResourceName()))
+			if (item && (settings.IsHidden(item.GetItemResourceName()) || !settings.IsOnSide(item.GetItemResourceName(), this)))
 				filteredArsenalItems.Remove(i);
 		}
 
@@ -136,7 +140,16 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 		}
 
 		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.Cast(Replication.FindItem(resourceComponentRplId));
-		if (settings.IsExtra(resourceNameItem))
+		SCR_ArsenalComponent requestedFrom;
+		if (resourceComponent)
+			requestedFrom = SCR_ArsenalComponent.FindArsenalComponent(resourceComponent.GetOwner());
+		if (requestedFrom && !settings.IsOnSide(resourceNameItem, requestedFrom))
+		{
+			PrintFormat("OYB_ARSENAL refused an item this side doesn't get: %1", FilePath.StripPath(resourceNameItem.GetPath()), level: LogLevel.WARNING);
+			return;
+		}
+
+		if (settings.IsExtra(resourceNameItem) || settings.IsAddedAt(resourceNameItem, requestedFrom))
 		{
 			OYB_GiveExtra(resourceComponent, storageComponentRplId, resourceNameItem, resourceType);
 			return;
@@ -227,7 +240,7 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 		}
 
 		int price;
-		OYB_ArsenalSettings.Get().GetPrice(prefab, price);
+		OYB_ArsenalSettings.Get().GetPriceAt(prefab, arsenal, price);
 		SCR_ResourceConsumer consumer = resourceComponent.GetConsumer(EResourceGeneratorID.DEFAULT, resourceType);
 		if (arsenal.IsArsenalUsingSupplies() && price > 0)
 		{
@@ -251,18 +264,21 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 		if (itemComponent)
 			item = itemComponent.GetOwner();
 
+		SCR_ArsenalComponent arsenal;
+		if (resourceComponent)
+			arsenal = SCR_ArsenalComponent.FindArsenalComponent(resourceComponent.GetOwner());
+
 		int price;
-		if (!item || !item.GetPrefabData() || !resourceComponent || resourceType != EResourceType.SUPPLIES || !OYB_ArsenalSettings.Get().GetPrice(item.GetPrefabData().GetPrefabName(), price))
+		if (!item || !item.GetPrefabData() || !resourceComponent || resourceType != EResourceType.SUPPLIES || !OYB_ArsenalSettings.Get().GetPriceAt(item.GetPrefabData().GetPrefabName(), arsenal, price))
 		{
 			super.RpcAsk_ArsenalRefundItem_(resourceComponentRplId, inventoryItemRplId, resourceType);
 			return;
 		}
 
 		ResourceName prefab = item.GetPrefabData().GetPrefabName();
-		SCR_ArsenalComponent arsenal = SCR_ArsenalComponent.FindArsenalComponent(resourceComponent.GetOwner());
 		float gameRefund = SCR_ArsenalManagerComponent.GetItemRefundAmount(item, arsenal, false);
 		float catalogPrice = OYB_ArsenalSettings.CatalogPrice(prefab, arsenal);
-		bool extra = OYB_ArsenalSettings.Get().IsExtra(prefab);
+		bool extra = OYB_ArsenalSettings.Get().IsExtra(prefab) || OYB_ArsenalSettings.Get().IsAddedAt(prefab, arsenal);
 
 		super.RpcAsk_ArsenalRefundItem_(resourceComponentRplId, inventoryItemRplId, resourceType);
 
@@ -318,8 +334,12 @@ modded class SCR_ArsenalInventorySlotUI
 		if (total < 0 || !m_pItem || !m_pItem.GetOwner() || !m_pItem.GetOwner().GetPrefabData())
 			return total;
 
+		SCR_ArsenalComponent arsenal;
+		if (m_ArsenalResourceComponent)
+			arsenal = SCR_ArsenalComponent.FindArsenalComponent(m_ArsenalResourceComponent.GetOwner());
+
 		int price;
-		if (!OYB_ArsenalSettings.Get().GetPrice(m_pItem.GetOwner().GetPrefabData().GetPrefabName(), price))
+		if (!OYB_ArsenalSettings.Get().GetPriceAt(m_pItem.GetOwner().GetPrefabData().GetPrefabName(), arsenal, price))
 			return total;
 
 		float multiplier = 1;
@@ -359,6 +379,8 @@ class OYB_ArsenalSettings
 	protected ref map<ResourceName, ref OYB_ArsenalExtra> m_Extras = new map<ResourceName, ref OYB_ArsenalExtra>();
 	protected ref array<ResourceName> m_aExtraOrder = {};
 	protected ref map<ResourceName, int> m_Categories = new map<ResourceName, int>();
+	protected ref map<ResourceName, ref array<string>> m_Sides = new map<ResourceName, ref array<string>>();
+	protected ref map<ResourceName, ref OYB_ArsenalExtra> m_SideExtras = new map<ResourceName, ref OYB_ArsenalExtra>();
 	protected string m_sLoadedText;
 	protected bool m_bServerStarted;
 
@@ -406,11 +428,95 @@ class OYB_ArsenalSettings
 		return true;
 	}
 
+	// Also the catalogue price of an item put on a side whose catalogue doesn't
+	// list it.
+	bool GetPriceAt(ResourceName prefab, SCR_ArsenalComponent arsenal, out int price)
+	{
+		if (GetPrice(prefab, price))
+			return true;
+		if (!IsAddedAt(prefab, arsenal))
+			return false;
+
+		price = GetSideExtra(prefab).m_iCost;
+		return true;
+	}
+
+	protected static string FactionKey(SCR_ArsenalComponent arsenal)
+	{
+		if (!arsenal || !arsenal.GetAssignedFaction())
+			return string.Empty;
+
+		return arsenal.GetAssignedFaction().GetFactionKey();
+	}
+
+	// False when the panel gave the item to other sides only. Arsenals with no
+	// faction keep everything.
+	bool IsOnSide(ResourceName prefab, SCR_ArsenalComponent arsenal)
+	{
+		array<string> sides = m_Sides.Get(prefab);
+		if (!sides)
+			return true;
+
+		string factionKey = FactionKey(arsenal);
+		return factionKey.IsEmpty() || sides.Contains(factionKey);
+	}
+
+	// The panel put the item on this arsenal's side, but the side's catalogue
+	// doesn't list it, so OYB hands it out like an added item.
+	bool IsAddedAt(ResourceName prefab, SCR_ArsenalComponent arsenal)
+	{
+		array<string> sides = m_Sides.Get(prefab);
+		if (!sides || !arsenal || m_Hidden.Contains(prefab) || m_Extras.Contains(prefab))
+			return false;
+
+		SCR_Faction faction = arsenal.GetAssignedFaction();
+		if (!faction || !sides.Contains(faction.GetFactionKey()))
+			return false;
+
+		SCR_EntityCatalogManagerComponent catalogManager = SCR_EntityCatalogManagerComponent.GetInstance();
+		if (!catalogManager || catalogManager.GetEntryWithPrefabFromFactionCatalog(EEntityCatalogType.ITEM, prefab, faction) || catalogManager.GetEntryWithPrefabFromCatalog(EEntityCatalogType.ITEM, prefab))
+			return false;
+
+		return GetSideExtra(prefab) != null;
+	}
+
+	// Price and category from whichever faction's catalogue lists the item.
+	protected OYB_ArsenalExtra GetSideExtra(ResourceName prefab)
+	{
+		OYB_ArsenalExtra extra = m_SideExtras.Get(prefab);
+		if (extra || m_SideExtras.Contains(prefab))
+			return extra;
+
+		SCR_EntityCatalogManagerComponent catalogManager = SCR_EntityCatalogManagerComponent.GetInstance();
+		SCR_EntityCatalogEntry entry;
+		if (catalogManager)
+			entry = catalogManager.GetEntryWithPrefabFromAnyCatalog(EEntityCatalogType.ITEM, prefab);
+		SCR_ArsenalItem data;
+		if (entry)
+			data = SCR_ArsenalItem.Cast(entry.GetEntityDataOfType(SCR_ArsenalItem));
+		if (!data)
+		{
+			m_SideExtras.Insert(prefab, null);
+			return null;
+		}
+
+		extra = new OYB_ArsenalExtra();
+		extra.m_sPrefab = prefab;
+		extra.m_iCost = data.GetSupplyCost(SCR_EArsenalSupplyCostType.DEFAULT, false);
+		int moved;
+		if (m_Categories.Find(prefab, moved))
+			extra.m_iCategory = moved;
+		else
+			extra.m_iCategory = OYB_ArsenalCategories.Refine(OYB_ArsenalCategories.FromItem(data.GetItemType(), data.GetItemMode()), prefab);
+		m_SideExtras.Insert(prefab, extra);
+		return extra;
+	}
+
 	// The added items this arsenal offers: its faction, and the kinds of item it
 	// was set up to carry.
 	void GetExtrasFor(SCR_ArsenalComponent arsenal, notnull array<ResourceName> extras)
 	{
-		if (m_aExtraOrder.IsEmpty() || !arsenal)
+		if ((m_aExtraOrder.IsEmpty() && m_Sides.IsEmpty()) || !arsenal)
 			return;
 
 		string factionKey;
@@ -434,6 +540,14 @@ class OYB_ArsenalSettings
 			}
 			extras.Insert(prefab);
 		}
+
+		foreach (ResourceName sidePrefab, array<string> sides : m_Sides)
+		{
+			if (!IsAddedAt(sidePrefab, arsenal))
+				continue;
+			if (OYB_ArsenalCategories.ToArsenalTypes(GetSideExtra(sidePrefab).m_iCategory) & supported)
+				extras.Insert(sidePrefab);
+		}
 	}
 
 	// A category set in the panel for a catalogued item.
@@ -444,7 +558,35 @@ class OYB_ArsenalSettings
 
 	OYB_ArsenalExtra GetExtra(ResourceName prefab)
 	{
-		return m_Extras.Get(prefab);
+		OYB_ArsenalExtra extra = m_Extras.Get(prefab);
+		if (!extra && m_Sides.Contains(prefab))
+			extra = GetSideExtra(prefab);
+
+		return extra;
+	}
+
+	// Sent apart from the other lists, as one network message carries eight at
+	// most. Takes effect with the Apply that follows.
+	void GetSides(notnull array<string> items, notnull array<string> factions)
+	{
+		foreach (ResourceName prefab, array<string> sides : m_Sides)
+		{
+			items.Insert(prefab);
+			factions.Insert(SCR_StringHelper.Join(",", sides));
+		}
+	}
+
+	void SetSides(notnull array<string> items, notnull array<string> factions)
+	{
+		m_Sides.Clear();
+		int count = Math.Min(items.Count(), factions.Count());
+		for (int i = 0; i < count; i++)
+		{
+			array<string> sides = {};
+			factions[i].Split(",", sides, true);
+			if (!items[i].IsEmpty() && !sides.IsEmpty())
+				m_Sides.Set(items[i], sides);
+		}
 	}
 
 	// Everything a player needs, as the lists one network message carries (eight
@@ -525,6 +667,7 @@ class OYB_ArsenalSettings
 				m_Categories.Set(categoryItems[c], OYB_ArsenalCategories.FromName(categoryNames[c]));
 		}
 
+		m_SideExtras.Clear();
 		OYB_ArsenalCatalogService.GetInstance().Invalidate();
 		SCR_ArsenalComponent.OYB_RefreshAll();
 	}
@@ -590,6 +733,8 @@ class OYB_ArsenalSettings
 		array<string> extraCategories = {};
 		array<string> categoryItems = {};
 		array<string> categoryNames = {};
+		array<string> sideItems = {};
+		array<string> sideFactions = {};
 		if (!text.IsEmpty())
 		{
 			JsonLoadContext context = new JsonLoadContext();
@@ -604,6 +749,8 @@ class OYB_ArsenalSettings
 				context.ReadValue("extraCategories", extraCategories);
 				context.ReadValue("categoryItems", categoryItems);
 				context.ReadValue("categoryNames", categoryNames);
+				context.ReadValue("sideItems", sideItems);
+				context.ReadValue("sideFactions", sideFactions);
 			}
 			else
 			{
@@ -615,8 +762,9 @@ class OYB_ArsenalSettings
 		for (int m = 0; m < Math.Min(extraFactions.Count(), extraCategories.Count()); m++)
 			extraMeta.Insert(extraFactions[m] + "|" + extraCategories[m]);
 
+		SetSides(sideItems, sideFactions);
 		Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
-		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added, %4 moved", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count());
+		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added, %4 moved, %5 on changed sides", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count(), m_Sides.Count());
 
 		array<int> players = {};
 		GetGame().GetPlayerManager().GetPlayers(players);
