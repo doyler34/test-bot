@@ -308,13 +308,14 @@ def arsenal_price(cost):
 
 
 def arsenal_settings(base):
-    """(hidden prefabs, {prefab: price}, {prefab: {cost, factions, category}}) from the
-    server's OYB Arsenal settings. The last are items added to the arsenal that no
-    faction catalogue lists."""
+    """(hidden prefabs, {prefab: price}, {prefab: {cost, factions, category}},
+    {prefab: category}) from the server's OYB Arsenal settings. The third are items
+    added to the arsenal that no faction catalogue lists; the last are catalogued
+    items moved to another category."""
     profile = profile_folder(base)
     path = profile / ARSENAL_FOLDER / "settings.json" if profile else None
     if not path or not path.is_file():
-        return set(), {}, {}
+        return set(), {}, {}, {}
     data = json.loads(path.read_text(encoding="utf-8") or "{}")
     hidden = {prefab for prefab in data.get("hidden") or [] if isinstance(prefab, str)}
     prices = {}
@@ -327,10 +328,12 @@ def arsenal_settings(base):
         if isinstance(prefab, str) and prefab and arsenal_price(cost) and isinstance(factions, str):
             extras[prefab] = {"cost": cost, "factions": factions,
                               "category": category if category in ARSENAL_CATEGORIES else "Other"}
-    return hidden, prices, extras
+    moved = {prefab: category for prefab, category in zip(data.get("categoryItems") or [], data.get("categoryNames") or [])
+             if isinstance(prefab, str) and prefab and category in ARSENAL_CATEGORIES}
+    return hidden, prices, extras, moved
 
 
-def save_arsenal_settings(base, hidden, prices, extras=None):
+def save_arsenal_settings(base, hidden, prices, extras=None, moved=None):
     """Write the settings the OYB Arsenal mod reads; the server picks them up within a minute."""
     profile = profile_folder(base)
     if profile is None:
@@ -345,7 +348,8 @@ def save_arsenal_settings(base, hidden, prices, extras=None):
             "priceItems": [prefab for prefab, _ in priced], "priceCosts": [cost for _, cost in priced],
             "extraItems": [prefab for prefab, _ in added], "extraCosts": [extra["cost"] for _, extra in added],
             "extraFactions": [extra["factions"] for _, extra in added],
-            "extraCategories": [extra["category"] for _, extra in added]}
+            "extraCategories": [extra["category"] for _, extra in added],
+            "categoryItems": sorted(moved or {}), "categoryNames": [moved[prefab] for prefab in sorted(moved or {})]}
     write_text(folder / "settings.json", json.dumps(data, indent=1) + "\n")
 
 

@@ -225,13 +225,13 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "price", "prefab": m16, "cost": "45"})
         saved = self.arsenal_saved(folder)
         self.assertEqual((saved["priceItems"], saved["priceCosts"]), ([m16], [45]))
-        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), ({m16}, {m16: 45}, {}))
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), ({m16}, {m16: 45}, {}, {}))
 
         # Bad prices and items the server never listed change nothing.
         for cost in ("-1", "abc", str(files.ARSENAL_MAX_PRICE + 1)):
             await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "price", "prefab": m16, "cost": cost})
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "hide", "prefab": "{BBBB}Nope.et"})
-        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), ({m16}, {m16: 45}, {}))
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), ({m16}, {m16: 45}, {}, {}))
 
         hidden_only = await (await self.client.get("/arsenal/Plus01", params={"show": "hidden"})).text()
         self.assertIn("M16A2", hidden_only)
@@ -239,7 +239,7 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
 
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "show", "prefab": m16})
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "reset", "prefab": m16})
-        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), (set(), {}, {}))
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), (set(), {}, {}, {}))
         actions = {r["action"] for r in self.db.all("SELECT action FROM audit")}
         self.assertTrue({"arsenal hide", "arsenal price", "arsenal show", "arsenal reset"} <= actions)
 
@@ -270,7 +270,7 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
                          ([g3], [35], ["US"], ["Sniper rifles"]))
         # Its price is changed with the rest of its settings, not as an override.
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "price", "prefab": g3, "cost": "50"})
-        self.assertEqual(files.arsenal_settings(self.root / "Plus01")[1:],
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01")[1:3],
                          ({}, {g3: {"cost": 50, "factions": "US", "category": "Sniper rifles"}}))
         added = await (await self.client.get("/arsenal/Plus01", params={"show": "added"})).text()
         self.assertIn("HK G3A3", added)
@@ -287,6 +287,27 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "remove_added", "prefab": g3})
         self.assertEqual(files.arsenal_settings(self.root / "Plus01")[2], {})
 
+    async def test_items_can_be_moved_to_another_category(self):
+        folder = self.arsenal_profile()
+        m9 = "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"
+        token = await self.login("boss")
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "move", "prefab": m9, "category": "Rifles"})
+        saved = self.arsenal_saved(folder)
+        self.assertEqual((saved["categoryItems"], saved["categoryNames"]), ([m9], ["Rifles"]))
+        rifles = await (await self.client.get("/arsenal/Plus01", params={"cat": "Rifles"})).text()
+        self.assertIn("Handgun_M9", rifles)
+        self.assertIn("normally Pistols", rifles)
+        self.assertNotIn("Handgun_M9", await (await self.client.get("/arsenal/Plus01", params={"cat": "Pistols"})).text())
+        # Moving it back to where the game put it clears the change.
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "move", "prefab": m9, "category": "Pistols"})
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01")[3], {})
+        # A whole filter at once, and only real categories.
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "move_found", "faction": "US", "category": "Tools"})
+        self.assertEqual(set(files.arsenal_settings(self.root / "Plus01")[3].values()), {"Tools"})
+        self.assertEqual(len(files.arsenal_settings(self.root / "Plus01")[3]), 3)
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "move", "prefab": m9, "category": "Lasers"})
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01")[3][m9], "Tools")
+
     async def test_hand_written_arsenal_settings_are_read_carefully(self):
         folder = self.arsenal_profile(items=False)
         (folder / "settings.json").write_text(json.dumps({
@@ -294,7 +315,7 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
             "extraItems": ["{D}d.et", "{E}e.et"], "extraCosts": [3, True], "extraFactions": ["", ""],
             "extraCategories": ["Lasers", "Rifles"]}))
         self.assertEqual(files.arsenal_settings(self.root / "Plus01"),
-                         ({"{A}a.et"}, {"{A}a.et": 10}, {"{D}d.et": {"cost": 3, "factions": "", "category": "Other"}}))
+                         ({"{A}a.et"}, {"{A}a.et": 10}, {"{D}d.et": {"cost": 3, "factions": "", "category": "Other"}}, {}))
         self.assertIsNone(files.arsenal_items(self.root / "Plus01"))
 
     async def test_with_amp_off_mods_go_straight_into_its_settings_file(self):

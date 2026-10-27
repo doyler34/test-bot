@@ -63,6 +63,10 @@ below. Ownership: `NOTICE.md`.
   without a restart. Hidden items drop out of every arsenal and the server
   refuses them, even in a saved kit; a changed price is what the arsenal
   charges, refunds, shows on the item card and charges for a kit.
+- **Reorganising from the panel**: any item can be moved to another
+  category from the Arsenal tab, one at a time or everything a filter shows
+  at once; moving it back to its own category clears the change. Players see
+  the new categories within a minute.
 - **Mod scan**: on start the server also searches every loaded (non-base)
   mod's `Prefabs` folder for items no faction catalogue lists (a mod that
   wasn't set up properly), a few at a time so it doesn't hold the server up,
@@ -244,6 +248,7 @@ Nothing needs setting up. What there is:
   `{"version": 1, "hidden": [prefab, ...], "priceItems": [prefab, ...],
   "priceCosts": [cost, ...], "extraItems": [prefab, ...], "extraCosts":
   [cost, ...], "extraFactions": ["" or "US,FIA", ...], "extraCategories":
+  [category name, ...], "categoryItems": [prefab, ...], "categoryNames":
   [category name, ...]}`, prefabs written as `{GUID}Prefabs/....et` the
   way `items.json` lists them.
 
@@ -328,6 +333,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Mod scan | Load a weapon mod, start | `scan: N prefabs in <mod>`; its uncatalogued items show as Unlisted in the panel | ✅ Workbench (6 mods, 9 unlisted found); dedicated server ⏳ |
 | Added item | Add an unlisted gun for US at 20, open a US arsenal | Gun listed at 20; taking it charges 20; putting it back refunds | ⏳ |
 | Network | Open and close an arsenal many times | Settings asked once per session (no repeat in the server log) | ⏳ |
+| Move category | Move an item to another category in the panel, wait a minute | It shows under the new category; `settings loaded: … 1 moved` | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ⏳ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |

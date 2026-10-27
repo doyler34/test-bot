@@ -96,16 +96,17 @@ modded class SCR_PlayerController
 		array<int> priceCosts = {};
 		array<string> extraItems = {};
 		array<int> extraCosts = {};
-		array<string> extraFactions = {};
-		array<string> extraCategories = {};
-		OYB_ArsenalSettings.Get().GetLists(hidden, priceItems, priceCosts, extraItems, extraCosts, extraFactions, extraCategories);
-		Rpc(OYB_RpcDo_Settings, hidden, priceItems, priceCosts, extraItems, extraCosts, extraFactions, extraCategories);
+		array<string> extraMeta = {};
+		array<string> categoryItems = {};
+		array<string> categoryNames = {};
+		OYB_ArsenalSettings.Get().GetLists(hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
+		Rpc(OYB_RpcDo_Settings, hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
-	protected void OYB_RpcDo_Settings(array<string> hidden, array<string> priceItems, array<int> priceCosts, array<string> extraItems, array<int> extraCosts, array<string> extraFactions, array<string> extraCategories)
+	protected void OYB_RpcDo_Settings(array<string> hidden, array<string> priceItems, array<int> priceCosts, array<string> extraItems, array<int> extraCosts, array<string> extraMeta, array<string> categoryItems, array<string> categoryNames)
 	{
-		OYB_ArsenalSettings.Get().Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraFactions, extraCategories);
+		OYB_ArsenalSettings.Get().Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
 	}
 
 	// Questions a client asks once per session; a client asking again within a

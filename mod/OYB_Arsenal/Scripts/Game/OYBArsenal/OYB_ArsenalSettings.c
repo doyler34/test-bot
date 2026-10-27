@@ -9,7 +9,10 @@
 //     "priceItems": [prefab, ...], "priceCosts": [cost, ...],
 //     "extraItems": [prefab, ...], "extraCosts": [cost, ...],
 //     "extraFactions": ["" for all, or "US,FIA", ...],
-//     "extraCategories": [category name, ...] }
+//     "extraCategories": [category name, ...],
+//     "categoryItems": [prefab, ...], "categoryNames": [category name, ...] }
+//
+// The last pair moves catalogued items to another category in the arsenal.
 //
 // The server also writes $profile:OYB_Arsenal/items.json once it has started:
 // every item the faction catalogues offer, plus every item prefab in a loaded mod
@@ -355,6 +358,7 @@ class OYB_ArsenalSettings
 	protected ref map<ResourceName, int> m_Prices = new map<ResourceName, int>();
 	protected ref map<ResourceName, ref OYB_ArsenalExtra> m_Extras = new map<ResourceName, ref OYB_ArsenalExtra>();
 	protected ref array<ResourceName> m_aExtraOrder = {};
+	protected ref map<ResourceName, int> m_Categories = new map<ResourceName, int>();
 	protected string m_sLoadedText;
 	protected bool m_bServerStarted;
 
@@ -431,12 +435,21 @@ class OYB_ArsenalSettings
 		}
 	}
 
+	// A category set in the panel for a catalogued item.
+	bool GetCategory(ResourceName prefab, out int category)
+	{
+		return m_Categories.Find(prefab, category);
+	}
+
 	OYB_ArsenalExtra GetExtra(ResourceName prefab)
 	{
 		return m_Extras.Get(prefab);
 	}
 
-	void GetLists(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts, notnull array<string> extraItems, notnull array<int> extraCosts, notnull array<string> extraFactions, notnull array<string> extraCategories)
+	// Everything a player needs, as the lists one network message carries (eight
+	// at most, so an added item's factions and category travel together as
+	// "factions|category").
+	void GetLists(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts, notnull array<string> extraItems, notnull array<int> extraCosts, notnull array<string> extraMeta, notnull array<string> categoryItems, notnull array<string> categoryNames)
 	{
 		foreach (ResourceName hiddenPrefab : m_Hidden)
 			hidden.Insert(hiddenPrefab);
@@ -452,14 +465,19 @@ class OYB_ArsenalSettings
 			OYB_ArsenalExtra extra = m_Extras.Get(extraPrefab);
 			extraItems.Insert(extraPrefab);
 			extraCosts.Insert(extra.m_iCost);
-			extraFactions.Insert(extra.m_sFactions);
-			extraCategories.Insert(OYB_ArsenalCategories.GetName(extra.m_iCategory));
+			extraMeta.Insert(extra.m_sFactions + "|" + OYB_ArsenalCategories.GetName(extra.m_iCategory));
+		}
+
+		foreach (ResourceName movedPrefab, int category : m_Categories)
+		{
+			categoryItems.Insert(movedPrefab);
+			categoryNames.Insert(OYB_ArsenalCategories.GetName(category));
 		}
 	}
 
 	// Takes new settings and has every arsenal rebuild its list, so hidden and
 	// added items show (or go) on open arsenal screens too.
-	void Apply(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts, notnull array<string> extraItems, notnull array<int> extraCosts, notnull array<string> extraFactions, notnull array<string> extraCategories)
+	void Apply(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts, notnull array<string> extraItems, notnull array<int> extraCosts, notnull array<string> extraMeta, notnull array<string> categoryItems, notnull array<string> categoryNames)
 	{
 		m_Hidden.Clear();
 		foreach (string prefab : hidden)
@@ -475,7 +493,7 @@ class OYB_ArsenalSettings
 
 		m_Extras.Clear();
 		m_aExtraOrder.Clear();
-		int extraCount = Math.Min(Math.Min(extraItems.Count(), extraCosts.Count()), Math.Min(extraFactions.Count(), extraCategories.Count()));
+		int extraCount = Math.Min(Math.Min(extraItems.Count(), extraCosts.Count()), extraMeta.Count());
 		for (int e = 0; e < extraCount; e++)
 		{
 			if (extraItems[e].IsEmpty() || extraCosts[e] < 0 || m_Extras.Contains(extraItems[e]))
@@ -484,10 +502,26 @@ class OYB_ArsenalSettings
 			OYB_ArsenalExtra extra = new OYB_ArsenalExtra();
 			extra.m_sPrefab = extraItems[e];
 			extra.m_iCost = extraCosts[e];
-			extra.m_sFactions = extraFactions[e];
-			extra.m_iCategory = OYB_ArsenalCategories.FromName(extraCategories[e]);
+			string factions = extraMeta[e];
+			string categoryName;
+			int bar = factions.IndexOf("|");
+			if (bar != -1)
+			{
+				categoryName = factions.Substring(bar + 1, factions.Length() - bar - 1);
+				factions = factions.Substring(0, bar);
+			}
+			extra.m_sFactions = factions;
+			extra.m_iCategory = OYB_ArsenalCategories.FromName(categoryName);
 			m_Extras.Insert(extra.m_sPrefab, extra);
 			m_aExtraOrder.Insert(extra.m_sPrefab);
+		}
+
+		m_Categories.Clear();
+		int movedCount = Math.Min(categoryItems.Count(), categoryNames.Count());
+		for (int c = 0; c < movedCount; c++)
+		{
+			if (!categoryItems[c].IsEmpty())
+				m_Categories.Set(categoryItems[c], OYB_ArsenalCategories.FromName(categoryNames[c]));
 		}
 
 		OYB_ArsenalCatalogService.GetInstance().Invalidate();
@@ -553,6 +587,8 @@ class OYB_ArsenalSettings
 		array<int> extraCosts = {};
 		array<string> extraFactions = {};
 		array<string> extraCategories = {};
+		array<string> categoryItems = {};
+		array<string> categoryNames = {};
 		if (!text.IsEmpty())
 		{
 			JsonLoadContext context = new JsonLoadContext();
@@ -565,6 +601,8 @@ class OYB_ArsenalSettings
 				context.ReadValue("extraCosts", extraCosts);
 				context.ReadValue("extraFactions", extraFactions);
 				context.ReadValue("extraCategories", extraCategories);
+				context.ReadValue("categoryItems", categoryItems);
+				context.ReadValue("categoryNames", categoryNames);
 			}
 			else
 			{
@@ -572,8 +610,12 @@ class OYB_ArsenalSettings
 			}
 		}
 
-		Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraFactions, extraCategories);
-		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count());
+		array<string> extraMeta = {};
+		for (int m = 0; m < Math.Min(extraFactions.Count(), extraCategories.Count()); m++)
+			extraMeta.Insert(extraFactions[m] + "|" + extraCategories[m]);
+
+		Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
+		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added, %4 moved", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count());
 
 		array<int> players = {};
 		GetGame().GetPlayerManager().GetPlayers(players);

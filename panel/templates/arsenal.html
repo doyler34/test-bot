@@ -13,7 +13,7 @@
 </section>
 {% else %}
 <section class="card">
-  <p class="muted small">{{ items|length }} items{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ hidden|length }} hidden · {{ prices|length }} with a changed price · {{ unlisted }} unlisted (found by scan) · {{ extras|length }} added</p>
+  <p class="muted small">{{ items|length }} items{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ hidden|length }} hidden · {{ prices|length }} with a changed price · {{ moved|length }} moved · {{ unlisted }} unlisted (found by scan) · {{ extras|length }} added</p>
   <form method="get" action="/arsenal/{{ inst }}" class="grid">
     <label>Search <input name="q" value="{{ filters.q }}" placeholder="Name, e.g. m16 carbine" maxlength="80" autocomplete="off"></label>
     <label>Category
@@ -33,6 +33,13 @@
   <h2>{{ found }} item{{ "s" if found != 1 }}{% if pages > 1 %} <span class="muted small">page {{ page }} of {{ pages }}</span>{% endif %}</h2>
   {% if found %}
   <div class="row-actions">
+    <form method="post" action="/arsenal/{{ inst }}" class="inline" data-confirm="Move the {{ found }} items that match this filter?">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="move_found">
+      <input type="hidden" name="back" value="{{ back }}">
+      {% for key, value in filters.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+      <select name="category" aria-label="Category to move them to">{% for c in add_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
+      <button class="small ghost">Move all {{ found }}</button>
+    </form>
     {% for action, label in (("hide_found", "Hide all " ~ found), ("show_found", "Show all " ~ found)) %}
     <form method="post" action="/arsenal/{{ inst }}" class="inline" data-confirm="{{ label }} items that match this filter?">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ action }}">
@@ -52,7 +59,18 @@
       <td class="strong">{{ item.name }}{% if is_hidden %} <span class="pill down">Hidden</span>{% endif %}
         {% if added %}<span class="pill on">Added</span>{% elif item.found %}<span class="pill alt">Unlisted</span>{% endif %}
         <div class="muted small mono">{{ item.prefab.rsplit("/", 1)[-1] }}</div></td>
-      <td data-label="Category">{{ added.category if added else item.category }}</td>
+      <td data-label="Category">
+        {% if item.found and not added %}{{ item.category }}{% else %}
+        {% set current = added.category if added else moved.get(item.prefab, item.category) %}
+        <form method="post" action="/arsenal/{{ inst }}" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="move">
+          <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <select name="category" aria-label="Category for {{ item.name }}">{% for c in add_categories %}<option value="{{ c }}" {% if c == current %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+          <button class="small ghost">Move</button>
+        </form>
+        {% if item.prefab in moved %}<div class="muted small">normally {{ item.category }}</div>{% endif %}
+        {% endif %}
+      </td>
       <td data-label="Factions">{% if added %}{{ added.factions or "All" }}{% elif item.found %}<span class="muted">none</span>{% else %}{{ item.factions|replace(",", ", ") }}{% endif %}</td>
       <td data-label="Price">
         {% if item.found and not added %}

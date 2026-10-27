@@ -279,6 +279,11 @@ class OYB_ArsenalCatalogService
 			if (!item || !entry || entry.m_iCategory != OYB_EArsenalCategory.AMMO)
 				continue;
 
+			// Left where the panel put it.
+			int moved;
+			if (OYB_ArsenalSettings.Get().GetCategory(prefabs[i], moved))
+				continue;
+
 			BaseMagazineComponent magazine = BaseMagazineComponent.Cast(item.FindComponent(BaseMagazineComponent));
 			if (magazine && magazine.GetMaxAmmoCount() > 1)
 				continue;
@@ -357,6 +362,11 @@ class OYB_ArsenalCatalogService
 			entry.m_eType = item.GetItemType();
 			entry.m_eMode = item.GetItemMode();
 			entry.m_iCategory = OYB_ArsenalCategories.Refine(OYB_ArsenalCategories.FromItem(entry.m_eType, entry.m_eMode), prefab);
+
+			// A category picked in the panel wins.
+			int moved;
+			if (OYB_ArsenalSettings.Get().GetCategory(prefab, moved))
+				entry.m_iCategory = moved;
 			entry.m_iSupplyCost = item.GetSupplyCost(costType);
 			entry.m_eRank = item.GetRequiredRank();
 
