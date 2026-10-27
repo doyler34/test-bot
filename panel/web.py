@@ -3466,11 +3466,13 @@ async def arsenal_page(request):
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     error, items, hidden, prices, extras, moved, sides, renames = "", None, set(), {}, {}, {}, {}, {}
+    refund_cap = files.ARSENAL_REFUND_CAP
     try:
         items = files.arsenal_items(base)
         hidden, prices, extras, moved = files.arsenal_settings(base)
         sides = files.arsenal_sides(base)
         renames = files.arsenal_renames(base)
+        refund_cap = files.arsenal_refund_cap(base)
     except (OSError, ValueError) as exc:
         error = f"Couldn't read the arsenal files: {exc}"
     filters = arsenal_filters(request.query)
@@ -3489,7 +3491,7 @@ async def arsenal_page(request):
     age = files.arsenal_items_age(base)
     return render(request, "arsenal.html", inst=inst, tabs=manage_tabs(request, inst, "arsenal"), error=error,
                   items=items, shown=shown, found=len(found), hidden=hidden, prices=prices, extras=extras, moved=moved,
-                  sides=sides, renames=renames, max_name=ARSENAL_MAX_NAME,
+                  sides=sides, renames=renames, max_name=ARSENAL_MAX_NAME, refund_cap=refund_cap,
                   unlisted=unlisted, add_categories=files.ARSENAL_CATEGORIES, filters=filters,
                   categories=categories, factions=factions, show_options=ARSENAL_SHOW, page=page, pages=pages,
                   prev_link=arsenal_link(inst, filters, page - 1) if page > 1 else "",
@@ -3512,6 +3514,7 @@ async def arsenal_change(request):
         hidden, prices, extras, moved = files.arsenal_settings(base)
         sides = files.arsenal_sides(base)
         renames = files.arsenal_renames(base)
+        refund_cap = files.arsenal_refund_cap(base)
     except (OSError, ValueError) as exc:
         flash(request, f"Couldn't read the arsenal files: {exc}", "error")
         raise web.HTTPFound(back)
@@ -3625,6 +3628,10 @@ async def arsenal_change(request):
         else:
             renames[prefab] = new_name
             message = f"{name} is now called {new_name}."
+    elif action == "refund_cap":
+        refund_cap = read_cost()
+        name = "refund limit"
+        message = f"One refund now gives back at most {refund_cap} supplies."
     elif action == "reset_sides":
         sides.pop(prefab, None)
         message = f"{name} is back on its normal sides."
@@ -3640,7 +3647,7 @@ async def arsenal_change(request):
     else:
         raise web.HTTPBadRequest(text="Unknown action.")
     try:
-        files.save_arsenal_settings(base, hidden, prices, extras, moved, sides, renames)
+        files.save_arsenal_settings(base, hidden, prices, extras, moved, sides, renames, refund_cap)
     except (files.FileError, OSError) as exc:
         audit(request, f"arsenal {action}", inst, name, str(exc), ok=False)
         flash(request, str(exc), "error")

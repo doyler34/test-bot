@@ -91,6 +91,11 @@ below. Ownership: `NOTICE.md`.
   search, the hover box and the inventory. The game keeps a second copy of a
   weapon's name for the on-screen weapon display (and possibly the kill
   feed), which keeps the original. Items that shared a name share the new one.
+- **Refund limit**: one refund gives back at most 350 supplies (changed on
+  the panel's Arsenal tab), however much is packed into what's handed in, so
+  a backpack stuffed with gear can't be turned into a pile of supplies; a
+  loadout swap's refund is capped the same way. Supplies the arsenal's storage
+  has no room for are thrown away instead of being dropped as crates.
 - **Mod scan**: on start the server also searches every loaded (non-base)
   mod's `Prefabs` folder for items no faction catalogue lists (a mod that
   wasn't set up properly), a few at a time so it doesn't hold the server up,
@@ -275,7 +280,7 @@ Nothing needs setting up. What there is:
   [category name, ...], "categoryItems": [prefab, ...], "categoryNames":
   [category name, ...], "sideItems": [prefab, ...], "sideFactions":
   ["US,USSR", ...], "renameItems": [prefab, ...], "renameNames": [new name,
-  ...]}`, prefabs written as `{GUID}Prefabs/....et` the
+  ...], "refundCap": 350}`, prefabs written as `{GUID}Prefabs/....et` the
   way `items.json` lists them.
 
 - **The game's own arsenal settings** on each arsenal (faction, item types,
@@ -369,6 +374,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Nested slots | Fit a rail adapter, then double-click a scope that only fits the rail | Scope in Fits and fitted onto the rail | ✅ AK74 RIS Rail + Aimpoint (Workbench) |
 | Accessories | Wear a helmet with a free mount, double-click a helmet light or NVGs | Goes onto the helmet; log `accessory … putting … on worn gear` | ✅ PVS-31 onto the OPS Core helmet, and swapped for a GPNVG-18 (Workbench) |
 | Body slots | Double-click NVGs (with a night vision slot, e.g. NV-System), a watch or binoculars | Goes into its slot on the body; a taken slot is swapped | ⏳ |
+| Refund limit | Fill a backpack with gear, hand it to an arsenal that uses supplies | At most 350 back; log `refund cut from … to 350`; no supply crates appear | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ✅ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |

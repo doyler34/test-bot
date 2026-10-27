@@ -13,6 +13,17 @@
 </section>
 {% else %}
 <section class="card">
+  <h2>Refund limit</h2>
+  <p class="muted small">The most supplies one refund gives back, however much is packed into what's handed in (a full backpack counts as one refund), and the most a loadout swap gives back. Supplies the arsenal has no room for are thrown away, not dropped as crates.</p>
+  <form method="post" action="/arsenal/{{ inst }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="refund_cap">
+    <input type="hidden" name="back" value="{{ back }}">
+    <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ refund_cap }}" aria-label="Refund limit" class="price">
+    <button class="small">Set</button>
+  </form>
+</section>
+
+<section class="card">
   <p class="muted small">{{ items|length }} items{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ hidden|length }} hidden · {{ prices|length }} with a changed price · {{ moved|length }} moved · {{ sides|length }} on changed sides · {{ renames|length }} renamed · {{ unlisted }} unlisted (found by scan) · {{ extras|length }} added</p>
   <form method="get" action="/arsenal/{{ inst }}" class="grid">
     <label>Search <input name="q" value="{{ filters.q }}" placeholder="Name, e.g. m16 carbine" maxlength="80" autocomplete="off"></label>

@@ -343,9 +343,13 @@ modded class SCR_PlayerController
 		context.ReadValue(SCR_PlayerArsenalLoadout.ARSENALLOADOUT_FACTION_KEY, factionKey);
 		bool applied = SCR_PlayerArsenalLoadout.ApplyLoadoutString(character, context);
 
+		// What the kit swap gives back is capped like any refund.
 		SCR_ResourceGenerator generator = resourceComponent.GetGenerator(EResourceGeneratorID.DEFAULT, EResourceType.SUPPLIES);
+		OYB_Refunds.Start(OYB_ArsenalSettings.Get().GetRefundCap());
+		refund = OYB_Refunds.Take(generator, refund);
 		if (refund > 0 && generator)
 			generator.RequestGeneration(refund);
+		OYB_Refunds.Stop();
 
 		PrintFormat("OYB_ARSENAL loadout %1 loaded for player %2 (applied %3): cost %4, refund %5", slot + 1, GetPlayerId(), applied, cost, refund);
 		if (applied)

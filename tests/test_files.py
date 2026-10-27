@@ -361,6 +361,19 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "rename", "prefab": m16, "name": "M16A2"})
         self.assertEqual(files.arsenal_renames(self.root / "Plus01"), {})
 
+    async def test_the_refund_limit_can_be_changed(self):
+        folder = self.arsenal_profile()
+        token = await self.login("boss")
+        self.assertEqual(files.arsenal_refund_cap(self.root / "Plus01"), 350)
+        self.assertIn('value="350"', await (await self.client.get("/arsenal/Plus01")).text())
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "refund_cap", "cost": "200"})
+        self.assertEqual(self.arsenal_saved(folder)["refundCap"], 200)
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "refund_cap", "cost": "-5"})
+        # Other changes keep it.
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "hide",
+                                                        "prefab": "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"})
+        self.assertEqual(files.arsenal_refund_cap(self.root / "Plus01"), 200)
+
     async def test_items_can_be_moved_to_another_category(self):
         folder = self.arsenal_profile()
         m9 = "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"

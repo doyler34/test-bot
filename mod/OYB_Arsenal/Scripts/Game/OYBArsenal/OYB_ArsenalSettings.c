@@ -12,7 +12,8 @@
 //     "extraCategories": [category name, ...],
 //     "categoryItems": [prefab, ...], "categoryNames": [category name, ...],
 //     "sideItems": [prefab, ...], "sideFactions": ["US,USSR", ...],
-//     "renameItems": [prefab, ...], "renameNames": [new name, ...] }
+//     "renameItems": [prefab, ...], "renameNames": [new name, ...],
+//     "refundCap": most supplies one refund gives back (350 if left out) }
 //
 // categoryItems moves catalogued items to another category in the arsenal.
 // sideItems gives a catalogued item to exactly those factions' arsenals, whatever
@@ -260,6 +261,10 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
 	override protected void RpcAsk_ArsenalRefundItem_(RplId resourceComponentRplId, RplId inventoryItemRplId, EResourceType resourceType)
 	{
+		// One refund, however much is packed in what's handed back, gives at most
+		// the panel's refund limit (see OYB_Refunds).
+		OYB_Refunds.Start(OYB_ArsenalSettings.Get().GetRefundCap());
+
 		InventoryItemComponent itemComponent = InventoryItemComponent.Cast(Replication.FindItem(inventoryItemRplId));
 		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.Cast(Replication.FindItem(resourceComponentRplId));
 		IEntity item;
@@ -274,6 +279,7 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 		if (!item || !item.GetPrefabData() || !resourceComponent || resourceType != EResourceType.SUPPLIES || !OYB_ArsenalSettings.Get().GetPriceAt(item.GetPrefabData().GetPrefabName(), arsenal, price))
 		{
 			super.RpcAsk_ArsenalRefundItem_(resourceComponentRplId, inventoryItemRplId, resourceType);
+			OYB_Refunds.Stop();
 			return;
 		}
 
@@ -284,10 +290,11 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 
 		super.RpcAsk_ArsenalRefundItem_(resourceComponentRplId, inventoryItemRplId, resourceType);
 
-		if (item && !item.IsDeleted())
+		if ((item && !item.IsDeleted()) || !arsenal || !arsenal.IsArsenalUsingSupplies())
+		{
+			OYB_Refunds.Stop();
 			return;
-		if (!arsenal || !arsenal.IsArsenalUsingSupplies())
-			return;
+		}
 
 		// An added item has no catalogue price, so the game gave nothing back; it
 		// gets the arsenal's usual refund share of its price. Otherwise the
@@ -308,6 +315,21 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 		}
 
 		OYB_Settle(resourceComponent, resourceComponent.GetConsumer(EResourceGeneratorID.DEFAULT, resourceType), -delta);
+		OYB_Refunds.Stop();
+	}
+
+	// What the game hands back during a refund is cut to the refund limit and to
+	// the room the arsenal's storage has; the rest is thrown away.
+	override protected bool TryPerformResourceGeneration(notnull SCR_ResourceActor actor, float resourceValue)
+	{
+		if (!OYB_Refunds.IsOn())
+			return super.TryPerformResourceGeneration(actor, resourceValue);
+
+		float allowed = OYB_Refunds.Take(SCR_ResourceGenerator.Cast(actor), resourceValue);
+		if (allowed <= 0)
+			return true;
+
+		return super.TryPerformResourceGeneration(actor, allowed);
 	}
 
 	// A positive amount is taken from the arsenal, a negative one given to it.
@@ -320,8 +342,9 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 		else if (amount < 0)
 		{
 			SCR_ResourceGenerator generator = resourceComponent.GetGenerator(EResourceGeneratorID.DEFAULT, EResourceType.SUPPLIES);
-			if (generator)
-				generator.RequestGeneration(-amount);
+			float allowed = OYB_Refunds.Take(generator, -amount);
+			if (generator && allowed > 0)
+				generator.RequestGeneration(allowed);
 		}
 	}
 }
@@ -357,6 +380,67 @@ modded class SCR_ArsenalInventorySlotUI
 	}
 }
 
+// Keeps refunds in check. Packing a backpack full of gear and handing it to an
+// arsenal would otherwise turn into a pile of supplies, so a refund (whatever
+// is inside the item) gives back at most the panel's limit. What the arsenal's
+// storage has no room for is thrown away instead of being dropped next to it
+// as supply crates.
+class OYB_Refunds
+{
+	protected static bool s_bOn;
+	protected static float s_fLeft;
+
+	static void Start(float limit)
+	{
+		s_bOn = true;
+		s_fLeft = limit;
+	}
+
+	static void Stop()
+	{
+		s_bOn = false;
+	}
+
+	static bool IsOn()
+	{
+		return s_bOn;
+	}
+
+	// How much of amount may be given back now: within what's left of the limit
+	// (while a refund is on) and the room the generator's storage has.
+	static float Take(SCR_ResourceGenerator generator, float amount)
+	{
+		float allowed = amount;
+		if (s_bOn)
+			allowed = Math.Min(allowed, s_fLeft);
+		if (generator)
+			allowed = Math.Min(allowed, generator.GetAggregatedMaxResourceValue() - generator.GetAggregatedResourceValue());
+		allowed = Math.Max(allowed, 0);
+
+		if (s_bOn)
+			s_fLeft -= allowed;
+		if (allowed < amount)
+			PrintFormat("OYB_ARSENAL refund cut from %1 to %2 (limit or no room)", Math.Round(amount), Math.Round(allowed));
+		return allowed;
+	}
+}
+
+// While a refund is on, supplies with nowhere to go are thrown away rather than
+// dropped as crates.
+modded class SCR_ResourceGeneratorActionDropContainers
+{
+	override void PerformAction(notnull SCR_ResourceGenerator generator, inout float resourceValue)
+	{
+		if (OYB_Refunds.IsOn())
+		{
+			resourceValue = 0;
+			return;
+		}
+
+		super.PerformAction(generator, resourceValue);
+	}
+}
+
 class OYB_ArsenalExtra
 {
 	ResourceName m_sPrefab;
@@ -384,6 +468,8 @@ class OYB_ArsenalSettings
 	protected ref map<ResourceName, ref array<string>> m_Sides = new map<ResourceName, ref array<string>>();
 	protected ref map<ResourceName, ref OYB_ArsenalExtra> m_SideExtras = new map<ResourceName, ref OYB_ArsenalExtra>();
 	protected ref map<ResourceName, string> m_Renames = new map<ResourceName, string>();
+	protected static const int DEFAULT_REFUND_CAP = 350;
+	protected int m_iRefundCap = DEFAULT_REFUND_CAP;
 	protected string m_sLoadedText;
 	protected bool m_bServerStarted;
 
@@ -577,6 +663,12 @@ class OYB_ArsenalSettings
 			items.Insert(prefab);
 			factions.Insert(SCR_StringHelper.Join(",", sides));
 		}
+	}
+
+	// The most one refund (or one loadout swap) gives back, from the panel.
+	int GetRefundCap()
+	{
+		return m_iRefundCap;
 	}
 
 	// The name players see: the one set in the panel, else the item's own.
@@ -773,6 +865,7 @@ class OYB_ArsenalSettings
 		array<string> sideFactions = {};
 		array<string> renameItems = {};
 		array<string> renameNames = {};
+		int refundCap = DEFAULT_REFUND_CAP;
 		if (!text.IsEmpty())
 		{
 			JsonLoadContext context = new JsonLoadContext();
@@ -791,6 +884,8 @@ class OYB_ArsenalSettings
 				context.ReadValue("sideFactions", sideFactions);
 				context.ReadValue("renameItems", renameItems);
 				context.ReadValue("renameNames", renameNames);
+				if (!context.ReadValue("refundCap", refundCap) || refundCap < 0)
+					refundCap = DEFAULT_REFUND_CAP;
 			}
 			else
 			{
@@ -804,8 +899,9 @@ class OYB_ArsenalSettings
 
 		SetSides(sideItems, sideFactions);
 		SetNames(renameItems, renameNames);
+		m_iRefundCap = refundCap;
 		Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
-		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added, %4 moved, %5 on changed sides, %6 renamed", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count(), m_Sides.Count(), m_Renames.Count());
+		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added, %4 moved, %5 on changed sides, %6 renamed, refunds up to %7", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count(), m_Sides.Count(), m_Renames.Count(), m_iRefundCap);
 
 		array<int> players = {};
 		GetGame().GetPlayerManager().GetPlayers(players);
