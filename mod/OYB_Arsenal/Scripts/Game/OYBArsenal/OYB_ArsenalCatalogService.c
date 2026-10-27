@@ -280,8 +280,8 @@ class OYB_ArsenalCatalogService
 				continue;
 
 			// Left where the panel put it.
-			int moved;
-			if (OYB_ArsenalSettings.Get().GetCategory(prefabs[i], moved))
+			int pinned;
+			if (OYB_ArsenalSettings.Get().GetCategory(prefabs[i], pinned))
 				continue;
 
 			BaseMagazineComponent magazine = BaseMagazineComponent.Cast(item.FindComponent(BaseMagazineComponent));
