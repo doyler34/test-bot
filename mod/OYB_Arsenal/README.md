@@ -366,7 +366,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Sides | In the panel, tick USSR on a US rifle, wait a minute, open a USSR arsenal | Rifle listed at its usual price; untick US and the US arsenal loses it | ✅ |
 | Rename | Rename an item in the panel, wait a minute, open an arsenal | New name on the card, hover box and in the inventory; `settings loaded: … 1 renamed` | ⏳ |
 | Nested slots | Fit a rail adapter, then double-click a scope that only fits the rail | Scope in Fits and fitted onto the rail | ⏳ |
-| Accessories | Wear a helmet with a free mount, double-click a helmet light or NVGs | Goes onto the helmet; log `accessory … putting … on worn gear` | ⏳ |
+| Accessories | Wear a helmet with a free mount, double-click a helmet light or NVGs | Goes onto the helmet; log `accessory … putting … on worn gear` | ✅ PVS-31 onto the OPS Core helmet (Workbench) |
 | Body slots | Double-click NVGs (with a night vision slot, e.g. NV-System), a watch or binoculars | Goes into its slot on the body; a taken slot is swapped | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ✅ |
