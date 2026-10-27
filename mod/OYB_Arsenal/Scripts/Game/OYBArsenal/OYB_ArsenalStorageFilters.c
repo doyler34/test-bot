@@ -384,7 +384,8 @@ modded class SCR_InventoryStorageBaseUI
 		if (save)
 			save.m_OnActivated.Insert(OYB_OnSaveKey);
 
-		SCR_InputButtonComponent load = OYB_CreateNavButton(row, "MenuDeploy", "Load");
+		// MenuDeploy (Space) is a hold on the respawn screen and never fired here.
+		SCR_InputButtonComponent load = OYB_CreateNavButton(row, "MenuRename", "Load");
 		if (load)
 			load.m_OnActivated.Insert(OYB_OnLoadKey);
 
