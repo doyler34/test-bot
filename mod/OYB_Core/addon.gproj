@@ -1,0 +1,8 @@
+GameProject {
+ ID "OYBCore"
+ GUID "6AB71DA09BBD10CF"
+ TITLE "OYB Core"
+ Dependencies {
+  "58D0FB3206B6F859"
+ }
+}
