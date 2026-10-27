@@ -341,8 +341,12 @@ modded class SCR_ResourcePlayerControllerInventoryComponent
 		}
 		else if (amount < 0)
 		{
+			// Only a refund is held to the limit; giving back the difference on a
+			// purchase stays as it was.
 			SCR_ResourceGenerator generator = resourceComponent.GetGenerator(EResourceGeneratorID.DEFAULT, EResourceType.SUPPLIES);
-			float allowed = OYB_Refunds.Take(generator, -amount);
+			float allowed = -amount;
+			if (OYB_Refunds.IsOn())
+				allowed = OYB_Refunds.Take(generator, allowed);
 			if (generator && allowed > 0)
 				generator.RequestGeneration(allowed);
 		}
@@ -389,11 +393,13 @@ class OYB_Refunds
 {
 	protected static bool s_bOn;
 	protected static float s_fLeft;
+	protected static float s_fStartedAt;
 
 	static void Start(float limit)
 	{
 		s_bOn = true;
 		s_fLeft = limit;
+		s_fStartedAt = Now();
 	}
 
 	static void Stop()
@@ -401,23 +407,35 @@ class OYB_Refunds
 		s_bOn = false;
 	}
 
+	// Only for the refund in hand: if a script error ever skipped Stop, the
+	// limit still lapses with the moment it was started in, so nothing else
+	// that hands out supplies is ever cut.
 	static bool IsOn()
 	{
-		return s_bOn;
+		return s_bOn && s_fStartedAt == Now();
+	}
+
+	protected static float Now()
+	{
+		if (!GetGame().GetWorld())
+			return -1;
+
+		return GetGame().GetWorld().GetWorldTime();
 	}
 
 	// How much of amount may be given back now: within what's left of the limit
 	// (while a refund is on) and the room the generator's storage has.
 	static float Take(SCR_ResourceGenerator generator, float amount)
 	{
+		bool on = IsOn();
 		float allowed = amount;
-		if (s_bOn)
+		if (on)
 			allowed = Math.Min(allowed, s_fLeft);
 		if (generator)
 			allowed = Math.Min(allowed, generator.GetAggregatedMaxResourceValue() - generator.GetAggregatedResourceValue());
 		allowed = Math.Max(allowed, 0);
 
-		if (s_bOn)
+		if (on)
 			s_fLeft -= allowed;
 		if (allowed < amount)
 			PrintFormat("OYB_ARSENAL refund cut from %1 to %2 (limit or no room)", Math.Round(amount), Math.Round(allowed));
