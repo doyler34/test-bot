@@ -321,11 +321,11 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Removed item | Save a kit with a mod item, remove the mod, Load | Refused, item named, no supplies taken | ⏳ |
 | Supplies | Load at an arsenal that uses supplies | Charged for missing items only; refund for dropped | ⏳ |
 | Spam | Click Load repeatedly | At most one load a second | ⏳ |
-| Item list for the panel | Start the server with the mod | `wrote N items to $profile:OYB_Arsenal/items.json`; panel's Arsenal tab lists them | ⏳ |
+| Item list for the panel | Start the server with the mod | `wrote N items to $profile:OYB_Arsenal/items.json`; panel's Arsenal tab lists them | ✅ Workbench (519 items) |
 | Hide from panel | Hide an item, wait a minute, open an arsenal | Item gone; `settings loaded: 1 hidden` | ⏳ |
 | Price from panel | Set a price, wait, open an arsenal that uses supplies | Card shows the new price; that's what's taken and refunded | ⏳ |
 | Hidden in a kit | Save a kit, hide one of its items, load at an arsenal without it on you | Refused, item named | ⏳ |
-| Mod scan | Load a weapon mod, start | `scan: N prefabs in <mod>`; its uncatalogued items show as Unlisted in the panel | ⏳ |
+| Mod scan | Load a weapon mod, start | `scan: N prefabs in <mod>`; its uncatalogued items show as Unlisted in the panel | ✅ Workbench (6 mods, 9 unlisted found); dedicated server ⏳ |
 | Added item | Add an unlisted gun for US at 20, open a US arsenal | Gun listed at 20; taking it charges 20; putting it back refunds | ⏳ |
 | Network | Open and close an arsenal many times | Settings asked once per session (no repeat in the server log) | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
