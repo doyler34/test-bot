@@ -303,9 +303,11 @@ modded class SCR_PlayerController
 	}
 
 	// Every prefab named in a saved kit, by how many times it appears. Prefab names
-	// are the only strings in it that start with a {GUID}.
+	// are the only strings in it that start with a {GUID}. The first one is the
+	// character itself, which loading a kit never replaces, so it isn't counted.
 	protected void OYB_CountPrefabs(string kit, notnull map<ResourceName, int> counts)
 	{
+		bool skippedCharacter;
 		int pos = kit.IndexOf("\"{");
 		while (pos != -1)
 		{
@@ -318,7 +320,9 @@ modded class SCR_PlayerController
 			{
 				string prefab = kit.Substring(start, end - start);
 				prefab.Replace("\\/", "/");
-				counts.Set(prefab, counts.Get(prefab) + 1);
+				if (skippedCharacter)
+					counts.Set(prefab, counts.Get(prefab) + 1);
+				skippedCharacter = true;
 			}
 			pos = kit.IndexOfFrom(end + 1, "\"{");
 		}
