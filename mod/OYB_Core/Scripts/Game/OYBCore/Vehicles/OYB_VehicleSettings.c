@@ -96,6 +96,7 @@ class OYB_VehicleSettings
 			return;
 		m_bServerStarted = true;
 
+		Print("OYB_CORE vehicles: starting (list from depots and the building menu)");
 		FileIO.MakeDirectory(FOLDER);
 		Reload();
 		GetGame().GetCallqueue().CallLater(Reload, RELOAD_EVERY_MS, true);
@@ -321,13 +322,10 @@ class OYB_VehicleSettings
 			if (!m_bLogged)
 				PrintFormat("OYB_CORE vehicles: %1 has %2 vehicles in its catalogue: %3 sold at depots, %4 in the building menu, %5 in neither", factionKey, entries.Count(), depot, building, neither);
 		}
-		// Until the catalogues have filled, the next try logs the details again.
-		if (inCatalogues > 0)
-			m_bLogged = true;
-
-		m_iListed = m_aPrefabs.Count();
-		if (m_iListed == 0)
+		// The details are logged again on every try until a list is written.
+		if (m_aPrefabs.IsEmpty())
 		{
+			m_iListed = 0;
 			// An empty list never replaces one already written.
 			if (inCatalogues == 0)
 				Print("OYB_CORE vehicles: the vehicle catalogues are empty or not ready yet, vehicle_list.json left as it was; trying again in a minute");
@@ -346,10 +344,16 @@ class OYB_VehicleSettings
 		context.WriteValue("buildCosts", m_aBuildCosts);
 		context.WriteValue("menus", m_aMenus);
 		context.WriteValue("variantOf", m_aVariantOf);
-		if (context.SaveToFile(LIST_FILE))
-			PrintFormat("OYB_CORE wrote %1 vehicles to %2", m_iListed, LIST_FILE);
-		else
-			PrintFormat("OYB_CORE couldn't write %1", LIST_FILE, level: LogLevel.WARNING);
+		if (!context.SaveToFile(LIST_FILE))
+		{
+			m_iListed = 0;
+			PrintFormat("OYB_CORE couldn't write %1, trying again in a minute", LIST_FILE, level: LogLevel.WARNING);
+			return;
+		}
+
+		m_iListed = m_aPrefabs.Count();
+		m_bLogged = true;
+		PrintFormat("OYB_CORE wrote %1 vehicles to %2", m_iListed, LIST_FILE);
 	}
 
 	// False when the prefab was already listed (another faction has it too).

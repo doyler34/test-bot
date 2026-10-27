@@ -86,7 +86,8 @@ faction catalogue vehicle that a depot sells (depot data) or the building menu
 places (in the building manager's prefab list, or editor data for building
 mode), with its variants, factions, depot price and building cost. The log
 shows, per faction, how many catalogue vehicles were found and how many are in
-each menu, plus the data on a few entries. An empty result never replaces a
+each menu, plus the data on a few entries, on every try until a list is
+written. An empty result or a failed write never replaces a
 list already written; it's tried again each minute.
 
 Files: `OYB_VehicleDepot.c` (depot, catalogue data, game mode and player
