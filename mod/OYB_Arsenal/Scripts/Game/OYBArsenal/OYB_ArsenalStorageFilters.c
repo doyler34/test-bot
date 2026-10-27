@@ -406,8 +406,9 @@ modded class SCR_InventoryStorageBaseUI
 		if (save)
 			save.m_OnActivated.Insert(OYB_OnSaveKey);
 
-		// MenuRename is R inside the inventory, the same as the Weapon key.
-		SCR_InputButtonComponent load = OYB_CreateNavButton(row, "MenuDeploy", "Load");
+		// MenuRename is R (the Weapon key) and MenuDeploy only works on the
+		// respawn screen.
+		SCR_InputButtonComponent load = OYB_CreateNavButton(row, "MenuDelete", "Load");
 		if (load)
 			load.m_OnActivated.Insert(OYB_OnLoadKey);
 
