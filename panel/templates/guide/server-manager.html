@@ -43,6 +43,16 @@
 </ol>
 <p>The server picks changes up within a minute, no restart needed. Hidden items can't be taken by any player, and a changed price is what the arsenal charges and refunds.</p>
 
+<h2>Vehicles</h2>
+<p>For servers running the OYB Core mod. It lists every vehicle the factions' depots can offer, modded ones included, each followed by its variants (the versions a depot picks between at random). The mod writes the list when the server starts, so after adding a vehicle mod, start the server once before its vehicles show here.</p>
+<ol class="steps">
+  <li>Search by name, or narrow it by category or faction.</li>
+  <li>Press <b>Hide</b> to take a vehicle out of every depot. Hiding a variant only stops the depot picking that version.</li>
+  <li>Type a new price and press <b>Set</b>. <b>Reset</b> puts the normal price back.</li>
+  <li>Type a number under <b>Limit per side</b> and press <b>Set</b>: each side can then only have that many of it alive at once. Leave it empty for unlimited.</li>
+</ol>
+<p>The server picks changes up within a minute, no restart needed. A player asking for a vehicle at its limit is told so and nothing spawns.</p>
+
 <h2>Files</h2>
 <p>Browse the server's folder, open a text file to edit it, and press <b>Save</b>. The shortcuts jump straight to the config, the mods folder and the logs. AMP rewrites <code>serverconfig.json</code> every time the server starts, so change those values in <b>Settings</b> instead.</p>
 

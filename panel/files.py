@@ -406,6 +406,67 @@ def save_arsenal_settings(base, hidden, prices, extras=None, moved=None, sides=N
     write_text(folder / "settings.json", json.dumps(data, indent=1) + "\n")
 
 
+VEHICLE_FOLDER = "OYB_Core"
+
+
+def vehicle_list(base):
+    """The depot vehicles the OYB Core mod listed when the server last started, as
+    [{prefab, name, category, factions, price, variant_of}] sorted by name (each
+    vehicle followed by its variants), or None before the server has listed them."""
+    profile = profile_folder(base)
+    path = profile / VEHICLE_FOLDER / "vehicle_list.json" if profile else None
+    if not path or not path.is_file():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    columns = [data.get(key) or [] for key in ("prefabs", "names", "categories", "factions", "prices")]
+    variant_of = list(data.get("variantOf") or [])
+    variant_of += [""] * (len(columns[0]) - len(variant_of))
+    vehicles = [{"prefab": prefab, "name": name or prefab.rsplit("/", 1)[-1], "category": category or "Other",
+                 "factions": factions or "", "price": price if isinstance(price, int) else 0, "variant_of": parent or ""}
+                for prefab, name, category, factions, price, parent in zip(*columns, variant_of)
+                if isinstance(prefab, str) and prefab]
+    names = {v["prefab"]: v["name"].lower() for v in vehicles if not v["variant_of"]}
+    return sorted(vehicles, key=lambda v: (names.get(v["variant_of"] or v["prefab"], v["name"].lower()),
+                                           v["variant_of"] or v["prefab"], bool(v["variant_of"]), v["name"].lower()))
+
+
+def vehicle_list_age(base):
+    profile = profile_folder(base)
+    path = profile / VEHICLE_FOLDER / "vehicle_list.json" if profile else None
+    return path.stat().st_mtime if path and path.is_file() else None
+
+
+def vehicle_settings(base):
+    """(hidden prefabs, {prefab: price}, {prefab: limit}) from the server's vehicle settings."""
+    profile = profile_folder(base)
+    path = profile / VEHICLE_FOLDER / "vehicles.json" if profile else None
+    if not path or not path.is_file():
+        return set(), {}, {}
+    data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    hidden = {prefab for prefab in data.get("hidden") or [] if isinstance(prefab, str)}
+    prices = {prefab: cost for prefab, cost in zip(data.get("priceItems") or [], data.get("priceCosts") or [])
+              if isinstance(prefab, str) and prefab and arsenal_price(cost)}
+    limits = {prefab: count for prefab, count in zip(data.get("limitItems") or [], data.get("limitCounts") or [])
+              if isinstance(prefab, str) and prefab and arsenal_price(count)}
+    return hidden, prices, limits
+
+
+def save_vehicle_settings(base, hidden, prices, limits):
+    """Write the settings the OYB Core mod reads; the server picks them up within a minute."""
+    profile = profile_folder(base)
+    if profile is None:
+        raise FileError("This server has no game profile folder yet. Start it once first.")
+    folder = profile / VEHICLE_FOLDER
+    if not folder.exists():
+        folder.mkdir()
+        hand_over(folder)
+    priced, limited = sorted(prices.items()), sorted(limits.items())
+    data = {"version": 1, "hidden": sorted(hidden),
+            "priceItems": [prefab for prefab, _ in priced], "priceCosts": [cost for _, cost in priced],
+            "limitItems": [prefab for prefab, _ in limited], "limitCounts": [count for _, count in limited]}
+    write_text(folder / "vehicles.json", json.dumps(data, indent=1) + "\n")
+
+
 def new_game(root, base):
     """Put this server's save aside so its next start is a fresh game. The save is moved
     to a folder of its own, not deleted. Returns where it went, or None if there was none."""

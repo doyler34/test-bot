@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{{ inst }} vehicles · OYB Control{% endblock %}
+{% block body %}
+{% include "_manage_tabs.html" %}
+<p class="muted">What the vehicle depots offer on this server (OYB Core mod). Hide a vehicle and it's gone from every depot; hide just a variant and the depot stops picking it. Give a vehicle a price and that's what it costs. Give it a limit and each side can only have that many alive at once; empty means unlimited. The server picks changes up within a minute, no restart needed.</p>
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+{% if vehicles is none %}
+<section class="card">
+  <h2>No vehicle list yet</h2>
+  <p>The OYB Core mod writes this server's vehicle list when the server starts. Make sure OYB Core is on the <a href="/mods/{{ inst }}">Mods</a> list, start the server once, then come back.</p>
+  <p class="muted small">After adding a vehicle mod, start the server again so its vehicles join the list.</p>
+</section>
+{% else %}
+<section class="card">
+  <p class="muted small">{{ vehicles|length }} vehicles and variants{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ hidden|length }} hidden · {{ prices|length }} with a changed price · {{ limits|length }} limited</p>
+  <form method="get" action="/vehicles/{{ inst }}" class="grid">
+    <label>Search <input name="q" value="{{ filters.q }}" placeholder="Name, e.g. m998" maxlength="80" autocomplete="off"></label>
+    <label>Category
+      <select name="cat"><option value="">All</option>{% for c in categories %}<option value="{{ c }}" {% if c == filters.cat %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+    </label>
+    <label>Faction
+      <select name="faction"><option value="">All</option>{% for f in factions %}<option value="{{ f }}" {% if f == filters.faction %}selected{% endif %}>{{ f }}</option>{% endfor %}</select>
+    </label>
+    <label>Show
+      <select name="show">{% for value, label in show_options.items() %}<option value="{{ value }}" {% if value == filters.show %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    </label>
+    <button class="small">Filter</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ found }} vehicle{{ "s" if found != 1 }}{% if pages > 1 %} <span class="muted small">page {{ page }} of {{ pages }}</span>{% endif %}</h2>
+  {% if found %}
+  <div class="row-actions">
+    {% for action, label in (("hide_found", "Hide all " ~ found), ("show_found", "Show all " ~ found)) %}
+    <form method="post" action="/vehicles/{{ inst }}" class="inline" data-confirm="{{ label }} vehicles that match this filter?">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ action }}">
+      <input type="hidden" name="back" value="{{ back }}">
+      {% for key, value in filters.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+      <button class="small ghost">{{ label }}</button>
+    </form>
+    {% endfor %}
+  </div>
+  <div class="scroll"><table class="stack">
+    <thead><tr><th>Vehicle</th><th>Category</th><th>Factions</th><th>Price</th><th>Limit per side</th><th></th></tr></thead>
+    <tbody>
+    {% for v in shown %}
+    {% set is_hidden = v.prefab in hidden %}
+    <tr>
+      <td class="strong">{% if v.variant_of %}<span class="muted">↳</span> {% endif %}{{ v.name }}{% if is_hidden %} <span class="pill down">Hidden</span>{% endif %}
+        {% if v.variant_of %}<div class="muted small">variant of {{ names.get(v.variant_of, v.variant_of.rsplit("/", 1)[-1]) }}</div>{% endif %}
+        <div class="muted small mono">{{ v.prefab.rsplit("/", 1)[-1] }}</div></td>
+      <td data-label="Category">{{ v.category }}</td>
+      <td data-label="Factions">{{ v.factions|replace(",", ", ") }}</td>
+      <td data-label="Price">
+        {% if v.variant_of %}<span class="muted small">as its vehicle</span>{% else %}
+        <form method="post" action="/vehicles/{{ inst }}" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="price">
+          <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ prices.get(v.prefab, v.price) }}" aria-label="Price of {{ v.name }}" class="price">
+          <button class="small">Set</button>
+        </form>
+        {% if v.prefab in prices %}
+        <span class="muted small">normally {{ v.price }}</span>
+        <form method="post" action="/vehicles/{{ inst }}" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reset">
+          <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <button class="small ghost">Reset</button>
+        </form>
+        {% endif %}{% endif %}
+      </td>
+      <td data-label="Limit per side">
+        {% if v.variant_of %}<span class="muted small">counts as its vehicle</span>{% else %}
+        <form method="post" action="/vehicles/{{ inst }}" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="limit">
+          <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <input name="count" type="number" min="0" max="{{ max_price }}" step="1" value="{{ limits.get(v.prefab, '') }}" placeholder="Unlimited" aria-label="Limit for {{ v.name }}" class="price">
+          <button class="small ghost">Set</button>
+        </form>
+        {% endif %}
+      </td>
+      <td>
+        <form method="post" action="/vehicles/{{ inst }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ 'show' if is_hidden else 'hide' }}">
+          <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <button class="small {{ '' if is_hidden else 'ghost' }}">{{ "Show" if is_hidden else "Hide" }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <div class="row-actions">
+    {% if prev_link %}<a class="button small ghost" href="{{ prev_link }}">Previous</a>{% endif %}
+    {% if next_link %}<a class="button small ghost" href="{{ next_link }}">Next</a>{% endif %}
+  </div>
+  {% else %}
+  <p class="muted">Nothing matched.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

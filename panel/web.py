@@ -2597,13 +2597,15 @@ AMP_STATES = {0: "Stopped", 5: "Getting ready", 7: "Configuring", 10: "Starting"
               40: "Stopping", 45: "Going to sleep", 50: "Asleep", 60: "Waiting", 70: "Installing", 75: "Updating",
               80: "Waiting for input", 100: "Failed", 200: "Suspended", 250: "Maintenance"}
 MANAGE_TABS = (("overview", "Overview", "power"), ("console", "Console", "files"), ("settings", "Settings", "amp_settings"),
-               ("mods", "Mods", "mods"), ("arsenal", "Arsenal", "arsenal"), ("files", "Files", "files"))
+               ("mods", "Mods", "mods"), ("arsenal", "Arsenal", "arsenal"), ("vehicles", "Vehicles", "vehicles"),
+               ("files", "Files", "files"))
 
 
 def manage_tabs(request, inst, current):
     """The sub-tabs along the top of one server's pages, only the ones this person can open."""
     urls = {"overview": f"/manage/{inst}", "console": f"/manage/{inst}/console", "settings": f"/manage/{inst}/settings",
-            "mods": f"/mods/{inst}", "arsenal": f"/arsenal/{inst}", "files": f"/files/{inst}"}
+            "mods": f"/mods/{inst}", "arsenal": f"/arsenal/{inst}", "vehicles": f"/vehicles/{inst}",
+            "files": f"/files/{inst}"}
     return [{"key": key, "label": label, "url": urls[key], "on": key == current}
             for key, label, perm in MANAGE_TABS if allowed(request, perm)]
 
@@ -3458,6 +3460,156 @@ def arsenal_matches(items, filters, hidden, prices, extras=None, moved=None, sid
 def arsenal_link(inst, filters, page=1):
     values = dict(filters, page=page if page > 1 else "")
     return f"/arsenal/{inst}?" + urlencode({k: v for k, v in values.items() if v})
+
+
+VEHICLE_SHOW = {"": "Everything", "hidden": "Hidden", "priced": "Price changed", "limited": "Limited",
+                "variants": "Variants only"}
+
+
+def vehicle_filters(source):
+    """The search, category, faction and show filters from a query or form."""
+    show = source.get("show", "")
+    return {"q": " ".join(source.get("q", "").split())[:80], "cat": source.get("cat", "")[:40],
+            "faction": source.get("faction", "")[:20], "show": show if show in VEHICLE_SHOW else ""}
+
+
+def vehicle_matches(vehicles, filters, hidden, prices, limits):
+    """The vehicles the filters let through; every search word has to be in the name or prefab."""
+    words = filters["q"].lower().split()
+    found = []
+    for vehicle in vehicles:
+        text = (vehicle["name"] + " " + vehicle["prefab"]).lower()
+        if words and not all(word in text for word in words):
+            continue
+        if filters["cat"] and vehicle["category"] != filters["cat"]:
+            continue
+        if filters["faction"] and filters["faction"] not in str(vehicle["factions"]).split(","):
+            continue
+        show = filters["show"]
+        if ((show == "hidden" and vehicle["prefab"] not in hidden) or (show == "priced" and vehicle["prefab"] not in prices)
+                or (show == "limited" and vehicle["prefab"] not in limits) or (show == "variants" and not vehicle["variant_of"])):
+            continue
+        found.append(vehicle)
+    return found
+
+
+def vehicle_link(inst, filters, page=1):
+    values = dict(filters, page=page if page > 1 else "")
+    return f"/vehicles/{inst}?" + urlencode({k: v for k, v in values.items() if v})
+
+
+async def vehicles_page(request):
+    """Hide depot vehicles, change what they cost and limit how many each side may have."""
+    require(request, "vehicles")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    error, vehicles, hidden, prices, limits = "", None, set(), {}, {}
+    try:
+        vehicles = files.vehicle_list(base)
+        hidden, prices, limits = files.vehicle_settings(base)
+    except (OSError, ValueError) as exc:
+        error = f"Couldn't read the vehicle files: {exc}"
+    filters = vehicle_filters(request.query)
+    try:
+        page = max(1, int(request.query.get("page", "1")))
+    except ValueError:
+        page = 1
+    found = vehicle_matches(vehicles or [], filters, hidden, prices, limits)
+    pages = max(1, -(-len(found) // ARSENAL_PAGE_SIZE))
+    page = min(page, pages)
+    shown = found[(page - 1) * ARSENAL_PAGE_SIZE:page * ARSENAL_PAGE_SIZE]
+    names = {v["prefab"]: v["name"] for v in vehicles or []}
+    categories = sorted({v["category"] for v in vehicles or []})
+    factions = sorted({key for v in vehicles or [] for key in str(v["factions"]).split(",") if key})
+    age = files.vehicle_list_age(base)
+    return render(request, "vehicles.html", inst=inst, tabs=manage_tabs(request, inst, "vehicles"), error=error,
+                  vehicles=vehicles, shown=shown, found=len(found), hidden=hidden, prices=prices, limits=limits,
+                  names=names, filters=filters, categories=categories, factions=factions, show_options=VEHICLE_SHOW,
+                  page=page, pages=pages, max_price=files.ARSENAL_MAX_PRICE,
+                  prev_link=vehicle_link(inst, filters, page - 1) if page > 1 else "",
+                  next_link=vehicle_link(inst, filters, page + 1) if page < pages else "",
+                  back=vehicle_link(inst, filters, page),
+                  listed_at=time.strftime("%Y-%m-%d %H:%M", time.localtime(age)) if age else "")
+
+
+async def vehicles_change(request):
+    require(request, "vehicles")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    form = await request.post()
+    action = form.get("action", "")
+    back = form.get("back", "")
+    if not back.startswith(f"/vehicles/{inst}"):
+        back = f"/vehicles/{inst}"
+    try:
+        vehicles = files.vehicle_list(base) or []
+        hidden, prices, limits = files.vehicle_settings(base)
+    except (OSError, ValueError) as exc:
+        flash(request, f"Couldn't read the vehicle files: {exc}", "error")
+        raise web.HTTPFound(back)
+    by_prefab = {v["prefab"]: v for v in vehicles}
+    prefab = form.get("prefab", "")
+    if (action in ("hide", "show", "price", "reset", "limit")
+            and prefab not in by_prefab and prefab not in hidden and prefab not in prices and prefab not in limits):
+        flash(request, "That vehicle isn't in this server's list.", "error")
+        raise web.HTTPFound(back)
+    name = by_prefab.get(prefab, {}).get("name") or prefab.rsplit("/", 1)[-1]
+
+    def read_number(field, what):
+        try:
+            number = int(form.get(field, "").strip())
+        except ValueError:
+            number = -1
+        if not 0 <= number <= files.ARSENAL_MAX_PRICE:
+            flash(request, f"{what} is a whole number from 0 to {files.ARSENAL_MAX_PRICE:,}.", "error")
+            raise web.HTTPFound(back)
+        return number
+
+    if action == "hide":
+        hidden.add(prefab)
+        message = f"{name} is hidden from every depot."
+    elif action == "show":
+        hidden.discard(prefab)
+        message = f"{name} is back in the depots."
+    elif action == "price":
+        if by_prefab.get(prefab, {}).get("variant_of"):
+            flash(request, "A variant costs what its vehicle costs.", "error")
+            raise web.HTTPFound(back)
+        prices[prefab] = read_number("cost", "A price")
+        message = f"{name} now costs {prices[prefab]}."
+    elif action == "reset":
+        prices.pop(prefab, None)
+        message = f"{name} is back to its normal price."
+    elif action == "limit":
+        if by_prefab.get(prefab, {}).get("variant_of"):
+            flash(request, "A variant counts towards its vehicle's limit.", "error")
+            raise web.HTTPFound(back)
+        if not form.get("count", "").strip():
+            limits.pop(prefab, None)
+            message = f"{name} is unlimited again."
+        else:
+            limits[prefab] = read_number("count", "A limit")
+            message = f"Each side can have at most {limits[prefab]} {name} at once."
+    elif action in ("hide_found", "show_found"):
+        found = [v["prefab"] for v in vehicle_matches(vehicles, vehicle_filters(form), hidden, prices, limits)]
+        if action == "hide_found":
+            hidden.update(found)
+            message = f"Hid {len(found)} vehicle{'s' if len(found) != 1 else ''}."
+        else:
+            hidden.difference_update(found)
+            message = f"Showed {len(found)} vehicle{'s' if len(found) != 1 else ''} again."
+        name = f"{len(found)} vehicles"
+    else:
+        raise web.HTTPBadRequest(text="Unknown action.")
+    try:
+        files.save_vehicle_settings(base, hidden, prices, limits)
+    except (files.FileError, OSError) as exc:
+        audit(request, f"vehicles {action}", inst, name, str(exc), ok=False)
+        flash(request, str(exc), "error")
+        raise web.HTTPFound(back)
+    audit(request, f"vehicles {action}", inst, name, prefab)
+    flash(request, message + " The server picks it up within a minute.")
+    raise web.HTTPFound(back)
 
 
 async def arsenal_page(request):
@@ -4402,6 +4554,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/mods/{inst}", mods_change)
     app.router.add_get("/arsenal/{inst}", arsenal_page)
     app.router.add_post("/arsenal/{inst}", arsenal_change)
+    app.router.add_get("/vehicles/{inst}", vehicles_page)
+    app.router.add_post("/vehicles/{inst}", vehicles_change)
     app.router.add_route("GET", "/console", console_page)
     app.router.add_post("/console", console_page)
     app.router.add_route("GET", "/network", network_page)

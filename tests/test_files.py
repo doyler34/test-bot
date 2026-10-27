@@ -388,6 +388,59 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "refund", "prefab": m16, "cost": ""})
         self.assertEqual(files.arsenal_refunds(self.root / "Plus01"), {})
 
+    def vehicle_profile(self):
+        folder = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "profile" / "OYB_Core"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "vehicle_list.json").write_text(json.dumps({
+            "version": 1,
+            "prefabs": ["{V1}Prefabs/Vehicles/Wheeled/M998/M998.et", "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et",
+                        "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et"],
+            "names": ["M998", "M998_covered", "Mi-8MT"], "categories": ["Cars", "Cars", "Helicopters"],
+            "factions": ["US", "US", "USSR"], "prices": [100, 0, 1500],
+            "variantOf": ["", "{V1}Prefabs/Vehicles/Wheeled/M998/M998.et", ""]}))
+        return folder
+
+    async def test_the_vehicle_page_waits_for_the_server_to_list_its_vehicles(self):
+        await self.login("boss")
+        page = await (await self.client.get("/vehicles/Plus01")).text()
+        self.assertIn("No vehicle list yet", page)
+        self.assertIn(">Vehicles</a>", page)
+
+    async def test_vehicles_can_be_hidden_repriced_and_limited(self):
+        folder = self.vehicle_profile()
+        m998, covered, mi8 = ("{V1}Prefabs/Vehicles/Wheeled/M998/M998.et",
+                              "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et", "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et")
+        token = await self.login("boss")
+        page = await (await self.client.get("/vehicles/Plus01")).text()
+        for name in ("M998", "Mi-8MT", "variant of M998"):
+            self.assertIn(name, page)
+        self.assertLess(page.index("M998_covered"), page.index("Mi-8MT"))       # variants follow their vehicle
+
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide", "prefab": covered})
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": mi8, "cost": "900"})
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "limit", "prefab": mi8, "count": "2"})
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01"), ({covered}, {mi8: 900}, {mi8: 2}))
+        saved = json.loads((folder / "vehicles.json").read_text())
+        self.assertEqual((saved["limitItems"], saved["limitCounts"]), ([mi8], [2]))
+
+        # Variants share their vehicle's price and limit; bad numbers change nothing.
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "limit", "prefab": covered, "count": "1"})
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": covered, "cost": "1"})
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "limit", "prefab": mi8, "count": "-3"})
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide", "prefab": "{X}Nope.et"})
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01"), ({covered}, {mi8: 900}, {mi8: 2}))
+        self.assertIn("Mi-8MT", await (await self.client.get("/vehicles/Plus01", params={"show": "limited"})).text())
+
+        # An empty limit is unlimited again.
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "limit", "prefab": mi8, "count": ""})
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "reset", "prefab": mi8})
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide_found", "cat": "Helicopters"})
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01"), ({covered, mi8}, {}, {}))
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "show_found"})
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")[0], set())
+        actions = {r["action"] for r in self.db.all("SELECT action FROM audit")}
+        self.assertTrue({"vehicles hide", "vehicles limit", "vehicles price"} <= actions)
+
     async def test_items_can_be_moved_to_another_category(self):
         folder = self.arsenal_profile()
         m9 = "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"
