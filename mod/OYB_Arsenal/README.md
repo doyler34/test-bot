@@ -5,7 +5,8 @@ open an arsenal you get the normal Reforger inventory, with the same item cards,
 real icons, supply costs, dragging, equipping and controller prompts, plus OYB's
 additions built into the arsenal panel.
 
-It's for testing in Workbench on your own PC. It doesn't go on the live servers.
+Being prepared for OYB's servers. Not released yet: see the test checklist
+below. Ownership: `NOTICE.md`.
 
 ## What's in so far
 
@@ -165,26 +166,27 @@ server or with a controller yet.
   allowlists.
 - Not tested: several players at one arsenal; a dedicated server.
 
-**7. Release — Not started.**
+**7. Release — In progress**
+- Done: install, server release and configuration guides, known
+  limitations, and a test for every feature (see below).
+- Left: the ⏳ tests in the checklist, Workshop publishing, then the mirror
+  sync for the live server.
 
-## Set up (once)
+## Install for testing (Workbench)
 
-1. On GitHub press **Code → Download ZIP**, unzip it, and copy
-   `mod/OYB_Arsenal` to `Documents\OYB_Arsenal`.
+1. Get the mod folder: on GitHub press **Code → Download ZIP**, unzip it and
+   copy `mod/OYB_Arsenal` to `Documents\OYB_Arsenal` (or clone the repo and
+   use `mod/OYB_Arsenal` from the clone, then `git pull` for each update).
 2. Launch Arma Reforger Tools, press **Add Existing**, pick
    `OYB_Arsenal.gproj`, and open it.
 
-No layouts, configs or prefabs need making by hand.
+No layouts, configs or prefabs need making by hand. All scripts live in
+`Scripts/Game/OYBArsenal`; keep exactly one copy of each `OYB_Arsenal*.c`
+file there and nowhere else under `Scripts`.
 
-### If you tried the earlier version
-
-The earlier version had its own menu and an action on the arsenal box. With
-Workbench closed, delete these from `Documents\OYB_Arsenal`, or Workbench
-will complain about a class that no longer exists:
-
-- the `Prefabs` folder
-- `Configs\System\chimeraMenus.conf` and its `.meta`
-- `Ui\OYB_ArsenalMain.layout` and its `.meta`
+If an earlier version left `Prefabs`, `Configs\System\chimeraMenus.conf` or
+`Ui\OYB_ArsenalMain.layout` (with their `.meta` files) in the folder, delete
+them with Workbench closed.
 
 ## Run it
 
@@ -192,26 +194,113 @@ will complain about a class that no longer exists:
    (not `worlds/Eden/Eden.ent`, which has no game mode), and press **F5**.
 2. As Game Master, place the US **Arsenal** and a US soldier, and take control
    of the soldier.
-3. Open the arsenal the normal way. The filter bar sits above the item grid.
-   Switch categories and search (the search applies when you press Enter or
-   leave the box).
-4. In the **Log Console** filter `OYB_ARSENAL`: searches, filter problems and
-   every attachment fit are logged there.
+3. Open the arsenal the normal way.
+4. In the **Log Console** filter `OYB_ARSENAL`: the item list, searches, key
+   presses, fits, swaps and loadouts are all logged there.
+
+## Releasing to a server
+
+1. Publish the project to the Workshop from Workbench's publish dialog (name,
+   visibility, preview image). Unlisted or private is fine for OYB-only use.
+   Note the mod ID it is given.
+2. Add it to the server's config under `game.mods`, with the dependency the
+   project already lists (the base game):
+   `{ "modId": "<mod ID>", "name": "OYB Arsenal" }`
+3. Restart the server. Clients download it on joining.
+4. Saved loadouts are kept by the server in its profile folder, in
+   `OYB_Arsenal/<player identity>.json`, one file per player. They survive
+   restarts and reconnects; back the folder up with the rest of the profile.
+   Deleting a player's file clears their five slots.
+
+## Configuration
+
+Nothing needs setting up. What there is:
+
+- **The game's own arsenal settings** on each arsenal (faction, item types,
+  supply use, refunds, whether kits may be saved) apply as usual. An arsenal
+  with saving turned off still loads OYB slots but doesn't set the respawn
+  kit.
+- **Keys** are the game's own menu actions, so players change them in the
+  game's control settings: Category `MenuFilter` (X), Weapon `MenuRefresh` (R),
+  Save `MenuFavourite` (F), Load `MenuRename`, pages `MenuTabLeft` /
+  `MenuTabRight` (Q / E).
+- **In the scripts**, if ever needed:
+  - `OYB_LOADOUT_SLOTS` (5) and `OYB_REQUEST_COOLDOWN_MS` (1000) in
+    `OYB_ArsenalLoadouts.c`;
+  - what every infantry arsenal always stocks, `OYB_ALWAYS_TYPES` in
+    `OYB_ArsenalAlwaysStocked.c` (medical, vests, helmets).
+
+## Known limitations
+
+- Controller use is untested; every OYB control is a game key button or a
+  game widget-library button, but nobody has tried them with a pad.
+- The Load key's binding inside the inventory hasn't been confirmed
+  (`MenuDeploy`, Space, was dropped because it seemed not to fire).
+- Military supply allocation is not counted when loading a kit (OYB servers
+  don't use it). Single items still go through the game's own checks.
+- Loading a kit is charged before it is applied; if the game can't place part
+  of it, the supplies aren't returned.
+- "Comes fitted" parts (an M203 on an M16A2 M203) are read from each prefab's
+  settings; an odd modded prefab could make a part look fitted when it isn't,
+  making it free when a kit is loaded.
+- Flares go into a weapon slot when double-clicked, as the game treats them
+  as handheld weapons.
+- A big modded arsenal (500-1,000 items) may stall the first time it's opened,
+  while item names are read; not measured.
+- Two `OverlayWidget Frame0 has invalid slot GridWidgetSlot` errors appear on
+  each inventory refresh; not yet checked whether they also appear without
+  OYB.
+- Several players at one arsenal, and a dedicated server, are untested.
+
+## Test checklist
+
+Status: ✅ verified in Workbench, ⏳ awaiting testing.
+
+| Feature | Test | Expected | Status |
+|---|---|---|---|
+| Item list | Open the US arsenal | `built item list: 173 entries … 0 without a display name` | ✅ |
+| Categories | Click each category, press X | Grid shows only that category; counts match | ✅ |
+| Empty category | On Fits, put the weapon away, reopen | Falls back to All | ✅ |
+| Explosives | Open Explosives | 40mm rounds, rockets, shells listed; log `moved … single-round items` | ⏳ |
+| Search | Type `m16 ca`, Enter | Only M16A2 Carbine variants | ✅ |
+| Pages | Page 2 of a category, switch away and back | Back on page 2; Q / E page straight after switching | ✅ |
+| Weapon picker | Press R / click arrows with two guns | Name changes, Fits list follows | ✅ |
+| Slung weapon | Empty hands, open Fits | Uses the first carried gun | ⏳ |
+| Fitting | Double-click a scope, then a different scope | Fitted; first one back in arsenal | ✅ |
+| Clothing swap | Double-click a jacket with full pockets | Worn, pockets moved, old one returned | ✅ |
+| Clothing into empty slot | Take helmet off, double-click a helmet | Goes on the head | ✅ |
+| Weapon swap | Both weapon slots full, double-click a rifle | Gun in hands replaced, old one returned | ✅ |
+| Same items together | Double-click a magazine you carry | Goes into the pouch holding the most | ✅ |
+| Save / load | Save a slot, change kit, Load | Kit restored; one log line per press | ✅ |
+| Load key | Press the key shown on Load | Loads; one `key MenuRename` line | ⏳ |
+| Respawn kit | Load a slot, die, respawn | "Saved loadout" offered | ✅ |
+| Removed item | Save a kit with a mod item, remove the mod, Load | Refused, item named, no supplies taken | ⏳ |
+| Supplies | Load at an arsenal that uses supplies | Charged for missing items only; refund for dropped | ⏳ |
+| Spam | Click Load repeatedly | At most one load a second | ⏳ |
+| Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
+| Modded gear | Load a weapon mod | Right categories, attachments fit | ⏳ |
+| Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |
+| Two players | Both use one arsenal at once | No errors, no duplicate items | ⏳ |
+| Controller | Navigate bar, list, buttons with a pad | All reachable | ⏳ |
 
 ## How it works
 
-`OYB_ArsenalStorageFilters.c` modifies `SCR_InventoryStorageBaseUI`, the base of
-every inventory panel. An arsenal is usually shown by the **Vicinity** panel
-(`SCR_InventoryStorageLootUI`) after you step into the box, and sometimes as an
-opened storage (`SCR_InventoryOpenedStorageArsenalUI`); both get their items
-through the base class, so that's where OYB filters them and adds the bar. The
-bar only shows while an arsenal is on screen. The game creates one card per
-offered prefab, in the arsenal's order, so each card's prefab is found by
-position; if the counts ever differ it logs `OYB_ARSENAL filter skipped` and
-shows everything.
+| File | What it does |
+|---|---|
+| `OYB_ArsenalStorageFilters.c` | Mods the inventory panel base class: the bar, category list, weapon picker, search, paging memory and loadout row, and filters the arsenal's items |
+| `OYB_ArsenalCatalogService.c` | Turns the arsenal's offer into categories, display names and search text; cached per arsenal |
+| `OYB_ArsenalWeaponFitting.c` | Mods the inventory menu: double-click / drag / equip for attachments, clothing, weapons and same-item stacking; paging context |
+| `OYB_ArsenalClothing.c` | The take-off, put-on, move-contents and refund steps for clothing and weapon swaps |
+| `OYB_ArsenalTargetWeapon.c` | Which carried weapon the Fits list and fitting use |
+| `OYB_ArsenalLoadouts.c` | Server-side loadout slots, pricing, refunds, respawn kit |
+| `OYB_ArsenalAlwaysStocked.c` | Every infantry arsenal also offers medical gear, vests and helmets |
 
-`OYB_ArsenalCatalogService.c` turns the arsenal's offer into categories,
-display names and search text, and caches it until the arsenal's offer changes.
+An arsenal is usually shown by the **Vicinity** panel
+(`SCR_InventoryStorageLootUI`) and sometimes as an opened storage; both get
+their items through the base class, so that's where OYB filters them. The
+game creates one card per offered prefab, in the arsenal's order, so each
+card's prefab is found by position; if the counts ever differ it logs
+`OYB_ARSENAL filter skipped` and shows everything.
 
 ## Found in testing (Workbench, 1.8.0.13)
 
@@ -241,12 +330,3 @@ display names and search text, and caches it until the arsenal's offer changes.
 - Opening an arsenal from Vicinity doesn't use
   `SCR_InventoryOpenedStorageArsenalUI` at all, so modding only that class did
   nothing; the filter now lives in the shared base class.
-
-## Not tested yet
-
-- Saved loadouts: the supply charge and refund at an arsenal that uses
-  supplies (the Game Master arsenal charged 0), and the file on a dedicated
-  server.
-- Whether X (`MenuFilter`) also triggers the inventory's own X actions inside
-  an arsenal; meds and armour in a weapons-only box; dragging to equip after
-  filtering; a controller and its on-screen keyboard; a dedicated server.
