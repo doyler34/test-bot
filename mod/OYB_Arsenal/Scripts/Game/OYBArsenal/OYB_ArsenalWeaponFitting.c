@@ -257,14 +257,15 @@ modded class SCR_InventoryMenuUI
 		return true;
 	}
 
-	// The weapon slot to swap: the one with the gun in hand if the new weapon can
-	// take its place, otherwise the first carried gun it can replace. A slot
+	// The weapon slot to swap: the one with the weapon picked in the arsenal's
+	// bar (the gun in hand unless another was picked) if the new weapon can take
+	// its place, otherwise the first carried gun it can replace. A slot
 	// counts if the inventory says the new weapon can replace what's there, or
 	// if what's there is the same kind of weapon (rifle for rifle, pistol for
 	// pistol), since weapon slots are set up by kind.
 	protected InventoryStorageSlot OYB_FindWeaponToReplace(IEntity preview, EWeaponType type)
 	{
-		IEntity held = OYB_TargetWeapon.GetHeld(m_Player);
+		IEntity chosen = OYB_TargetWeapon.Get(m_Player);
 		InventoryStorageSlot fallback;
 		for (int i = 0; i < m_pWeaponStorageComp.GetSlotsCount(); i++)
 		{
@@ -277,7 +278,7 @@ modded class SCR_InventoryMenuUI
 			if (!sameKind && !m_InventoryManager.CanReplaceItem(preview, m_pWeaponStorageComp, i))
 				continue;
 
-			if (slot.GetAttachedEntity() == held)
+			if (slot.GetAttachedEntity() == chosen)
 				return slot;
 
 			if (!fallback)
@@ -286,7 +287,6 @@ modded class SCR_InventoryMenuUI
 		return fallback;
 	}
 
-	// See OYB_ArsenalClothing.c.
 	// Accessories that go onto worn gear rather than the body (a helmet light,
 	// NVGs on a helmet mount, a flashlight on a vest) go straight into a free
 	// spot for them on what's worn. Pockets and backpacks don't count, so
@@ -444,6 +444,7 @@ modded class SCR_InventoryMenuUI
 		return null;
 	}
 
+	// See OYB_ArsenalClothing.c.
 	protected bool OYB_EquipClothing(string via)
 	{
 		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);

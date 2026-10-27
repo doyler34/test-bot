@@ -30,7 +30,7 @@ below. Ownership: `NOTICE.md`.
   "Fits" list and attachment fitting work on the chosen weapon, slung or
   holstered, without switching to it (`OYB_ArsenalTargetWeapon.c`). On a
   controller the Weapon button is the same as Requisition, so the key is
-  hidden there and the weapon in hand is used.
+  hidden there; the < > arrows pick the weapon instead.
 - **Fit attachments in one go** (`OYB_ArsenalWeaponFitting.c`): double-click
   an attachment in the arsenal, or drag it onto the character, and it goes
   straight onto the matching slot of the weapon in your hands. Whatever was in
@@ -58,7 +58,8 @@ below. Ownership: `NOTICE.md`.
   spot is taken, the old accessory is swapped out and refunded, like clothing.
 - **Swap weapons in one go** (also `OYB_ArsenalClothing.c`): double-click a
   weapon and it goes into a free weapon slot that takes it; with none free,
-  the weapon in its slot comes off and goes back into the arsenal whole
+  the weapon picked in the bar (if the new one can take its place, else the
+  one in hand or the first that fits) comes off and goes back into the arsenal whole
   (the game's refund covers its fitted parts and loaded magazine) once the
   new one is on. If the new one doesn't arrive, the old one goes back on.
   Grenades still go to pouches.
