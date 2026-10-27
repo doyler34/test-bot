@@ -85,7 +85,7 @@ below. Ownership: `NOTICE.md`.
 - **Saved loadouts** (`OYB_ArsenalLoadouts.c`): under the item grid, a
   "Saved loadouts" heading, "< Loadout 1 >" to pick one of five slots,
   **Save** (`MenuFavourite`) to store the kit you're wearing and **Load**
-  (`MenuRename`) to put it on at this
+  (`MenuDeploy`, Space) to put it on at this
   arsenal. Empty slots say so. The server keeps them in
   `$profile:OYB_Arsenal/<player id>.json`, using the game's own arsenal
   loadout format. Loading only charges for items you don't already carry, at
@@ -136,8 +136,7 @@ server or with a controller yet.
   game's key settings and controller layouts apply and no extra input file
   is needed. Each key button shows its prompt and can also be clicked:
   Category `MenuFilter` (X), Weapon `MenuRefresh` (R), Save `MenuFavourite` (F), Load
-  `MenuRename` (`MenuDeploy`, Space, never fired: it's a hold on the
-  respawn screen). `MenuSave` was tried for Save but is X, the same key as Category;
+  `MenuDeploy` (Space; `MenuRename` turned out to be R, the Weapon key). `MenuSave` was tried for Save but is X, the same key as Category;
   a crossed circle on a prompt means the action has no key there, and every
   press is logged as `OYB_ARSENAL key`.
 - Q / E (LB / RB) page the grid, also right after switching category, and
@@ -258,7 +257,7 @@ Nothing needs setting up. What there is:
   kit.
 - **Keys** are the game's own menu actions, so players change them in the
   game's control settings: Category `MenuFilter` (X), Weapon `MenuRefresh` (R),
-  Save `MenuFavourite` (F), Load `MenuRename`, pages `MenuTabLeft` /
+  Save `MenuFavourite` (F), Load `MenuDeploy` (Space), pages `MenuTabLeft` /
   `MenuTabRight` (Q / E).
 - **In the scripts**, if ever needed:
   - `OYB_LOADOUT_SLOTS` (5) and `OYB_REQUEST_COOLDOWN_MS` (1000) in
@@ -270,8 +269,8 @@ Nothing needs setting up. What there is:
 
 - Controller use is untested; every OYB control is a game key button or a
   game widget-library button, but nobody has tried them with a pad.
-- The Load key's binding inside the inventory hasn't been confirmed
-  (`MenuDeploy`, Space, was dropped because it seemed not to fire).
+- Load is on Space (`MenuDeploy`); `MenuSave` (X) and `MenuRename` (R)
+  clashed with Category and Weapon.
 - Military supply allocation is not counted when loading a kit (OYB servers
   don't use it). Single items still go through the game's own checks.
 - Loading a kit is charged before it is applied; if the game can't place part
@@ -321,7 +320,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Weapon swap | Both weapon slots full, double-click a rifle | Gun in hands replaced, old one returned | ✅ |
 | Same items together | Double-click a magazine you carry | Goes into the pouch holding the most | ✅ |
 | Save / load | Save a slot, change kit, Load | Kit restored; one log line per press | ✅ |
-| Load key | Press the key shown on Load | Loads; one `key MenuRename` line | ⏳ |
+| Load key | Press Space over the arsenal | Loads the selected slot; R only switches weapon | ⏳ |
 | Respawn kit | Load a slot, die, respawn | "Saved loadout" offered | ✅ |
 | Removed item | Save a kit with a mod item, remove the mod, Load | Refused, item named, no supplies taken | ⏳ |
 | Supplies | Load at an arsenal that uses supplies | Charged for missing items only; refund for dropped | ⏳ |
