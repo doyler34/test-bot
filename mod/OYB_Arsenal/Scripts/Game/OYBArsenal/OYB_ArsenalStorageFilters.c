@@ -408,9 +408,11 @@ modded class SCR_InventoryStorageBaseUI
 
 		// MenuRename is R (the Weapon key) and MenuDeploy only works on the
 		// respawn screen.
-		SCR_InputButtonComponent load = OYB_CreateNavButton(row, "MenuDelete", "Load");
+		SCR_InputButtonComponent load = OYB_CreateNavButton(row, OYB_LOAD_ACTION, "Load");
 		if (load)
 			load.m_OnActivated.Insert(OYB_OnLoadKey);
+
+		OYB_StartLoadDiagnostics();
 
 		Widget credits = workspace.CreateWidgets(OYB_LABEL_LAYOUT, area);
 		if (credits)
@@ -439,7 +441,66 @@ modded class SCR_InventoryStorageBaseUI
 	override event void HandlerDeattached(Widget w)
 	{
 		SCR_PlayerController.OYB_GetOnLoadoutNames().Remove(OYB_UpdateLoadoutText);
+		OYB_StopLoadDiagnostics();
 		super.HandlerDeattached(w);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// Load key diagnostics, while the Load key is being sorted out: what the game
+	// has bound to the action, whether the action is live while the inventory is
+	// open, and whether a key press reaches the game at all. Logged once per
+	// arsenal screen and once per press, never per frame.
+
+	protected static const string OYB_LOAD_ACTION = "MenuDelete";
+	protected static int s_iOYB_LoadRequests;
+	protected bool m_bOYB_ListeningForLoad;
+
+	protected void OYB_StartLoadDiagnostics()
+	{
+		InputManager input = GetGame().GetInputManager();
+		if (!input || m_bOYB_ListeningForLoad)
+			return;
+
+		array<string> actions = {"MenuFilter", "MenuRefresh", "MenuFavourite", OYB_LOAD_ACTION};
+		foreach (string action : actions)
+		{
+			array<string> keys = {};
+			array<BaseContainer> filters = {};
+			input.GetActionKeybinding(action, keys, filters, EInputDeviceType.KEYBOARD);
+			string filterName = "none";
+			if (!filters.IsEmpty() && filters[filters.Count() - 1])
+				filterName = filters[filters.Count() - 1].GetClassName();
+			PrintFormat("OYB_ARSENAL key check: %1 is bound to [%2], filter %3", action, SCR_StringHelper.Join(", ", keys), filterName);
+		}
+
+		input.AddActionListener(OYB_LOAD_ACTION, EActionTrigger.DOWN, OYB_OnLoadActionRaw);
+		m_bOYB_ListeningForLoad = true;
+
+		// Whether the game has the action switched on can only be read while the
+		// inventory is up, so it's checked a moment after the screen opens.
+		GetGame().GetCallqueue().CallLater(OYB_LogLoadActionActive, 500);
+	}
+
+	protected void OYB_StopLoadDiagnostics()
+	{
+		GetGame().GetCallqueue().Remove(OYB_LogLoadActionActive);
+		InputManager input = GetGame().GetInputManager();
+		if (input && m_bOYB_ListeningForLoad)
+			input.RemoveActionListener(OYB_LOAD_ACTION, EActionTrigger.DOWN, OYB_OnLoadActionRaw);
+		m_bOYB_ListeningForLoad = false;
+	}
+
+	protected void OYB_LogLoadActionActive()
+	{
+		InputManager input = GetGame().GetInputManager();
+		if (input && m_wOYB_LoadoutRow && m_wOYB_LoadoutRow.IsVisible())
+			PrintFormat("OYB_ARSENAL key check: %1 active in the inventory: %2", OYB_LOAD_ACTION, input.IsActionActive(OYB_LOAD_ACTION));
+	}
+
+	protected void OYB_OnLoadActionRaw(float value = 0.0, EActionTrigger reason = 0, string actionName = string.Empty)
+	{
+		if (m_wOYB_LoadoutRow && m_wOYB_LoadoutRow.IsVisible())
+			PrintFormat("OYB_ARSENAL key check: %1 pressed (the game saw the key)", OYB_LOAD_ACTION);
 	}
 
 	protected void OYB_UpdateLoadoutText()
@@ -475,6 +536,7 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_OnLoadKey(SCR_InputButtonComponent button, string action)
 	{
+		PrintFormat("OYB_ARSENAL load request %1: the Load button fired (%2)", s_iOYB_LoadRequests + 1, action);
 		OYB_OnLoadLoadout(null);
 	}
 
@@ -510,6 +572,8 @@ modded class SCR_InventoryStorageBaseUI
 			return;
 		}
 
+		s_iOYB_LoadRequests++;
+		PrintFormat("OYB_ARSENAL load request %1: slot %2 sent to the server", s_iOYB_LoadRequests, s_iOYB_LoadoutSlot + 1);
 		controller.OYB_LoadLoadout(s_iOYB_LoadoutSlot, Replication.FindItemId(resourceComponent));
 	}
 
