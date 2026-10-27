@@ -17,10 +17,9 @@ modded class SCR_LoadingScreenComponent
 
 class OYB_LoadingScreen
 {
-	// The imported image's resource name, as Workbench gives it after import:
-	// "{GUID}UI/Textures/LoadingScreen/OYB_LoadingScreen.edds". Empty means the
-	// game's own image is kept.
-	static const ResourceName IMAGE = "";
+	// The imported image (UI/Textures/LoadingScreen/OYB_LoadingScreen.edds, GUID
+	// from its .meta). Empty keeps the game's own image.
+	static const ResourceName IMAGE = "{77B814A1D59FDB3A}UI/Textures/LoadingScreen/OYB_LoadingScreen.edds";
 
 	static void Apply(SCR_ScenarioLoadingScreenWidgets widgets)
 	{

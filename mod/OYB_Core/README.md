@@ -17,5 +17,7 @@ details arrive (the first, plain screen) stay as they are: OYB Core's scripts
 can only change what is shown after the game has loaded its mods, and the
 picture slot is only filled once the scenario is known.
 
-The image goes in `UI/Textures/LoadingScreen/OYB_LoadingScreen.png`, imported
-in Workbench; its resource name goes into `OYB_LoadingScreen.IMAGE`.
+The image is `UI/Textures/LoadingScreen/OYB_LoadingScreen.edds`, imported in
+Workbench from a 16:9 PNG; its resource name (GUID from the `.meta`) is
+`OYB_LoadingScreen.IMAGE`. To change the picture, re-import over the same file
+so the GUID stays.
