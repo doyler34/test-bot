@@ -126,8 +126,8 @@ server or with a controller yet.
   attachments, magazines and pocket contents use the game's own loadout
   format.
 - Not wanted: deleting and renaming slots (saving over a slot replaces it).
-- Implemented — awaiting testing: the last saved or loaded kit becomes the
-  respawn kit.
+- Verified: the last saved or loaded kit becomes the respawn kit; the
+  respawn screen offers it as "Saved loadout" (Game Master, Workbench).
 - Not done: a clear message naming items that no longer exist (a removed
   mod); a reconnect / restart test on a dedicated server.
 
