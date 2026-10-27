@@ -335,7 +335,10 @@ modded class SCR_InventoryMenuUI
 					break;
 			}
 			if (!taken)
+			{
+				OYB_ReportNoSpot(worn, preview, arsenalSlot.GetItemResource());
 				return false;
+			}
 		}
 
 		IEntity arsenalEntity = SCR_InventoryStorageBaseUI.ARSENAL_SLOT_STORAGES.Get(arsenalSlot);
@@ -384,6 +387,46 @@ modded class SCR_InventoryMenuUI
 				return slot;
 		}
 		return null;
+	}
+
+	// For testing on modded gear: what each worn piece can hold, when an item
+	// found no place on any of them.
+	protected void OYB_ReportNoSpot(notnull array<IEntity> worn, IEntity item, ResourceName resource)
+	{
+		OYB_ArsenalLogLine(string.Format("accessory: no place for %1 on worn gear, checked:", FilePath.StripPath(resource.GetPath())));
+		foreach (IEntity piece : worn)
+		{
+			if (!piece || !piece.GetPrefabData())
+				continue;
+
+			string line = FilePath.StripPath(piece.GetPrefabData().GetPrefabName().GetPath()) + ":";
+			array<Managed> found = {};
+			piece.FindComponents(BaseInventoryStorageComponent, found);
+			foreach (Managed component : found)
+			{
+				BaseInventoryStorageComponent storage = BaseInventoryStorageComponent.Cast(component);
+				if (!storage)
+					continue;
+
+				string fits = "no";
+				if (m_InventoryManager.CanInsertItemInStorage(item, storage, -1))
+					fits = "yes";
+				else if (storage.FindSuitableSlotForItem(item))
+					fits = "taken";
+				line += string.Format(" %1(%2, fits %3)", storage.ClassName(), typename.EnumToString(EStoragePurpose, storage.GetPurpose()), fits);
+			}
+
+			array<Managed> slots = {};
+			piece.FindComponents(AttachmentSlotComponent, slots);
+			if (!slots.IsEmpty())
+				line += string.Format(" %1 attachment slots", slots.Count());
+			OYB_ArsenalLogLine(line);
+		}
+	}
+
+	protected void OYB_ArsenalLogLine(string text)
+	{
+		Print("OYB_ARSENAL " + text);
 	}
 
 	// A storage that holds something on a piece of gear rather than in a pocket:
@@ -498,7 +541,10 @@ modded class SCR_InventoryMenuUI
 			// The server takes the supplies before it spawns, so don't ask for
 			// something that can't go in.
 			if (!m_InventoryManager.CanInsertItemInStorage(preview, wearing, slot.GetID()))
+			{
+				OYB_ArsenalLogLine(string.Format("wear (%1): %2 has a body slot (%3) but the game won't put it there", via, FilePath.StripPath(arsenalSlot.GetItemResource().GetPath()), slot.GetID()));
 				return false;
+			}
 
 			PrintFormat("OYB_ARSENAL wear (%1): slot empty, requesting %2", via, resource.GetPath());
 			OYB_ArsenalRequest.Request(resourceId, Replication.FindItemId(wearing), resource);
