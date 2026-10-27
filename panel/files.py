@@ -346,7 +346,18 @@ def arsenal_sides(base):
             and re.fullmatch(r"[A-Za-z0-9_]{1,20}(,[A-Za-z0-9_]{1,20})*", factions)}
 
 
-def save_arsenal_settings(base, hidden, prices, extras=None, moved=None, sides=None):
+def arsenal_renames(base):
+    """{prefab: new name} for items given a new name in the panel."""
+    profile = profile_folder(base)
+    path = profile / ARSENAL_FOLDER / "settings.json" if profile else None
+    if not path or not path.is_file():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    return {prefab: name for prefab, name in zip(data.get("renameItems") or [], data.get("renameNames") or [])
+            if isinstance(prefab, str) and prefab and isinstance(name, str) and name.strip()}
+
+
+def save_arsenal_settings(base, hidden, prices, extras=None, moved=None, sides=None, renames=None):
     """Write the settings the OYB Arsenal mod reads; the server picks them up within a minute."""
     profile = profile_folder(base)
     if profile is None:
@@ -363,7 +374,8 @@ def save_arsenal_settings(base, hidden, prices, extras=None, moved=None, sides=N
             "extraFactions": [extra["factions"] for _, extra in added],
             "extraCategories": [extra["category"] for _, extra in added],
             "categoryItems": sorted(moved or {}), "categoryNames": [moved[prefab] for prefab in sorted(moved or {})],
-            "sideItems": sorted(sides or {}), "sideFactions": [sides[prefab] for prefab in sorted(sides or {})]}
+            "sideItems": sorted(sides or {}), "sideFactions": [sides[prefab] for prefab in sorted(sides or {})],
+            "renameItems": sorted(renames or {}), "renameNames": [renames[prefab] for prefab in sorted(renames or {})]}
     write_text(folder / "settings.json", json.dumps(data, indent=1) + "\n")
 
 

@@ -11,12 +11,14 @@
 //     "extraFactions": ["" for all, or "US,FIA", ...],
 //     "extraCategories": [category name, ...],
 //     "categoryItems": [prefab, ...], "categoryNames": [category name, ...],
-//     "sideItems": [prefab, ...], "sideFactions": ["US,USSR", ...] }
+//     "sideItems": [prefab, ...], "sideFactions": ["US,USSR", ...],
+//     "renameItems": [prefab, ...], "renameNames": [new name, ...] }
 //
 // categoryItems moves catalogued items to another category in the arsenal.
 // sideItems gives a catalogued item to exactly those factions' arsenals, whatever
 // faction its mod tagged it with; a faction whose catalogue doesn't list it gets
-// it the way an added item is given out.
+// it the way an added item is given out. renameItems gives items a new name on
+// every player's screen (OYB_ArsenalItemNames.c).
 //
 // The server also writes $profile:OYB_Arsenal/items.json once it has started:
 // every item the faction catalogues offer, plus every item prefab in a loaded mod
@@ -381,6 +383,7 @@ class OYB_ArsenalSettings
 	protected ref map<ResourceName, int> m_Categories = new map<ResourceName, int>();
 	protected ref map<ResourceName, ref array<string>> m_Sides = new map<ResourceName, ref array<string>>();
 	protected ref map<ResourceName, ref OYB_ArsenalExtra> m_SideExtras = new map<ResourceName, ref OYB_ArsenalExtra>();
+	protected ref map<ResourceName, string> m_Renames = new map<ResourceName, string>();
 	protected string m_sLoadedText;
 	protected bool m_bServerStarted;
 
@@ -576,6 +579,39 @@ class OYB_ArsenalSettings
 		}
 	}
 
+	// The name players see: the one set in the panel, else the item's own.
+	string GetDisplayName(ResourceName prefab)
+	{
+		string name;
+		if (m_Renames.Find(prefab, name))
+			return name;
+
+		return OYB_ArsenalCatalogService.OYB_ReadInventoryName(prefab);
+	}
+
+	void GetNames(notnull array<string> items, notnull array<string> names)
+	{
+		foreach (ResourceName prefab, string name : m_Renames)
+		{
+			items.Insert(prefab);
+			names.Insert(name);
+		}
+	}
+
+	void SetNames(notnull array<string> items, notnull array<string> names)
+	{
+		m_Renames.Clear();
+		int count = Math.Min(items.Count(), names.Count());
+		for (int i = 0; i < count; i++)
+		{
+			string name = names[i].Trim();
+			if (!items[i].IsEmpty() && !name.IsEmpty())
+				m_Renames.Set(items[i], name);
+		}
+
+		OYB_ItemNames.Set(m_Renames);
+	}
+
 	void SetSides(notnull array<string> items, notnull array<string> factions)
 	{
 		m_Sides.Clear();
@@ -735,6 +771,8 @@ class OYB_ArsenalSettings
 		array<string> categoryNames = {};
 		array<string> sideItems = {};
 		array<string> sideFactions = {};
+		array<string> renameItems = {};
+		array<string> renameNames = {};
 		if (!text.IsEmpty())
 		{
 			JsonLoadContext context = new JsonLoadContext();
@@ -751,6 +789,8 @@ class OYB_ArsenalSettings
 				context.ReadValue("categoryNames", categoryNames);
 				context.ReadValue("sideItems", sideItems);
 				context.ReadValue("sideFactions", sideFactions);
+				context.ReadValue("renameItems", renameItems);
+				context.ReadValue("renameNames", renameNames);
 			}
 			else
 			{
@@ -763,8 +803,9 @@ class OYB_ArsenalSettings
 			extraMeta.Insert(extraFactions[m] + "|" + extraCategories[m]);
 
 		SetSides(sideItems, sideFactions);
+		SetNames(renameItems, renameNames);
 		Apply(hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
-		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added, %4 moved, %5 on changed sides", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count(), m_Sides.Count());
+		PrintFormat("OYB_ARSENAL settings loaded: %1 hidden, %2 priced, %3 added, %4 moved, %5 on changed sides, %6 renamed", m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count(), m_Sides.Count(), m_Renames.Count());
 
 		array<int> players = {};
 		GetGame().GetPlayerManager().GetPlayers(players);

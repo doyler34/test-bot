@@ -162,7 +162,7 @@ modded class SCR_InventoryStorageBaseUI
 			if (weaponEntity && weaponEntity.GetPrefabData())
 			{
 				ResourceName weaponPrefab = weaponEntity.GetPrefabData().GetPrefabName();
-				m_sOYB_WeaponName = OYB_ArsenalCatalogService.OYB_ReadInventoryName(weaponPrefab);
+				m_sOYB_WeaponName = OYB_ArsenalSettings.Get().GetDisplayName(weaponPrefab);
 				if (m_sOYB_WeaponName.IsEmpty())
 					m_sOYB_WeaponName = FilePath.StripExtension(FilePath.StripPath(weaponPrefab.GetPath()));
 			}

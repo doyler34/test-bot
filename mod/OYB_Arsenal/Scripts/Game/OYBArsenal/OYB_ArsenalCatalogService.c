@@ -320,20 +320,12 @@ class OYB_ArsenalCatalogService
 	// The name the inventory tooltip shows for a prefab.
 	static string OYB_ReadInventoryName(ResourceName prefab)
 	{
-		Resource resource = Resource.Load(prefab);
-		if (!resource || !resource.IsValid())
-			return string.Empty;
-
-		IEntityComponentSource itemSource = SCR_ComponentHelper.GetInventoryItemComponentSource(SCR_BaseContainerTools.FindEntitySource(resource));
-		if (!itemSource)
-			return string.Empty;
-
-		SCR_ItemAttributeCollection attributes = SCR_ComponentHelper.GetInventoryItemInfo(itemSource);
-		if (!attributes || !attributes.GetUIInfo())
+		string original = OYB_ItemNames.ReadOriginal(prefab);
+		if (original.IsEmpty())
 			return string.Empty;
 
 		// A mod that forgot its translations leaves the key, like "#MCE-Weapon_Name".
-		string name = WidgetManager.Translate(attributes.GetUIInfo().GetName());
+		string name = WidgetManager.Translate(original);
 		if (name.StartsWith("#"))
 			return string.Empty;
 
@@ -380,7 +372,7 @@ class OYB_ArsenalCatalogService
 			// attributes. The catalogue entry prefers the weapon's own name, which
 			// variants share (an M16A2 carbine is still "M16A2" there), so it's only
 			// the fallback.
-			string name = OYB_ReadInventoryName(prefab);
+			string name = OYB_ArsenalSettings.Get().GetDisplayName(prefab);
 			if (name.IsEmpty() && catalogManager)
 			{
 				SCR_EntityCatalogEntry catalogEntry = catalogManager.GetEntryWithPrefabFromAnyCatalog(EEntityCatalogType.ITEM, prefab, faction);
@@ -419,7 +411,7 @@ class OYB_ArsenalCatalogService
 			added.m_sPrefab = extraPrefab;
 			added.m_iCategory = extra.m_iCategory;
 			added.m_iSupplyCost = extra.m_iCost;
-			added.m_sName = OYB_ReadInventoryName(extraPrefab);
+			added.m_sName = OYB_ArsenalSettings.Get().GetDisplayName(extraPrefab);
 			added.m_bHasName = !added.m_sName.IsEmpty() && added.m_sName != "MISSING";
 			if (!added.m_bHasName)
 				added.m_sName = FilePath.StripExtension(FilePath.StripPath(extraPrefab.GetPath()));

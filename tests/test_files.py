@@ -334,6 +334,33 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "sides_found"})
         self.assertEqual(len(self.arsenal_saved(folder)["sideItems"]), 1)
 
+    async def test_items_can_be_renamed(self):
+        folder = self.arsenal_profile()
+        m16 = "{AAAA000000000001}Prefabs/Weapons/Rifles/M16/Rifle_M16A2.et"
+        token = await self.login("boss")
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "rename", "prefab": m16, "name": "  Sixteen   A2 "})
+        saved = self.arsenal_saved(folder)
+        self.assertEqual((saved["renameItems"], saved["renameNames"]), ([m16], ["Sixteen A2"]))
+        page = await (await self.client.get("/arsenal/Plus01", params={"q": "sixteen"})).text()
+        self.assertIn("Sixteen A2", page)
+        self.assertIn("normally M16A2", page)
+        self.assertIn("Sixteen A2", await (await self.client.get("/arsenal/Plus01", params={"show": "renamed"})).text())
+
+        # Too long, or a character the game would read as markup, changes nothing.
+        for bad in ("x" * 41, "#AR-Name", "<b>M16</b>"):
+            await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "rename", "prefab": m16, "name": bad})
+        self.assertEqual(files.arsenal_renames(self.root / "Plus01"), {m16: "Sixteen A2"})
+        # Other changes keep it.
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "hide", "prefab": m16})
+        self.assertEqual(files.arsenal_renames(self.root / "Plus01"), {m16: "Sixteen A2"})
+
+        # An empty box, or the item's own name, clears it.
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "rename", "prefab": m16, "name": ""})
+        self.assertEqual(files.arsenal_renames(self.root / "Plus01"), {})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "rename", "prefab": m16, "name": "Short"})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "rename", "prefab": m16, "name": "M16A2"})
+        self.assertEqual(files.arsenal_renames(self.root / "Plus01"), {})
+
     async def test_items_can_be_moved_to_another_category(self):
         folder = self.arsenal_profile()
         m9 = "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et"

@@ -2,7 +2,7 @@
 {% block title %}{{ inst }} arsenal · OYB Control{% endblock %}
 {% block body %}
 {% include "_manage_tabs.html" %}
-<p class="muted">What the OYB Arsenal offers on this server. Hide an item and it's gone from every arsenal; give it a price and that's what it costs and refunds. Tick the sides that get an item, so a US gun can be in the USSR arsenal too, or only there. Items a mod forgot to list for any faction are found by a scan and can be added. The server picks changes up within a minute, no restart needed.</p>
+<p class="muted">What the OYB Arsenal offers on this server. Hide an item and it's gone from every arsenal; give it a price and that's what it costs and refunds. Tick the sides that get an item, so a US gun can be in the USSR arsenal too, or only there. Give an item a shorter name and players see it in the arsenal and their inventory; leave the box empty to go back to its own name. Items a mod forgot to list for any faction are found by a scan and can be added. The server picks changes up within a minute, no restart needed.</p>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
 {% if items is none %}
@@ -13,7 +13,7 @@
 </section>
 {% else %}
 <section class="card">
-  <p class="muted small">{{ items|length }} items{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ hidden|length }} hidden · {{ prices|length }} with a changed price · {{ moved|length }} moved · {{ sides|length }} on changed sides · {{ unlisted }} unlisted (found by scan) · {{ extras|length }} added</p>
+  <p class="muted small">{{ items|length }} items{% if listed_at %} · listed {{ listed_at }}{% endif %} · {{ hidden|length }} hidden · {{ prices|length }} with a changed price · {{ moved|length }} moved · {{ sides|length }} on changed sides · {{ renames|length }} renamed · {{ unlisted }} unlisted (found by scan) · {{ extras|length }} added</p>
   <form method="get" action="/arsenal/{{ inst }}" class="grid">
     <label>Search <input name="q" value="{{ filters.q }}" placeholder="Name, e.g. m16 carbine" maxlength="80" autocomplete="off"></label>
     <label>Category
@@ -63,9 +63,16 @@
     {% set is_hidden = item.prefab in hidden %}
     {% set added = extras.get(item.prefab) %}
     <tr>
-      <td class="strong">{{ item.name }}{% if is_hidden %} <span class="pill down">Hidden</span>{% endif %}
+      <td class="strong">{{ renames.get(item.prefab, item.name) }}{% if is_hidden %} <span class="pill down">Hidden</span>{% endif %}
         {% if added %}<span class="pill on">Added</span>{% elif item.found %}<span class="pill alt">Unlisted</span>{% endif %}
-        <div class="muted small mono">{{ item.prefab.rsplit("/", 1)[-1] }}</div></td>
+        {% if item.prefab in renames %}<div class="muted small">normally {{ item.name }}</div>{% endif %}
+        <div class="muted small mono">{{ item.prefab.rsplit("/", 1)[-1] }}</div>
+        <form method="post" action="/arsenal/{{ inst }}" class="inline rename">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="rename">
+          <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <input name="name" value="{{ renames.get(item.prefab, '') }}" placeholder="New name" maxlength="{{ max_name }}" aria-label="New name for {{ item.name }}">
+          <button class="small ghost">Rename</button>
+        </form></td>
       <td data-label="Category">
         {% if item.found and not added %}{{ item.category }}{% else %}
         {% set current = added.category if added else moved.get(item.prefab, item.category) %}

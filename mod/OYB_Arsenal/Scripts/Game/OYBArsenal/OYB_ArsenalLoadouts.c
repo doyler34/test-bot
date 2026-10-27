@@ -101,12 +101,22 @@ modded class SCR_PlayerController
 		array<string> categoryNames = {};
 		OYB_ArsenalSettings.Get().GetLists(hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
 
-		// Sides go first; they take effect with the settings that follow.
+		// Sides and names go first; they take effect with the settings that follow.
 		array<string> sideItems = {};
 		array<string> sideFactions = {};
 		OYB_ArsenalSettings.Get().GetSides(sideItems, sideFactions);
 		Rpc(OYB_RpcDo_Sides, sideItems, sideFactions);
+		array<string> renameItems = {};
+		array<string> renameNames = {};
+		OYB_ArsenalSettings.Get().GetNames(renameItems, renameNames);
+		Rpc(OYB_RpcDo_Names, renameItems, renameNames);
 		Rpc(OYB_RpcDo_Settings, hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
+	protected void OYB_RpcDo_Names(array<string> renameItems, array<string> renameNames)
+	{
+		OYB_ArsenalSettings.Get().SetNames(renameItems, renameNames);
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
@@ -626,7 +636,7 @@ modded class SCR_PlayerController
 			if (!prefabData)
 				continue;
 
-			string weaponName = OYB_ArsenalCatalogService.OYB_ReadInventoryName(prefabData.GetPrefabName());
+			string weaponName = OYB_ArsenalSettings.Get().GetDisplayName(prefabData.GetPrefabName());
 			if (weaponName.IsEmpty())
 				continue;
 

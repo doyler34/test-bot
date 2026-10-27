@@ -75,6 +75,11 @@ below. Ownership: `NOTICE.md`.
   its mod tagged it with, so a US gun can be in the USSR arsenal too, or only
   there, one item at a time or everything a filter shows. A side whose catalogue doesn't list the item gets it at its usual
   price; a side it was taken from can't have it, even in a saved kit.
+- **Renaming from the panel** (`OYB_ArsenalItemNames.c`): give an item a
+  shorter name and every player sees it within a minute, in the arsenal, its
+  search, the hover box and the inventory. The game keeps a second copy of a
+  weapon's name for the on-screen weapon display (and possibly the kill
+  feed), which keeps the original. Items that shared a name share the new one.
 - **Mod scan**: on start the server also searches every loaded (non-base)
   mod's `Prefabs` folder for items no faction catalogue lists (a mod that
   wasn't set up properly), a few at a time so it doesn't hold the server up,
@@ -258,7 +263,8 @@ Nothing needs setting up. What there is:
   [cost, ...], "extraFactions": ["" or "US,FIA", ...], "extraCategories":
   [category name, ...], "categoryItems": [prefab, ...], "categoryNames":
   [category name, ...], "sideItems": [prefab, ...], "sideFactions":
-  ["US,USSR", ...]}`, prefabs written as `{GUID}Prefabs/....et` the
+  ["US,USSR", ...], "renameItems": [prefab, ...], "renameNames": [new name,
+  ...]}`, prefabs written as `{GUID}Prefabs/....et` the
   way `items.json` lists them.
 
 - **The game's own arsenal settings** on each arsenal (faction, item types,
@@ -347,6 +353,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Branding | Walk up to any arsenal, open it | Prompt and the title bar inside say "OYB Arsenal" | ✅ |
 | Full arsenal | Open a clothing-only box | Weapons, ammo, equipment and clothing all listed | ✅ |
 | Sides | In the panel, tick USSR on a US rifle, wait a minute, open a USSR arsenal | Rifle listed at its usual price; untick US and the US arsenal loses it | ✅ |
+| Rename | Rename an item in the panel, wait a minute, open an arsenal | New name on the card, hover box and in the inventory; `settings loaded: … 1 renamed` | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ✅ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |
@@ -365,6 +372,8 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | `OYB_ArsenalLoadouts.c` | Server-side loadout slots, pricing, refunds, respawn kit |
 | `OYB_ArsenalSettings.c` | The panel's hidden items and prices: writes `items.json`, reads `settings.json`, hides items in every arsenal, makes the server refuse them and charge, refund and show the new prices |
 | `OYB_ArsenalAlwaysStocked.c` | Every infantry arsenal offers all infantry gear |
+| `OYB_ArsenalItemNames.c` | Gives renamed items their new name on each player's screen |
+| `OYB_ArsenalPrompt.c` | Every arsenal's open prompt reads "OYB Arsenal" |
 
 An arsenal is usually shown by the **Vicinity** panel
 (`SCR_InventoryStorageLootUI`) and sometimes as an opened storage; both get
