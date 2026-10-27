@@ -28,7 +28,9 @@ below. Ownership: `NOTICE.md`.
 - **Weapon picker**: the **Weapon** key and "< M16A2 >" in the bar step through the
   guns you carry (in hands, then each weapon slot; grenades skipped). The
   "Fits" list and attachment fitting work on the chosen weapon, slung or
-  holstered, without switching to it (`OYB_ArsenalTargetWeapon.c`).
+  holstered, without switching to it (`OYB_ArsenalTargetWeapon.c`). On a
+  controller the Weapon button is the same as Requisition, so the key is
+  hidden there and the weapon in hand is used.
 - **Fit attachments in one go** (`OYB_ArsenalWeaponFitting.c`): double-click
   an attachment in the arsenal, or drag it onto the character, and it goes
   straight onto the matching slot of the weapon in your hands. Whatever was in
@@ -138,7 +140,7 @@ server or with a controller yet.
 - Left open: the two `OverlayWidget Frame0 has invalid slot GridWidgetSlot`
   errors may be the game's own (check with the mod off).
 
-**2. Keyboard and controller — Keyboard verified; controller awaiting testing**
+**2. Keyboard and controller — Keyboard verified; controller tested on the live server**
 - OYB uses the game's own menu actions, so players change the keys in the
   game's own key settings. Verified in Workbench, one action each, no
   clashes: Category X (`MenuFilter`), Weapon R (`MenuRefresh`), Save F
@@ -148,7 +150,11 @@ server or with a controller yet.
   as Weapon), `MenuDeploy` (Space, only works on the respawn screen).
 - Not done: OYB-only named actions under their own heading in the key
   settings (needs the game's input and key-settings configs from Workbench
-  as a template); inspecting an arsenal item; controller testing.
+  as a template); inspecting an arsenal item; a controller button for
+  Weapon (X is Requisition there, so it's hidden on a controller).
+- Controller (live server): Category on the menu button, Save on Y, Load on
+  the right stick work; Weapon on X clashed with Requisition and is now
+  keyboard only.
 
 **3. Loadouts — Verified in Workbench; dedicated server awaiting testing**
 - Five slots per player, saved on the server under `$profile:` by player

@@ -332,7 +332,12 @@ class OYB_ArsenalCatalogService
 		if (!attributes || !attributes.GetUIInfo())
 			return string.Empty;
 
-		return WidgetManager.Translate(attributes.GetUIInfo().GetName());
+		// A mod that forgot its translations leaves the key, like "#MCE-Weapon_Name".
+		string name = WidgetManager.Translate(attributes.GetUIInfo().GetName());
+		if (name.StartsWith("#"))
+			return string.Empty;
+
+		return name;
 	}
 
 	protected array<ref OYB_ArsenalEntry> Build(SCR_ArsenalComponent arsenal)
@@ -384,7 +389,7 @@ class OYB_ArsenalCatalogService
 			}
 
 			// The game names an item MISSING when its prefab has no UI info.
-			entry.m_bHasName = !name.IsEmpty() && name != "MISSING";
+			entry.m_bHasName = !name.IsEmpty() && name != "MISSING" && !name.StartsWith("#");
 			if (!entry.m_bHasName)
 			{
 				name = FilePath.StripExtension(FilePath.StripPath(prefab.GetPath()));
