@@ -6,16 +6,18 @@ contents into the Workbench project folder of the same name (the one with
 
 ## Loading screen
 
-`Scripts/Game/OYBCore/LoadingScreen/OYB_LoadingScreen.c` puts OYB's image in
-the picture slot of the game's scenario loading screen. Everything else on
-that screen (progress bar, spinner, hints, title, description) is the game's
+`Scripts/Game/OYBCore/LoadingScreen/OYB_LoadingScreen.c` puts OYB's image
+across the whole scenario loading screen, in place of the background: scaled to
+cover the screen at its own shape and centred, so other screen shapes crop the
+edges instead of stretching it. The scenario's photo, title, description and
+the Reforger logo are hidden once the scenario is known (the image carries
+OYB's branding); the progress bar, spinner, hints and warnings stay the game's
 own. It works with any scenario, Conflict included; no mission header change.
 
-Which loading stage: the scenario loading screen, once the scenario's details
-have arrived. The game's start-up splash and the moment before the scenario's
-details arrive (the first, plain screen) stay as they are: OYB Core's scripts
-can only change what is shown after the game has loaded its mods, and the
-picture slot is only filled once the scenario is known.
+Which loading stage: the scenario loading screen, from when it opens once the
+game has loaded its mods. The game's start-up splash, and the connecting and
+mod download before that, stay as they are: OYB Core's scripts only run once
+the mods are loaded.
 
 The image is `UI/Textures/LoadingScreen/OYB_LoadingScreen.edds`, imported in
 Workbench from a 16:9 PNG; its resource name (GUID from the `.meta`) is
