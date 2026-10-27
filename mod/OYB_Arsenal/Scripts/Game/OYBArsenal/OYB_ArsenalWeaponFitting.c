@@ -9,8 +9,8 @@
 //
 // The new part is asked for with the same arsenal request the game uses when an
 // item is dragged onto a weapon, so the server still checks the storage belongs to
-// the player, the distance, the arsenal and the supply cost. Magazines and
-// everything else keep the vanilla behaviour.
+// the player, the distance, the arsenal and the supply cost. Accessories go onto
+// worn gear the same way. Everything else keeps the vanilla behaviour.
 modded class SCR_InventoryMenuUI
 {
 	// The game decides whether Q / E turn pages when the mouse enters a panel.
@@ -26,7 +26,7 @@ modded class SCR_InventoryMenuUI
 
 	override protected bool MoveBetweenFromVicinity_VirtualArsenal()
 	{
-		if (OYB_FitToHeldWeapon("quick move") || OYB_EquipClothing("quick move") || OYB_EquipWeapon("quick move") || OYB_PutWithSameItems("quick move"))
+		if (OYB_FitToHeldWeapon("quick move") || OYB_EquipClothing("quick move") || OYB_EquipAccessory("quick move") || OYB_EquipWeapon("quick move") || OYB_PutWithSameItems("quick move"))
 			return true;
 
 		return super.MoveBetweenFromVicinity_VirtualArsenal();
@@ -34,7 +34,7 @@ modded class SCR_InventoryMenuUI
 
 	override protected bool EquipDraggedItem_VirtualArsenal(bool forceEquip = false)
 	{
-		if (OYB_FitToHeldWeapon("drag onto character") || OYB_EquipClothing("drag onto character") || OYB_EquipWeapon("drag onto character") || OYB_PutWithSameItems("drag onto character"))
+		if (OYB_FitToHeldWeapon("drag onto character") || OYB_EquipClothing("drag onto character") || OYB_EquipAccessory("drag onto character") || OYB_EquipWeapon("drag onto character") || OYB_PutWithSameItems("drag onto character"))
 			return true;
 
 		return super.EquipDraggedItem_VirtualArsenal(forceEquip);
@@ -47,7 +47,7 @@ modded class SCR_InventoryMenuUI
 		{
 			SCR_InventorySlotUI selected = m_pSelectedSlotUI;
 			m_pSelectedSlotUI = m_pFocusedSlotUI;
-			bool fitted = OYB_FitToHeldWeapon("equip") || OYB_EquipClothing("equip") || OYB_EquipWeapon("equip");
+			bool fitted = OYB_FitToHeldWeapon("equip") || OYB_EquipClothing("equip") || OYB_EquipAccessory("equip") || OYB_EquipWeapon("equip");
 			m_pSelectedSlotUI = selected;
 			if (fitted)
 			{
@@ -286,6 +286,113 @@ modded class SCR_InventoryMenuUI
 	}
 
 	// See OYB_ArsenalClothing.c.
+	// Accessories that go onto worn gear rather than the body (a helmet light,
+	// NVGs on a helmet mount, a flashlight on a vest) go straight into a free
+	// spot for them on what's worn. Pockets and backpacks don't count, so
+	// everything else still goes in the bag as usual.
+	protected bool OYB_EquipAccessory(string via)
+	{
+		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);
+		if (!arsenalSlot || !arsenalSlot.IsAvailable() || !arsenalSlot.GetInventoryItemComponent() || !m_InventoryManager)
+			return false;
+
+		IEntity preview = arsenalSlot.GetInventoryItemComponent().GetOwner();
+		if (!preview || preview.FindComponent(BaseLoadoutClothComponent) || preview.FindComponent(BaseWeaponComponent) || preview.FindComponent(BaseMagazineComponent))
+			return false;
+
+		SCR_CharacterInventoryStorageComponent wearing = m_InventoryManager.GetCharacterStorage();
+		if (!wearing)
+			return false;
+
+		// What's worn, and what's already mounted on it (NVGs can go on a mount
+		// that's on the helmet).
+		BaseInventoryStorageComponent target;
+		array<IEntity> worn = {};
+		wearing.GetAll(worn);
+		int wornCount = worn.Count();
+		for (int i = 0; i < wornCount; i++)
+		{
+			if (worn[i])
+				OYB_GetMounted(worn[i], worn);
+		}
+		foreach (IEntity piece : worn)
+		{
+			target = OYB_FindAccessorySpot(piece, preview);
+			if (target)
+				break;
+		}
+		if (!target)
+			return false;
+
+		IEntity arsenalEntity = SCR_InventoryStorageBaseUI.ARSENAL_SLOT_STORAGES.Get(arsenalSlot);
+		SCR_ResourceComponent resourceComponent = SCR_ResourceComponent.FindResourceComponent(arsenalEntity);
+		if (!resourceComponent)
+			return false;
+
+		ResourceName resource = arsenalSlot.GetItemResource();
+		PrintFormat("OYB_ARSENAL accessory (%1): putting %2 on worn gear", via, resource.GetPath());
+		OYB_ArsenalRequest.Request(Replication.FindItemId(resourceComponent), Replication.FindItemId(target), resource);
+		return true;
+	}
+
+	protected void OYB_GetMounted(IEntity piece, notnull array<IEntity> mounted)
+	{
+		array<Managed> found = {};
+		piece.FindComponents(BaseInventoryStorageComponent, found);
+		foreach (Managed component : found)
+		{
+			BaseInventoryStorageComponent storage = BaseInventoryStorageComponent.Cast(component);
+			if (!storage || (!BaseEquipmentStorageComponent.Cast(storage) && !ClothNodeStorageComponent.Cast(storage)))
+				continue;
+
+			array<IEntity> items = {};
+			storage.GetAll(items, false);
+			foreach (IEntity item : items)
+			{
+				if (item && !mounted.Contains(item))
+					mounted.Insert(item);
+			}
+		}
+
+		array<Managed> slots = {};
+		piece.FindComponents(AttachmentSlotComponent, slots);
+		foreach (Managed slotComponent : slots)
+		{
+			AttachmentSlotComponent slot = AttachmentSlotComponent.Cast(slotComponent);
+			if (slot && slot.GetAttachedEntity() && !mounted.Contains(slot.GetAttachedEntity()))
+				mounted.Insert(slot.GetAttachedEntity());
+		}
+	}
+
+	// A free spot for the accessory on this worn piece: an equipment or cloth node
+	// storage, or an attachment slot, that takes it.
+	protected BaseInventoryStorageComponent OYB_FindAccessorySpot(IEntity piece, IEntity accessory)
+	{
+		if (!piece)
+			return null;
+
+		array<Managed> found = {};
+		piece.FindComponents(BaseInventoryStorageComponent, found);
+		foreach (Managed component : found)
+		{
+			BaseInventoryStorageComponent storage = BaseInventoryStorageComponent.Cast(component);
+			if (!storage || (!BaseEquipmentStorageComponent.Cast(storage) && !ClothNodeStorageComponent.Cast(storage)))
+				continue;
+			if (m_InventoryManager.CanInsertItemInStorage(accessory, storage, -1))
+				return storage;
+		}
+
+		array<Managed> slots = {};
+		piece.FindComponents(AttachmentSlotComponent, slots);
+		foreach (Managed slotComponent : slots)
+		{
+			AttachmentSlotComponent slot = AttachmentSlotComponent.Cast(slotComponent);
+			if (slot && !slot.GetAttachedEntity() && slot.CanSetAttachment(accessory))
+				return OYB_TargetWeapon.GetSlotStorage(slot);
+		}
+		return null;
+	}
+
 	protected bool OYB_EquipClothing(string via)
 	{
 		SCR_ArsenalInventorySlotUI arsenalSlot = SCR_ArsenalInventorySlotUI.Cast(m_pSelectedSlotUI);
