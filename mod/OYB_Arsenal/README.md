@@ -340,7 +340,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Move category | Move an item to another category in the panel, wait a minute | It shows under the new category; `settings loaded: … 1 moved` | ⏳ |
 | Branding | Walk up to any arsenal, open it | Prompt and the title bar inside say "OYB Arsenal" | ✅ |
 | Full arsenal | Open a clothing-only box | Weapons, ammo, equipment and clothing all listed | ✅ |
-| Sides | In the panel, tick USSR on a US rifle, wait a minute, open a USSR arsenal | Rifle listed at its usual price; untick US and the US arsenal loses it | ⏳ |
+| Sides | In the panel, tick USSR on a US rifle, wait a minute, open a USSR arsenal | Rifle listed at its usual price; untick US and the US arsenal loses it | ✅ listed in the USSR arsenal; taking it and the US side ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ✅ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |
