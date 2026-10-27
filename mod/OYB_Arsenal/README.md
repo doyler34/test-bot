@@ -12,7 +12,9 @@ It's for testing in Workbench on your own PC. It doesn't go on the live servers.
 - **A category list to the left of the arsenal grid** (dark rows, name on the
   left, count on the right, the selected row lit with an orange edge): All, Rifles, Machine guns,
   Sniper rifles, Pistols, Launchers, Ammo, Attachments, Clothing, Vests &
-  bags, Medical, Explosives, Tools, Other, each with its item count.
+  bags, Medical, Explosives (grenades, explosives, and single rounds such as
+  40mm grenades, rockets and mortar shells), Tools, Other, each with its item
+  count.
   Only categories the arsenal has items in get a button. Built from the game's
   own `WLib_ButtonTextUnderlined` buttons.
 - **"Fits <weapon>" category** at the top of the column: the attachments,

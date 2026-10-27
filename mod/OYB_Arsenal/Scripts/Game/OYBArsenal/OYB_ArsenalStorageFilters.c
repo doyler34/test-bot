@@ -54,6 +54,11 @@ modded class SCR_InventoryStorageBaseUI
 
 		m_OYB_Arsenal = listed;
 
+		// Before any filtering, while the list still holds one item per prefab.
+		array<ResourceName> offered = {};
+		listed.GetAvailablePrefabs(offered);
+		OYB_ArsenalCatalogService.GetInstance().SortRounds(listed, pItemsInStorage, offered);
+
 		array<bool> fits = {};
 		m_iOYB_FitCount = OYB_FindFits(pItemsInStorage, fits);
 		OYB_UpdateCategoryText();

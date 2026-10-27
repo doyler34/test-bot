@@ -44,10 +44,18 @@ class OYB_ArsenalCategories
 	}
 
 	// Ammo goes by item mode because magazines share item types with their weapons.
+	// Rockets, mortar shells and other explosive rounds go with the explosives;
+	// single 40mm rounds are sorted out once the arsenal's items are on screen
+	// (see OYB_ArsenalCatalogService.SortRounds).
 	static int FromItem(SCR_EArsenalItemType type, SCR_EArsenalItemMode mode)
 	{
 		if (mode == SCR_EArsenalItemMode.AMMUNITION)
+		{
+			if (type & (SCR_EArsenalItemType.ROCKET_LAUNCHER | SCR_EArsenalItemType.MORTARS | SCR_EArsenalItemType.EXPLOSIVES))
+				return OYB_EArsenalCategory.THROWABLES;
+
 			return OYB_EArsenalCategory.AMMO;
+		}
 
 		if (type & SCR_EArsenalItemType.RIFLE)
 			return OYB_EArsenalCategory.RIFLES;
@@ -100,6 +108,7 @@ class OYB_ArsenalCatalogService
 	protected SCR_ArsenalComponent m_CachedArsenal;
 	protected ref array<ref OYB_ArsenalEntry> m_aCachedEntries;
 	protected ref map<ResourceName, OYB_ArsenalEntry> m_mCachedByPrefab = new map<ResourceName, OYB_ArsenalEntry>();
+	protected bool m_bRoundsSorted;
 
 	static OYB_ArsenalCatalogService GetInstance()
 	{
@@ -123,12 +132,44 @@ class OYB_ArsenalCatalogService
 
 		m_CachedArsenal = arsenal;
 		m_aCachedEntries = Build(arsenal);
+		m_bRoundsSorted = false;
 
 		m_mCachedByPrefab.Clear();
 		foreach (OYB_ArsenalEntry entry : m_aCachedEntries)
 			m_mCachedByPrefab.Insert(entry.m_sPrefab, entry);
 
 		return m_aCachedEntries;
+	}
+
+	// Grenade rounds, rockets and shells are ammunition to the arsenal, the same
+	// as rifle magazines. They hold a single round, so an ammo item that holds
+	// one round (or isn't a magazine at all) moves to Explosives. This needs the
+	// item itself, so it's done with the arsenal's preview items, once per list.
+	void SortRounds(notnull SCR_ArsenalComponent arsenal, notnull array<IEntity> items, notnull array<ResourceName> prefabs)
+	{
+		bool fromCache;
+		GetEntries(arsenal, fromCache);
+		if (m_bRoundsSorted || items.Count() != prefabs.Count())
+			return;
+		m_bRoundsSorted = true;
+
+		int moved;
+		foreach (int i, IEntity item : items)
+		{
+			OYB_ArsenalEntry entry = FindEntry(arsenal, prefabs[i]);
+			if (!item || !entry || entry.m_iCategory != OYB_EArsenalCategory.AMMO)
+				continue;
+
+			BaseMagazineComponent magazine = BaseMagazineComponent.Cast(item.FindComponent(BaseMagazineComponent));
+			if (magazine && magazine.GetMaxAmmoCount() > 1)
+				continue;
+
+			entry.m_iCategory = OYB_EArsenalCategory.THROWABLES;
+			moved++;
+		}
+
+		if (moved > 0)
+			PrintFormat("OYB_ARSENAL moved %1 single-round items from Ammo to Explosives", moved);
 	}
 
 	OYB_ArsenalEntry FindEntry(notnull SCR_ArsenalComponent arsenal, ResourceName prefab)
