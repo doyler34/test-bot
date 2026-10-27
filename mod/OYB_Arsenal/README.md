@@ -305,7 +305,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Item list | Open the US arsenal | `built item list: 173 entries … 0 without a display name` | ✅ |
 | Categories | Click each category, press X | Grid shows only that category; counts match | ✅ |
 | Empty category | On Fits, put the weapon away, reopen | Falls back to All | ✅ |
-| Explosives | Open Explosives | 40mm rounds, rockets, shells listed; log `moved … single-round items` | ⏳ |
+| Explosives | Open Explosives | 40mm rounds, rockets, shells listed; log `moved … single-round items` | ✅ |
 | Search | Type `m16 ca`, Enter | Only M16A2 Carbine variants | ✅ |
 | Pages | Page 2 of a category, switch away and back | Back on page 2; Q / E page straight after switching | ✅ |
 | Weapon picker | Press R / click arrows with two guns | Name changes, Fits list follows | ✅ |
@@ -329,7 +329,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Added item | Add an unlisted gun for US at 20, open a US arsenal | Gun listed at 20; taking it charges 20; putting it back refunds | ⏳ |
 | Network | Open and close an arsenal many times | Settings asked once per session (no repeat in the server log) | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
-| Modded gear | Load a weapon mod | Right categories, attachments fit | ⏳ |
+| Modded gear | Load a weapon mod | Right categories, attachments fit | ✅ categories (Bacon Desert Eagle, M110, suppressors, RIS optics: 257 items); patches listed as equipment now go to Clothing ⏳ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |
 | Two players | Both use one arsenal at once | No errors, no duplicate items | ⏳ |
 | Controller | Navigate bar, list, buttons with a pad | All reachable | ⏳ |

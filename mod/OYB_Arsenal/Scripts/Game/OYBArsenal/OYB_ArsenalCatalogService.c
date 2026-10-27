@@ -83,6 +83,21 @@ class OYB_ArsenalCategories
 		return OYB_EArsenalCategory.OTHER;
 	}
 
+	// Mods list some wearables as plain equipment: flag and name patches for
+	// uniforms and vests belong with the clothing.
+	static int Refine(int category, ResourceName prefab)
+	{
+		if (category != OYB_EArsenalCategory.EQUIPMENT && category != OYB_EArsenalCategory.OTHER)
+			return category;
+
+		string path = prefab.GetPath();
+		path.ToLower();
+		if (path.Contains("patch"))
+			return OYB_EArsenalCategory.CLOTHING;
+
+		return category;
+	}
+
 	// For items added from the panel, which have no arsenal type of their own:
 	// which kinds of arsenal carry each category.
 	static int ToArsenalTypes(int category)
@@ -184,7 +199,7 @@ class OYB_ArsenalCategories
 		if (medical || path.Contains("medic") || path.Contains("bandage"))
 			return OYB_EArsenalCategory.MEDICAL;
 
-		return OYB_EArsenalCategory.OTHER;
+		return Refine(OYB_EArsenalCategory.OTHER, prefab);
 	}
 }
 
@@ -341,7 +356,7 @@ class OYB_ArsenalCatalogService
 			entry.m_sPrefab = prefab;
 			entry.m_eType = item.GetItemType();
 			entry.m_eMode = item.GetItemMode();
-			entry.m_iCategory = OYB_ArsenalCategories.FromItem(entry.m_eType, entry.m_eMode);
+			entry.m_iCategory = OYB_ArsenalCategories.Refine(OYB_ArsenalCategories.FromItem(entry.m_eType, entry.m_eMode), prefab);
 			entry.m_iSupplyCost = item.GetSupplyCost(costType);
 			entry.m_eRank = item.GetRequiredRank();
 

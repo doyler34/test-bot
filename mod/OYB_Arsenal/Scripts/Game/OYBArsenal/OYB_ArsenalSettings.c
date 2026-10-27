@@ -648,7 +648,7 @@ class OYB_ArsenalSettings
 					continue;
 				}
 
-				int category = OYB_ArsenalCategories.FromItem(item.GetItemType(), item.GetItemMode());
+				int category = OYB_ArsenalCategories.Refine(OYB_ArsenalCategories.FromItem(item.GetItemType(), item.GetItemMode()), prefab);
 				AddListed(prefab, category, scrFaction.GetFactionKey(), item.GetSupplyCost(SCR_EArsenalSupplyCostType.DEFAULT, false), 0);
 			}
 		}
