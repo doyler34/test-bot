@@ -383,6 +383,19 @@ modded class SCR_InventoryStorageBaseUI
 		if (load)
 			load.m_OnActivated.Insert(OYB_OnLoadKey);
 
+		Widget credits = workspace.CreateWidgets(OYB_LABEL_LAYOUT, area);
+		if (credits)
+		{
+			AlignableSlot.SetPadding(credits, 0, 6, 0, 0);
+			TextWidget creditsText = TextWidget.Cast(OYB_FindWidgetOfType(credits, TextWidget));
+			if (creditsText)
+			{
+				creditsText.SetText("Zero fucking thanks to Tay and Saber");
+				creditsText.SetExactFontSize(11);
+				creditsText.SetColor(new Color(0.45, 0.45, 0.45, 1));
+			}
+		}
+
 		SCR_PlayerController.OYB_GetOnLoadoutNames().Insert(OYB_UpdateLoadoutText);
 		OYB_UpdateLoadoutText();
 
