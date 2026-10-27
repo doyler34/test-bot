@@ -37,6 +37,7 @@ PERMISSIONS = {
     "box": "owner",
     "cards": "owner",
     "mods": "owner",
+    "arsenal": "owner",
     "files": "manager",
     "amp_settings": "manager",
     # Commands on the box, and deleting a whole server: ticked per person.
@@ -66,6 +67,7 @@ GRANTS = (
     ("sus", "Change the Sus check settings"),
     ("mortar", "Use the mortar calculator (being tested)"),
     ("mods", "Change which mods each server runs"),
+    ("arsenal", "Change each server's arsenal: hidden items and prices"),
     ("files", "Server manager: start and stop servers' AMP, files, game console"),
     ("amp_settings", "Server manager: change AMP settings"),
     ("console", "Box console: run commands on the machine"),

@@ -53,6 +53,38 @@ modded class SCR_PlayerController
 		Rpc(OYB_RpcAsk_LoadLoadout, slot, arsenalResourceId);
 	}
 
+	// The panel's hidden items and prices (see OYB_ArsenalSettings.c).
+	void OYB_RequestSettings()
+	{
+		if (!OYB_IsLocal() || !Replication.IsServer())
+			Rpc(OYB_RpcAsk_Settings);
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+	protected void OYB_RpcAsk_Settings()
+	{
+		OYB_SendSettings();
+	}
+
+	// The host shares the server's copy, so only remote players are sent one.
+	void OYB_SendSettings()
+	{
+		if (OYB_IsLocal())
+			return;
+
+		array<string> hidden = {};
+		array<string> priceItems = {};
+		array<int> priceCosts = {};
+		OYB_ArsenalSettings.Get().GetLists(hidden, priceItems, priceCosts);
+		Rpc(OYB_RpcDo_Settings, hidden, priceItems, priceCosts);
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
+	protected void OYB_RpcDo_Settings(array<string> hidden, array<string> priceItems, array<int> priceCosts)
+	{
+		OYB_ArsenalSettings.Get().Apply(hidden, priceItems, priceCosts);
+	}
+
 	//------------------------------------------------------------------------------------------------
 	// Server
 
@@ -168,6 +200,15 @@ modded class SCR_PlayerController
 				prices.Set(item.GetItemResourceName(), item.GetSupplyCost(arsenal.GetSupplyCostType()));
 		}
 
+		// Prices set in the panel replace the catalogue's.
+		OYB_ArsenalSettings settings = OYB_ArsenalSettings.Get();
+		array<string> hidden = {};
+		array<string> priceItems = {};
+		array<int> priceCosts = {};
+		settings.GetLists(hidden, priceItems, priceCosts);
+		foreach (int p, string pricedItem : priceItems)
+			prices.Set(pricedItem, priceCosts[p]);
+
 		// Parts that come fitted to something being bought, like the M203 on an
 		// M16A2 M203, arrive with it, so they aren't paid for again.
 		map<ResourceName, int> missingCounts = new map<ResourceName, int>();
@@ -177,6 +218,20 @@ modded class SCR_PlayerController
 				missingCounts.Set(prefab, count - carried.Get(prefab));
 		}
 		map<ResourceName, int> comesWith = OYB_CountFittedParts(missingCounts);
+
+		// Hidden items can't be taken from an arsenal, so a kit can't bring them in
+		// either; ones already carried can stay.
+		array<string> refused = {};
+		foreach (ResourceName missingPrefab, int missingCount : missingCounts)
+		{
+			if (missingCount > comesWith.Get(missingPrefab) && settings.IsHidden(missingPrefab))
+				refused.Insert(FilePath.StripExtension(FilePath.StripPath(missingPrefab.GetPath())));
+		}
+		if (!refused.IsEmpty())
+		{
+			OYB_SendMessage(string.Format("Loadout %1 has items this server doesn't allow: %2.", slot + 1, SCR_StringHelper.Join(", ", refused)));
+			return;
+		}
 
 		bool usesSupplies = arsenal.IsArsenalUsingSupplies();
 		float cost;
@@ -474,7 +529,17 @@ modded class SCR_PlayerController
 				SCR_ItemAttributeCollection attributes = SCR_ItemAttributeCollection.Cast(item.GetAttributes());
 				ResourceName prefab = prefabData.GetPrefabName();
 				if (attributes && attributes.IsRefundable() && !refunds.Contains(prefab))
-					refunds.Set(prefab, Math.Max(SCR_ArsenalManagerComponent.GetItemRefundAmount(child, arsenal, false), 0));
+				{
+					float refund = Math.Max(SCR_ArsenalManagerComponent.GetItemRefundAmount(child, arsenal, false), 0);
+
+					// The same share of a price set in the panel.
+					int price;
+					float catalogPrice = OYB_ArsenalSettings.CatalogPrice(prefab, arsenal);
+					if (refund > 0 && catalogPrice > 0 && OYB_ArsenalSettings.Get().GetPrice(prefab, price))
+						refund = price * Math.Min(refund / catalogPrice, 1);
+
+					refunds.Set(prefab, refund);
+				}
 			}
 
 			OYB_FindRefunds(child, arsenal, refunds);

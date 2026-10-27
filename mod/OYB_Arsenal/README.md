@@ -55,6 +55,14 @@ below. Ownership: `NOTICE.md`.
   character) an item you already have, like a magazine, and it goes into the
   pouch or pocket holding the most of them, if there's room; otherwise the
   game picks as usual.
+- **Panel settings** (`OYB_ArsenalSettings.c`): the OYB panel's **Arsenal**
+  tab on each server lists every item the arsenals can offer (modded ones
+  included) and hides items or changes their price. The mod writes the list
+  to `$profile:OYB_Arsenal/items.json` when the server starts and reads
+  `$profile:OYB_Arsenal/settings.json` every minute, so changes apply
+  without a restart. Hidden items drop out of every arsenal and the server
+  refuses them, even in a saved kit; a changed price is what the arsenal
+  charges, refunds, shows on the item card and charges for a kit.
 - **Saved loadouts** (`OYB_ArsenalLoadouts.c`): under the item grid, a
   "Saved loadouts" heading, "< Loadout 1 >" to pick one of five slots,
   **Save** (`MenuFavourite`) to store the kit you're wearing and **Load**
@@ -216,6 +224,12 @@ them with Workbench closed.
 
 Nothing needs setting up. What there is:
 
+- **The panel's Arsenal tab** for each server: hide items and change prices
+  (see above). The same file can be edited by hand if needed:
+  `{"version": 1, "hidden": [prefab, ...], "priceItems": [prefab, ...],
+  "priceCosts": [cost, ...]}`, prefabs written as `{GUID}Prefabs/....et`
+  the way `items.json` lists them.
+
 - **The game's own arsenal settings** on each arsenal (faction, item types,
   supply use, refunds, whether kits may be saved) apply as usual. An arsenal
   with saving turned off still loads OYB slots but doesn't set the respawn
@@ -251,6 +265,14 @@ Nothing needs setting up. What there is:
   each inventory refresh; not yet checked whether they also appear without
   OYB.
 - Several players at one arsenal, and a dedicated server, are untested.
+- Panel prices are settled after the game's own charge, so the arsenal must
+  hold enough for both the game's price and the new one for a moment; the
+  refund of an item with a changed price is worked out as the same share of
+  the new price as the game gives of the old one.
+- Items a mod never adds to a faction's item catalogue can't appear in any
+  arsenal (the game's rule), so they don't show in the panel either.
+- After adding a mod, the server has to start once before the panel lists
+  its items.
 
 ## Test checklist
 
@@ -277,6 +299,10 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | Removed item | Save a kit with a mod item, remove the mod, Load | Refused, item named, no supplies taken | ⏳ |
 | Supplies | Load at an arsenal that uses supplies | Charged for missing items only; refund for dropped | ⏳ |
 | Spam | Click Load repeatedly | At most one load a second | ⏳ |
+| Item list for the panel | Start the server with the mod | `wrote N items to $profile:OYB_Arsenal/items.json`; panel's Arsenal tab lists them | ⏳ |
+| Hide from panel | Hide an item, wait a minute, open an arsenal | Item gone; `settings loaded: 1 hidden` | ⏳ |
+| Price from panel | Set a price, wait, open an arsenal that uses supplies | Card shows the new price; that's what's taken and refunded | ⏳ |
+| Hidden in a kit | Save a kit, hide one of its items, load at an arsenal without it on you | Refused, item named | ⏳ |
 | Credits | Look under Save / Load | Grey "Zero fucking thanks to Tay and Saber" | ✅ |
 | Modded gear | Load a weapon mod | Right categories, attachments fit | ⏳ |
 | Dedicated server | Save, restart server, rejoin, Load | Slots still there | ⏳ |
@@ -293,6 +319,7 @@ Status: ✅ verified in Workbench, ⏳ awaiting testing.
 | `OYB_ArsenalClothing.c` | The take-off, put-on, move-contents and refund steps for clothing and weapon swaps |
 | `OYB_ArsenalTargetWeapon.c` | Which carried weapon the Fits list and fitting use |
 | `OYB_ArsenalLoadouts.c` | Server-side loadout slots, pricing, refunds, respawn kit |
+| `OYB_ArsenalSettings.c` | The panel's hidden items and prices: writes `items.json`, reads `settings.json`, hides items in every arsenal, makes the server refuse them and charge, refund and show the new prices |
 | `OYB_ArsenalAlwaysStocked.c` | Every infantry arsenal also offers medical gear, vests and helmets |
 
 An arsenal is usually shown by the **Vicinity** panel

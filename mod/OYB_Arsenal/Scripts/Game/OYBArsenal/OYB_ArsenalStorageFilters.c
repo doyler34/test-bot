@@ -428,7 +428,10 @@ modded class SCR_InventoryStorageBaseUI
 
 		SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerController());
 		if (controller)
+		{
 			controller.OYB_RequestLoadoutNames();
+			controller.OYB_RequestSettings();
+		}
 	}
 
 	override event void HandlerDeattached(Widget w)

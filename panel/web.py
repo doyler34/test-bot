@@ -2597,13 +2597,13 @@ AMP_STATES = {0: "Stopped", 5: "Getting ready", 7: "Configuring", 10: "Starting"
               40: "Stopping", 45: "Going to sleep", 50: "Asleep", 60: "Waiting", 70: "Installing", 75: "Updating",
               80: "Waiting for input", 100: "Failed", 200: "Suspended", 250: "Maintenance"}
 MANAGE_TABS = (("overview", "Overview", "power"), ("console", "Console", "files"), ("settings", "Settings", "amp_settings"),
-               ("mods", "Mods", "mods"), ("files", "Files", "files"))
+               ("mods", "Mods", "mods"), ("arsenal", "Arsenal", "arsenal"), ("files", "Files", "files"))
 
 
 def manage_tabs(request, inst, current):
     """The sub-tabs along the top of one server's pages, only the ones this person can open."""
     urls = {"overview": f"/manage/{inst}", "console": f"/manage/{inst}/console", "settings": f"/manage/{inst}/settings",
-            "mods": f"/mods/{inst}", "files": f"/files/{inst}"}
+            "mods": f"/mods/{inst}", "arsenal": f"/arsenal/{inst}", "files": f"/files/{inst}"}
     return [{"key": key, "label": label, "url": urls[key], "on": key == current}
             for key, label, perm in MANAGE_TABS if allowed(request, perm)]
 
@@ -3384,6 +3384,138 @@ async def mods_change(request):
     raise web.HTTPFound(back)
 
 
+ARSENAL_PAGE_SIZE = 60
+ARSENAL_SHOW = {"": "Everything", "hidden": "Hidden", "priced": "Price changed"}
+
+
+def arsenal_filters(source):
+    """The search, category, faction and show filters from a query or form."""
+    show = source.get("show", "")
+    return {"q": " ".join(source.get("q", "").split())[:80], "cat": source.get("cat", "")[:40],
+            "faction": source.get("faction", "")[:20], "show": show if show in ARSENAL_SHOW else ""}
+
+
+def arsenal_matches(items, filters, hidden, prices):
+    """The items the filters let through; every search word has to be in the name or prefab."""
+    words = filters["q"].lower().split()
+    found = []
+    for item in items:
+        text = (item["name"] + " " + item["prefab"]).lower()
+        if words and not all(word in text for word in words):
+            continue
+        if filters["cat"] and item["category"] != filters["cat"]:
+            continue
+        if filters["faction"] and filters["faction"] not in str(item["factions"]).split(","):
+            continue
+        if filters["show"] == "hidden" and item["prefab"] not in hidden:
+            continue
+        if filters["show"] == "priced" and item["prefab"] not in prices:
+            continue
+        found.append(item)
+    return found
+
+
+def arsenal_link(inst, filters, page=1):
+    values = dict(filters, page=page if page > 1 else "")
+    return f"/arsenal/{inst}?" + urlencode({k: v for k, v in values.items() if v})
+
+
+async def arsenal_page(request):
+    """Hide items from the OYB Arsenal and change what they cost, per server."""
+    require(request, "arsenal")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    error, items, hidden, prices = "", None, set(), {}
+    try:
+        items = files.arsenal_items(base)
+        hidden, prices = files.arsenal_settings(base)
+    except (OSError, ValueError) as exc:
+        error = f"Couldn't read the arsenal files: {exc}"
+    filters = arsenal_filters(request.query)
+    try:
+        page = max(1, int(request.query.get("page", "1")))
+    except ValueError:
+        page = 1
+    found = arsenal_matches(items or [], filters, hidden, prices)
+    pages = max(1, -(-len(found) // ARSENAL_PAGE_SIZE))
+    page = min(page, pages)
+    shown = found[(page - 1) * ARSENAL_PAGE_SIZE:page * ARSENAL_PAGE_SIZE]
+    categories = sorted({item["category"] for item in items or [] if item["category"]})
+    factions = sorted({key for item in items or [] for key in str(item["factions"]).split(",") if key})
+    age = files.arsenal_items_age(base)
+    return render(request, "arsenal.html", inst=inst, tabs=manage_tabs(request, inst, "arsenal"), error=error,
+                  items=items, shown=shown, found=len(found), hidden=hidden, prices=prices, filters=filters,
+                  categories=categories, factions=factions, show_options=ARSENAL_SHOW, page=page, pages=pages,
+                  prev_link=arsenal_link(inst, filters, page - 1) if page > 1 else "",
+                  next_link=arsenal_link(inst, filters, page + 1) if page < pages else "",
+                  back=arsenal_link(inst, filters, page), max_price=files.ARSENAL_MAX_PRICE,
+                  listed_at=time.strftime("%Y-%m-%d %H:%M", time.localtime(age)) if age else "")
+
+
+async def arsenal_change(request):
+    require(request, "arsenal")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    form = await request.post()
+    action = form.get("action", "")
+    back = form.get("back", "")
+    if not back.startswith(f"/arsenal/{inst}"):
+        back = f"/arsenal/{inst}"
+    try:
+        items = files.arsenal_items(base) or []
+        hidden, prices = files.arsenal_settings(base)
+    except (OSError, ValueError) as exc:
+        flash(request, f"Couldn't read the arsenal files: {exc}", "error")
+        raise web.HTTPFound(back)
+    names = {item["prefab"]: item["name"] for item in items}
+    prefab = form.get("prefab", "")
+    # Only items the server listed, or ones already in the settings (so a removed
+    # mod's leftovers can still be cleared).
+    if action in ("hide", "show", "price", "reset") and prefab not in names and prefab not in hidden and prefab not in prices:
+        flash(request, "That item isn't in this server's arsenal list.", "error")
+        raise web.HTTPFound(back)
+    name = names.get(prefab, prefab.rsplit("/", 1)[-1])
+    if action == "hide":
+        hidden.add(prefab)
+        message = f"{name} is hidden."
+    elif action == "show":
+        hidden.discard(prefab)
+        message = f"{name} is back in the arsenal."
+    elif action == "price":
+        try:
+            cost = int(form.get("cost", "").strip())
+        except ValueError:
+            cost = -1
+        if not 0 <= cost <= files.ARSENAL_MAX_PRICE:
+            flash(request, f"A price is a whole number from 0 to {files.ARSENAL_MAX_PRICE:,}.", "error")
+            raise web.HTTPFound(back)
+        prices[prefab] = cost
+        message = f"{name} now costs {cost}."
+    elif action == "reset":
+        prices.pop(prefab, None)
+        message = f"{name} is back to its normal price."
+    elif action in ("hide_found", "show_found"):
+        found = [item["prefab"] for item in arsenal_matches(items, arsenal_filters(form), hidden, prices)]
+        if action == "hide_found":
+            hidden.update(found)
+            message = f"Hid {len(found)} item{'s' if len(found) != 1 else ''}."
+        else:
+            hidden.difference_update(found)
+            message = f"Showed {len(found)} item{'s' if len(found) != 1 else ''} again."
+        name = f"{len(found)} items"
+    else:
+        raise web.HTTPBadRequest(text="Unknown action.")
+    try:
+        files.save_arsenal_settings(base, hidden, prices)
+    except (files.FileError, OSError) as exc:
+        audit(request, f"arsenal {action}", inst, name, str(exc), ok=False)
+        flash(request, str(exc), "error")
+        raise web.HTTPFound(back)
+    audit(request, f"arsenal {action}", inst, name, prefab)
+    flash(request, message + " The server picks it up within a minute.")
+    raise web.HTTPFound(back)
+
+
 async def instance_power(request):
     """Start or stop a whole AMP instance from the panel."""
     require(request, "power")
@@ -4117,6 +4249,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/instances/{inst}/{action}", instance_power)
     app.router.add_get("/mods/{inst}", mods_page)
     app.router.add_post("/mods/{inst}", mods_change)
+    app.router.add_get("/arsenal/{inst}", arsenal_page)
+    app.router.add_post("/arsenal/{inst}", arsenal_change)
     app.router.add_route("GET", "/console", console_page)
     app.router.add_post("/console", console_page)
     app.router.add_route("GET", "/network", network_page)

@@ -146,7 +146,7 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Plus01", page)
         self.assertIn('href="/manage"', page)
         tabs = await (await self.client.get("/files/Plus01")).text()
-        for tab in ("Overview", "Console", "Settings", "Mods", "Files"):
+        for tab in ("Overview", "Console", "Settings", "Mods", "Arsenal", "Files"):
             self.assertIn(f">{tab}</a>", tabs)
 
     async def test_mod_list_changes_go_through_amp(self):
@@ -176,6 +176,81 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await self.client.post("/mods/Plus01", data={"csrf": token, "action": "add", "mod_id": "nope"})
         self.assertEqual(len(files.parse_mods(stored["value"])), 1)
 
+
+    def arsenal_profile(self, items=True):
+        profile = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "profile"
+        (profile / "OYB_Arsenal").mkdir(parents=True)
+        if items:
+            (profile / "OYB_Arsenal" / "items.json").write_text(json.dumps({
+                "version": 1,
+                "prefabs": ["{AAAA000000000001}Prefabs/Weapons/Rifles/M16/Rifle_M16A2.et",
+                            "{AAAA000000000002}Prefabs/Weapons/Handguns/M9/Handgun_M9.et",
+                            "{AAAA000000000003}Prefabs/Items/Medicine/FieldDressing_US_01.et"],
+                "names": ["M16A2", "M9", "Field Dressing"],
+                "categories": ["Rifles", "Pistols", "Medical"],
+                "factions": ["US", "US", "US,USSR"],
+                "prices": [30, 15, 2]}))
+        return profile / "OYB_Arsenal"
+
+    def arsenal_saved(self, folder):
+        return json.loads((folder / "settings.json").read_text())
+
+    async def test_the_arsenal_page_waits_for_the_server_to_list_its_items(self):
+        await self.login("boss")
+        page = await (await self.client.get("/arsenal/Plus01")).text()
+        self.assertIn("No item list yet", page)
+        self.assertIn(">Arsenal</a>", page)
+
+    async def test_items_can_be_hidden_shown_and_repriced(self):
+        folder = self.arsenal_profile()
+        m16 = "{AAAA000000000001}Prefabs/Weapons/Rifles/M16/Rifle_M16A2.et"
+        token = await self.login("boss")
+        page = await (await self.client.get("/arsenal/Plus01")).text()
+        for name in ("M16A2", "M9", "Field Dressing"):
+            self.assertIn(name, page)
+        searched = await (await self.client.get("/arsenal/Plus01", params={"q": "m16"})).text()
+        self.assertIn("M16A2", searched)
+        self.assertNotIn("Field Dressing", searched)
+
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "hide", "prefab": m16})
+        self.assertEqual(self.arsenal_saved(folder)["hidden"], [m16])
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "price", "prefab": m16, "cost": "45"})
+        saved = self.arsenal_saved(folder)
+        self.assertEqual((saved["priceItems"], saved["priceCosts"]), ([m16], [45]))
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), ({m16}, {m16: 45}))
+
+        # Bad prices and items the server never listed change nothing.
+        for cost in ("-1", "abc", str(files.ARSENAL_MAX_PRICE + 1)):
+            await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "price", "prefab": m16, "cost": cost})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "hide", "prefab": "{BBBB}Nope.et"})
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), ({m16}, {m16: 45}))
+
+        hidden_only = await (await self.client.get("/arsenal/Plus01", params={"show": "hidden"})).text()
+        self.assertIn("M16A2", hidden_only)
+        self.assertNotIn("Handgun_M9", hidden_only)
+
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "show", "prefab": m16})
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "reset", "prefab": m16})
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), (set(), {}))
+        actions = {r["action"] for r in self.db.all("SELECT action FROM audit")}
+        self.assertTrue({"arsenal hide", "arsenal price", "arsenal show", "arsenal reset"} <= actions)
+
+    async def test_a_whole_filter_can_be_hidden_at_once(self):
+        folder = self.arsenal_profile()
+        token = await self.login("boss")
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "hide_found", "faction": "US", "cat": "Rifles"})
+        self.assertEqual(self.arsenal_saved(folder)["hidden"], ["{AAAA000000000001}Prefabs/Weapons/Rifles/M16/Rifle_M16A2.et"])
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "hide_found", "faction": "USSR"})
+        self.assertEqual(len(self.arsenal_saved(folder)["hidden"]), 2)
+        await self.client.post("/arsenal/Plus01", data={"csrf": token, "action": "show_found"})
+        self.assertEqual(self.arsenal_saved(folder)["hidden"], [])
+
+    async def test_hand_written_arsenal_settings_are_read_carefully(self):
+        folder = self.arsenal_profile(items=False)
+        (folder / "settings.json").write_text(json.dumps({
+            "hidden": ["{A}a.et", 5], "priceItems": ["{A}a.et", "{B}b.et", "{C}c.et"], "priceCosts": [10, -3, "x"]}))
+        self.assertEqual(files.arsenal_settings(self.root / "Plus01"), ({"{A}a.et"}, {"{A}a.et": 10}))
+        self.assertIsNone(files.arsenal_items(self.root / "Plus01"))
 
     async def test_with_amp_off_mods_go_straight_into_its_settings_file(self):
         kvp = self.root / "Plus01" / "GenericModule.kvp"

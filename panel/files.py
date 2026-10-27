@@ -263,6 +263,68 @@ def save_folder(base):
     return found[0] if found else None
 
 
+def profile_folder(base):
+    """The game's profile folder for this server (what the game calls $profile:), or None."""
+    found = sorted(Path(base).glob("arma-reforger/*/*/profile"))
+    return found[0] if found else None
+
+
+ARSENAL_FOLDER = "OYB_Arsenal"
+ARSENAL_MAX_PRICE = 1_000_000
+
+
+def arsenal_items(base):
+    """The items the OYB Arsenal mod listed when the server last started, as
+    [{prefab, name, category, factions, price}] sorted by name, or None when the
+    server hasn't written the list yet."""
+    profile = profile_folder(base)
+    path = profile / ARSENAL_FOLDER / "items.json" if profile else None
+    if not path or not path.is_file():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    columns = [data.get(key) or [] for key in ("prefabs", "names", "categories", "factions", "prices")]
+    items = [{"prefab": prefab, "name": name or prefab, "category": category, "factions": factions, "price": price}
+             for prefab, name, category, factions, price in zip(*columns) if isinstance(prefab, str) and prefab]
+    return sorted(items, key=lambda item: (item["name"].lower(), item["prefab"]))
+
+
+def arsenal_items_age(base):
+    """When the server last wrote the item list, as a Unix time, or None."""
+    profile = profile_folder(base)
+    path = profile / ARSENAL_FOLDER / "items.json" if profile else None
+    return path.stat().st_mtime if path and path.is_file() else None
+
+
+def arsenal_settings(base):
+    """(hidden prefabs, {prefab: price}) from the server's OYB Arsenal settings."""
+    profile = profile_folder(base)
+    path = profile / ARSENAL_FOLDER / "settings.json" if profile else None
+    if not path or not path.is_file():
+        return set(), {}
+    data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    hidden = {prefab for prefab in data.get("hidden") or [] if isinstance(prefab, str)}
+    prices = {}
+    for prefab, cost in zip(data.get("priceItems") or [], data.get("priceCosts") or []):
+        if isinstance(prefab, str) and isinstance(cost, int) and 0 <= cost <= ARSENAL_MAX_PRICE:
+            prices[prefab] = cost
+    return hidden, prices
+
+
+def save_arsenal_settings(base, hidden, prices):
+    """Write the settings the OYB Arsenal mod reads; the server picks them up within a minute."""
+    profile = profile_folder(base)
+    if profile is None:
+        raise FileError("This server has no game profile folder yet. Start it once first.")
+    folder = profile / ARSENAL_FOLDER
+    if not folder.exists():
+        folder.mkdir()
+        hand_over(folder)
+    priced = sorted(prices.items())
+    data = {"version": 1, "hidden": sorted(hidden),
+            "priceItems": [prefab for prefab, _ in priced], "priceCosts": [cost for _, cost in priced]}
+    write_text(folder / "settings.json", json.dumps(data, indent=1) + "\n")
+
+
 def new_game(root, base):
     """Put this server's save aside so its next start is a fresh game. The save is moved
     to a folder of its own, not deleted. Returns where it went, or None if there was none."""
