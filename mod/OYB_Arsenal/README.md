@@ -174,8 +174,10 @@ server or with a controller yet.
   change; weapon fits until the weapon or its parts change. The mod scan
   runs 20 prefabs at a time. Settings and loadout names are asked once per
   session and pushed only on change.
-- Measured so far: 257-item arsenal, no visible stall. The log now gives
-  times: `built item list … in N ms` and `the scan took N ms`.
+- Measured so far: 257-item arsenal, no visible stall. With 17 mods loaded
+  (GRS, WZ Weapons, Zelik's, Beryl, Scorpion and more) a 418-item arsenal
+  builds its list in 12 ms, and the scan queues 148 uncatalogued prefabs.
+  The log gives times: `built item list … in N ms` and `the scan took N ms`.
 - Awaiting testing: a big modpack (500-1,000 items).
 
 **6. Security — Implemented — awaiting testing**
