@@ -56,14 +56,7 @@
       <td data-label="Factions">{% if added %}{{ added.factions or "All" }}{% elif item.found %}<span class="muted">none</span>{% else %}{{ item.factions|replace(",", ", ") }}{% endif %}</td>
       <td data-label="Price">
         {% if item.found and not added %}
-        <form method="post" action="/arsenal/{{ inst }}" class="inline">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add">
-          <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="10" class="price" aria-label="Price of {{ item.name }}">
-          <select name="category" aria-label="Category for {{ item.name }}">{% for c in add_categories %}<option value="{{ c }}" {% if c == item.category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
-          <select name="faction" aria-label="Which arsenals offer {{ item.name }}"><option value="">Every faction</option>{% for f in factions %}<option value="{{ f }}">{{ f }}</option>{% endfor %}</select>
-          <button class="small">Add to arsenal</button>
-        </form>
+        <span class="muted small">not in the arsenal</span>
         {% else %}
         <form method="post" action="/arsenal/{{ inst }}" class="inline">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="price">
@@ -98,6 +91,20 @@
         {% endif %}
       </td>
     </tr>
+    {% if item.found and not added %}
+    <tr class="add-row">
+      <td colspan="5">
+        <form method="post" action="/arsenal/{{ inst }}" class="add-item">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add">
+          <input type="hidden" name="prefab" value="{{ item.prefab }}"><input type="hidden" name="back" value="{{ back }}">
+          <label>Price <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="10" class="price"></label>
+          <label>Category <select name="category">{% for c in add_categories %}<option value="{{ c }}" {% if c == item.category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
+          <label>Arsenals <select name="faction"><option value="">Every faction</option>{% for f in factions %}<option value="{{ f }}">{{ f }} only</option>{% endfor %}</select></label>
+          <button class="small">Add to arsenal</button>
+        </form>
+      </td>
+    </tr>
+    {% endif %}
     {% endfor %}
     </tbody>
   </table></div>
