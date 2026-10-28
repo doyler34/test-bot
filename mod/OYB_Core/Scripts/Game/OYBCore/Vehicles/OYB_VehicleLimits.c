@@ -43,6 +43,8 @@ class OYB_VehicleLimits
 	// panel applies straight away.
 	protected static ref array<IEntity> s_aVehicles = {};
 	protected static ref array<string> s_aFactions = {};
+	// Of those, the ones already in the world when the server started.
+	protected static ref array<IEntity> s_aAtStart = {};
 
 	protected static bool s_bStarted;
 
@@ -158,6 +160,28 @@ class OYB_VehicleLimits
 		s_aFactions.Insert(factionKey);
 	}
 
+	// The vehicles counted for the side in the group, for the log: each one's
+	// prefab and position, and whether it was already in the world when the
+	// server started.
+	static string Counted(string factionKey, string group)
+	{
+		Prune();
+
+		string text;
+		foreach (int i, IEntity vehicle : s_aVehicles)
+		{
+			if (s_aFactions[i] != factionKey || GroupOf(SCR_ResourceNameUtils.GetPrefabName(vehicle)) != group)
+				continue;
+
+			if (!text.IsEmpty())
+				text += "; ";
+			text += FilePath.StripPath(SCR_ResourceNameUtils.GetPrefabName(vehicle).GetPath()) + " at " + vehicle.GetOrigin().ToString();
+			if (s_aAtStart.Contains(vehicle))
+				text += " (in the world at start)";
+		}
+		return text;
+	}
+
 	static int Count(string factionKey, string group)
 	{
 		Prune();
@@ -184,6 +208,12 @@ class OYB_VehicleLimits
 			s_aVehicles.Remove(i);
 			s_aFactions.Remove(i);
 		}
+
+		for (int k = s_aAtStart.Count() - 1; k >= 0; k--)
+		{
+			if (!s_aVehicles.Contains(s_aAtStart[k]))
+				s_aAtStart.Remove(k);
+		}
 	}
 
 	protected static bool IsWreck(IEntity vehicle)
@@ -205,6 +235,7 @@ class OYB_VehicleLimits
 		SCR_VehicleDamageManagerComponent.GetOnVehicleDamageStateChanged().Remove(OnVehicleDamageStateChanged);
 		s_aVehicles.Clear();
 		s_aFactions.Clear();
+		s_aAtStart.Clear();
 		s_bStarted = false;
 	}
 
@@ -245,6 +276,7 @@ class OYB_VehicleLimits
 				continue;
 
 			Register(vehicle, affiliation.GetDefaultFactionKey());
+			s_aAtStart.Insert(vehicle);
 			counted++;
 		}
 		PrintFormat("OYB_CORE vehicle limits: following %1 vehicles already in the world", counted);

@@ -92,7 +92,7 @@ modded class SCR_CatalogEntitySpawnerComponent
 		int count, limit;
 		if (Replication.IsServer() && !OYB_VehicleLimits.Allows(factionKey, entityEntry.GetPrefab(), group, count, limit))
 		{
-			PrintFormat("OYB_CORE vehicle limit: %1 has %2/%3 %4, refused %5 for player %6", factionKey, count, limit, group, FilePath.StripPath(entityEntry.GetPrefab().GetPath()), userId);
+			PrintFormat("OYB_CORE vehicle limit: %1 has %2/%3 %4, refused %5 for player %6; counted: %7", factionKey, count, limit, group, FilePath.StripPath(entityEntry.GetPrefab().GetPath()), userId, OYB_VehicleLimits.Counted(factionKey, group));
 			SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerManager().GetPlayerController(userId));
 			if (controller)
 				controller.OYB_SendVehicleLimitReached(OYB_VehicleLimits.DisplayName(group), count, limit);

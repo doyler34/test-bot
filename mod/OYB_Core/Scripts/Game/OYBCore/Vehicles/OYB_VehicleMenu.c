@@ -48,7 +48,7 @@ modded class SCR_CampaignBuildingPlacingEditorComponent
 		if (OYB_VehicleLimits.Allows(factionKey, prefab, group, count, limit))
 			return true;
 
-		PrintFormat("OYB_CORE vehicle limit: %1 has %2/%3 %4, refused %5 for player %6", factionKey, count, limit, group, FilePath.StripPath(prefab.GetPath()), playerID);
+		PrintFormat("OYB_CORE vehicle limit: %1 has %2/%3 %4, refused %5 for player %6; counted: %7", factionKey, count, limit, group, FilePath.StripPath(prefab.GetPath()), playerID, OYB_VehicleLimits.Counted(factionKey, group));
 		SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerManager().GetPlayerController(playerID));
 		if (controller)
 			controller.OYB_SendVehicleLimitReached(OYB_VehicleLimits.DisplayName(group), count, limit);
