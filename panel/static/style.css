@@ -1757,3 +1757,9 @@ form.sides label { display: inline-flex; gap: 4px; align-items: center; margin: 
 form.sides input[type=checkbox] { width: auto; margin: 0; }
 form.rename { margin-top: 4px; font-weight: normal; }
 form.rename input[name=name] { display: inline-block; width: 12em; margin: 0; padding: 4px 8px; }
+
+/* Phones zoom in on a text box or list whose text is under 16px when it's tapped,
+   and stay zoomed and shifted after; on touch screens they're 16px. */
+@media (pointer: coarse) {
+  input, select, textarea, body.app .top-search input { font-size: 16px !important; }
+}
