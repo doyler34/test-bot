@@ -1690,6 +1690,12 @@ body.map-open { overflow: hidden; }
   .srv-tabs, .manage-tabs { flex-wrap: nowrap; overflow: visible; gap: 0; }
   .srv-tabs a, .manage-tabs a { padding: 8px 9px; font-size: .86rem; white-space: nowrap; }
 }
+/* The server manager has more tabs than a phone is wide: the row scrolls
+   sideways on its own rather than widening the page. */
+@media (max-width: 720px) {
+  .manage-tabs { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .manage-tabs::-webkit-scrollbar { display: none; }
+}
 
 /* Menu pages (Settings, Data): two short tiles across on phones, not one long column. */
 @media (max-width: 720px) {
