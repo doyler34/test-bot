@@ -42,6 +42,10 @@ does `vehicle_list.json` and the panel's Vehicles page.
   editable entity component (the charge and the refund) (`OYB_VehicleBudget.c`). Crew costs come on top as the game
   sets them. A variant costs what its vehicle costs. A vehicle whose building
   cost is left to the game's per-type default can't be priced.
+- **Broken mod entries**: a building or Game Master menu entry whose prefab
+  can't be loaded (a mod listing a file that isn't there) used to stop the
+  game loading the menu's cards, so the cards after it showed no price. It's
+  left out instead and logged as `OYB_CORE building menu: … can't be loaded`.
 - **Limits by category**: each category (Helicopters, Planes, Armour, Trucks,
   Cars, Turrets, Other) can have a limit per side on its live vehicles, all of
   the category together (a vehicle's variants count as the vehicle).

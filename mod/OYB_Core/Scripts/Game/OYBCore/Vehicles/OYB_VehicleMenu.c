@@ -115,6 +115,43 @@ modded class SCR_CampaignBuildingPlacingEditorComponent
 // what the card shows (see OYB_VehicleBudget.c).
 modded class SCR_ContentBrowserEditorComponent
 {
+	// The game loads every card's info a few at a time. A card whose prefab is
+	// missing (a mod listing a file that doesn't exist) stopped it with a script
+	// error, so every card after it had no info and showed no price. The same
+	// loading, but a prefab that can't be loaded gets an empty card, as the game
+	// does for other faulty ones, and the rest still load.
+	override bool EOnEditorActivateAsync(int attempt)
+	{
+		if (attempt == 0 || !m_aAsyncPrefabs)
+			return super.EOnEditorActivateAsync(attempt);
+
+		int tickEnd = System.GetTickCount() + ASYNC_TICK_LENGTH;
+		int count = m_aAsyncPrefabs.Count();
+		while (System.GetTickCount() < tickEnd)
+		{
+			if (m_iAsyncIndex >= count)
+			{
+				m_aAsyncPrefabs = null;
+				FilterEntries();
+				return true;
+			}
+
+			ResourceName prefab = m_aAsyncPrefabs[m_iAsyncIndex];
+			SCR_EditableEntityUIInfo info = null;
+			Resource resource = null;
+			if (!prefab.IsEmpty())
+				resource = BaseContainerTools.LoadContainer(prefab);
+			if (resource && resource.IsValid())
+				info = SCR_EditableEntityUIInfo.ExtractEditableUIInfoFromPrefab(prefab);
+			else if (!prefab.IsEmpty())
+				PrintFormat("OYB_CORE building menu: %1 can't be loaded (a mod lists a file that isn't there), left out", prefab, level: LogLevel.WARNING);
+
+			m_aInfos.Insert(info);
+			m_iAsyncIndex++;
+		}
+		return false;
+	}
+
 	override void FilterEntries()
 	{
 		if (m_aInfos)
