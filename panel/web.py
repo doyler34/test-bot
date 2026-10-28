@@ -3462,8 +3462,8 @@ def arsenal_link(inst, filters, page=1):
     return f"/arsenal/{inst}?" + urlencode({k: v for k, v in values.items() if v})
 
 
-VEHICLE_SHOW = {"": "Everything", "hidden": "Hidden", "priced": "Price changed", "grouped": "In a limit group",
-                "variants": "Variants only"}
+VEHICLE_SHOW = {"": "Everything", "offered": "In a menu", "hidden": "Hidden", "priced": "Price changed",
+                "grouped": "In a limit group", "variants": "Variants only"}
 
 
 def vehicle_filters(source):
@@ -3477,6 +3477,17 @@ def vehicle_filters(source):
 def vehicle_group(vehicle, members):
     """The limit group a vehicle counts in: its own, or for a variant, its vehicle's."""
     return members.get(vehicle["variant_of"] or vehicle["prefab"], "")
+
+
+def vehicle_limit_text(vehicle, settings):
+    """What limits a vehicle, for its row: its group, else its category's limit."""
+    group = vehicle_group(vehicle, settings["members"])
+    if group:
+        return f"{group} ({limit_text(settings['groups'].get(group, files.VEHICLE_UNLIMITED))} per side)"
+    limit = settings.get("categories", {}).get(vehicle["category"], files.VEHICLE_UNLIMITED)
+    if limit == files.VEHICLE_UNLIMITED:
+        return "unlimited"
+    return f"{vehicle['category']} ({limit} per side)"
 
 
 def vehicle_matches(vehicles, filters, settings):
@@ -3497,7 +3508,8 @@ def vehicle_matches(vehicles, filters, settings):
         if ((show == "hidden" and vehicle["prefab"] not in settings["hidden"])
                 or (show == "priced" and vehicle["prefab"] not in settings["prices"])
                 or (show == "grouped" and not vehicle_group(vehicle, settings["members"]))
-                or (show == "variants" and not vehicle["variant_of"])):
+                or (show == "variants" and not vehicle["variant_of"])
+                or (show == "offered" and not vehicle["menus"])):
             continue
         found.append(vehicle)
     return found
@@ -3524,7 +3536,7 @@ async def vehicles_page(request):
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     error, vehicles = "", None
-    settings = {"hidden": set(), "prices": {}, "enabled": True, "groups": {}, "members": {}}
+    settings = {"hidden": set(), "prices": {}, "enabled": True, "groups": {}, "members": {}, "categories": {}}
     try:
         vehicles = files.vehicle_list(base)
         settings = files.vehicle_settings(base)
@@ -3541,6 +3553,10 @@ async def vehicles_page(request):
     shown = found[(page - 1) * ARSENAL_PAGE_SIZE:page * ARSENAL_PAGE_SIZE]
     names = {v["prefab"]: v["name"] for v in vehicles or []}
     members_per_group = {name: sum(1 for group in settings["members"].values() if group == name) for name in settings["groups"]}
+    # Vehicles (not variants) each category's limit covers: those in no group.
+    per_category = {name: sum(1 for v in vehicles or [] if v["category"] == name and not v["variant_of"]
+                              and not vehicle_group(v, settings["members"]))
+                    for name in files.VEHICLE_CATEGORIES}
     age = files.vehicle_list_age(base)
     try:
         list_info = files.vehicle_list_info(base)
@@ -3549,7 +3565,8 @@ async def vehicles_page(request):
     process = files.game_process(base)
     # Written before the running game started: the running game hasn't written its own yet.
     stale = bool(age and process and age < time.time() - process["up"])
-    return render(request, "vehicles.html", list_info=list_info, stale=stale, vehicle_priceable=vehicle_priceable, inst=inst, tabs=manage_tabs(request, inst, "vehicles"), error=error,
+    return render(request, "vehicles.html", list_info=list_info, stale=stale, vehicle_priceable=vehicle_priceable,
+                  categories_all=files.VEHICLE_CATEGORIES, per_category=per_category, vehicle_limit_text=vehicle_limit_text, inst=inst, tabs=manage_tabs(request, inst, "vehicles"), error=error,
                   vehicles=vehicles, shown=shown, found=len(found), settings=settings, names=names,
                   members_per_group=members_per_group, vehicle_group=vehicle_group, limit_text=limit_text,
                   filters=filters, categories=sorted({v["category"] for v in vehicles or []}),
@@ -3630,10 +3647,19 @@ async def vehicles_change(request):
         settings["enabled"] = form.get("enabled") == "1"
         name = "limits"
         message = "Vehicle limits are on." if settings["enabled"] else "Vehicle limits are off: every vehicle is unlimited."
+    elif action == "category_limit":
+        category = form.get("name", "")
+        if category not in files.VEHICLE_CATEGORIES:
+            fail("Pick one of the categories.")
+        settings.setdefault("categories", {})[category] = read_limit()
+        name = category
+        message = f"{category} is now {limit_text(settings['categories'][category])} per side."
     elif action == "group_add":
         group = " ".join(form.get("name", "").split())
         if not files.VEHICLE_GROUP_NAME.fullmatch(group):
             fail("A group name is up to 30 letters, numbers, spaces, - or _.")
+        if group.lower() in (c.lower() for c in files.VEHICLE_CATEGORIES):
+            fail(f"{group} is already a category with its own limit above; give the group another name.")
         if group in groups:
             fail(f"There's already a group called {group}.")
         groups[group] = read_limit()
@@ -3660,7 +3686,7 @@ async def vehicles_change(request):
             message = f"{name} now counts in {group}."
         else:
             members.pop(prefab, None)
-            message = f"{name} isn't in a limit group: unlimited."
+            message = f"{name} counts in its category again."
     elif action == "group_found":
         group = read_group("to_group", allow_none=True)
         found = [v["prefab"] for v in vehicle_matches(vehicles, vehicle_filters(form), settings) if not v["variant_of"]]
@@ -3670,7 +3696,7 @@ async def vehicles_change(request):
             else:
                 members.pop(target, None)
         name = f"{len(found)} vehicles to {group or 'no group'}"
-        message = f"{len(found)} vehicle{'s' if len(found) != 1 else ''} now {'count in ' + group if group else 'in no group'}."
+        message = f"{len(found)} vehicle{'s' if len(found) != 1 else ''} now {'count in ' + group if group else 'count in their category'}."
     elif action in ("hide_found", "show_found"):
         found = [v["prefab"] for v in vehicle_matches(vehicles, vehicle_filters(form), settings)]
         if action == "hide_found":

@@ -17,14 +17,23 @@
 // Settings (from OYB_VehicleSettings): limits on or off; each group's limit,
 // where -1 is unlimited and 0 allows none; and which exact prefabs are in which
 // group. A vehicle's variants (the depot's, or the building menu's random
-// ones) count as the vehicle. A prefab in no group
-// is unlimited.
+// ones) count as the vehicle. A prefab in no group counts in its category's
+// allowance when the category has a limit (Helicopters, Cars...), else it's
+// unlimited.
 class OYB_VehicleLimits
 {
 	static const int UNLIMITED = -1;
 
+	// A category's allowance is kept under its name with this in front, so it
+	// can't clash with a group of the same name.
+	static const string CATEGORY_KEY = "#";
+
 	protected static bool s_bEnabled;
 	protected static ref map<string, int> s_mGroupLimits = new map<string, int>();
+	// Category -> limit, for every vehicle of the category in no group.
+	protected static ref map<string, int> s_mCategoryLimits = new map<string, int>();
+	// Prefab -> category, from the vehicle list.
+	protected static ref map<ResourceName, string> s_mPrefabCategory = new map<ResourceName, string>();
 	protected static ref map<ResourceName, string> s_mPrefabGroups = new map<ResourceName, string>();
 	// Variant -> the vehicle it's a variant of (depot or building menu variants).
 	protected static ref map<ResourceName, ResourceName> s_mVariantOf = new map<ResourceName, ResourceName>();
@@ -37,9 +46,17 @@ class OYB_VehicleLimits
 
 	protected static bool s_bStarted;
 
-	static void Configure(bool enabled, notnull array<string> groupNames, notnull array<int> groupLimits, notnull array<string> groupItems, notnull array<string> groupOf)
+	static void Configure(bool enabled, notnull array<string> groupNames, notnull array<int> groupLimits, notnull array<string> groupItems, notnull array<string> groupOf,
+		notnull array<string> categoryNames, notnull array<int> categoryLimits)
 	{
 		s_bEnabled = enabled;
+
+		s_mCategoryLimits.Clear();
+		for (int c = 0; c < Math.Min(categoryNames.Count(), categoryLimits.Count()); c++)
+		{
+			if (!categoryNames[c].IsEmpty() && categoryLimits[c] != UNLIMITED)
+				s_mCategoryLimits.Set(categoryNames[c], Math.Max(categoryLimits[c], UNLIMITED));
+		}
 
 		s_mGroupLimits.Clear();
 		for (int i = 0; i < Math.Min(groupNames.Count(), groupLimits.Count()); i++)
@@ -61,6 +78,22 @@ class OYB_VehicleLimits
 		s_mVariantOf.Set(variant, vehicle);
 	}
 
+	static void SetCategory(ResourceName prefab, string category)
+	{
+		if (!prefab.IsEmpty() && !category.IsEmpty())
+			s_mPrefabCategory.Set(prefab, category);
+	}
+
+	// What a group is called in a message: a category's allowance by the
+	// category's name.
+	static string DisplayName(string group)
+	{
+		if (group.StartsWith(CATEGORY_KEY))
+			return group.Substring(CATEGORY_KEY.Length(), group.Length() - CATEGORY_KEY.Length());
+
+		return group;
+	}
+
 	// The vehicle a variant belongs to, or empty.
 	static ResourceName VariantOf(ResourceName prefab)
 	{
@@ -69,7 +102,9 @@ class OYB_VehicleLimits
 		return vehicle;
 	}
 
-	// The group a prefab counts in, or empty for none.
+	// The group a prefab counts in, or empty for none: its own group, its
+	// vehicle's when it's a variant, or else its category's allowance when the
+	// category has a limit.
 	static string GroupOf(ResourceName prefab)
 	{
 		string group;
@@ -77,9 +112,24 @@ class OYB_VehicleLimits
 			return group;
 
 		ResourceName vehicle;
-		if (s_mVariantOf.Find(prefab, vehicle))
-			s_mPrefabGroups.Find(vehicle, group);
-		return group;
+		if (s_mVariantOf.Find(prefab, vehicle) && s_mPrefabGroups.Find(vehicle, group))
+			return group;
+
+		string category;
+		if (!s_mPrefabCategory.Find(prefab, category) && !vehicle.IsEmpty())
+			s_mPrefabCategory.Find(vehicle, category);
+		if (!category.IsEmpty() && s_mCategoryLimits.Contains(category))
+			return CATEGORY_KEY + category;
+
+		return string.Empty;
+	}
+
+	protected static bool LimitOf(string group, out int limit)
+	{
+		if (group.StartsWith(CATEGORY_KEY))
+			return s_mCategoryLimits.Find(DisplayName(group), limit);
+
+		return s_mGroupLimits.Find(group, limit);
 	}
 
 	// Whether one more of this vehicle is allowed for the side; when it isn't,
@@ -88,7 +138,7 @@ class OYB_VehicleLimits
 	static bool Allows(string factionKey, ResourceName prefab, out string group, out int count, out int limit)
 	{
 		group = GroupOf(prefab);
-		if (!s_bEnabled || group.IsEmpty() || !s_mGroupLimits.Find(group, limit) || limit == UNLIMITED)
+		if (!s_bEnabled || group.IsEmpty() || !LimitOf(group, limit) || limit == UNLIMITED)
 			return true;
 
 		if (factionKey.IsEmpty())

@@ -6,7 +6,9 @@
 //     "priceItems": [prefab, ...], "priceCosts": [supplies, ...],
 //     "limitsEnabled": true (false turns every limit off),
 //     "groupNames": [name, ...], "groupLimits": [-1 unlimited, 0 none, or N, ...],
-//     "groupItems": [prefab, ...], "groupOf": [group name, ...] }
+//     "groupItems": [prefab, ...], "groupOf": [group name, ...],
+//     "categoryNames": [category, ...], "categoryLimits": [-1, 0 or N, ...] }
+// A category's limit applies to every vehicle of that category in no group.
 // A file that isn't valid (bad JSON, lists of different lengths, a group that
 // doesn't exist) is refused and the last good settings stay in force.
 //
@@ -23,7 +25,7 @@
 // "building", or empty when only found by the scan).
 class OYB_VehicleSettings
 {
-	static const string BUILD = "vehicles-2026-10-28b";
+	static const string BUILD = "vehicles-2026-10-28c";
 
 	protected static const string FOLDER = "$profile:OYB_Core";
 	protected static const string SETTINGS_FILE = "$profile:OYB_Core/vehicles.json";
@@ -228,12 +230,14 @@ class OYB_VehicleSettings
 		array<int> groupLimits = {};
 		array<string> groupItems = {};
 		array<string> groupOf = {};
+		array<string> categoryNames = {};
+		array<int> categoryLimits = {};
 
 		// No file at all is a server without settings yet; a file being written
 		// can be empty for a moment, which isn't.
 		if (exists)
 		{
-			string error = Parse(text, hidden, priceItems, priceCosts, limitsEnabled, groupNames, groupLimits, groupItems, groupOf);
+			string error = Parse(text, hidden, priceItems, priceCosts, limitsEnabled, groupNames, groupLimits, groupItems, groupOf, categoryNames, categoryLimits);
 			if (!error.IsEmpty())
 			{
 				m_sRefusedText = text;
@@ -246,15 +250,16 @@ class OYB_VehicleSettings
 		m_sAcceptedText = text;
 		m_sRefusedText = string.Empty;
 
-		OYB_VehicleLimits.Configure(limitsEnabled, groupNames, groupLimits, groupItems, groupOf);
+		OYB_VehicleLimits.Configure(limitsEnabled, groupNames, groupLimits, groupItems, groupOf, categoryNames, categoryLimits);
 		Apply(hidden, priceItems, priceCosts);
-		PrintFormat("OYB_CORE vehicle settings loaded: %1 hidden, %2 priced, limits %3, %4 groups", m_Hidden.Count(), m_Prices.Count(), limitsEnabled, groupNames.Count());
+		PrintFormat("OYB_CORE vehicle settings loaded: %1 hidden, %2 priced, limits %3, %4 groups, %5 category limits", m_Hidden.Count(), m_Prices.Count(), limitsEnabled, groupNames.Count(), categoryNames.Count());
 		SendToAll();
 	}
 
 	// Empty when the settings are usable, else what's wrong with them.
 	protected static string Parse(string text, notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts, out bool limitsEnabled,
-		notnull array<string> groupNames, notnull array<int> groupLimits, notnull array<string> groupItems, notnull array<string> groupOf)
+		notnull array<string> groupNames, notnull array<int> groupLimits, notnull array<string> groupItems, notnull array<string> groupOf,
+		notnull array<string> categoryNames, notnull array<int> categoryLimits)
 	{
 		string trimmed = text.Trim();
 		if (trimmed.IsEmpty())
@@ -273,6 +278,16 @@ class OYB_VehicleSettings
 		context.ReadValue("groupLimits", groupLimits);
 		context.ReadValue("groupItems", groupItems);
 		context.ReadValue("groupOf", groupOf);
+		context.ReadValue("categoryNames", categoryNames);
+		context.ReadValue("categoryLimits", categoryLimits);
+
+		if (categoryNames.Count() != categoryLimits.Count())
+			return "categoryNames and categoryLimits differ in length";
+		foreach (int categoryLimit : categoryLimits)
+		{
+			if (categoryLimit < OYB_VehicleLimits.UNLIMITED)
+				return "a category limit below -1";
+		}
 
 		if (priceItems.Count() != priceCosts.Count())
 			return "priceItems and priceCosts differ in length";
@@ -635,6 +650,7 @@ class OYB_VehicleSettings
 			return;
 		}
 
+		OYB_VehicleLimits.SetCategory(prefab, category);
 		m_mListed.Insert(prefab, m_aPrefabs.Count());
 		m_aPrefabs.Insert(prefab);
 		m_aNames.Insert(name);

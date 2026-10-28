@@ -457,7 +457,7 @@ def vehicle_list(base):
             column("sources", "catalogue" if "sources" not in data else ""), column("variantOf", "")):
         if not isinstance(prefab, str) or not prefab:
             continue
-        vehicles.append({"prefab": prefab, "name": name or prefab.rsplit("/", 1)[-1], "category": category or "Other",
+        vehicles.append({"prefab": prefab, "name": vehicle_name(name, prefab), "category": category or "Other",
                          "factions": factions or "", "variant_of": parent or "",
                          "price": number(price), "build_cost": number(build_cost),
                          "menus": [menu for menu in (menus or "").split(",") if menu in ("depot", "building")],
@@ -465,6 +465,15 @@ def vehicle_list(base):
     names = {v["prefab"]: v["name"].lower() for v in vehicles if not v["variant_of"]}
     return sorted(vehicles, key=lambda v: (names.get(v["variant_of"] or v["prefab"], v["name"].lower()),
                                            v["variant_of"] or v["prefab"], bool(v["variant_of"]), v["name"].lower()))
+
+
+def vehicle_name(name, prefab):
+    """The name to show: the game's, unless it's missing or a text key the server
+    couldn't translate (a mod's "#WCS-Vehicle_AH64D_US_Name - ..."), then the prefab's
+    file name ("AH64D_AIM9_X2")."""
+    if isinstance(name, str) and name.strip() and "#" not in name:
+        return name.strip()
+    return prefab.rsplit("/", 1)[-1].removesuffix(".et")
 
 
 def vehicle_list_file(base):
@@ -493,13 +502,16 @@ def vehicle_list_age(base):
 
 VEHICLE_UNLIMITED = -1
 VEHICLE_GROUP_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,29}")
+# The categories OYB Core sorts vehicles into, each with a limit of its own.
+VEHICLE_CATEGORIES = ("Helicopters", "Planes", "Armour", "Trucks", "Cars", "Turrets", "Other")
 
 
 def vehicle_settings(base):
     """The server's vehicle settings: {"hidden": set of prefabs, "prices": {prefab: price},
     "enabled": limits on or off, "groups": {name: limit, -1 unlimited, 0 none},
-    "members": {prefab: group name}}."""
-    settings = {"hidden": set(), "prices": {}, "enabled": True, "groups": {}, "members": {}}
+    "members": {prefab: group name}, "categories": {category: limit}}. A category's limit
+    covers every vehicle of that category in no group."""
+    settings = {"hidden": set(), "prices": {}, "enabled": True, "groups": {}, "members": {}, "categories": {}}
     profile = profile_folder(base)
     path = profile / VEHICLE_FOLDER / "vehicles.json" if profile else None
     if not path or not path.is_file():
@@ -514,6 +526,9 @@ def vehicle_settings(base):
                           and not isinstance(limit, bool) and VEHICLE_UNLIMITED <= limit <= ARSENAL_MAX_PRICE}
     settings["members"] = {prefab: group for prefab, group in zip(data.get("groupItems") or [], data.get("groupOf") or [])
                            if isinstance(prefab, str) and prefab and group in settings["groups"]}
+    settings["categories"] = {name: limit for name, limit in zip(data.get("categoryNames") or [], data.get("categoryLimits") or [])
+                              if name in VEHICLE_CATEGORIES and isinstance(limit, int) and not isinstance(limit, bool)
+                              and VEHICLE_UNLIMITED <= limit <= ARSENAL_MAX_PRICE}
     return settings
 
 
@@ -527,12 +542,14 @@ def save_vehicle_settings(base, settings):
         folder.mkdir()
         hand_over(folder)
     priced, groups = sorted(settings["prices"].items()), sorted(settings["groups"].items())
+    categories = sorted((name, limit) for name, limit in settings.get("categories", {}).items() if limit != VEHICLE_UNLIMITED)
     members = sorted((prefab, group) for prefab, group in settings["members"].items() if group in settings["groups"])
     data = {"version": 2, "hidden": sorted(settings["hidden"]),
             "priceItems": [prefab for prefab, _ in priced], "priceCosts": [cost for _, cost in priced],
             "limitsEnabled": bool(settings["enabled"]),
             "groupNames": [name for name, _ in groups], "groupLimits": [limit for _, limit in groups],
-            "groupItems": [prefab for prefab, _ in members], "groupOf": [group for _, group in members]}
+            "groupItems": [prefab for prefab, _ in members], "groupOf": [group for _, group in members],
+            "categoryNames": [name for name, _ in categories], "categoryLimits": [limit for _, limit in categories]}
     write_whole(folder / "vehicles.json", json.dumps(data, indent=1) + "\n")
 
 

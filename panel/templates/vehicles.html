@@ -2,7 +2,7 @@
 {% block title %}{{ inst }} vehicles · OYB Control{% endblock %}
 {% block body %}
 {% include "_manage_tabs.html" %}
-<p class="muted">Every vehicle on this server, mods included (OYB Core mod): the ones the building menu and vehicle depots offer, and any other vehicle found in the server's mods. Hide a vehicle and it's gone from both menus; hiding just a variant only works at depots. A price is what the depot or the building menu shows and charges for the vehicle (crew costs come on top in the building menu). Put vehicles in a limit group and each side can only have that many of the whole group alive at once. The server picks changes up within a minute, no restart needed.</p>
+<p class="muted">Every vehicle on this server, mods included (OYB Core mod). Set a limit per side for each category below; hide, price or group single vehicles in the list. Hiding just a variant only works at depots, and in the building menu crew costs come on top of a price. The server picks changes up within a minute, no restart needed.</p>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
 {% if vehicles is none %}
@@ -13,8 +13,33 @@
 </section>
 {% else %}
 <section class="card">
-  <h2>Limit groups</h2>
-  <p class="muted small">Each group is an allowance per side: with Helicopters at 2, each side can have at most 2 live vehicles from that group at once (a vehicle's variants count as the vehicle). A vehicle counts for the side of the player who placed it from the building menu, or of the depot that sold it, whoever drives it; wrecked or deleted ones stop counting. Vehicles in no group, and groups with an empty limit, are unlimited; 0 allows none. Game Master vehicles don't count, except that when the server starts every live vehicle already in the world counts once for its own side. Lowering a limit never removes vehicles.</p>
+  <h2>Limits by category</h2>
+  <p class="muted small">With Helicopters at 2, each side can have at most 2 live helicopters at once, all of them together (a vehicle's variants count as the vehicle). Empty is unlimited, 0 allows none. A vehicle counts for the side of the player who placed it, or of the depot that sold it, whoever drives it; wrecked or deleted ones stop counting. Game Master vehicles don't count, except that when the server starts every live vehicle already in the world counts once for its own side. Lowering a limit never removes vehicles.</p>
+  <div class="scroll"><table class="stack">
+    <thead><tr><th>Category</th><th>Vehicles</th><th>Limit per side</th></tr></thead>
+    <tbody>
+    {% for category in categories_all %}
+    {% set category_limit = settings.categories.get(category, -1) %}
+    <tr>
+      <td class="strong"><a href="/vehicles/{{ inst }}?cat={{ category|urlencode }}">{{ category }}</a></td>
+      <td data-label="Vehicles">{{ per_category[category] }}</td>
+      <td data-label="Limit per side">
+        <form method="post" action="/vehicles/{{ inst }}" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="category_limit">
+          <input type="hidden" name="name" value="{{ category }}"><input type="hidden" name="back" value="{{ back }}">
+          <input name="count" type="number" min="0" max="{{ max_price }}" step="1" value="{{ '' if category_limit < 0 else category_limit }}" placeholder="Unlimited" aria-label="Limit for {{ category }}" class="price">
+          <button class="small ghost">Set</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>Custom groups <span class="muted small">optional</span></h2>
+  <p class="muted small">For vehicles that need an allowance of their own instead of their category's, like attack helicopters apart from transport ones. A group's vehicles share its limit per side.</p>
   <form method="post" action="/vehicles/{{ inst }}" class="inline">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="limits">
     <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="enabled" value="{{ '0' if settings.enabled else '1' }}">
@@ -91,7 +116,7 @@
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="group_found">
       <input type="hidden" name="back" value="{{ back }}">
       {% for key, value in filters.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
-      <select name="to_group" aria-label="Group"><option value="">No group</option>{% for g in settings.groups|sort %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select>
+      <select name="to_group" aria-label="Group"><option value="">Their category</option>{% for g in settings.groups|sort %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select>
       <button class="small ghost">Group all {{ found }}</button>
     </form>
     {% endif %}
@@ -105,7 +130,7 @@
     {% endfor %}
   </div>
   <div class="scroll"><table class="stack">
-    <thead><tr><th>Vehicle</th><th>Category</th><th>Factions</th><th>Offered</th><th>Price</th><th>Limit group</th><th></th></tr></thead>
+    <thead><tr><th>Vehicle</th><th>Category</th><th>Factions</th><th>Offered</th><th>Price</th><th>Limit</th><th></th></tr></thead>
     <tbody>
     {% for v in shown %}
     {% set is_hidden = v.prefab in settings.hidden %}
@@ -136,16 +161,17 @@
         </form>
         {% endif %}{% endif %}
       </td>
-      <td data-label="Limit group">
-        {% if v.variant_of %}<span class="muted small">{{ group or "none" }} (as its vehicle)</span>
+      <td data-label="Limit">
+        <div class="muted small">{{ vehicle_limit_text(v, settings) }}</div>
+        {% if v.variant_of %}<span class="muted small">as its vehicle</span>
         {% elif settings.groups %}
         <form method="post" action="/vehicles/{{ inst }}" class="inline">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set_group">
           <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <select name="group" aria-label="Limit group for {{ v.name }}"><option value="">None</option>{% for g in settings.groups|sort %}<option value="{{ g }}" {% if g == group %}selected{% endif %}>{{ g }}</option>{% endfor %}</select>
+          <select name="group" aria-label="Limit group for {{ v.name }}"><option value="">Its category</option>{% for g in settings.groups|sort %}<option value="{{ g }}" {% if g == group %}selected{% endif %}>{{ g }}</option>{% endfor %}</select>
           <button class="small ghost">Set</button>
         </form>
-        {% else %}<span class="muted small">make a group above</span>{% endif %}
+        {% endif %}
       </td>
       <td>
         <form method="post" action="/vehicles/{{ inst }}">

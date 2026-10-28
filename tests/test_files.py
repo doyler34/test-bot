@@ -480,37 +480,67 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
                               "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et", "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et")
         token = await self.login("boss")
         post = lambda **data: self.client.post("/vehicles/Plus01", data={"csrf": token, **data})
-        await post(action="group_add", name="Helicopters", count="2")
-        await post(action="group_add", name="Cars")                                  # empty: unlimited
-        await post(action="group_add", name="Helicopters", count="5")                # already there
+        await post(action="group_add", name="Transport helis", count="2")
+        await post(action="group_add", name="Jeeps")                                 # empty: unlimited
+        await post(action="group_add", name="Transport helis", count="5")            # already there
         await post(action="group_add", name="Bad|name", count="1")
-        await post(action="set_group", prefab=mi8, group="Helicopters")
-        await post(action="set_group", prefab=covered, group="Cars")                 # variants follow their vehicle
+        await post(action="group_add", name="helicopters", count="1")                # a category's name
+        await post(action="set_group", prefab=mi8, group="Transport helis")
+        await post(action="set_group", prefab=covered, group="Jeeps")                # variants follow their vehicle
         await post(action="set_group", prefab=m998, group="Nope")
         settings = files.vehicle_settings(self.root / "Plus01")
-        self.assertEqual(settings["groups"], {"Helicopters": 2, "Cars": files.VEHICLE_UNLIMITED})
-        self.assertEqual(settings["members"], {mi8: "Helicopters"})
+        self.assertEqual(settings["groups"], {"Transport helis": 2, "Jeeps": files.VEHICLE_UNLIMITED})
+        self.assertEqual(settings["members"], {mi8: "Transport helis"})
         saved = json.loads((folder / "vehicles.json").read_text())
         self.assertEqual((saved["groupNames"], saved["groupLimits"], saved["groupItems"], saved["groupOf"], saved["limitsEnabled"]),
-                         (["Cars", "Helicopters"], [-1, 2], [mi8], ["Helicopters"], True))
+                         (["Jeeps", "Transport helis"], [-1, 2], [mi8], ["Transport helis"], True))
 
-        await post(action="group_found", cat="Cars", to_group="Cars")                   # the vehicle, not its variant
-        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["members"], {mi8: "Helicopters", m998: "Cars"})
-        cars = await (await self.client.get("/vehicles/Plus01", params={"group": "Cars"})).text()
-        self.assertIn("M998_covered", cars)                                           # its variant counts there too
-        self.assertNotIn("Mi-8MT", cars)
+        await post(action="group_found", cat="Cars", to_group="Jeeps")                 # the vehicle, not its variant
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["members"], {mi8: "Transport helis", m998: "Jeeps"})
+        jeeps = await (await self.client.get("/vehicles/Plus01", params={"group": "Jeeps"})).text()
+        self.assertIn("M998_covered", jeeps)                                          # its variant counts there too
+        self.assertNotIn("Mi-8MT", jeeps)
 
-        await post(action="group_limit", name="Helicopters", count="0")
+        await post(action="group_limit", name="Transport helis", count="0")
         await post(action="limits", enabled="0")
         settings = files.vehicle_settings(self.root / "Plus01")
-        self.assertEqual((settings["groups"]["Helicopters"], settings["enabled"]), (0, False))
-        await post(action="group_delete", name="Helicopters")
+        self.assertEqual((settings["groups"]["Transport helis"], settings["enabled"]), (0, False))
+        await post(action="group_delete", name="Transport helis")
         await post(action="limits", enabled="1")
         settings = files.vehicle_settings(self.root / "Plus01")
         self.assertEqual((settings["groups"], settings["members"], settings["enabled"]),
-                         ({"Cars": -1}, {m998: "Cars"}, True))
+                         ({"Jeeps": -1}, {m998: "Jeeps"}, True))
         actions = {r["action"] for r in self.db.all("SELECT action FROM audit")}
         self.assertTrue({"vehicles group_add", "vehicles set_group", "vehicles group_limit", "vehicles limits"} <= actions)
+
+    async def test_each_category_has_a_limit(self):
+        folder = self.vehicle_profile()
+        mi8 = "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et"
+        token = await self.login("boss")
+        post = lambda **data: self.client.post("/vehicles/Plus01", data={"csrf": token, **data})
+        page = await (await self.client.get("/vehicles/Plus01")).text()
+        for category in files.VEHICLE_CATEGORIES:
+            self.assertIn(category, page)
+        await post(action="category_limit", name="Helicopters", count="2")
+        await post(action="category_limit", name="Cars", count="0")
+        await post(action="category_limit", name="Boats", count="3")                  # not a category
+        saved = json.loads((folder / "vehicles.json").read_text())
+        self.assertEqual((saved["categoryNames"], saved["categoryLimits"]), (["Cars", "Helicopters"], [0, 2]))
+        page = await (await self.client.get("/vehicles/Plus01", params={"cat": "Helicopters"})).text()
+        self.assertIn("Helicopters (2 per side)", page)
+        await post(action="group_add", name="Attack helis", count="1")
+        await post(action="set_group", prefab=mi8, group="Attack helis")
+        page = await (await self.client.get("/vehicles/Plus01", params={"cat": "Helicopters"})).text()
+        self.assertIn("Attack helis (1 per side)", page)
+        await post(action="category_limit", name="Helicopters", count="")             # empty: unlimited again
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["categories"], {"Cars": 0})
+        self.assertEqual(json.loads((folder / "vehicles.json").read_text())["categoryNames"], ["Cars"])
+
+    def test_untranslated_vehicle_names_show_the_prefab(self):
+        self.assertEqual(files.vehicle_name("#WCS-Vehicle_AH64D_US_Name - #WCS-Weapon_M261_Name", "{A}Prefabs/AH64D_AIM9_X2.et"),
+                         "AH64D_AIM9_X2")
+        self.assertEqual(files.vehicle_name("", "{A}Prefabs/M998.et"), "M998")
+        self.assertEqual(files.vehicle_name("M998 Humvee", "{A}Prefabs/M998.et"), "M998 Humvee")
 
     async def test_items_can_be_moved_to_another_category(self):
         folder = self.arsenal_profile()
