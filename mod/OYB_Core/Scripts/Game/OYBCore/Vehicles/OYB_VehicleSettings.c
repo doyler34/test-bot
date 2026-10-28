@@ -23,7 +23,7 @@
 // "building", or empty when only found by the scan).
 class OYB_VehicleSettings
 {
-	static const string BUILD = "vehicles-2026-10-27e";
+	static const string BUILD = "vehicles-2026-10-28a";
 
 	protected static const string FOLDER = "$profile:OYB_Core";
 	protected static const string SETTINGS_FILE = "$profile:OYB_Core/vehicles.json";
@@ -758,7 +758,7 @@ class OYB_VehicleSettings
 		if (!info)
 			return -1;
 
-		return info.OYB_GetOwnCampaignCost();
+		return OYB_VehicleBudget.OwnCampaignCost(info);
 	}
 
 	// The variants the building menu picks from at random when placing it.

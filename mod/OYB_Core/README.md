@@ -37,9 +37,9 @@ does `vehicle_list.json` and the panel's Vehicles page.
   single variant only works at depots; the building menu picks its random
   variant after the request is checked.
 - **Price**: at a depot, what it shows, checks and takes. In the building menu,
-  the vehicle's own supply cost: the game reads it from the vehicle's editable
-  UI info for the card, the supply check, the charge and the refund, and OYB
-  replaces it there (`OYB_VehicleBudget.c`). Crew costs come on top as the game
+  the vehicle's own supply cost: OYB replaces it where the game reads it, the
+  building budget component (the card and the supply check) and the vehicle's
+  editable entity component (the charge and the refund) (`OYB_VehicleBudget.c`). Crew costs come on top as the game
   sets them. A variant costs what its vehicle costs. A vehicle whose building
   cost is left to the game's per-type default can't be priced.
 - **Limit groups**: named groups of exact vehicle prefabs, each with a limit per
@@ -115,7 +115,7 @@ summary line whenever it changes (catalogue entries, building list size, scan
 progress, row count) with per-faction details. An empty result or a failed
 write never replaces a list already written; it's tried again.
 
-Files: `OYB_VehicleBudget.c` (building-menu prices; named to compile first),
+Files: `OYB_VehicleBudget.c` (building-menu prices),
 `OYB_VehicleDepot.c` (depot, catalogue data, game mode and player controller
 additions), `OYB_VehicleLimits.c` (counting and limits), `OYB_VehicleMenu.c`
 (the building menu) and `OYB_VehicleSettings.c` (settings and the panel's list).
