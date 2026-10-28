@@ -372,7 +372,7 @@ modded class SCR_PlayerController
 		IEntity arsenalEntity = resourceComponent.GetOwner();
 		SCR_ArsenalComponent arsenal = SCR_ArsenalComponent.FindArsenalComponent(arsenalEntity);
 		InventoryStorageManagerComponent inventory = character.GetCharacterController().GetInventoryStorageManager();
-		if (!arsenal || !inventory || !inventory.ValidateStorageRequest(arsenalEntity) || vector.DistanceSq(character.GetOrigin(), arsenalEntity.GetOrigin()) > OYB_MAX_ARSENAL_DISTANCE_SQ)
+		if (!arsenal || !arsenal.OYB_IsFull() || !inventory || !inventory.ValidateStorageRequest(arsenalEntity) || vector.DistanceSq(character.GetOrigin(), arsenalEntity.GetOrigin()) > OYB_MAX_ARSENAL_DISTANCE_SQ)
 			return null;
 
 		return arsenal;

@@ -240,7 +240,11 @@ modded class SCR_InventoryStorageBaseUI
 		if (!owner.FindComponent(SCR_ArsenalInventoryStorageManagerComponent))
 			return null;
 
-		return SCR_ArsenalComponent.Cast(owner.FindComponent(SCR_ArsenalComponent));
+		SCR_ArsenalComponent arsenal = SCR_ArsenalComponent.Cast(owner.FindComponent(SCR_ArsenalComponent));
+		if (!arsenal || !arsenal.OYB_IsFull())
+			return null;
+
+		return arsenal;
 	}
 
 	override protected void FindAndSetTitleName(Widget targetTitle, BaseInventoryStorageComponent targetStorage)

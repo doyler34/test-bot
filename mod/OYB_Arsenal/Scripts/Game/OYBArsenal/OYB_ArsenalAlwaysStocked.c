@@ -3,7 +3,8 @@
 // gear. Applied at start and whenever the box's item types are set again (a
 // loaded save, the editor, the server telling a player), on server and clients
 // alike, so the replicated item types match. Arsenals with no infantry gear at
-// all (vehicle pylons, mortars) and switched-off arsenals are left alone.
+// all (vehicle pylons, mortars), medical-only ones (the medical tent, the
+// ambulance) and switched-off arsenals are left alone.
 modded class SCR_ArsenalComponent
 {
 	protected static const int OYB_INFANTRY_TYPES = SCR_EArsenalItemType.RIFLE | SCR_EArsenalItemType.PISTOL | SCR_EArsenalItemType.MACHINE_GUN | SCR_EArsenalItemType.SNIPER_RIFLE | SCR_EArsenalItemType.ROCKET_LAUNCHER | SCR_EArsenalItemType.LETHAL_THROWABLE | SCR_EArsenalItemType.NON_LETHAL_THROWABLE | SCR_EArsenalItemType.HEAL | SCR_EArsenalItemType.BACKPACK | SCR_EArsenalItemType.HEADWEAR | SCR_EArsenalItemType.TORSO | SCR_EArsenalItemType.VEST_AND_WAIST | SCR_EArsenalItemType.LEGS | SCR_EArsenalItemType.FOOTWEAR | SCR_EArsenalItemType.HANDWEAR | SCR_EArsenalItemType.EQUIPMENT | SCR_EArsenalItemType.WEAPON_ATTACHMENT | SCR_EArsenalItemType.EXPLOSIVES;
@@ -36,7 +37,7 @@ modded class SCR_ArsenalComponent
 
 	protected static int OYB_WidenTypes(int types)
 	{
-		if (types & OYB_INFANTRY_TYPES)
+		if (OYB_IsFullArsenal(types))
 			return types | OYB_ALWAYS_TYPES;
 
 		return types;
@@ -45,9 +46,22 @@ modded class SCR_ArsenalComponent
 	// No modes at all means the arsenal is switched off.
 	protected static int OYB_WidenModes(int types, int modes)
 	{
-		if (modes && (types & OYB_INFANTRY_TYPES))
+		if (modes && OYB_IsFullArsenal(types))
 			return modes | OYB_ALWAYS_MODES;
 
 		return modes;
+	}
+
+	// A full OYB arsenal, with OYB's panel and saved loadouts; medical-only
+	// arsenals and the like stay as the game has them.
+	bool OYB_IsFull()
+	{
+		return OYB_IsFullArsenal(m_eSupportedArsenalItemTypes);
+	}
+
+	// Infantry gear other than medical supplies.
+	protected static bool OYB_IsFullArsenal(int types)
+	{
+		return (types & OYB_INFANTRY_TYPES & ~SCR_EArsenalItemType.HEAL) != 0;
 	}
 }
