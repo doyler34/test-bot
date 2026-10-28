@@ -130,6 +130,13 @@ below. Ownership: `NOTICE.md`.
   it wherever the game mode supports that, with the game's respawn cost and
   the arsenal's own save rules. An arsenal with saving turned off doesn't set
   it. Military supply allocation isn't counted.
+- **Saving a kit with OYB items**: the game's save check (for its "Save
+  loadout" action and the respawn kit above) only accepts items in the
+  player's faction catalogue or the arsenal's storage, so a kit holding an
+  item OYB hands out at that arsenal (an added item, or one the panel put on
+  a side whose catalogue doesn't list it) was always refused. Those items are
+  now accepted at that arsenal; other items, the blacklist, the rank and the
+  supply allocation are checked as the game checks them.
 - **A bar above the grid:** a **Category** button that cycles the same
   categories (the game's `MenuFilter` action, X on keyboard), the weapon
   picker, and the game's own search box, which matches each word

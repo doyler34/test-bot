@@ -123,6 +123,134 @@ modded class SCR_ArsenalManagerComponent
 	{
 		OYB_ArsenalSettings.Get().StartServer();
 	}
+
+	// The game only lets a kit be saved (as the respawn kit) when every item in
+	// it is in the player's faction catalogue, or in the arsenal's storage,
+	// depending on the arsenal. Items OYB hands out at that arsenal (added
+	// items, and items the panel put on a side whose catalogue doesn't list
+	// them) are neither, so a kit with one was always refused. Those count as
+	// allowed here; every other item, the blacklist, the rank and the supply
+	// allocation are checked as the game checks them.
+	override protected bool CanSaveLoadout(int playerId, notnull GameEntity characterEntity, Faction characterFaction, SCR_ArsenalComponent arsenalComponent, bool sendNotificationOnFailed)
+	{
+		if (super.CanSaveLoadout(playerId, characterEntity, characterFaction, arsenalComponent, false))
+			return true;
+
+		if (arsenalComponent && OYB_CanSaveWithOYBItems(playerId, characterEntity, characterFaction, arsenalComponent))
+			return true;
+
+		return super.CanSaveLoadout(playerId, characterEntity, characterFaction, arsenalComponent, sendNotificationOnFailed);
+	}
+
+	protected bool OYB_CanSaveWithOYBItems(int playerId, notnull GameEntity characterEntity, Faction characterFaction, notnull SCR_ArsenalComponent arsenalComponent)
+	{
+		array<ResourceName> offered = {};
+		OYB_ArsenalSettings.Get().GetExtrasFor(arsenalComponent, offered);
+		if (offered.IsEmpty())
+			return false;
+
+		SCR_EArsenalSaveType saveType = arsenalComponent.GetArsenalSaveType();
+		if (saveType == SCR_EArsenalSaveType.SAVING_DISABLED)
+			return false;
+
+		SCR_Faction playerFaction = SCR_Faction.Cast(characterFaction);
+		if (playerFaction && !playerFaction.IsCustomLoadoutSupported())
+			return false;
+
+		SCR_InventoryStorageManagerComponent characterInventory = SCR_InventoryStorageManagerComponent.Cast(characterEntity.FindComponent(SCR_InventoryStorageManagerComponent));
+		if (!characterInventory)
+			return false;
+
+		array<SCR_EntityCatalog> itemCatalogs = {};
+		SCR_ArsenalInventoryStorageManagerComponent arsenalInventory;
+		if (saveType == SCR_EArsenalSaveType.FACTION_ITEMS_ONLY && playerFaction)
+		{
+			SCR_EntityCatalog ownCatalog = playerFaction.GetFactionEntityCatalogOfType(EEntityCatalogType.ITEM, false);
+			if (ownCatalog)
+				itemCatalogs.Insert(ownCatalog);
+		}
+		else if (saveType == SCR_EArsenalSaveType.FRIENDLY_AND_FACTION_ITEMS_ONLY && playerFaction)
+		{
+			array<Faction> friendlyFactions = {};
+			playerFaction.GetFriendlyFactions(friendlyFactions);
+			foreach (Faction friendly : friendlyFactions)
+			{
+				SCR_Faction scrFriendly = SCR_Faction.Cast(friendly);
+				if (!scrFriendly)
+					continue;
+
+				SCR_EntityCatalog friendlyCatalog = scrFriendly.GetFactionEntityCatalogOfType(EEntityCatalogType.ITEM, false);
+				if (friendlyCatalog)
+					itemCatalogs.Insert(friendlyCatalog);
+			}
+		}
+		else if (saveType == SCR_EArsenalSaveType.IN_ARSENAL_ITEMS_ONLY)
+		{
+			arsenalInventory = arsenalComponent.GetArsenalInventoryComponent();
+		}
+
+		array<IEntity> items = {};
+		characterInventory.GetItems(items, EStoragePurpose.PURPOSE_DEPOSIT | EStoragePurpose.PURPOSE_WEAPON_PROXY);
+		set<ResourceName> checked = new set<ResourceName>();
+		SCR_ECharacterRank requiredRank = SCR_ECharacterRank.RENEGADE;
+		foreach (IEntity item : items)
+		{
+			EntityPrefabData prefabData = item.GetPrefabData();
+			if (!prefabData)
+				continue;
+
+			ResourceName prefab = prefabData.GetPrefabName();
+			if (prefab.IsEmpty() || !checked.Insert(prefab))
+				continue;
+
+			if (m_LoadoutSaveBlackListHolder && m_LoadoutSaveBlackListHolder.IsPrefabBlacklisted(prefab))
+				return false;
+
+			if (offered.Contains(prefab))
+				continue;
+
+			if (arsenalInventory)
+			{
+				if (!arsenalInventory.IsPrefabInArsenalStorage(prefab))
+					return false;
+				continue;
+			}
+
+			if (itemCatalogs.IsEmpty())
+				continue;
+
+			SCR_EntityCatalogEntry entry = null;
+			foreach (SCR_EntityCatalog catalog : itemCatalogs)
+			{
+				entry = catalog.GetEntryWithPrefab(prefab);
+				if (entry)
+					break;
+			}
+			if (!entry)
+				return false;
+
+			SCR_ArsenalItem arsenalItem = SCR_ArsenalItem.Cast(entry.GetEntityDataOfType(SCR_ArsenalItem));
+			if (arsenalItem && AreItemsRankLocked())
+				requiredRank = Math.Max(requiredRank, arsenalItem.GetRequiredRank());
+		}
+
+		SCR_PlayerController playerController = SCR_PlayerController.Cast(GetGame().GetPlayerManager().GetPlayerController(playerId));
+		if (playerController && AreItemsRankLocked())
+		{
+			SCR_PlayerXPHandlerComponent xpHandler = SCR_PlayerXPHandlerComponent.Cast(playerController.FindComponent(SCR_PlayerXPHandlerComponent));
+			if (xpHandler && xpHandler.GetPlayerRankByXP() < requiredRank)
+				return false;
+		}
+
+		if (m_bUseMilitarySupplyAllocation && playerController)
+		{
+			SCR_PlayerSupplyAllocationComponent allocation = SCR_PlayerSupplyAllocationComponent.Cast(playerController.FindComponent(SCR_PlayerSupplyAllocationComponent));
+			if (allocation && GetCharacterLoadoutSupplyCost(characterEntity, false) > allocation.GetPlayerMilitarySupplyAllocation())
+				return false;
+		}
+
+		return true;
+	}
 }
 
 // The server's side: hidden items can't be taken however the request was made,
