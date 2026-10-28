@@ -902,8 +902,6 @@ modded class SCR_InventoryStorageBaseUI
 	//------------------------------------------------------------------------------------------------
 	// Widget helpers
 
-	// AddChild appends, so the widgets from the target onwards are moved to the
-	// end after the new one, which keeps the parent's order otherwise unchanged.
 	protected bool OYB_IsInPanel(Widget widget)
 	{
 		while (widget)
@@ -915,30 +913,27 @@ modded class SCR_InventoryStorageBaseUI
 		return false;
 	}
 
-	// Puts the widget just before the target among its siblings by their
-	// z-order, which is what the layouts sort by. The game's widgets are never
-	// taken out of their parent for this.
+	// AddChild appends, so the widgets from the target onwards are moved to the
+	// end after the new one, which keeps the parent's order otherwise unchanged.
 	protected void OYB_MoveBefore(Widget widget, Widget target)
 	{
 		Widget parent = target.GetParent();
-		if (!parent || widget.GetParent() != parent)
-			return;
-
-		int order;
+		array<Widget> after = {};
 		Widget child = parent.GetChildren();
+		bool found;
 		while (child)
 		{
 			if (child == target)
-			{
-				widget.SetZOrder(order);
-				order++;
-			}
-			if (child != widget)
-			{
-				child.SetZOrder(order);
-				order++;
-			}
+				found = true;
+			if (found && child != widget)
+				after.Insert(child);
 			child = child.GetSibling();
+		}
+
+		foreach (Widget moved : after)
+		{
+			parent.RemoveChild(moved);
+			parent.AddChild(moved);
 		}
 	}
 
