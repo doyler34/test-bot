@@ -54,24 +54,49 @@ class OYB_VehicleBudget
 	// Changes the campaign cost in the list by the difference between the price
 	// and the game's own cost. The entry is replaced rather than changed, as it
 	// can be the info's own.
-	static void ApplyPrice(ResourceName prefab, SCR_EditableEntityUIInfo info, notnull array<ref SCR_EntityBudgetValue> budgets)
+	static void ApplyPrice(ResourceName prefab, SCR_EditableEntityUIInfo info, notnull array<ref SCR_EntityBudgetValue> budgets, string where = "")
 	{
 		int price;
 		if (prefab.IsEmpty() || !OYB_VehicleSettings.Get().GetPrice(prefab, price))
 			return;
 
 		int own = OwnCampaignCost(info);
-		if (own < 0)
-			return;
+		string before = Describe(budgets);
+		if (own >= 0)
+		{
+			foreach (int i, SCR_EntityBudgetValue budget : budgets)
+			{
+				if (budget.GetBudgetType() != EEditableEntityBudget.CAMPAIGN)
+					continue;
 
+				budgets[i] = new SCR_EntityBudgetValue(EEditableEntityBudget.CAMPAIGN, Math.Max(0, budget.GetBudgetValue() + price - own));
+				break;
+			}
+		}
+
+		// Once per vehicle and place, to see what a price does to the costs.
+		string key = where + prefab;
+		if (s_aLogged.Contains(key))
+			return;
+		s_aLogged.Insert(key);
+		PrintFormat("OYB_CORE price %1 (%2): price %3, own cost %4, costs before %5, after %6", FilePath.StripPath(prefab.GetPath()), where, price, own, before, Describe(budgets));
+	}
+
+	protected static ref array<string> s_aLogged = {};
+
+	protected static string Describe(notnull array<ref SCR_EntityBudgetValue> budgets)
+	{
+		string text = "[";
 		foreach (int i, SCR_EntityBudgetValue budget : budgets)
 		{
-			if (budget.GetBudgetType() != EEditableEntityBudget.CAMPAIGN)
-				continue;
-
-			budgets[i] = new SCR_EntityBudgetValue(EEditableEntityBudget.CAMPAIGN, Math.Max(0, budget.GetBudgetValue() + price - own));
-			return;
+			if (i > 0)
+				text += ", ";
+			if (budget)
+				text += typename.EnumToString(EEditableEntityBudget, budget.GetBudgetType()) + " " + budget.GetBudgetValue();
+			else
+				text += "null";
 		}
+		return text + "]";
 	}
 }
 
@@ -81,7 +106,7 @@ modded class SCR_CampaignBuildingBudgetEditorComponent
 	override bool GetEntityPreviewBudgetCosts(SCR_EditableEntityUIInfo entityUIInfo, out notnull array<ref SCR_EntityBudgetValue> budgetCosts)
 	{
 		bool result = super.GetEntityPreviewBudgetCosts(entityUIInfo, budgetCosts);
-		OYB_VehicleBudget.ApplyPrice(OYB_VehicleBudget.CardPrefab(entityUIInfo), entityUIInfo, budgetCosts);
+		OYB_VehicleBudget.ApplyPrice(OYB_VehicleBudget.CardPrefab(entityUIInfo), entityUIInfo, budgetCosts, "card");
 		return result;
 	}
 
@@ -104,7 +129,7 @@ modded class SCR_CampaignBuildingBudgetEditorComponent
 			return;
 
 		ResourceName prefab = SCR_BaseContainerTools.GetPrefabResourceName(editableEntitySource);
-		OYB_VehicleBudget.ApplyPrice(prefab, SCR_EditableEntityComponentClass.GetInfo(editableEntitySource), budgetCosts);
+		OYB_VehicleBudget.ApplyPrice(prefab, SCR_EditableEntityComponentClass.GetInfo(editableEntitySource), budgetCosts, "check");
 	}
 }
 
@@ -133,6 +158,6 @@ modded class SCR_EditableEntityComponent
 		if (!owner)
 			return;
 
-		OYB_VehicleBudget.ApplyPrice(SCR_ResourceNameUtils.GetPrefabName(owner), SCR_EditableEntityUIInfo.Cast(GetInfo(owner)), budgets);
+		OYB_VehicleBudget.ApplyPrice(SCR_ResourceNameUtils.GetPrefabName(owner), SCR_EditableEntityUIInfo.Cast(GetInfo(owner)), budgets, "charge");
 	}
 }
