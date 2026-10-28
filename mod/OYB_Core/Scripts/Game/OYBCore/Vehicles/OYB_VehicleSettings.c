@@ -23,7 +23,7 @@
 // "building", or empty when only found by the scan).
 class OYB_VehicleSettings
 {
-	static const string BUILD = "vehicles-2026-10-28a";
+	static const string BUILD = "vehicles-2026-10-28b";
 
 	protected static const string FOLDER = "$profile:OYB_Core";
 	protected static const string SETTINGS_FILE = "$profile:OYB_Core/vehicles.json";
@@ -508,7 +508,7 @@ class OYB_VehicleSettings
 				if (described < 3)
 				{
 					described++;
-					details += string.Format("OYB_CORE vehicles: %1 %2 | data: %3 | depot data %4, in building list %5, building-mode editor data %6\n", factionKey, prefab, entry.OYB_DescribeData(), spawnerData != null, inBuildingList, buildingMode);
+					details += string.Format("OYB_CORE vehicles: %1 %2 | data: %3 | depot data %4, in building list %5, building-mode editor data %6\n", factionKey, prefab, DescribeData(entry), spawnerData != null, inBuildingList, buildingMode);
 				}
 
 				if (spawnerData)
@@ -781,6 +781,31 @@ class OYB_VehicleSettings
 		variantData.GetVariants(all);
 		foreach (SCR_EditableEntityVariant variant : all)
 			variants.Insert(variant.m_sVariantPrefab);
+	}
+
+	// The entry's enabled data blocks, for the log.
+	protected static string DescribeData(notnull SCR_EntityCatalogEntry entry)
+	{
+		array<SCR_BaseEntityCatalogData> dataList = {};
+		entry.GetEntityDataList(dataList);
+		if (dataList.IsEmpty())
+			return "none enabled";
+
+		string text;
+		foreach (SCR_BaseEntityCatalogData data : dataList)
+		{
+			if (!data)
+				continue;
+
+			if (!text.IsEmpty())
+				text += ", ";
+			text += data.Type().ToString();
+
+			SCR_EntityCatalogEditorData editorData = SCR_EntityCatalogEditorData.Cast(data);
+			if (editorData)
+				text += string.Format(" modes %1", editorData.GetValidEditorModes());
+		}
+		return text;
 	}
 
 	protected static string Category(SCR_EntityCatalogEntry entry)
