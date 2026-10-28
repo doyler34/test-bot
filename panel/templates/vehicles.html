@@ -110,32 +110,29 @@
 <section class="card">
   <h2>{{ found }} vehicle{{ "s" if found != 1 }}{% if pages > 1 %} <span class="muted small">page {{ page }} of {{ pages }}</span>{% endif %}</h2>
   {% if found %}
-  <div class="row-actions">
-    {% if settings.groups %}
-    <form method="post" action="/vehicles/{{ inst }}" class="inline" data-confirm="Put the {{ found }} vehicles that match this filter in this group?">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="group_found">
-      <input type="hidden" name="back" value="{{ back }}">
-      {% for key, value in filters.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
-      <select name="to_group" aria-label="Group"><option value="">Their category</option>{% for g in settings.groups|sort %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select>
-      <button class="small ghost">Group all {{ found }}</button>
-    </form>
-    {% endif %}
-    {% for action, label in (("hide_found", "Hide all " ~ found), ("show_found", "Show all " ~ found)) %}
-    <form method="post" action="/vehicles/{{ inst }}" class="inline" data-confirm="{{ label }} vehicles that match this filter?">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ action }}">
-      <input type="hidden" name="back" value="{{ back }}">
-      {% for key, value in filters.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
-      <button class="small ghost">{{ label }}</button>
-    </form>
-    {% endfor %}
-  </div>
+  <form id="vehicle-bulk" method="post" action="/vehicles/{{ inst }}" class="row-actions" data-confirm="Change these vehicles?">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="bulk">
+    <input type="hidden" name="back" value="{{ back }}">
+    {% for key, value in filters.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+    <select name="scope" aria-label="Which vehicles"><option value="picked">Ticked vehicles</option><option value="found">All {{ found }} shown</option></select>
+    <select name="change" aria-label="Change">
+      <option value="hide">Hide</option><option value="show">Show</option>
+      <option value="price">Set price</option><option value="reset">Reset price</option>
+      <option value="group">Put in group</option>
+    </select>
+    <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" placeholder="Price" aria-label="Price" class="price">
+    <select name="to_group" aria-label="Group"><option value="">Their category</option>{% for g in settings.groups|sort %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select>
+    <button class="small">Apply</button>
+  </form>
+  <p class="muted small">Tick vehicles in the list, or pick "All {{ found }} shown" to change everything the filter shows (a whole category, say). A price needs a number, and "Put in group" the group or "Their category".</p>
   <div class="scroll"><table class="stack">
-    <thead><tr><th>Vehicle</th><th>Category</th><th>Factions</th><th>Offered</th><th>Price</th><th>Limit</th><th></th></tr></thead>
+    <thead><tr><th><input type="checkbox" data-check-all="pick" aria-label="Tick every vehicle on this page"></th><th>Vehicle</th><th>Category</th><th>Factions</th><th>Offered</th><th>Price</th><th>Limit</th><th></th></tr></thead>
     <tbody>
     {% for v in shown %}
     {% set is_hidden = v.prefab in settings.hidden %}
     {% set group = vehicle_group(v, settings.members) %}
     <tr>
+      <td><input type="checkbox" name="pick" value="{{ v.prefab }}" form="vehicle-bulk" aria-label="Tick {{ v.name }}"></td>
       <td class="strong">{% if v.variant_of %}<span class="muted">↳</span> {% endif %}{{ v.name }}{% if is_hidden %} <span class="pill down">Hidden</span>{% endif %}
         {% if v.variant_of %}<div class="muted small">variant of {{ names.get(v.variant_of, v.variant_of.rsplit("/", 1)[-1]) }}</div>{% endif %}
         <div class="muted small mono">{{ v.prefab.rsplit("/", 1)[-1] }}</div></td>

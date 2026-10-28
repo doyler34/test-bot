@@ -536,6 +536,30 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(files.vehicle_settings(self.root / "Plus01")["categories"], {"Cars": 0})
         self.assertEqual(json.loads((folder / "vehicles.json").read_text())["categoryNames"], ["Cars"])
 
+    async def test_many_vehicles_can_be_changed_at_once(self):
+        self.vehicle_profile()
+        m998, covered, mi8 = ("{V1}Prefabs/Vehicles/Wheeled/M998/M998.et",
+                              "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et", "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et")
+        token = await self.login("boss")
+        page = await (await self.client.get("/vehicles/Plus01")).text()
+        self.assertIn('name="pick"', page)
+        self.assertIn('form="vehicle-bulk"', page)
+        bulk = lambda *picks, **data: self.client.post("/vehicles/Plus01", data=[("csrf", token), ("action", "bulk"), *[("pick", p) for p in picks], *data.items()])
+        await bulk(m998, mi8, change="price", cost="700")
+        await bulk(covered, change="price", cost="5")                              # a variant: skipped
+        settings = files.vehicle_settings(self.root / "Plus01")
+        self.assertEqual(settings["prices"], {m998: 700, mi8: 700})
+        await bulk(scope="found", cat="Cars", change="hide")                       # everything the filter shows
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], {m998, covered})
+        await bulk(m998, covered, change="show")
+        await bulk(m998, change="reset")
+        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "group_add", "name": "Jeeps", "count": "1"})
+        await bulk(m998, covered, change="group", to_group="Jeeps")
+        settings = files.vehicle_settings(self.root / "Plus01")
+        self.assertEqual((settings["hidden"], settings["prices"], settings["members"]), (set(), {mi8: 700}, {m998: "Jeeps"}))
+        await bulk(change="hide")                                                  # nothing ticked
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], set())
+
     def test_untranslated_vehicle_names_show_the_prefab(self):
         self.assertEqual(files.vehicle_name("#WCS-Vehicle_AH64D_US_Name - #WCS-Weapon_M261_Name", "{A}Prefabs/AH64D_AIM9_X2.et"),
                          "AH64D_AIM9_X2")

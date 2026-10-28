@@ -3697,6 +3697,48 @@ async def vehicles_change(request):
                 members.pop(target, None)
         name = f"{len(found)} vehicles to {group or 'no group'}"
         message = f"{len(found)} vehicle{'s' if len(found) != 1 else ''} now {'count in ' + group if group else 'count in their category'}."
+    elif action == "bulk":
+        # The ticked vehicles, or with "all" every vehicle the filter shows.
+        if form.get("scope") == "found":
+            targets = [v["prefab"] for v in vehicle_matches(vehicles, vehicle_filters(form), settings)]
+        else:
+            targets = [p for p in form.getall("pick", []) if p in by_prefab]
+        if not targets:
+            fail("Tick some vehicles first, or pick every vehicle shown.")
+        change = form.get("change", "")
+        bases = [p for p in targets if not by_prefab[p]["variant_of"]]
+        if change == "hide":
+            hidden.update(targets)
+            done, outcome = len(targets), "hidden"
+        elif change == "show":
+            hidden.difference_update(targets)
+            done, outcome = len(targets), "shown again"
+        elif change == "price":
+            cost = read_number("cost", "A price")
+            priceable = [p for p in bases if vehicle_priceable(by_prefab[p])]
+            for target in priceable:
+                prices[target] = cost
+            done, outcome = len(priceable), f"now cost {cost}"
+        elif change == "reset":
+            for target in targets:
+                prices.pop(target, None)
+            done, outcome = len(targets), "back to their normal price"
+        elif change == "group":
+            group = read_group("to_group", allow_none=True)
+            for target in bases:
+                if group:
+                    members[target] = group
+                else:
+                    members.pop(target, None)
+            done, outcome = len(bases), f"in {group}" if group else "counting in their category"
+        else:
+            fail("Pick what to change.")
+        skipped = len(targets) - done
+        name = f"{done} vehicles: {change}"
+        message = f"{done} vehicle{'s' if done != 1 else ''} {outcome}."
+        if skipped:
+            message += (f" {skipped} skipped: variants follow their vehicle, and only vehicles sold at a depot"
+                        " or with a building cost of their own can be priced.")
     elif action in ("hide_found", "show_found"):
         found = [v["prefab"] for v in vehicle_matches(vehicles, vehicle_filters(form), settings)]
         if action == "hide_found":

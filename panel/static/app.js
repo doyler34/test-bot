@@ -4,6 +4,9 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.matches("[data-check-all]")) {
+    for (const box of document.querySelectorAll(`input[type=checkbox][name="${event.target.dataset.checkAll}"]`)) box.checked = event.target.checked;
+  }
   if (event.target.matches("[data-autosubmit]")) {
     if (location.hash) event.target.form.action = location.pathname + location.hash;
     event.target.form.submit();
