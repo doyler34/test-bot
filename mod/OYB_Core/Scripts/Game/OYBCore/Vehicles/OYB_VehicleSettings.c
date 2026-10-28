@@ -386,7 +386,7 @@ class OYB_VehicleSettings
 			BUILD, m_iCatalogueEntries, buildableCount, building, ScanState(), scanned, m_aPrefabs.Count());
 		bool changed = LogOnChange(summary);
 		if (changed)
-			Print(details);
+			PrintFormat("%1", details);
 
 		if (m_aPrefabs.IsEmpty())
 		{
@@ -421,7 +421,7 @@ class OYB_VehicleSettings
 			return false;
 
 		m_sLastSummary = text;
-		Print(text);
+		PrintFormat("%1", text);
 		return true;
 	}
 
