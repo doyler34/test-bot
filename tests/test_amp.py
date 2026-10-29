@@ -2,6 +2,7 @@ import json
 import re
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from aiohttp import web
@@ -25,6 +26,7 @@ class FakeAmp:
     def __init__(self):
         self.admins = {"inst-everon": f'"{ALICE}"', "inst-modded": ""}
         self.restarts = []
+        self.listed = 0
         self.proxy = True
         self.app = web.Application()
         self.app.router.add_post("/API/{endpoint:.+}", self.handle)
@@ -41,6 +43,7 @@ class FakeAmp:
         if body.get("SESSIONID") != "s1":
             return web.json_response({"Title": "Unauthorized", "Message": "No session", "StackTrace": ""})
         if endpoint == "ADSModule/GetInstances":
+            self.listed += 1
             return web.json_response({"result": [{"AvailableInstances": [
                 {"InstanceID": "ads", "InstanceName": "ADS01", "Module": "ADS"},
                 {"InstanceID": "inst-everon", "InstanceName": "OGEveron01", "FriendlyName": "OG Everon", "Module": "GenericModule"},
@@ -92,6 +95,17 @@ class AmpTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.amp.change_admins(everon, add=[BOB]), [ALICE, BOB])
         self.assertEqual(self.fake.admins["inst-everon"], f'"{ALICE}","{BOB}"')
         self.assertEqual(await self.amp.change_admins(everon, remove=[ALICE]), [BOB])
+
+    async def test_the_instance_list_is_kept_a_few_seconds_until_one_changes(self):
+        everon = (await self.amp.instances())["OGEveron01"]
+        await self.amp.instances()
+        self.assertEqual(self.fake.listed, 1)
+        await self.amp.restart(everon)
+        await self.amp.instances()
+        self.assertEqual(self.fake.listed, 2)
+        with unittest.mock.patch("panel.amp.INSTANCES_SECONDS", 0):
+            await self.amp.instances()
+        self.assertEqual(self.fake.listed, 3)
 
     async def test_a_wrong_password_says_so(self):
         with self.assertRaisesRegex(AmpError, "refused the login"):

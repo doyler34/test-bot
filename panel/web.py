@@ -234,6 +234,22 @@ def memory_chart(samples, since, until, fresh=0, width=600, height=120):
     }
 
 
+async def read_apart(request, work):
+    """work(db) on a connection of its own in another thread, for reads slow enough to
+    hold up every other page and the servers' checks while they run."""
+    db = request.app[DB]
+    if db.path == ":memory:":
+        return work(db)
+
+    def run():
+        reader = db.reader()
+        try:
+            return work(reader)
+        finally:
+            reader.close()
+    return await asyncio.to_thread(run)
+
+
 def server_or_404(request, server_id):
     state = request.app[MANAGER].state(server_id)
     if state is None:
@@ -516,11 +532,11 @@ async def server_page(request):
     state = server_or_404(request, request.match_info["id"])
     db = request.app[DB]
     recent = db.audit(server=state.config.id, limit=15)
+    overview = server_overview(request, state)
     return render(request, "server.html", s=server_view(state), card=control_card(state, request.app[PICTURES], card_details(db)), recent=recent,
                   health=health_data(db, state), alts=alt_flags(request, state),
                   played=played(request, [p["identity"] for p in state.players]), amp=bool(request.app[AMP]),
-                  gb=GB, csp=MAP_CSP, feed=db.feed(state.config.id), **server_overview(request, state),
-                  **history(request, state))
+                  gb=GB, csp=MAP_CSP, feed=overview["live_feed"], **overview, **history(request, state))
 
 
 def history(request, state):
@@ -761,8 +777,17 @@ def site_doc(request):
     return site.check_site(raw, [s.id for s in request.app[CONFIG].servers])[0]
 
 
+# The public site asks every 30 seconds from each visitor's page, so what it reads from the
+# servers' files is kept this long.
+SITE_LIVE_SECONDS = 10
+SITE_LIVE = web.AppKey("site_live", dict)
+
+
 def site_live(request):
     """What each server last said about itself: its slots, map and game version."""
+    kept = request.app[SITE_LIVE]
+    if kept and time.monotonic() - kept["at"] < SITE_LIVE_SECONDS:
+        return kept["live"]
     live = {}
     for state in request.app[MANAGER].states.values():
         found = state.query if (state.query or {}).get("ok") else {}
@@ -778,6 +803,7 @@ def site_live(request):
         slots = slots if isinstance(slots, int) and slots > 0 else listing.get("slots")
         live[state.config.id] = {"slots": slots, "map": game_map, "version": found.get("version") or "",
                                  "address": listing.get("address", "")}
+    kept.update(at=time.monotonic(), live=live)
     return live
 
 
@@ -1316,7 +1342,8 @@ async def unusual_page(request):
         period = "30"
     since = 0 if period == "all" else now() - int(period) * 86400
     db = request.app[DB]
-    players, typical = outliers.unusual(db.player_totals(since), db.incident_counts(since))
+    players, typical = await read_apart(request, lambda db: outliers.unusual(db.player_totals(since),
+                                                                             db.incident_counts(since)))
     everyone = request.query.get("show") == "all"
     staff = request.app[MANAGER].staff_ids()
     hidden = sum(1 for p in players if p["identity"] in staff or not p["stands_out"])
@@ -1367,7 +1394,7 @@ def kill_log(request, identity):
         since = "last" if period == "last" else now() - int(period) * 86400
         rows, label, day = db.kill_log(identity, mode, since), dict(KILL_PERIODS)[period], ""
     lines = []
-    for r in rows:
+    for r, revenge in zip(rows, db.revenges(rows)):
         stamp = time.strftime("%d %b %Y · %H:%M:%S", time.localtime(r["at"]))
         what = "teamkilled" if r["kind"] == "teamkill" else "killed"
         killer = r["killer_name"] or "Unknown"
@@ -1376,7 +1403,6 @@ def kill_log(request, identity):
         how = DAMAGE.get(r["damage"], r["damage"].lower())
         extra = ", ".join(x for x in (how, f"{r['distance']:.0f} m" if r["distance"] else "",
                                       f"hit in the {body_part(r['zone'])}" if r["zone"] else "") if x)
-        revenge = db.revenge_for(r)
         note = ""
         if revenge:
             gap = r["at"] - revenge["at"]
@@ -1423,16 +1449,8 @@ def kill_log_groups(identity, lines):
 INVESTIGATE_PERIODS = (("30", "Last 30 days"), ("90", "Last 90 days"), ("all", "Everything kept"))
 
 
-async def investigate_page(request):
-    """Investigate: the player and every account that has shared an IP with them."""
-    require(request, "ips")
-    identity = request.match_info["identity"].lower()
-    if not valid_identity(identity):
-        raise web.HTTPNotFound(text="No such player.")
-    period = request.query.get("days", "30")
-    period = period if period in dict(INVESTIGATE_PERIODS) else "30"
-    since = 0 if period == "all" else now() - int(period) * 86400
-    db = request.app[DB]
+def investigation(db, identity, since):
+    """Everything the Investigate page shows, read from db."""
     subject = db.player(identity)
     linked = db.alts(identity)
     platforms = {}
@@ -1464,13 +1482,27 @@ async def investigate_page(request):
     incidents = [dict(r, who=a["label"]) for a in accounts for r in db.incidents_for(a["identity"]) if r["at"] >= since]
     found = investigate.findings(identity, accounts, unusual, sus, incidents)
     level, title, about = investigate.verdict(found)
+    return {"subject": subject, "accounts": accounts, "found": found, "level": level, "title": title, "about": about,
+            "unusual": unusual, "typical": typical, "sus": sus, "incidents": incidents,
+            "text": investigate.report_text(accounts[0]["label"], title, found, accounts)}
+
+
+async def investigate_page(request):
+    """Investigate: the player and every account that has shared an IP with them."""
+    require(request, "ips")
+    identity = request.match_info["identity"].lower()
+    if not valid_identity(identity):
+        raise web.HTTPNotFound(text="No such player.")
+    period = request.query.get("days", "30")
+    period = period if period in dict(INVESTIGATE_PERIODS) else "30"
+    since = 0 if period == "all" else now() - int(period) * 86400
+    page = await read_apart(request, lambda db: investigation(db, identity, since))
+    accounts = page["accounts"]
     servers = {s.id: s.name for s in request.app[CONFIG].servers}
-    audit(request, "investigate", target=accounts[0]["label"], detail=f"{len(ids)} account{'s' if len(ids) != 1 else ''}, {title}")
-    return render(request, "investigate.html", identity=identity, subject=subject, accounts=accounts,
-                  found=found, level=level, title=title, about=about, unusual=unusual, typical=typical,
-                  metrics=outliers.METRICS, sus=sus, incidents=incidents, server_names=servers,
-                  periods=INVESTIGATE_PERIODS, period=period,
-                  text=investigate.report_text(accounts[0]["label"], title, found, accounts))
+    audit(request, "investigate", target=accounts[0]["label"],
+          detail=f"{len(accounts)} account{'s' if len(accounts) != 1 else ''}, {page['title']}")
+    return render(request, "investigate.html", identity=identity, metrics=outliers.METRICS, server_names=servers,
+                  periods=INVESTIGATE_PERIODS, period=period, **page)
 
 
 async def player_page(request):
@@ -1480,25 +1512,27 @@ async def player_page(request):
     db, oyb = request.app[DB], request.app[STATS]
     bans = [b for b in db.all("SELECT * FROM bans WHERE identity = ? ORDER BY id DESC", identity)]
     stats = oyb.player(identity)
+    alts = db.alts(identity) if (stats and not stats["discord"]) or allowed(request, "ips") else []
     linked_via = None
     if stats and not stats["discord"]:
-        for alt in db.alts(identity):
+        for alt in alts:
             other = oyb.player(alt["identity"])
             if other and other["discord"]:
                 linked_via = {"identity": alt["identity"], "name": alt["name"], "discord": other["discord"]}
                 break
     fight = db.combat(identity)
     fight.update(hit=body_map(fight["hit"]), hit_by=body_map(fight["hit_by"]))
+    warnings, platform = db.visible_warnings(identity), db.platform(identity)
     return render(request, "player.html", identity=identity, player=db.player(identity), combat=fight,
                   average=combat_average(db),
                   stats=stats, stats_here=oyb.available, linked_via=linked_via,
                   ips=db.ips(identity) if allowed(request, "ips") else [],
                   banned_ips=db.banned_ips() if allowed(request, "ips") else set(),
-                  alts=db.alts(identity) if allowed(request, "ips") else [],
-                  names=db.player_names(identity), notes=db.notes(identity), warnings=db.visible_warnings(identity),
-                  warn_manage={w["id"] for w in db.visible_warnings(identity) if may_manage_warning(request, w)}, bans=bans,
-                  platform=db.platform(identity),
-                  same_steam=db.same_steam((db.platform(identity) or {"steam_id": ""})["steam_id"], identity)
+                  alts=alts if allowed(request, "ips") else [],
+                  names=db.player_names(identity), notes=db.notes(identity), warnings=warnings,
+                  warn_manage={w["id"] for w in warnings if may_manage_warning(request, w)}, bans=bans,
+                  platform=platform,
+                  same_steam=db.same_steam((platform or {"steam_id": ""})["steam_id"], identity)
                   if allowed(request, "ips") else [],
                   incidents=db.incidents_for(identity), kills=kill_log(request, identity),
                   kill_logs=KILL_LOGS, kill_periods=KILL_PERIODS,
@@ -3152,7 +3186,7 @@ async def file_action(request):
                 audit(request, "renamed file", inst, rel, files.relative(base, target))
                 back = file_url(inst, files.relative(base, target.parent))
             elif kind == "delete":
-                files.delete(base, path)
+                await asyncio.to_thread(files.delete, base, path)
                 audit(request, "deleted file", inst, rel)
                 flash(request, f"Deleted {path.name}.")
                 back = file_url(inst, rel.rpartition("/")[0])
@@ -4567,6 +4601,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[CONSOLE] = {}
     app[SETUPS] = {}
     app[SETUP_TASKS] = set()
+    app[SITE_LIVE] = {}
     app[FILES_ROOT] = files.instances_root(config.servers)
     app[PICTURES] = Path(config.database).resolve().parent / "server-pictures"
     app[BM] = BanSync(app[DB], config.battlemetrics_token, config.battlemetrics_ban_list) \

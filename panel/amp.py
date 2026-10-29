@@ -8,12 +8,16 @@ import asyncio
 import json
 import re
 import secrets
+import time
 import uuid
 
 import aiohttp
 
 MAX_ADMINS = 20
 TIMEOUT = aiohttp.ClientTimeout(total=15)
+# Most Server manager pages look the instance up before doing anything with it, so the
+# list is kept this long rather than logging in to AMP for it each time.
+INSTANCES_SECONDS = 10
 HEADERS = {"Accept": "application/json", "Content-Type": "application/json", "User-Agent": "OYB-Control"}
 
 
@@ -58,6 +62,7 @@ class Amp:
         self.username = username
         self.password = password
         self.nodes = {}
+        self._instances = (0.0, None)
 
     async def _post(self, http, base, endpoint, args):
         try:
@@ -95,6 +100,9 @@ class Amp:
 
     async def instances(self) -> dict:
         """Every instance AMP manages, by its instance name (the folder name under instances/)."""
+        at, found = self._instances
+        if found is not None and time.monotonic() - at < INSTANCES_SECONDS:
+            return dict(found)
         async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
             session = await self._login(http, self.url)
             targets = await self._call(http, self.url, session, "ADSModule/GetInstances", {"ForceIncludeSelf": False})
@@ -103,7 +111,12 @@ class Amp:
             for inst in target.get("AvailableInstances") or []:
                 if inst.get("InstanceName") and inst.get("Module") != "ADS":
                     found[inst["InstanceName"]] = inst
-        return found
+        self._instances = (time.monotonic(), found)
+        return dict(found)
+
+    def forget_instances(self):
+        """After a change to the instances themselves, the next look reads them fresh."""
+        self._instances = (0.0, None)
 
     async def _ads(self, endpoint, args=None):
         async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
@@ -113,6 +126,7 @@ class Amp:
     async def create_instance(self, name, friendly, port, provision):
         """A new instance on this box's ADS, the way AMP's own Create Instance does it.
         AMP picks the game ports itself and downloads the game afterwards."""
+        self.forget_instances()
         targets = await self._ads("ADSModule/GetInstances", {"ForceIncludeSelf": True})
         target = next((t.get("InstanceId") for t in targets if isinstance(t, dict) and t.get("InstanceId")), None) \
             if isinstance(targets, list) else None
@@ -127,6 +141,7 @@ class Amp:
             raise AmpError(f"AMP didn't create {name}: {result.get('Reason') or 'no reason given'}")
 
     async def delete_instance(self, name):
+        self.forget_instances()
         result = await self._ads("ADSModule/DeleteInstance", {"InstanceName": name})
         if isinstance(result, dict) and result.get("Status") is False:
             raise AmpError(f"AMP didn't delete {name}: {result.get('Reason') or 'no reason given'}")
@@ -181,6 +196,7 @@ class Amp:
     async def instance_power(self, name, action):
         """Start or stop a whole AMP instance (its manager, not just the game) through ADS."""
         endpoint = {"start": "ADSModule/StartInstance", "stop": "ADSModule/StopInstance"}[action]
+        self.forget_instances()
         async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
             session = await self._login(http, self.url)
             result = await self._call(http, self.url, session, endpoint, {"InstanceName": name})
@@ -291,6 +307,7 @@ class Amp:
         one whose AMP is off switches that AMP on first and waits for it to answer."""
         endpoint = {"start": "Core/Start", "stop": "Core/Stop", "restart": "Core/Restart",
                     "update": "Core/UpdateApplication"}[action]
+        self.forget_instances()
         async with aiohttp.ClientSession(timeout=TIMEOUT) as http:
             try:
                 base, session = await self._instance(http, inst)

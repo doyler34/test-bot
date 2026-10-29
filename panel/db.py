@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS audit (
     ok INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS audit_at ON audit(at);
+CREATE INDEX IF NOT EXISTS audit_server ON audit(server, at);
 CREATE TABLE IF NOT EXISTS bans (
     id INTEGER PRIMARY KEY,
     identity TEXT NOT NULL,
@@ -158,6 +159,8 @@ CREATE TABLE IF NOT EXISTS feed (
 );
 CREATE INDEX IF NOT EXISTS feed_at ON feed(server, at);
 CREATE INDEX IF NOT EXISTS feed_kind ON feed(server, kind, at);
+-- The sus flags on every server at once, for the bar along the top of each page.
+CREATE INDEX IF NOT EXISTS feed_sus ON feed(kind, at);
 CREATE TABLE IF NOT EXISTS ip_bans (
     ban_id INTEGER NOT NULL REFERENCES bans(id),
     ip TEXT NOT NULL,
@@ -271,6 +274,7 @@ CREATE TABLE IF NOT EXISTS kills (
 CREATE INDEX IF NOT EXISTS kills_killer ON kills(killer, at);
 CREATE INDEX IF NOT EXISTS kills_victim ON kills(victim, at);
 CREATE INDEX IF NOT EXISTS kills_server ON kills(server, at);
+CREATE INDEX IF NOT EXISTS kills_at ON kills(at);
 CREATE TABLE IF NOT EXISTS platforms (
     identity TEXT PRIMARY KEY,
     platform TEXT NOT NULL,
@@ -335,10 +339,15 @@ def now() -> int:
 
 class PanelDB:
     def __init__(self, path: str):
+        self.path = path
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path, timeout=10)
         self.db.row_factory = sqlite3.Row
+        if path != ":memory:":
+            # The bot reads this file too. In WAL mode its reads and the panel's writes don't wait on each other.
+            self.db.execute("PRAGMA journal_mode = WAL")
+            self.db.execute("PRAGMA synchronous = NORMAL")
         self.db.execute("PRAGMA foreign_keys = ON")
         self.db.executescript(SCHEMA)
         for table, column, kind in ADDED_COLUMNS:
@@ -348,6 +357,14 @@ class PanelDB:
 
     def close(self):
         self.db.close()
+
+    def reader(self) -> "PanelDB":
+        """A read-only connection of its own, for a slow page to read from in another thread."""
+        other = PanelDB.__new__(PanelDB)
+        other.path = self.path
+        other.db = sqlite3.connect(Path(self.path).resolve().as_uri() + "?mode=ro", uri=True, timeout=10)
+        other.db.row_factory = sqlite3.Row
+        return other
 
     def one(self, sql, *args):
         return self.db.execute(sql, args).fetchone()
@@ -414,7 +431,7 @@ class PanelDB:
         if search:
             sql += " AND (username LIKE ? OR action LIKE ? OR target LIKE ? OR detail LIKE ?)"
             args += [f"%{search}%"] * 4
-        sql += " ORDER BY id DESC LIMIT ?"
+        sql += " ORDER BY at DESC, id DESC LIMIT ?" if server and not search else " ORDER BY id DESC LIMIT ?"
         return self.all(sql, *args, limit)
 
     # bans
@@ -612,6 +629,9 @@ class PanelDB:
         self.write("INSERT OR REPLACE INTO baselines (server, pid, started, rss) VALUES (?, ?, ?, ?)",
                    server, pid, int(started), rss)
 
+    def prune_events(self, days=180):
+        self.write("DELETE FROM server_events WHERE at < ?", now() - days * 86400)
+
     def baseline(self, server):
         return self.one("SELECT * FROM baselines WHERE server = ?", server)
 
@@ -716,7 +736,11 @@ class PanelDB:
     def add_memory(self, server, rss, at=None):
         t = at or now()
         self.write("INSERT OR REPLACE INTO memory_samples (server, at, rss) VALUES (?, ?, ?)", server, t, rss)
-        self.write("DELETE FROM memory_samples WHERE at < ?", t - 7 * 86400)
+        self.write("DELETE FROM memory_samples WHERE server = ? AND at < ?", server, t - 7 * 86400)
+
+    def prune_memory(self, days=7):
+        """Also clears the readings of servers that have since left the panel."""
+        self.write("DELETE FROM memory_samples WHERE at < ?", now() - days * 86400)
 
     def memory(self, server, since):
         return self.all("SELECT at, rss FROM memory_samples WHERE server = ? AND at >= ? ORDER BY at", server, since)
@@ -757,24 +781,30 @@ class PanelDB:
         """Log events, RCON messages and admin actions for one server, newest first.
         show picks one of FEED_SHOWS, so a rare kind isn't buried under the last 200 kills."""
         kinds = FEED_SHOWS.get(show)
-        events = ("SELECT id, at, kind, text, ip, 0 AS src FROM feed WHERE server = ?"
-                  + (f" AND kind IN ({', '.join('?' * len(kinds))})" if kinds else ""))
-        actions = ("SELECT id, at, 'admin' AS kind,"
+        # Each half takes only its own newest rows, so neither table is read from end to end.
+        events = ("SELECT * FROM (SELECT id, at, kind, text, ip, 0 AS src FROM feed WHERE server = ?"
+                  + (f" AND kind IN ({', '.join('?' * len(kinds))})" if kinds else "")
+                  + " ORDER BY at DESC, id DESC LIMIT ?)")
+        actions = ("SELECT * FROM (SELECT id, at, 'admin' AS kind,"
                    " username || ': ' || action || CASE WHEN target != '' THEN ' ' || target ELSE '' END"
                    " || CASE WHEN detail != '' THEN ' (' || detail || ')' ELSE '' END AS text, '' AS ip, 1 AS src"
-                   " FROM audit WHERE server = ?")
+                   " FROM audit WHERE server = ? ORDER BY at DESC, id DESC LIMIT ?)")
         if show == "admin":
-            parts, args = [actions], [server]
+            parts, args = [actions], [server, limit]
         elif kinds:
-            parts, args = [events], [server, *kinds]
+            parts, args = [events], [server, *kinds, limit]
         else:
-            parts, args = [events, actions], [server, server]
+            parts, args = [events, actions], [server, limit, server, limit]
         return self.all(f"SELECT at, kind, text, ip FROM ({' UNION ALL '.join(parts)})"
                         " ORDER BY at DESC, src, id DESC LIMIT ?", *args, limit)
 
     def prune_feed(self, days=7, sus_days=180):
         self.write("DELETE FROM feed WHERE at < ? AND (kind != 'sus' OR at < ?)",
                    now() - days * 86400, now() - sus_days * 86400)
+
+    def forget_positions(self, server, paths):
+        self.db.executemany("DELETE FROM log_positions WHERE server = ? AND path = ?", [(server, p) for p in paths])
+        self.db.commit()
 
     def log_positions(self, server) -> dict[str, int]:
         return {r["path"]: r["position"] for r in self.all("SELECT path, position FROM log_positions WHERE server = ?", server)}
@@ -878,6 +908,9 @@ class PanelDB:
         return self.write("INSERT INTO staff_alerts (server, at, title, text, created) VALUES (?, ?, ?, ?, ?)",
                           server, at, title, text, now())
 
+    def prune_staff_alerts(self, days=90):
+        self.write("DELETE FROM staff_alerts WHERE created < ?", now() - days * 86400)
+
     def staff_alerts(self, limit=20):
         return self.all("SELECT * FROM staff_alerts ORDER BY id DESC LIMIT ?", limit)
 
@@ -914,6 +947,28 @@ class PanelDB:
             self.add_game_players(server, folder, int(game["started"]), game["stats"])
         if "kill_rows" in game:
             self.add_kills(server, game["kill_rows"], folder)
+        if "platforms" in game:
+            self.add_platforms(game["platforms"], server, folder)
+
+    def old_archives(self, before):
+        """Archived games whose saved log is old enough to delete."""
+        return self.all("SELECT * FROM log_archive WHERE started < ? AND path != ''", before)
+
+    def archive_deleted(self, server, folder):
+        """The game stays listed with its numbers; only its saved log is gone."""
+        self.write("UPDATE log_archive SET path = '' WHERE server = ? AND folder = ?", server, folder)
+
+    def unread_games(self, server, limit=20):
+        """Games archived before the panel kept per-player numbers, kills, kill places or
+        platforms, each with what it still lacks."""
+        return self.all(
+            "SELECT * FROM (SELECT a.*,"
+            " NOT EXISTS (SELECT 1 FROM scored_games r WHERE r.server = a.server AND r.folder = a.folder) AS no_scores,"
+            " NOT EXISTS (SELECT 1 FROM kills_read r WHERE r.server = a.server AND r.folder = a.folder) AS no_kills,"
+            " NOT EXISTS (SELECT 1 FROM kill_places_read r WHERE r.server = a.server AND r.folder = a.folder) AS no_places,"
+            " NOT EXISTS (SELECT 1 FROM platforms_read r WHERE r.server = a.server AND r.folder = a.folder) AS no_platforms"
+            " FROM log_archive a WHERE server = ? AND path != '')"
+            " WHERE no_scores OR no_kills OR no_places OR no_platforms ORDER BY started DESC LIMIT ?", server, limit)
 
     # every kill, for the kill log on a player's page
 
@@ -960,16 +1015,6 @@ class PanelDB:
                         " LEFT JOIN players pl ON pl.identity = p.identity"
                         " WHERE p.steam_id = ? AND p.identity != ? ORDER BY p.last_seen DESC", steam_id, identity)
 
-    def unread_platform_games(self, server, limit=20):
-        return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM platforms_read r"
-                        " WHERE r.server = a.server AND r.folder = a.folder) ORDER BY started DESC LIMIT ?",
-                        server, limit)
-
-    def unread_kill_games(self, server, limit=20):
-        return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM kills_read r"
-                        " WHERE r.server = a.server AND r.folder = a.folder) ORDER BY started DESC LIMIT ?",
-                        server, limit)
-
     def combat(self, identity):
         """A player's kills and deaths from every saved game: totals, longest
         kill, and which body part took the killing bullet, both ways."""
@@ -995,11 +1040,6 @@ class PanelDB:
         hs = [r["h"] / r["b"] for r in rows if r["b"]]
         return {"kd": sum(kd) / len(kd), "hs": sum(hs) / len(hs) if hs else None, "players": len(rows)}
 
-    def unread_place_games(self, server, limit=20):
-        return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM kill_places_read r"
-                        " WHERE r.server = a.server AND r.folder = a.folder) ORDER BY started DESC LIMIT ?",
-                        server, limit)
-
     def kill_log(self, identity, mode, since=0, until=None, limit=500):
         """A player's kills, deaths or teamkills, oldest first. 'last' is the
         last game they were in, on whichever server that was."""
@@ -1017,14 +1057,24 @@ class PanelDB:
         rows = self.all(f"SELECT * FROM kills WHERE {who} AND {where} ORDER BY at DESC LIMIT ?", *args, *more, limit)
         return list(reversed(rows))
 
-    def revenge_for(self, row, window=600):
-        """The teamkill this one may have been paying back: the victim
-        teamkilling the killer shortly before, on the same server."""
-        if row["kind"] != "teamkill" or not row["killer"]:
-            return None
-        return self.one("SELECT * FROM kills WHERE server = ? AND kind = 'teamkill' AND killer = ? AND victim = ?"
-                        " AND at <= ? AND at >= ? ORDER BY at DESC LIMIT 1",
-                        row["server"], row["victim"], row["killer"], row["at"], row["at"] - window)
+    def revenges(self, rows, window=600) -> list:
+        """For each row, the teamkill it may have been paying back: the victim
+        teamkilling the killer shortly before, on the same server. None where
+        there's none. All read at once rather than a read per row."""
+        teamkills = [r for r in rows if r["kind"] == "teamkill" and r["killer"]]
+        if not teamkills:
+            return [None] * len(rows)
+        victims = sorted({r["victim"] for r in teamkills})
+        earlier = {}
+        for start in range(0, len(victims), 500):
+            chunk = victims[start:start + 500]
+            for found in self.all(f"SELECT * FROM kills WHERE kind = 'teamkill' AND killer IN ({','.join('?' * len(chunk))})"
+                                  " AND at >= ? AND at <= ? ORDER BY at DESC", *chunk,
+                                  min(r["at"] for r in teamkills) - window, max(r["at"] for r in teamkills)):
+                earlier.setdefault((found["server"], found["killer"], found["victim"]), []).append(found)
+        return [next((f for f in earlier.get((r["server"], r["victim"], r["killer"]), ())
+                      if r["at"] - window <= f["at"] <= r["at"]), None)
+                if r["kind"] == "teamkill" and r["killer"] else None for r in rows]
 
     def prune_kills(self, days=180):
         self.write("DELETE FROM kills WHERE at < ?", now() - days * 86400)
@@ -1037,11 +1087,6 @@ class PanelDB:
                 [(server, folder, p["identity"], p["name"], started, max(0, int(p["last"] - p["first"])), p["kills"],
                   p["deaths"], p["rifle"], p["heads"], p["long"], p["metres"], p["measured"]) for p in players])
             self.db.execute("INSERT OR IGNORE INTO scored_games VALUES (?, ?)", (server, folder))
-
-    def unscored_games(self, server, limit=20):
-        return self.all("SELECT * FROM log_archive a WHERE server = ? AND NOT EXISTS (SELECT 1 FROM scored_games s"
-                        " WHERE s.server = a.server AND s.folder = a.folder) ORDER BY started DESC LIMIT ?",
-                        server, limit)
 
     def player_totals(self, since):
         """Each player's numbers added up over every archived game since then."""

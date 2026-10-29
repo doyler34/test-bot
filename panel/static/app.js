@@ -27,13 +27,30 @@ async function refresh(box) {
   } catch (err) {}
 }
 
+// A part that's out of sight (a closed tab, a hidden side panel) isn't asked for;
+// it's brought up to date as soon as it can be seen again.
+const shown = (box) => box.getClientRects().length > 0;
+const missed = new Set();
+
 for (const box of document.querySelectorAll("[data-refresh]")) {
   const every = Number(box.dataset.every) || 10000;
   setInterval(() => {
     if (document.hidden || box.contains(document.activeElement) || box.querySelector(".kick-pick[open]")) return;
+    if (!shown(box)) return missed.add(box);
     refresh(box);
   }, every);
 }
+
+function catchUp() {
+  for (const box of missed) {
+    if (!shown(box)) continue;
+    missed.delete(box);
+    refresh(box);
+  }
+}
+document.addEventListener("click", () => setTimeout(catchUp, 0));
+window.addEventListener("hashchange", catchUp);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) catchUp(); });
 
 function closeFull() {
   for (const open of document.querySelectorAll(".pane.full, .card.full")) open.classList.remove("full");

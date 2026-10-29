@@ -1031,7 +1031,61 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         self.db.write("DELETE FROM scored_games")
         await self.archive()
         self.assertEqual(self.db.one("SELECT rifle FROM game_players WHERE identity = ?", GAZ)["rifle"], 1)
-        self.assertEqual(self.db.unscored_games("server-1"), [])
+        self.assertEqual(self.db.unread_games("server-1"), [])
+
+    def test_the_database_lets_the_bot_read_while_the_panel_writes(self):
+        self.assertEqual(self.db.one("PRAGMA journal_mode")[0], "wal")
+        reader = self.db.reader()
+        self.addCleanup(reader.close)
+        self.assertEqual(reader.user_by_name("boss")["role"], "owner")
+        with self.assertRaises(sqlite3.OperationalError):
+            reader.log("boss", "write through a reader")
+
+    async def test_old_saved_logs_go_but_the_game_and_the_audit_log_stay(self):
+        await self.archive()
+        game = self.db.archived_game("server-1", "logs_2026-09-25_10-16-32")
+        old = now() - 200 * 86400
+        self.db.write("UPDATE log_archive SET started = ?", old)
+        self.db.write("INSERT INTO audit (at, username, action) VALUES (?, 'boss', 'long ago')", old)
+        self.db.add_event("server-1", "online", at=old)
+        self.db.add_event("server-1", "online")
+        self.manager.prune()
+        self.assertFalse(Path(game["path"]).exists())
+        kept = self.db.archived_game("server-1", "logs_2026-09-25_10-16-32")
+        self.assertEqual((kept["path"], kept["kills"]), ("", 4))
+        self.assertIsNotNone(self.db.one("SELECT 1 FROM audit WHERE action = 'long ago'"))
+        self.assertEqual(len(self.db.events("server-1")), 1)
+        self.assertEqual(self.db.unread_games("server-1"), [])
+        self.manager.prune()
+
+    async def test_a_game_read_again_only_gets_what_it_lacks(self):
+        await self.archive()
+        self.assertIsNotNone(self.db.one("SELECT 1 FROM platforms_read"))
+        self.db.write("DELETE FROM platforms_read")
+        self.db.write("UPDATE game_players SET kills = 99")
+        [row] = self.db.unread_games("server-1")
+        self.assertEqual((row["no_scores"], row["no_kills"], row["no_platforms"]), (0, 0, 1))
+        await self.archive()
+        self.assertEqual(self.db.unread_games("server-1"), [])
+        self.assertEqual(self.db.one("SELECT MAX(kills) FROM game_players")[0], 99)
+
+    async def test_how_far_a_deleted_log_was_read_is_forgotten(self):
+        state, reader = self.manager.states["server-1"], LogReader(str(self.logs))
+        await self.manager.read_logs(state, reader)
+        self.assertEqual(len(self.db.log_positions("server-1")), 2)
+        shutil.rmtree(Path(self.logs, "logs_2026-09-25_10-16-32"))
+        self.manager.forget_gone_logs(state, reader)
+        self.assertEqual([Path(p).parent.name for p in self.db.log_positions("server-1")], ["logs_2026-09-25_11-00-00"])
+        # A log folder that can't be read forgets nothing.
+        self.manager.forget_gone_logs(state, LogReader(str(Path(self.tmp.name, "missing"))))
+        self.assertEqual(len(self.db.log_positions("server-1")), 1)
+
+    async def test_investigate_reads_in_another_thread(self):
+        await self.archive()
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+        reply = await self.client.get(f"/player/{GAZ}/investigate?days=all")
+        self.assertEqual(reply.status, 200)
+        self.assertIn("GazLagom", await reply.text())
 
     async def test_unusual_players(self):
         for n in range(12):
@@ -2910,6 +2964,31 @@ class SusWordingTests(unittest.TestCase):
         self.assertEqual(feet([{"zone": "Chest"}]), "")
         self.assertEqual(how({"damage": "EXPLOSIVE", "zone": "RFoot"}), "explosion to the right foot")
         self.assertEqual(how({"damage": "KINETIC", "zone": "Head", "distance": 1049}), "bullet to the head from 1,049 m")
+
+
+class FeedAndRevengeReadTests(unittest.TestCase):
+    def setUp(self):
+        self.db = PanelDB(":memory:")
+        self.addCleanup(self.db.close)
+
+    def test_the_feed_mixes_both_tables_newest_first(self):
+        for at in range(1, 6):
+            self.db.add_feed("one", "join", f"join {at}", at=at * 10)
+            self.db.write("INSERT INTO audit (at, username, action, server) VALUES (?, 'boss', ?, 'one')", at * 10 + 5, f"act {at}")
+        self.db.add_feed("two", "join", "elsewhere", at=1000)
+        self.assertEqual([r["text"] for r in self.db.feed("one", limit=4)], ["boss: act 5", "join 5", "boss: act 4", "join 4"])
+        self.assertEqual([r["text"] for r in self.db.feed("one", limit=2, show="admin")], ["boss: act 5", "boss: act 4"])
+        self.assertEqual([r["text"] for r in self.db.feed("one", limit=2, show="joins")], ["join 5", "join 4"])
+
+    def test_revenge_is_the_victims_own_teamkill_shortly_before(self):
+        row = lambda at, killer, victim: (0, at, "teamkill", killer, killer, victim, victim, "KINETIC", 10.0, "",
+                                          None, None, None, None)
+        self.db.add_kills("s", [row(1000, "a", "b"), row(1300, "b", "a"), row(5000, "b", "a")])
+        self.db.add_kills("t", [row(1310, "b", "a")])
+        rows = self.db.all("SELECT * FROM kills ORDER BY at")
+        found = self.db.revenges(rows)
+        self.assertEqual([f["at"] if f else None for f in found], [None, 1000, None, None])
+        self.assertEqual(self.db.revenges([]), [])
 
 
 class KillLogGroupTests(unittest.TestCase):

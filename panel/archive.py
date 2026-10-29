@@ -135,4 +135,4 @@ def kill_rows(events, game=None):
 def summary(game: dict) -> dict:
     return {"started": game["started"], "ended": game["ended"], "players": len(game["players"]),
             "kills": game["kills"], "flags": len(game["flags"]), "stats": game["players"],
-            "kill_rows": game["kill_rows"]}
+            "kill_rows": game["kill_rows"], "platforms": game["platforms"]}

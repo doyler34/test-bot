@@ -33,7 +33,7 @@ class PlatformTests(unittest.TestCase):
         self.assertEqual(db.same_steam("", XBOX), [])
         db.add_platforms([{"identity": PC, "platform": "steam", "steam": "76561199889955833", "at": 10}])
         self.assertEqual(db.platform(PC)["last_seen"], 100)
-        self.assertEqual(db.unread_platform_games("server-1"), [])
+        self.assertIsNotNone(db.one("SELECT 1 FROM platforms_read WHERE server = 'server-1' AND folder = 'logs_x'"))
 
 
 if __name__ == "__main__":

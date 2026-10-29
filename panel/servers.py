@@ -127,6 +127,8 @@ UNREACHABLE_AFTER = 4
 # Failed logins from one address, within ATTACK_WINDOW seconds, that count as an attack.
 ATTACK_LOGINS = 10
 ATTACK_WINDOW = 600
+# A saved game log is deleted after this long, as kills are; the game stays listed with its numbers.
+ARCHIVE_DAYS = 180
 
 
 class ServerManager:
@@ -158,6 +160,7 @@ class ServerManager:
             self._tasks.append(asyncio.create_task(self._watch_memory()))
         self._tasks.append(asyncio.create_task(self._watch_monitor()))
         self._tasks.append(asyncio.create_task(self._watch_attacks()))
+        self._tasks.append(asyncio.create_task(self._maintain()))
         for state in self.states.values():
             if state.config.log_dir:
                 self._tasks.append(asyncio.create_task(self._watch_logs(state)))
@@ -335,20 +338,55 @@ class ServerManager:
 
     async def _watch_logs(self, state: ServerState):
         reader = LogReader(state.config.log_dir)
-        pruned = 0
+        archived = 0
         while not self._stopping:
             try:
                 await self.read_logs(state, reader)
-                if now() - pruned > 3600:
-                    pruned = now()
+                if now() - archived > 3600:
+                    archived = now()
                     await self.archive_logs(state, reader)
-                    self.db.prune_connections()
-                    self.db.prune_feed()
-                    self.db.prune_incidents()
-                    self.db.prune_kills()
+                    self.forget_gone_logs(state, reader)
             except Exception:
                 log.exception("reading logs failed for %s", state.config.id)
             await asyncio.sleep(self.config.poll_seconds)
+
+    async def _maintain(self):
+        """Once an hour, for every server at once: old rows out of the database and old saved logs off the disk.
+        The audit log is kept for good."""
+        while not self._stopping:
+            try:
+                self.prune()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("clearing out old data failed")
+            await asyncio.sleep(3600)
+
+    def prune(self):
+        self.db.prune_connections()
+        self.db.prune_feed()
+        self.db.prune_incidents()
+        self.db.prune_kills()
+        self.db.prune_memory()
+        self.db.prune_events()
+        self.db.prune_staff_alerts()
+        for row in self.db.old_archives(now() - ARCHIVE_DAYS * 86400):
+            try:
+                Path(row["path"]).unlink(missing_ok=True)
+            except OSError as exc:
+                log.warning("Couldn't delete %s: %s", row["path"], exc)
+                continue
+            self.db.archive_deleted(row["server"], row["folder"])
+
+    def forget_gone_logs(self, state: ServerState, reader: LogReader):
+        """How far each log was read, for logs that have since been deleted. Nothing is
+        forgotten while the log folder can't be read, or every log would be read again."""
+        if not reader.folders():
+            return
+        gone = [path for path in self.db.log_positions(state.config.id) if not os.path.exists(path)]
+        self.db.forget_positions(state.config.id, gone)
+        for path in gone:
+            reader.files.pop(path, None)
 
     async def read_logs(self, state: ServerState, reader: LogReader):
         positions = self.db.log_positions(state.config.id)
@@ -508,46 +546,22 @@ class ServerManager:
                 log.warning("Couldn't archive %s: %s", folder, exc)
                 continue
             self.db.add_archive(state.config.id, folder.name, str(dest), dest.stat().st_size, game)
-        # Games archived before the per-player numbers existed get them a few at a time.
-        for row in self.db.unscored_games(state.config.id):
+        # Games archived before the panel kept per-player numbers, kills, kill places or platforms get
+        # what they lack, a few at a time, each read once.
+        for row in self.db.unread_games(state.config.id):
             try:
                 info = Path(row["path"]).stat()
                 game = await asyncio.to_thread(archive.read_game, row["path"], row["folder"], info.st_size,
                                                info.st_mtime, ())
             except (OSError, tarfile.TarError, EOFError) as exc:
-                log.warning("Couldn't read %s for player numbers: %s", row["path"], exc)
-                game = {"players": []}
-            self.db.add_game_players(state.config.id, row["folder"], row["started"], game["players"])
-        # Likewise every kill in games saved before the kill log existed.
-        for row in self.db.unread_kill_games(state.config.id):
-            try:
-                info = Path(row["path"]).stat()
-                game = await asyncio.to_thread(archive.read_game, row["path"], row["folder"], info.st_size,
-                                               info.st_mtime, ())
-            except (OSError, tarfile.TarError, EOFError) as exc:
-                log.warning("Couldn't read %s for the kill log: %s", row["path"], exc)
-                game = {"kill_rows": []}
-            self.db.add_kills(state.config.id, game["kill_rows"], row["folder"])
-        # And where each of those kills happened, for games read before places were kept.
-        for row in self.db.unread_place_games(state.config.id):
-            try:
-                info = Path(row["path"]).stat()
-                game = await asyncio.to_thread(archive.read_game, row["path"], row["folder"], info.st_size,
-                                               info.st_mtime, ())
-            except (OSError, tarfile.TarError, EOFError) as exc:
-                log.warning("Couldn't read %s for kill places: %s", row["path"], exc)
-                game = {"kill_rows": []}
-            self.db.add_kills(state.config.id, game["kill_rows"], row["folder"])
-        # And who was on PC or console, with Steam IDs, in games saved before that was read.
-        for row in self.db.unread_platform_games(state.config.id):
-            try:
-                info = Path(row["path"]).stat()
-                game = await asyncio.to_thread(archive.read_game, row["path"], row["folder"], info.st_size,
-                                               info.st_mtime, ())
-            except (OSError, tarfile.TarError, EOFError) as exc:
-                log.warning("Couldn't read %s for platforms: %s", row["path"], exc)
-                game = {"platforms": []}
-            self.db.add_platforms(game["platforms"], state.config.id, row["folder"])
+                log.warning("Couldn't read %s again: %s", row["path"], exc)
+                game = {"players": [], "kill_rows": [], "platforms": []}
+            if row["no_scores"]:
+                self.db.add_game_players(state.config.id, row["folder"], row["started"], game["players"])
+            if row["no_kills"] or row["no_places"]:
+                self.db.add_kills(state.config.id, game["kill_rows"], row["folder"])
+            if row["no_platforms"]:
+                self.db.add_platforms(game["platforms"], state.config.id, row["folder"])
 
     def suspicious(self, state: ServerState, flag: dict):
         """Puts a flag in the live feed; a fresh one also goes to Discord, and a
@@ -721,8 +735,9 @@ class ServerManager:
         state.updated = now()
         for player in state.players:
             if player["identity"]:
-                self.db.saw_player(player["identity"], player["name"], state.config.id)
+                self.db.saw_player(player["identity"], player["name"], state.config.id, commit=False)
                 state.recent[player["identity"]] = (player["name"], now())
+        self.db.db.commit()
         state.recent = {i: seen for i, seen in state.recent.items() if now() - seen[1] <= 600}
         on = {p["identity"] or p["name"] for p in state.players}
         state.joined = {k: state.joined.get(k, now()) for k in on}

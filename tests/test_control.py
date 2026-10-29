@@ -109,7 +109,7 @@ class ControlPageTests(unittest.IsolatedAsyncioTestCase):
         self.db.add_kills("two", [(*old, 10.0, 20.0, 30.0, 40.0)], "logs_old")
         spot = self.db.map_kills("two", 0)[0]
         self.assertEqual((spot["victim_x"], spot["victim_y"], spot["killer_x"], spot["killer_y"]), (10.0, 20.0, 30.0, 40.0))
-        self.assertEqual(self.db.unread_place_games("two"), [])
+        self.assertIsNotNone(self.db.one("SELECT 1 FROM kill_places_read WHERE server = 'two' AND folder = 'logs_old'"))
 
     async def test_power_goes_through_amp_and_needs_permission(self):
         amp = mock.Mock()
