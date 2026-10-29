@@ -1162,12 +1162,17 @@ class OYB_ArsenalSettings
 
 		array<int> players = {};
 		GetGame().GetPlayerManager().GetPlayers(players);
+		int sent = 0;
 		foreach (int playerId : players)
 		{
 			SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerManager().GetPlayerController(playerId));
 			if (controller)
+			{
 				controller.OYB_SendSettings();
+				sent++;
+			}
 		}
+		PrintFormat("OYB_ARSENAL settings sent to %1 players: %2 hidden, %3 priced, %4 added, %5 categorised, %6 sides, %7 renamed", sent, m_Hidden.Count(), m_Prices.Count(), m_Extras.Count(), m_Categories.Count(), m_Sides.Count(), m_Renames.Count());
 	}
 
 	// False when the file is there but can't be opened.

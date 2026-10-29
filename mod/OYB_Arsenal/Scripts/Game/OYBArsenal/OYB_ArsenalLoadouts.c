@@ -111,7 +111,6 @@ modded class SCR_PlayerController
 		OYB_ArsenalSettings.Get().GetNames(renameItems, renameNames);
 		Rpc(OYB_RpcDo_Names, renameItems, renameNames);
 		Rpc(OYB_RpcDo_Settings, hidden, priceItems, priceCosts, extraItems, extraCosts, extraMeta, categoryItems, categoryNames);
-		PrintFormat("OYB_ARSENAL settings sent: %1 hidden, %2 priced, %3 added, %4 categorised, %5 sides, %6 renamed", hidden.Count(), priceItems.Count(), extraItems.Count(), categoryItems.Count(), sideItems.Count(), renameItems.Count());
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
