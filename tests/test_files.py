@@ -1035,7 +1035,8 @@ class AmpStartTests(unittest.IsolatedAsyncioTestCase):
         amp = Amp("http://amp", "gaz", "pw")
         tries = {"n": 0}
 
-        async def instance(http, inst):
+        async def instance(http, inst, fresh=False):
+            self.assertTrue(fresh)
             tries["n"] += 1
             if tries["n"] < 3:
                 raise AmpError("Couldn't reach AMP at http://127.0.0.1:8080: Cannot connect to host 127.0.0.1:8084")
