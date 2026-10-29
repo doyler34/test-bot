@@ -422,7 +422,7 @@ def save_arsenal_settings(base, hidden, prices, extras=None, moved=None, sides=N
             "renameItems": sorted(renames or {}), "renameNames": [renames[prefab] for prefab in sorted(renames or {})],
             "refundCap": refund_cap,
             "refundItems": sorted(refunds or {}), "refundCosts": [refunds[prefab] for prefab in sorted(refunds or {})]}
-    write_text(folder / "settings.json", json.dumps(data, indent=1) + "\n")
+    write_whole(folder / "settings.json", json.dumps(data, indent=1) + "\n")
 
 
 VEHICLE_FOLDER = "OYB_Core"

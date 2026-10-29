@@ -78,6 +78,11 @@ below. Ownership: `NOTICE.md`.
   without a restart. Hidden items drop out of every arsenal and the server
   refuses them, even in a saved kit; a changed price is what the arsenal
   charges, refunds, shows on the item card and charges for a kit.
+  A `settings.json` that can't be read, isn't valid JSON or has lists that
+  don't pair up is refused and logged (`OYB_ARSENAL … refused (…), keeping
+  the settings in force`), and the last good settings stay; the panel writes
+  the file whole, by replacing it. An arsenal the game has switched off
+  offers no added items either, and the server refuses them there.
 - **Reorganising from the panel**: any item can be moved to another
   category from the Arsenal tab, one at a time or everything a filter shows
   at once; moving it back to its own category clears the change. Players see

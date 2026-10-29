@@ -663,6 +663,9 @@ class OYB_ArsenalSettings
 	protected int m_iRefundCap = DEFAULT_REFUND_CAP;
 	protected ref map<ResourceName, int> m_Refunds = new map<ResourceName, int>();
 	protected string m_sLoadedText;
+	protected string m_sRefusedText;
+	protected bool m_bHaveSettings;
+	protected bool m_bUnreadableLogged;
 	protected bool m_bServerStarted;
 
 	// The item list being put together for items.json.
@@ -798,6 +801,11 @@ class OYB_ArsenalSettings
 	void GetExtrasFor(SCR_ArsenalComponent arsenal, notnull array<ResourceName> extras)
 	{
 		if ((m_aExtraOrder.IsEmpty() && m_Sides.IsEmpty()) || !arsenal)
+			return;
+
+		// The game switches an arsenal off by clearing its item modes; an arsenal
+		// that's off offers nothing, added items included.
+		if (!arsenal.IsArsenalEnabled() || arsenal.GetSupportedArsenalItemModes() == 0)
 			return;
 
 		string factionKey;
@@ -1040,15 +1048,29 @@ class OYB_ArsenalSettings
 		StartScan();
 	}
 
-	// Reads settings.json, and only when its text changed applies it and sends it
-	// to the players, once each. Reading a small local file once a minute costs
-	// nothing on the network.
+	// Reads settings.json, and only when its text changed and is valid applies it
+	// and sends it to the players, once each. A file that can't be read, isn't
+	// valid JSON or has lists that don't pair up (one half-written, say) is
+	// refused and logged, and the settings in force stay. No file at all is a
+	// server without settings yet. Reading a small local file once a minute
+	// costs nothing on the network.
 	protected void Reload()
 	{
-		string text = ReadFile(SETTINGS_FILE);
-		if (text == m_sLoadedText)
+		bool exists;
+		string text;
+		if (!ReadFile(SETTINGS_FILE, exists, text))
+		{
+			if (!m_bUnreadableLogged)
+				PrintFormat("OYB_ARSENAL %1 couldn't be read, keeping the settings in force", SETTINGS_FILE, level: LogLevel.WARNING);
+			m_bUnreadableLogged = true;
 			return;
-		m_sLoadedText = text;
+		}
+		m_bUnreadableLogged = false;
+
+		if (m_bHaveSettings && text == m_sLoadedText)
+			return;
+		if (!text.IsEmpty() && text == m_sRefusedText)
+			return;
 
 		array<string> hidden = {};
 		array<string> priceItems = {};
@@ -1066,10 +1088,17 @@ class OYB_ArsenalSettings
 		int refundCap = DEFAULT_REFUND_CAP;
 		array<string> refundItems = {};
 		array<int> refundCosts = {};
-		if (!text.IsEmpty())
+		if (exists)
 		{
+			string trimmed = text.Trim();
+			string error;
 			JsonLoadContext context = new JsonLoadContext();
-			if (context.LoadFromString(text))
+			if (trimmed.IsEmpty())
+				error = "empty file";
+			else if (!context.LoadFromString(text))
+				error = "not valid JSON";
+
+			if (error.IsEmpty())
 			{
 				context.ReadValue("hidden", hidden);
 				context.ReadValue("priceItems", priceItems);
@@ -1088,12 +1117,32 @@ class OYB_ArsenalSettings
 				context.ReadValue("refundCosts", refundCosts);
 				if (!context.ReadValue("refundCap", refundCap) || refundCap < 0)
 					refundCap = DEFAULT_REFUND_CAP;
+
+				if (priceItems.Count() != priceCosts.Count())
+					error = "priceItems and priceCosts differ in length";
+				else if (extraItems.Count() != extraCosts.Count() || extraItems.Count() != extraFactions.Count() || extraItems.Count() != extraCategories.Count())
+					error = "the extra item lists differ in length";
+				else if (categoryItems.Count() != categoryNames.Count())
+					error = "categoryItems and categoryNames differ in length";
+				else if (sideItems.Count() != sideFactions.Count())
+					error = "sideItems and sideFactions differ in length";
+				else if (renameItems.Count() != renameNames.Count())
+					error = "renameItems and renameNames differ in length";
+				else if (refundItems.Count() != refundCosts.Count())
+					error = "refundItems and refundCosts differ in length";
 			}
-			else
+
+			if (!error.IsEmpty())
 			{
-				PrintFormat("OYB_ARSENAL %1 isn't valid JSON, keeping no hidden, priced or added items", SETTINGS_FILE, level: LogLevel.WARNING);
+				m_sRefusedText = text;
+				PrintFormat("OYB_ARSENAL %1 refused (%2), keeping the settings in force", SETTINGS_FILE, error, level: LogLevel.WARNING);
+				return;
 			}
 		}
+
+		m_bHaveSettings = true;
+		m_sLoadedText = text;
+		m_sRefusedText = string.Empty;
 
 		array<string> extraMeta = {};
 		for (int m = 0; m < Math.Min(extraFactions.Count(), extraCategories.Count()); m++)
@@ -1121,21 +1170,23 @@ class OYB_ArsenalSettings
 		}
 	}
 
-	protected string ReadFile(string path)
+	// False when the file is there but can't be opened.
+	protected static bool ReadFile(string path, out bool exists, out string text)
 	{
-		if (!FileIO.FileExists(path))
-			return string.Empty;
+		text = string.Empty;
+		exists = FileIO.FileExists(path);
+		if (!exists)
+			return true;
 
 		FileHandle file = FileIO.OpenFile(path, FileMode.READ);
 		if (!file)
-			return string.Empty;
+			return false;
 
-		string text;
 		string line;
 		while (file.ReadLine(line) >= 0)
 			text += line + "\n";
 		file.Close();
-		return text;
+		return true;
 	}
 
 	// Every item any faction's arsenal can offer in this game mode. Hidden items
