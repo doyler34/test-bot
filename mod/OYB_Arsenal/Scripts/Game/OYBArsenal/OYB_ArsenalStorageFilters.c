@@ -19,6 +19,16 @@ modded class SCR_InventoryStorageBaseUI
 	// where you were.
 	protected static ref map<int, int> s_mOYB_CategoryPages = new map<int, int>();
 
+	protected static int s_iOYB_NextPanelId;
+	protected int m_iOYB_PanelId;
+	protected bool m_bOYB_Detached;
+	protected bool m_bOYB_Building;
+	protected bool m_bOYB_FilterVisible;
+	protected Widget m_wOYB_GridRow;
+	protected int m_iOYB_GridZOrder;
+	protected ref array<SCR_InputButtonComponent> m_aOYB_NavButtons = {};
+	protected ref array<SCR_ButtonTextComponent> m_aOYB_SwitchButtons = {};
+
 	protected Widget m_wOYB_FilterBar;
 	protected Widget m_wOYB_CategoryColumn;
 	protected Widget m_wOYB_LoadoutRow;
@@ -49,10 +59,6 @@ modded class SCR_InventoryStorageBaseUI
 
 	protected void OYB_FilterArsenalItems(notnull array<IEntity> pItemsInStorage, BaseInventoryStorageComponent pStorage)
 	{
-		// A refresh lists other storages too, so whether the bar shows depends on
-		// what the panel is showing, not on which list this happens to be.
-		OYB_UpdateFilterBarVisibility();
-
 		SCR_ArsenalComponent listed = OYB_GetArsenal(pStorage);
 		if (!listed)
 			return;
@@ -290,15 +296,63 @@ modded class SCR_InventoryStorageBaseUI
 	//------------------------------------------------------------------------------------------------
 	// Filter bar
 
+	// Build only after vanilla has initialised/filled the panel, never while
+	// GetAllItems is traversing storages (including unrelated nested storages).
+	override void HandlerAttached(Widget w)
+	{
+		m_bOYB_Detached = false;
+		s_iOYB_NextPanelId++;
+		m_iOYB_PanelId = s_iOYB_NextPanelId;
+		PrintFormat("OYB_ARSENAL UI panel=%1 attached type=%2", m_iOYB_PanelId, Type());
+		super.HandlerAttached(w);
+		OYB_UpdateFilterBarVisibility();
+	}
+
+	override protected void FillItemsFromStorage(BaseInventoryStorageComponent storage)
+	{
+		super.FillItemsFromStorage(storage);
+		OYB_UpdateFilterBarVisibility();
+	}
+
+	override void Refresh()
+	{
+		if (m_bOYB_Detached)
+			return;
+		super.Refresh();
+		OYB_UpdateFilterBarVisibility();
+	}
+
+	override void Home()
+	{
+		super.Home();
+		OYB_UpdateFilterBarVisibility();
+	}
+
 	protected void OYB_UpdateFilterBarVisibility()
 	{
-		OYB_ShowFilterBar(OYB_GetArsenal(GetCurrentNavigationStorage()) != null);
+		if (m_bOYB_Detached || m_bOYB_Building || !m_widget)
+			return;
+
+		m_OYB_Arsenal = OYB_GetArsenal(GetCurrentNavigationStorage());
+		OYB_ShowFilterBar(m_OYB_Arsenal != null);
+		if (m_OYB_Arsenal)
+			OYB_UpdateCategoryText();
 	}
 
 	protected void OYB_ShowFilterBar(bool show)
 	{
 		if (show && !m_wOYB_FilterBar)
+		{
+			m_bOYB_Building = true;
 			OYB_BuildFilterBar();
+			m_bOYB_Building = false;
+		}
+
+		if (show != m_bOYB_FilterVisible)
+		{
+			m_bOYB_FilterVisible = show;
+			PrintFormat("OYB_ARSENAL UI panel=%1 visible=%2", m_iOYB_PanelId, show);
+		}
 
 		if (m_wOYB_FilterBar)
 			m_wOYB_FilterBar.SetVisible(show);
@@ -332,7 +386,7 @@ modded class SCR_InventoryStorageBaseUI
 		AlignableSlot.SetPadding(bar, 0, 4, 0, 4);
 		OYB_MoveBefore(bar, m_wGrid);
 		m_wOYB_FilterBar = bar;
-		PrintFormat("OYB_ARSENAL filter bar added above %1 in %2", m_wGrid.GetName(), m_wGrid.GetParent().GetName());
+		PrintFormat("OYB_ARSENAL UI panel=%1 built grid=%2 parent=%3", m_iOYB_PanelId, m_wGrid.GetName(), m_wGrid.GetParent().GetName());
 
 		if (m_wStorageName && Type() == SCR_InventoryOpenedStorageArsenalUI)
 			m_wStorageName.SetText("OYB Arsenal");
@@ -474,41 +528,120 @@ modded class SCR_InventoryStorageBaseUI
 		}
 	}
 
-	// When the game closes the panel it takes the handler off, then the panel
-	// out of the menu. Anything still holding a widget of it then keeps that
-	// part alive outside the menu, where it stays on screen, so everything OYB
-	// holds is let go and what it added is removed first.
+	// Disconnect listeners before removing their widgets. Restore the vanilla
+	// grid before deleting the wrapper so super can still delete item slots.
 	override event void HandlerDeattached(Widget w)
 	{
-		SCR_PlayerController.OYB_GetOnLoadoutNames().Remove(OYB_UpdateLoadoutText);
+		m_bOYB_Detached = true;
+		PrintFormat("OYB_ARSENAL UI panel=%1 detach begin titles=%2 wrapped=%3", m_iOYB_PanelId, m_aTraverseTitle.Count(), m_wOYB_GridRow != null);
 		OYB_RemoveAdded();
+
+		// Vanilla keeps strong references to traverse-title widgets in this
+		// array. Release them explicitly even if their original host is gone.
+		// This covers retained traverse headers as well as OYB's added controls.
+		foreach (Widget title : m_aTraverseTitle)
+		{
+			if (!title)
+				continue;
+			title.SetVisible(false);
+			title.RemoveFromHierarchy();
+		}
+		m_aTraverseTitle.Clear();
+		m_wLastCloseTraverseButton = null;
+
 		super.HandlerDeattached(w);
+		PrintFormat("OYB_ARSENAL UI panel=%1 detach complete titles=%2", m_iOYB_PanelId, m_aTraverseTitle.Count());
 	}
 
 	protected void OYB_RemoveAdded()
 	{
-		m_aOYB_CategoryButtons.Clear();
-		m_aOYB_CategoryCountTexts.Clear();
-		m_aOYB_CategoryAccents.Clear();
+		SCR_PlayerController.OYB_GetOnLoadoutNames().Remove(OYB_UpdateLoadoutText);
 
+		foreach (SCR_InputButtonComponent nav : m_aOYB_NavButtons)
+		{
+			if (!nav)
+				continue;
+			nav.m_OnActivated.Remove(OYB_OnNextCategory);
+			nav.m_OnActivated.Remove(OYB_OnWeaponKey);
+			nav.m_OnActivated.Remove(OYB_OnSaveKey);
+			nav.m_OnActivated.Remove(OYB_OnLoadKey);
+		}
+		foreach (SCR_ButtonTextComponent arrow : m_aOYB_SwitchButtons)
+		{
+			if (!arrow)
+				continue;
+			arrow.m_OnClicked.Remove(OYB_OnPreviousWeapon);
+			arrow.m_OnClicked.Remove(OYB_OnNextWeapon);
+			arrow.m_OnClicked.Remove(OYB_OnPreviousLoadoutSlot);
+			arrow.m_OnClicked.Remove(OYB_OnNextLoadoutSlot);
+		}
+		foreach (SCR_ButtonTextComponent category : m_aOYB_CategoryButtons)
+		{
+			if (category)
+				category.m_OnClicked.Remove(OYB_OnCategoryClicked);
+		}
 		if (m_OYB_Search)
 		{
 			m_OYB_Search.m_OnConfirm.Remove(OYB_OnSearchConfirmed);
 			m_OYB_Search.m_OnWriteModeLeave.Remove(OYB_OnSearchLeft);
 		}
 
-		if (m_wOYB_FilterBar)
-			m_wOYB_FilterBar.RemoveFromHierarchy();
-		if (m_wOYB_LoadoutRow)
-			m_wOYB_LoadoutRow.RemoveFromHierarchy();
-
-		m_wOYB_FilterBar = null;
-		m_wOYB_CategoryColumn = null;
-		m_wOYB_LoadoutRow = null;
+		m_aOYB_NavButtons.Clear();
+		m_aOYB_SwitchButtons.Clear();
+		m_aOYB_CategoryButtons.Clear();
+		m_aOYB_CategoryCountTexts.Clear();
+		m_aOYB_CategoryAccents.Clear();
 		m_wOYB_WeaponText = null;
 		m_wOYB_LoadoutText = null;
 		m_OYB_WeaponKey = null;
 		m_OYB_Search = null;
+		m_wOYB_CategoryColumn = null;
+
+		if (m_wOYB_GridRow)
+		{
+			Widget row = m_wOYB_GridRow;
+			Widget container = row.GetParent();
+			Widget grid = m_wGrid;
+			if (grid && grid.GetParent() == row)
+			{
+				if (container)
+				{
+					row.RemoveChild(grid);
+					container.AddChild(grid);
+					OYB_MoveBefore(grid, row);
+					grid.SetZOrder(m_iOYB_GridZOrder);
+				}
+				else
+				{
+					// Detached host: hide it before releasing the wrapper.
+					row.SetVisible(false);
+					PrintFormat("OYB_ARSENAL UI panel=%1 cleanup warning: grid wrapper has no parent", m_iOYB_PanelId);
+				}
+			}
+			row.SetVisible(false);
+			row.RemoveFromHierarchy();
+		}
+		m_wOYB_GridRow = null;
+
+		if (m_wOYB_FilterBar)
+		{
+			m_wOYB_FilterBar.SetVisible(false);
+			m_wOYB_FilterBar.RemoveFromHierarchy();
+		}
+		if (m_wOYB_LoadoutRow)
+		{
+			m_wOYB_LoadoutRow.SetVisible(false);
+			m_wOYB_LoadoutRow.RemoveFromHierarchy();
+		}
+		m_wOYB_FilterBar = null;
+		m_wOYB_LoadoutRow = null;
+		m_bOYB_FilterVisible = false;
+		m_OYB_Arsenal = null;
+		m_OYB_FitWeapon = null;
+		m_iOYB_FitParts = -1;
+		m_mOYB_Fits.Clear();
+		m_sOYB_WeaponName = string.Empty;
+		m_aOYB_CategoryCounts.Clear();
 	}
 
 	// V on keyboard (the game's MenuDelete, a click action). Space (MenuDeploy)
@@ -662,7 +795,10 @@ modded class SCR_InventoryStorageBaseUI
 		AlignableSlot.SetPadding(root, 0, 0, 6, 0);
 		SCR_ButtonTextComponent button = SCR_ButtonTextComponent.Cast(root.FindHandler(SCR_ButtonTextComponent));
 		if (button)
+		{
 			button.SetText(text);
+			m_aOYB_SwitchButtons.Insert(button);
+		}
 		return button;
 	}
 
@@ -677,6 +813,9 @@ modded class SCR_InventoryStorageBaseUI
 		if (!row)
 			return;
 		row.SetName("OYB_GridRow");
+		m_wOYB_GridRow = row;
+		m_iOYB_GridZOrder = m_wGrid.GetZOrder();
+		row.SetZOrder(m_iOYB_GridZOrder);
 		OYB_MoveBefore(row, m_wGrid);
 		Widget column = workspace.CreateWidget(WidgetType.VerticalLayoutWidgetTypeID, WidgetFlags.VISIBLE, null, 0, row);
 		if (!column)
@@ -780,6 +919,7 @@ modded class SCR_InventoryStorageBaseUI
 		if (!button)
 			return null;
 
+		m_aOYB_NavButtons.Insert(button);
 		button.SetAction(action, forceUpdate: true);
 		button.SetLabel(label);
 		return button;
@@ -986,18 +1126,5 @@ modded class SCR_InventoryStorageBaseUI
 			child = child.GetSibling();
 		}
 		return null;
-	}
-}
-
-// The Vicinity panel lists what's around the player itself without going through
-// the base class, so the bar's visibility is checked here too.
-modded class SCR_InventoryStorageLootUI
-{
-	override protected void GetAllItems(out notnull array<IEntity> pItemsInStorage, BaseInventoryStorageComponent pStorage = null)
-	{
-		super.GetAllItems(pItemsInStorage, pStorage);
-
-		if (!pStorage)
-			OYB_UpdateFilterBarVisibility();
 	}
 }
