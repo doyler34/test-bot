@@ -64,12 +64,20 @@ for (const card of document.querySelectorAll("[data-joiners]")) {
     const { amount, unit, pc, steam } = form.elements;
     try { localStorage.setItem("joiners", JSON.stringify({ amount: amount.value, unit: unit.value, pc: pc.checked, steam: steam.checked })); } catch (err) {}
   };
+  const empty = body.innerHTML;
+  const close = form.querySelector("[data-close]");
   form.addEventListener("change", remember);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     remember();
     body.dataset.refresh = `${body.dataset.base}?${query()}&run=1`;
     await refresh(body);
+    close.hidden = false;
+  });
+  close.addEventListener("click", () => {
+    delete body.dataset.refresh;
+    body.innerHTML = empty;
+    close.hidden = true;
   });
 }
 

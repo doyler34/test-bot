@@ -2935,6 +2935,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(page.count('data-base="/server/server-1/joiners.part"'), 2)
         self.assertIn('class="joins-tools"', page)
         self.assertNotIn('data-refresh="/server/server-1/joiners.part"', page)
+        self.assertIn("data-close hidden", page)
         part = await (await self.client.get("/server/server-1/joiners.part?mins=30&steam=0")).text()
         self.assertIn("Fresh_Face", part)
         self.assertIn("Regular", part)
