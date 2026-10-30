@@ -765,6 +765,11 @@ class MassTeamkillTests(unittest.TestCase):
         self.assertIn("**Buford** teamkilled 3 players in 2 seconds: A, B, C.", alert["text"])
         self.assertEqual([r for r in self.db.feed("one") if r["kind"] == "sus"], [])
 
+    def test_crashes_do_not_make_a_staff_alert(self):
+        crashes = [dict(e, damage="COLLISION") for e in self.teamkills("A", "B", "C", "D")]
+        self.assertEqual(self.manager.mass_teamkills(self.manager.states["one"], crashes), [])
+        self.assertEqual(self.db.staff_alerts(), [])
+
     def test_mine_spam_goes_to_the_staff_channel_once(self):
         at = now()
         events = [{"kind": "kill", "at": at + n, "relation": "ENEMY", "killer": BUFORD, "killer_name": "Buford",
@@ -902,6 +907,15 @@ class AutoPunishTests(unittest.IsolatedAsyncioTestCase):
         await self.teamkill(4)
         self.assertEqual(self.kicked, ["7"])
         self.assertEqual([a["title"] for a in self.db.staff_alerts()], ["Auto-kicked on Server 1"])
+
+    async def test_crashes_never_punish(self):
+        self.settings(tk_kick=2)
+        for n in range(5):
+            event = {"kind": "teamkill", "at": now(), "killer": BUFORD, "killer_name": "Buford",
+                     "victim_name": f"V{n}", "damage": "COLLISION"}
+            self.assertEqual(self.manager.mass_teamkills(self.state, [event]), [])
+        self.assertEqual(self.kicked, [])
+        self.assertEqual(self.db.staff_alerts(), [])
 
     async def test_old_log_lines_never_punish(self):
         self.settings(tk_kick=2)

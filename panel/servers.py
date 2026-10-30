@@ -21,7 +21,7 @@ from bot.discord import welcome_doc
 from bot.discord.ban_roles import length_text
 from .suspicion import DEFAULTS, Detector, check_settings
 from .resend_watch import ResendWatch
-from .tk_burst import TkBurst
+from .tk_burst import IGNORED_DAMAGE, TkBurst
 
 PLAYER_ROW = re.compile(r"\d+\s*;\s*[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}\s*;")
 
@@ -457,6 +457,8 @@ class ServerManager:
             return []
         actions = []
         for event in events:
+            if event.get("damage") in IGNORED_DAMAGE:
+                continue
             burst = state.tk_burst.feed(event, settings["count"] if settings["on"] else 0, settings["seconds"], now())
             if burst:
                 victims = ", ".join(burst["victims"])

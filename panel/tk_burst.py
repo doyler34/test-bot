@@ -4,6 +4,8 @@ from collections import defaultdict, deque
 
 COOLDOWN = 300
 FRESH = 300
+# A crash is credited to whoever last damaged the vehicle, so it says nothing about who killed.
+IGNORED_DAMAGE = {"COLLISION"}
 
 
 class TkBurst:
@@ -18,6 +20,8 @@ class TkBurst:
         """An alert for this teamkill if it makes `count` within `seconds`, else None.
         A count of 0 only keeps track, for the automatic kick and ban."""
         if event.get("kind") != "teamkill" or not event.get("killer") or now - event["at"] > FRESH:
+            return None
+        if event.get("damage") in IGNORED_DAMAGE:
             return None
         killer, at = event["killer"], event["at"]
         kills = self.recent[killer]

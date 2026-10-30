@@ -33,6 +33,17 @@ class TkBurstTests(unittest.TestCase):
         for at in (1000, 1001, 1002):
             self.assertIsNone(burst.feed(dict(tk(at), kind="kill"), 3, 60, at))
 
+    def test_crashes_do_not_count(self):
+        burst = TkBurst()
+        for at in (1000, 1001, 1002):
+            self.assertIsNone(burst.feed(dict(tk(at), damage="COLLISION"), 3, 60, at))
+        self.assertEqual(burst.in_window(ROOK), 0)
+        self.assertIsNone(burst.feed(dict(tk(1010, "A"), damage="KINETIC"), 3, 60, 1010))
+        self.assertIsNone(burst.feed(dict(tk(1011, "B"), damage="COLLISION"), 3, 60, 1011))
+        self.assertIsNone(burst.feed(dict(tk(1012, "C"), damage="KINETIC"), 3, 60, 1012))
+        alert = burst.feed(dict(tk(1013, "D"), damage="KINETIC"), 3, 60, 1013)
+        self.assertEqual(alert["victims"], ["A", "C", "D"])
+
     def test_alerts_again_after_the_cooldown(self):
         burst = TkBurst()
         for at in (1000, 1001, 1002):
