@@ -213,6 +213,12 @@ body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(
 .joiner-options input[type=number], .joiner-options select { width: auto; margin: 0 0 0 4px; padding: 3px 8px; font-size: .85rem; min-height: 0; }
 .joiner-options input[type=number] { width: 4.5em; }
 .joiner-options .check { margin: 0; }
+.joiner-options label.window { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.joiner-options label.window input, .joiner-options label.window select { margin: 0; }
+.auto-action { display: flex; flex-direction: column; gap: 6px; }
+.auto-action label { margin: 0; }
+.auto-action label:not(.check) { display: flex; align-items: center; gap: 8px; }
+.auto-action input[type=number] { width: 6em; }
 .joins-tools { display: none; margin: 10px 0; }
 [data-filter="joins"] .joins-tools { display: block; }
 .joiner-results { max-height: 20rem; overflow: auto; margin-top: 8px; }
