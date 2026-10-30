@@ -2914,13 +2914,14 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(found, sorted(names, key=str.lower))
 
     async def test_live_feed(self):
+        self.db.add_feed("server-1", "side", "GazLagom joined US")
         self.db.add_feed("server-1", "kill", "GazLagom killed Sgt_Burd (120 m)")
         self.fake.say("Something from the server")
         await asyncio.sleep(0.1)
         await self.login("boss", "boss-password")
         html = await (await self.client.get("/server/server-1")).text()
         self.assertIn("Live feed", html)
-        self.assertIn("GazLagom killed Sgt_Burd (120 m)", html)
+        self.assertIn('side-us" title="US">US</i>GazLagom killed <i class="side side-none" title="No side picked">?</i>Sgt_Burd (120 m)', html)
         part = await (await self.client.get("/server/server-1/feed.part")).text()
         self.assertIn("Something from the server", part)
         self.assertNotIn("Logged In!", part)

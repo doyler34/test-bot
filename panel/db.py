@@ -4,8 +4,12 @@ import sqlite3
 import time
 from pathlib import Path
 
+from panel.feedsides import feed_parts, sides_from
+
 FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"), "tks": ("teamkill",), "sus": ("sus",),
               "rcon": ("rcon", "server"), "admin": ()}
+# The rows that name a player, so the ones that get a side chip beside the name.
+MARKED_KINDS = ("join", "leave", "side", "kill", "teamkill")
 
 # Columns added after their table first shipped: older databases get them on start.
 ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("notes", "edited_by", "TEXT"), ("notes", "edited_at", "INTEGER"), ("warnings", "used_ban", "INTEGER"), ("warnings", "edited_by", "TEXT"), ("warnings", "edited_at", "INTEGER"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
@@ -795,8 +799,15 @@ class PanelDB:
             parts, args = [events], [server, *kinds, limit]
         else:
             parts, args = [events, actions], [server, limit, server, limit]
-        return self.all(f"SELECT at, kind, text, ip FROM ({' UNION ALL '.join(parts)})"
+        rows = self.all(f"SELECT at, kind, text, ip FROM ({' UNION ALL '.join(parts)})"
                         " ORDER BY at DESC, src, id DESC LIMIT ?", *args, limit)
+        sides = self.sides(server) if any(r["kind"] in MARKED_KINDS for r in rows) else {}
+        return [{**row, "parts": feed_parts(row["kind"], row["text"], sides)} for row in map(dict, rows)]
+
+    def sides(self, server):
+        """The side each player last picked on this server, from the feed's join rows."""
+        return sides_from(r["text"] for r in self.all(
+            "SELECT text FROM feed WHERE server = ? AND kind = 'side' ORDER BY at DESC, id DESC LIMIT 500", server))
 
     def prune_feed(self, days=7, sus_days=180):
         self.write("DELETE FROM feed WHERE at < ? AND (kind != 'sus' OR at < ?)",
