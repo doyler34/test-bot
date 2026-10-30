@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS player_names (
     last_seen INTEGER NOT NULL,
     PRIMARY KEY (identity, name)
 );
+CREATE INDEX IF NOT EXISTS player_names_name ON player_names(name);
 CREATE TABLE IF NOT EXISTS server_events (
     id INTEGER PRIMARY KEY,
     server TEXT NOT NULL,
@@ -808,7 +809,22 @@ class PanelDB:
         rows = self.all(f"SELECT at, kind, text, ip FROM ({' UNION ALL '.join(parts)})"
                         " ORDER BY at DESC, src, id DESC LIMIT ?", *args, limit)
         sides = self.sides(server) if any(r["kind"] in MARKED_KINDS for r in rows) else {}
-        return [{**row, "parts": feed_parts(row["kind"], row["text"], sides)} for row in map(dict, rows)]
+        shown = [{**row, "parts": feed_parts(row["kind"], row["text"], sides)} for row in map(dict, rows)]
+        ids = self.identities({name for row in shown for chip, name in row["parts"] if chip})
+        for row in shown:
+            row["ids"] = ids
+        return shown
+
+    def identities(self, names):
+        """Who each name belongs to, so a name in the feed can link to its player. Where several players
+        have used a name, the newest one."""
+        found, names = {}, list(names)
+        for start in range(0, len(names), 500):
+            chunk = names[start:start + 500]
+            for r in self.all(f"SELECT name, identity FROM player_names WHERE name IN ({','.join('?' * len(chunk))})"
+                              " ORDER BY last_seen", *chunk):
+                found[r["name"]] = r["identity"]
+        return found
 
     def sides(self, server):
         """The side each player last picked on this server, from the feed's join rows."""

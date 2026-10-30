@@ -2978,6 +2978,17 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             await self.client.get("/server/server-1/joiners.part?steam=1")
             refresh.assert_awaited_once()
 
+    async def test_feed_names_link_to_their_player_and_the_overview_can_go_full_screen(self):
+        self.db.saw_player("id-gaz", "GazLagom", "server-1")
+        self.db.add_feed("server-1", "kill", "GazLagom killed Sgt_Burd (120 m)")
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/server/server-1")).text()
+        self.assertIn('<a href="/player/id-gaz">GazLagom</a> killed', page)
+        self.assertNotIn('/player/id-gaz">Sgt_Burd', page)
+        self.assertIn('class="ctl-panel" data-expand', page)
+        part = await (await self.client.get("/server/server-1/feed.part")).text()
+        self.assertIn('<a href="/player/id-gaz">GazLagom</a>', part)
+
     async def test_feed_filter_reaches_past_a_busy_minute(self):
         self.db.add_feed("server-1", "sus", "Hubcaps got 7 kills in 30 seconds", at=1000)
         self.db.log("boss", "kick", "server-1", "Hubcaps", "camping")

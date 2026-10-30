@@ -87,7 +87,7 @@ window.addEventListener("hashchange", catchUp);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) catchUp(); });
 
 function closeFull() {
-  for (const open of document.querySelectorAll(".pane.full, .card.full")) open.classList.remove("full");
+  for (const open of document.querySelectorAll(".pane.full, .card.full, .ctl-panel.full")) open.classList.remove("full");
   document.body.classList.remove("has-full");
 }
 
@@ -116,7 +116,7 @@ for (const pane of document.querySelectorAll("[data-expand]")) {
 // back button all leave full screen, so the page never stays locked.
 document.addEventListener("click", (event) => {
   if (!document.body.classList.contains("has-full")) return;
-  if (event.target.closest(".pane.full, .card.full")) return;
+  if (event.target.closest(".pane.full, .card.full, .ctl-panel.full")) return;
   closeFull();
 });
 document.addEventListener("keydown", (event) => {

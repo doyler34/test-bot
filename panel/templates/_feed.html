@@ -4,7 +4,7 @@
   <li class="k-{{ f.kind }}">
     <time title="{{ f.at|ts }}">{{ f.at|clock }}</time>
     <b>{{ {"join": "Join", "leave": "Leave", "side": "Side", "kill": "Kill", "teamkill": "TK", "admin": "Admin", "rcon": "RCON", "server": "Server", "sus": "Sus"}.get(f.kind, f.kind) }}</b>
-    <span>{% for chip, piece in f.parts or [("", f.text)] %}{% if chip %}<i class="sidetag sidetag-{{ chip }}" title="{{ {"us": "US", "ussr": "Russian", "fia": "FIA", "none": "No side picked"}[chip] }}">{{ {"us": "US", "ussr": "RU", "fia": "FIA", "none": "?"}[chip] }}</i>{% endif %}{{ piece }}{% endfor %}{% if f.ip and can("ips") %} <span class="muted mono">{{ f.ip }}</span>{% endif %}</span>
+    <span>{% for chip, piece in f.parts or [("", f.text)] %}{% if chip %}<i class="sidetag sidetag-{{ chip }}" title="{{ {"us": "US", "ussr": "Russian", "fia": "FIA", "none": "No side picked"}[chip] }}">{{ {"us": "US", "ussr": "RU", "fia": "FIA", "none": "?"}[chip] }}</i>{% set who = f.ids.get(piece) if f.ids else none %}{% if who %}<a href="/player/{{ who }}">{{ piece }}</a>{% else %}{{ piece }}{% endif %}{% else %}{{ piece }}{% endif %}{% endfor %}{% if f.ip and can("ips") %} <span class="muted mono">{{ f.ip }}</span>{% endif %}</span>
   </li>
   {% endfor %}
 </ul>

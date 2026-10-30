@@ -64,6 +64,16 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(rows["rcon"]["parts"], [("", "hello")])
         self.assertEqual(rows["kill"]["text"], "Ann killed Bob (10 m)")
 
+    def test_feed_rows_know_who_each_name_is(self):
+        db = PanelDB(":memory:")
+        db.saw_player("id-ann", "Ann", "one", at=100)
+        db.saw_player("id-old", "Twin", "one", at=100)
+        db.saw_player("id-new", "Twin", "one", at=200)
+        db.add_feed("one", "kill", "Ann killed Twin (10 m)", at=300)
+        db.add_feed("one", "kill", "AI killed Nobody (5 m)", at=301)
+        for row in db.feed("one"):
+            self.assertEqual(row["ids"], {"Ann": "id-ann", "Twin": "id-new"})
+
 
 if __name__ == "__main__":
     unittest.main()

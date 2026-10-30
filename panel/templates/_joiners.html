@@ -3,7 +3,7 @@
   {%- if steam_wait %} · Steam is limiting lookups, trying again in {{ (steam_wait / 60)|round(0, "ceil")|int }} min{% endif %}</p>
 {% if joiners %}
 <div class="scroll"><table class="players-table">
-  <thead><tr><th>Name</th><th>Joined</th><th>Account</th></tr></thead>
+  <thead><tr><th>Name</th><th>Joined</th></tr></thead>
   <tbody>
   {% for j in joiners %}
   <tr{% if j.watch %} class="watch"{% endif %}>
@@ -14,8 +14,8 @@
       {% if j.alts and j.alts.banned %}<span class="pill down" title="Shares an IP with {{ j.alts.banned|join(', ') }}">Banned alt</span>
       {% elif j.alts %}<span class="pill alt" title="{{ j.alts.count }} other account{{ 's' if j.alts.count > 1 }} from the same IP">{{ j.alts.count }} alt{{ 's' if j.alts.count > 1 }}</span>{% endif %}
     </td>
-    <td class="muted">{{ j.ago }}</td>
-    <td>{% if j.account and j.account.new %}<span class="pill down">{{ j.account.text }}</span>
+    <td class="joined"><span class="muted">{{ j.ago }}</span>
+      {% if j.account and j.account.new %}<span class="pill down">{{ j.account.text }}</span>
       {% elif j.account %}<span class="muted">{{ j.account.text }}</span>
       {% elif steam and j.platform %}<span class="muted">—</span>{% endif %}</td>
   </tr>
