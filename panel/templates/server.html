@@ -72,28 +72,10 @@
           {% endfor %}
         </div>
       </div>
+      {% include "_joiner_tools.html" %}
       <div class="body" data-refresh="/server/{{ s.id }}/feed.part" data-every="5000">
       {% include "_feed.html" %}
       </div>
-    </section>
-
-    <section class="card pane wide" data-joiners>
-      <div class="row">
-        <h2>New joiners</h2>
-        <form class="joiner-options">
-          <label>Joined in the last
-            <input type="number" name="amount" value="30" min="1" max="10080" inputmode="numeric" aria-label="How far back to look">
-            <select name="unit" aria-label="Minutes, hours or days">
-              <option value="1">minutes</option>
-              <option value="60">hours</option>
-              <option value="1440">days</option>
-            </select></label>
-          <label class="check"><input type="checkbox" name="pc" checked> PC only</label>
-          <label class="check"><input type="checkbox" name="steam"> Check Steam account age</label>
-          <button class="small">Run</button>
-        </form>
-      </div>
-      <div class="body" data-refresh="/server/{{ s.id }}/joiners.part" data-base="/server/{{ s.id }}/joiners.part" data-every="15000"></div>
     </section>
 
     <section class="card pane wide" data-expand>

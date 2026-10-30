@@ -14,7 +14,7 @@ document.addEventListener("change", (event) => {
 });
 
 async function refresh(box) {
-  const pane = box.closest("[data-filter]");
+  const pane = box.closest("[data-joiners]") ? null : box.closest("[data-filter]");
   const url = pane ? `${box.dataset.refresh}?show=${encodeURIComponent(pane.dataset.filter)}` : box.dataset.refresh;
   try {
     const response = await fetch(url, { credentials: "same-origin" });

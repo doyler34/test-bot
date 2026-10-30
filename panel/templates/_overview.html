@@ -72,6 +72,7 @@
           <button type="button" class="chip" data-show="{{ key }}">{{ label }}</button>
           {% endfor %}
         </div>
+        {% include "_joiner_tools.html" %}
         <div class="ctl-feed-body" data-refresh="/server/{{ s.id }}/feed.part" data-every="5000">
         {% with feed = live_feed, s = s %}{% include "_feed.html" %}{% endwith %}
         </div>
