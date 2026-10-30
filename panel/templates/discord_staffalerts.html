@@ -17,12 +17,18 @@
     <p class="muted">Each player is reported at most once every 5 minutes, so one rampage is one alert. It also shows as a Sus line in the live feed.</p>
     <h3>Automatic kick or ban</h3>
     <div class="grid">
-      <label>Kick at (teamkills) <input name="tk_kick" type="number" min="0" max="100" value="{{ doc.tk_kick or '' }}" placeholder="Off" inputmode="numeric"></label>
-      <label>Ban at (teamkills) <input name="tk_ban" type="number" min="0" max="100" value="{{ doc.tk_ban or '' }}" placeholder="Off" inputmode="numeric"></label>
+      <div class="auto-action" data-auto>
+        <label class="check"><input type="checkbox" name="tk_kick_on" {% if doc.tk_kick %}checked{% endif %}> Automatic kick</label>
+        <label>at <input name="tk_kick" type="number" min="2" max="100" value="{{ doc.tk_kick or '' }}" inputmode="numeric"> teamkills</label>
+      </div>
+      <div class="auto-action" data-auto>
+        <label class="check"><input type="checkbox" name="tk_ban_on" {% if doc.tk_ban %}checked{% endif %}> Automatic ban</label>
+        <label>at <input name="tk_ban" type="number" min="2" max="100" value="{{ doc.tk_ban or '' }}" inputmode="numeric"> teamkills</label>
+      </div>
       <label>Ban for
         <select name="tk_ban_length">{% for value, label in auto_lengths %}<option value="{{ value }}" {% if value == doc.tk_ban_length %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
     </div>
-    <p class="muted">Counted within the same number of seconds as above, even with the alert turned off. Leave blank for off. Admins are never kicked or banned automatically. Each one is posted in the staff channel, the live feed and the audit log.</p>
+    <p class="muted">Counted within the same number of seconds as above, even with the alert turned off. Switch one on to use it. Admins are never kicked or banned automatically. Each one is posted in the staff channel, the live feed and the audit log.</p>
   </section>
   <section class="card">
     <h2>AP mine spam</h2>
@@ -36,12 +42,18 @@
     <p class="muted">A game runs until the server restarts. The Sus line in the live feed keeps counting for the rest of the game either way.</p>
     <h3>Automatic kick or ban</h3>
     <div class="grid">
-      <label>Kick at (mine kills) <input name="mines_kick" type="number" min="0" max="100" value="{{ doc.mines_kick or '' }}" placeholder="Off" inputmode="numeric"></label>
-      <label>Ban at (mine kills) <input name="mines_ban" type="number" min="0" max="100" value="{{ doc.mines_ban or '' }}" placeholder="Off" inputmode="numeric"></label>
+      <div class="auto-action" data-auto>
+        <label class="check"><input type="checkbox" name="mines_kick_on" {% if doc.mines_kick %}checked{% endif %}> Automatic kick</label>
+        <label>at <input name="mines_kick" type="number" min="2" max="100" value="{{ doc.mines_kick or '' }}" inputmode="numeric"> mine kills</label>
+      </div>
+      <div class="auto-action" data-auto>
+        <label class="check"><input type="checkbox" name="mines_ban_on" {% if doc.mines_ban %}checked{% endif %}> Automatic ban</label>
+        <label>at <input name="mines_ban" type="number" min="2" max="100" value="{{ doc.mines_ban or '' }}" inputmode="numeric"> mine kills</label>
+      </div>
       <label>Ban for
         <select name="mines_ban_length">{% for value, label in auto_lengths %}<option value="{{ value }}" {% if value == doc.mines_ban_length %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
     </div>
-    <p class="muted">Counted over the whole game, like the alert, and can't be lower than the alert's count. A ban still happens if they've left, since their mines keep killing. Leave blank for off. Admins are never kicked or banned automatically. Each one is posted in the staff channel, the live feed and the audit log.</p>
+    <p class="muted">Counted over the whole game, like the alert, and can't be lower than the alert's count. A ban still happens if they've left, since their mines keep killing. Switch one on to use it. Admins are never kicked or banned automatically. Each one is posted in the staff channel, the live feed and the audit log.</p>
   </section>
   {% if recent %}
   <section class="card">

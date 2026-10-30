@@ -19,7 +19,7 @@
           {% endfor %}
         </select></label>
       <button class="small">Change channel</button>
-      <p class="muted">{% if now_name %}In #{{ now_name }} now. {% endif %}Picking one saves it straight away, apart from Publish below, and the bot moves there within a minute.</p>
+      <p class="muted">{% if now_name %}In #{{ now_name }} now. {% endif %}{% if page == "staffalerts" %}Picking one saves it straight away, and the bot moves there within a minute.{% else %}Picking one saves it straight away, apart from Publish below, and the bot moves there within a minute.{% endif %}</p>
     </form>
     {% endif %}
     {% if kind not in ("posts", "links") %}

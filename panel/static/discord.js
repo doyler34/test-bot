@@ -46,13 +46,30 @@ if (form && form.dataset.kind === "bans") bansEditor();
 if (form && form.dataset.kind === "matchping") matchPingEditor();
 if (form && form.dataset.kind === "weekly") weeklyEditor();
 if (form && form.dataset.kind === "staffalerts") {
+  const field = (name) => form.querySelector(`[name="${name}"]`);
+  // What a switch fills in when it's turned on with no number yet; the ban always sits above the kick.
+  const starting = {
+    tk_kick: () => 5, tk_ban: () => 8,
+    mines_kick: () => Number(field("mines").value) + 1, mines_ban: () => Number(field("mines").value) + 4,
+  };
+  for (const box of form.querySelectorAll("[data-auto]")) {
+    const toggle = box.querySelector('input[type="checkbox"]');
+    const number = box.querySelector('input[type="number"]');
+    const sync = () => {
+      number.disabled = !toggle.checked;
+      if (toggle.checked && !number.value) number.value = starting[number.name]();
+    };
+    toggle.addEventListener("change", sync);
+    sync();
+  }
+  // A switch that is off sends nothing, which the panel reads as off.
+  const auto = (name) => (field(`${name}_on`).checked ? field(name).value : "");
   form.addEventListener("submit", () => {
-    const field = (name) => form.querySelector(`[name="${name}"]`);
     document.getElementById("dc-doc").value = JSON.stringify({ on: field("on").checked, count: field("count").value,
       seconds: field("seconds").value, ping_role: field("ping_role").value,
       mines_on: field("mines_on").checked, mines: field("mines").value, mines_ping_role: field("mines_ping_role").value,
-      tk_kick: field("tk_kick").value, tk_ban: field("tk_ban").value, tk_ban_length: field("tk_ban_length").value,
-      mines_kick: field("mines_kick").value, mines_ban: field("mines_ban").value,
+      tk_kick: auto("tk_kick"), tk_ban: auto("tk_ban"), tk_ban_length: field("tk_ban_length").value,
+      mines_kick: auto("mines_kick"), mines_ban: auto("mines_ban"),
       mines_ban_length: field("mines_ban_length").value });
   });
 }

@@ -2317,7 +2317,11 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         page = await (await self.client.get("/discord/staffalerts")).text()
         self.assertIn("In use now", page)
         self.assertNotIn("hasn't reported in", page.split("In use now")[0].split("dc-status")[-1])
-        self.assertIn('name="tk_kick" type="number" min="0" max="100" value="5"', page)
+        self.assertIn('name="tk_kick" type="number" min="2" max="100" value="5"', page)
+        self.assertIn('name="tk_kick_on" checked', page)
+        self.assertIn('name="tk_ban_on" checked', page)
+        self.assertNotIn('name="mines_kick_on" checked', page)
+        self.assertIn('name="mines_ban_on" checked', page)
         self.assertIn('<option value="0" selected>Permanent</option>', page)
         await self.client.post("/discord/staffalerts", data={"csrf": token, "action": "publish",
             "doc": json.dumps({"on": True, "count": "3", "seconds": "60", "mines": "5", "tk_kick": "6", "tk_ban": "4",
