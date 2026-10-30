@@ -93,7 +93,7 @@ const BODY_SHAPES = {
 };
 const hitBody = (zone) => `<svg class="kill-body" viewBox="0 0 120 262" aria-hidden="true">${Object.entries(BODY_SHAPES)
   .map(([part, shape]) => shape.replace("/>", ` class="${ZONE_PART[zone] === part ? "hit" : ""}"/>`)).join("")}</svg>`;
-const RANGE_WORDS = { "30m": "last 30 min", "1h": "last hour", "6h": "last 6 hours", "24h": "last 24 hours",
+const RANGE_WORDS = { "game": "since this game started", "30m": "last 30 min", "1h": "last hour", "6h": "last 6 hours", "24h": "last 24 hours",
   "7d": "last 7 days", "30d": "last 30 days" };
 
 async function startMap(box) {
@@ -218,7 +218,7 @@ async function startMap(box) {
 
   async function load() {
     if (map.getContainer().querySelector(".leaflet-popup")) return;    // don't pull a popup out from under someone
-    const range = rangePick ? rangePick.value : "30m";
+    const range = rangePick ? rangePick.value : "game";
     const option = serverPick && serverPick.selectedOptions[0];
     const other = option && option.dataset.mapName && !option.dataset.mapName.toLowerCase().includes(MAP.name.toLowerCase());
     if (other) {
@@ -297,7 +297,7 @@ async function startMap(box) {
 
   load();
   setInterval(() => {
-    const range = rangePick ? rangePick.value : "30m";
-    if (!document.hidden && ["30m", "1h"].includes(range)) load();
+    const range = rangePick ? rangePick.value : "game";
+    if (!document.hidden && ["game", "30m", "1h"].includes(range)) load();
   }, 30000);
 }

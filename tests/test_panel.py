@@ -2913,6 +2913,29 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             self.manager.state("server-1").config.log_dir = str(logs)
             self.assertEqual(self.manager.config_admins(), {HAVOC})
 
+    async def test_the_kill_map_starts_clean_with_each_game(self):
+        def kill(at, victim):
+            return (1, at, "kill", "k-id", "Killer", f"v-{victim}", victim, "KINETIC", 50, "", 100.0, 200.0, 110.0, 210.0)
+        self.db.add_kills("server-1", [kill(now() - 3000, "Old"), kill(now() - 100, "New")])
+        await self.login("boss", "boss-password")
+
+        async def victims(query):
+            data = await (await self.client.get("/server/server-1/kills.json" + query)).json()
+            return sorted(k["victim"] for k in data["kills"])
+
+        with tempfile.TemporaryDirectory() as root:
+            started = time.strftime("logs_%Y-%m-%d_%H-%M-%S", time.localtime(now() - 600))
+            Path(root, started).mkdir()
+            self.manager.state("server-1").config.log_dir = root
+            self.assertEqual(await victims("?range=game"), ["New"])
+            self.assertEqual(await victims(""), ["New"])
+            self.assertEqual(await victims("?range=1h"), ["New", "Old"])
+            # A newer game's log folder starts the map afresh.
+            Path(root, time.strftime("logs_%Y-%m-%d_%H-%M-%S", time.localtime(now() - 50))).mkdir()
+            self.assertEqual(await victims("?range=game"), [])
+        self.manager.state("server-1").config.log_dir = ""
+        self.assertEqual(await victims("?range=game"), ["New"])
+
     async def test_only_owners_mark_admins(self):
         self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
         await self.login("adm", "adm-password")

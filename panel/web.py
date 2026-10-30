@@ -2157,9 +2157,19 @@ KILL_RANGES = {"30m": 1800, "1h": 3600, "6h": 6 * 3600, "24h": 86400, "7d": 7 * 
 KILL_MAP_LIMIT = 3000
 
 
+def game_start(state):
+    """When the game now running began: the newest log folder's start. None when there's no log to go by."""
+    if not state.config.log_dir:
+        return None
+    folders = LogReader(state.config.log_dir).folders()
+    return folder_start(folders[-1]) if folders else None
+
+
 async def control_kills(request):
     state = server_or_404(request, request.match_info["id"])
-    since = now() - KILL_RANGES.get(request.query.get("range", "30m"), 1800)
+    key = request.query.get("range", "game")
+    # "This game" starts clean with each new game; with no log to go by it shows the last half hour.
+    since = (game_start(state) if key == "game" else None) or now() - KILL_RANGES.get(key, 1800)
     rows = request.app[DB].map_kills(state.config.id, since, KILL_MAP_LIMIT)
     return web.json_response({"capped": len(rows) == KILL_MAP_LIMIT, "kills": [{
         "at": r["at"], "teamkill": r["kind"] == "teamkill", "ai": not r["killer"],

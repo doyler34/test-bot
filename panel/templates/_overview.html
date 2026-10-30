@@ -20,7 +20,7 @@
         <h2>Live Map <span class="muted" data-map-sub></span></h2>
         {% if has_map %}
         <select class="map-range" data-map-range aria-label="How far back">
-          {% for key, label in (("30m", "30 min"), ("1h", "1 hour"), ("6h", "6 hours"), ("24h", "24 hours"), ("7d", "7 days"), ("30d", "30 days")) %}
+          {% for key, label in (("game", "This game"), ("30m", "30 min"), ("1h", "1 hour"), ("6h", "6 hours"), ("24h", "24 hours"), ("7d", "7 days"), ("30d", "30 days")) %}
           <option value="{{ key }}">{{ label }}</option>{% endfor %}
         </select>
         <button type="button" class="icon-btn" data-map-full title="Full screen" aria-label="Full screen map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
