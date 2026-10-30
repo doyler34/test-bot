@@ -16,6 +16,71 @@ STAMP = re.compile(r'^(\d{2}:\d{2}:\d{2}\.\d{3})')
 FOLDER = re.compile(r'^logs_(\d{4}-\d{2}-\d{2})[_-]\d{2}[-_]\d{2}[-_]\d{2}$')
 
 
+def advance(day, clock, current):
+    """Steps the day count for a line's time of day. Midnight is a large backwards jump, not a delayed
+    message. Returns the day the line belongs to, then the day and clock to carry on with."""
+    def seconds(value):
+        h,m,s = value.split(':')
+        return int(h)*3600+int(m)*60+float(s)
+    event_day = day
+    if clock and seconds(clock)-seconds(current)>43200:
+        day += 1
+        event_day = day
+        clock = current
+    elif clock and day > 0 and seconds(current)-seconds(clock)>43200:
+        event_day = day-1  # Late previous-day entry, no clock rewind.
+    elif clock is None or current >= clock:
+        clock = current
+    return event_day, day, clock
+
+
+def fill_sides(db, server, path):
+    """Fills in the side on presence rows saved before sides were kept, from the faction lines still in
+    this log. Only rows with no side are touched; the source's checkpoint and the kills are left alone."""
+    date = FOLDER.fullmatch(path.parent.name)
+    if not date:
+        return 0
+    initial_date = datetime.strptime(date[1],'%Y-%m-%d').date()
+    day, clock, event_day, filled = 0, None, 0, 0
+    with db:
+        db.execute('BEGIN IMMEDIATE')
+        with path.open('rb') as stream:
+            for raw in stream:
+                if not raw.endswith(b'\n'):
+                    break  # still being written
+                line = raw.decode('utf-8','replace').rstrip('\r\n')
+                stamp = STAMP.match(line)
+                if stamp:
+                    current = stamp[1]
+                    if int(current[:2]) > 23 or int(current[3:5]) > 59 or int(current[6:8]) > 59:
+                        continue
+                    event_day, day, clock = advance(day, clock, current)
+                joined = parse_join(line)
+                if joined:
+                    occurred = f'{initial_date+timedelta(days=event_day)}T{joined.clock}'
+                    filled += db.execute('UPDATE combat_presence SET faction=? WHERE server=? AND occurred=?'
+                                         ' AND identity=? AND faction IS NULL',
+                                         (joined.faction,server,occurred,joined.identity)).rowcount
+    return filled
+
+
+def backfill_sides(database, servers):
+    """Once per start: each server's newest log, if it still has presence rows with no side."""
+    filled = 0
+    with closing(sqlite3.connect(database,timeout=10)) as db:
+        from bot.config import configure_connection
+        configure_connection(db)
+        for server in servers:
+            if not server.enabled:
+                continue
+            paths = sorted(Path(server.log_dir).glob('logs_*/console.log'))
+            date = FOLDER.fullmatch(paths[-1].parent.name) if paths else None
+            if date and db.execute('SELECT 1 FROM combat_presence WHERE server=? AND faction IS NULL'
+                                   ' AND occurred>=? LIMIT 1', (server.id,date[1])).fetchone():
+                filled += fill_sides(db,server.id,paths[-1])
+    return filled
+
+
 def scan(db, server, path, budget=4*1024*1024):
     date = FOLDER.fullmatch(path.parent.name)
     if not date:
@@ -52,19 +117,7 @@ def scan(db, server, path, budget=4*1024*1024):
                     current = stamp[1]
                     if int(current[:2]) > 23 or int(current[3:5]) > 59 or int(current[6:8]) > 59:
                         continue
-                    # Midnight is a large backwards jump, not a delayed message.
-                    def seconds(value):
-                        h,m,s = value.split(':')
-                        return int(h)*3600+int(m)*60+float(s)
-                    event_day = day
-                    if clock and seconds(clock)-seconds(current)>43200:
-                        day += 1
-                        event_day = day
-                        clock = current
-                    elif clock and day > 0 and seconds(current)-seconds(clock)>43200:
-                        event_day = day-1  # Late previous-day entry, no clock rewind.
-                    elif clock is None or current >= clock:
-                        clock = current
+                    event_day, day, clock = advance(day, clock, current)
                 event = parse_kill(line)
                 if event:
                     occurred = f'{initial_date+timedelta(days=event_day)}T{event.clock}'
@@ -120,6 +173,12 @@ class CombatIngestor:
 
     async def run(self):
         LOG.info('Combat stats ingestion ready; vanilla kill logs; AI kill counts unavailable')
+        try:
+            filled = await asyncio.to_thread(backfill_sides,self.database,self.servers)
+            if filled:
+                LOG.info('Filled in %s sides from the current logs',filled)
+        except (OSError,sqlite3.Error):
+            LOG.exception('Could not fill in sides from the logs; will carry on without')
         while True:
             try:
                 task = asyncio.create_task(asyncio.to_thread(ingest,self.database,self.servers))
