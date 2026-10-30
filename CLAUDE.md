@@ -1,5 +1,26 @@
 # OYB bot — deployment & sync notes
 
+## What the user wants — read this first, every session
+- **You never touch anything live. You give the command; the user runs it.**
+  Live means the panel (`/root/oyb-panel`, service `oyb-panel`), the friend's
+  bot (`~/Arma-bot`), the game server and AMP. Don't `git pull`, edit, restart
+  or stop any of them, not even "just the code". Reading (status, logs,
+  `git log`) is fine.
+- **Never push to Gazlagom.** The user runs the sync themselves, with their
+  token.
+- **Never store a token or password**, for any repo: no credential helper, no
+  token in a remote URL, no stored-token script.
+- **Never install anything** (packages, browsers, pip modules) without asking.
+- **When you ask "want me to?", stop and wait for the answer.** Don't carry on
+  and do it in the same turn.
+- **Only do what was asked.** Mention anything else you notice in one line;
+  don't fix it unasked.
+- **Keep it short and plain.** The user is on a phone. Give one step at a
+  time and one single-line command per step. No walls of text.
+- **Say what's proven and what isn't.** Don't call anything tested or working
+  unless you saw it work. Mod code can only be compiled and tested by the user
+  in Workbench.
+
 ## Repos
 - `doyler34/test-bot` — the real repo. All dev happens here; branch work is
   fast-forwarded onto `main`.
@@ -39,10 +60,16 @@ git push origin HEAD
   If the remote has been switched to SSH, put it back:
   `git remote set-url origin https://github.com/Gazlagom/Arma-bot.git`
 - "nothing to commit" means Gazlagom is already current.
+- Give it to the user as one line, with a commit message describing what
+  actually changed since the last sync:
+  `cd /root/Arma-bot-upload.StfK1D && git fetch origin && git reset --hard origin/main && git -C /root/test-bot pull --ff-only origin main && git -C /root/test-bot archive HEAD | tar -x -C . && grep -rIlE --exclude-dir=.git 'doyler34|test-bot' . | xargs -r sed -i 's#doyler34/test-bot#Gazlagom/Arma-bot#g; s#doyler34#Gazlagom#g; s#test-bot#Arma-bot#g' && git add -A && git -c user.name='Gazlagom' -c user.email='327911930+Gazlagom@users.noreply.github.com' commit -m '<describe the changes>' && git push origin HEAD`
 
-## After syncing — restart the bot
-- Friend's box, the only one running a live bot: `cd ~/Arma-bot && git pull && oyb restart`
-- Do NOT tell the user to restart anything on the VPS.
+## After syncing — the user updates what's live
+- Friend's bot: `cd ~/Arma-bot && git pull && oyb restart`
+- Panel: `/root/oyb-panel` is on branch `panel-test` with no upstream, so a
+  plain `git pull` there does nothing. Give the user:
+  `cd /root/oyb-panel && git pull --ff-only origin main && systemctl restart oyb-panel`
+- Nothing in `/root/test-bot` ever needs restarting.
 
 ## Live bot paths
 - `/root/test-bot` on the VPS is a plain checkout used to feed the Gazlagom
