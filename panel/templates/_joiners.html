@@ -1,6 +1,7 @@
 <p class="muted joiner-summary">{{ total }} joined{{ " on PC" if pc_only }} in the last {{ window }} ·{{ firsts }} never on OYB before
   {%- if steam and steam_total %} · Steam age checked for {{ steam_done }} of {{ steam_total }}{% endif %}
-  {%- if steam_wait %} · Steam is limiting lookups, trying again in {{ (steam_wait / 60)|round(0, "ceil")|int }} min{% endif %}</p>
+  {%- if steam_wait %} · Steam is limiting lookups, try Run again in {{ (steam_wait / 60)|round(0, "ceil")|int }} min
+  {%- elif steam and steam_done < steam_total %} · press Run again to check more{% endif %}</p>
 {% if joiners %}
 <div class="scroll"><table class="players-table">
   <thead><tr><th>Name</th><th>Joined</th></tr></thead>
