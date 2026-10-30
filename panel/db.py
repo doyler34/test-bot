@@ -286,6 +286,12 @@ CREATE TABLE IF NOT EXISTS platforms (
     last_seen INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS platforms_steam ON platforms(steam_id);
+CREATE TABLE IF NOT EXISTS steam_accounts (
+    steam_id TEXT PRIMARY KEY,
+    created INTEGER,
+    state TEXT NOT NULL,
+    checked INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS platforms_read (
     server TEXT NOT NULL,
     folder TEXT NOT NULL,
@@ -1017,6 +1023,19 @@ class PanelDB:
 
     def platform(self, identity):
         return self.one("SELECT * FROM platforms WHERE identity = ?", identity)
+
+    def joiners(self, server, since):
+        """Who connected to this server since then, newest first, with their platform and whatever
+        is known about their Steam account."""
+        return self.all(
+            "SELECT p.identity, p.name, p.first_seen, p.last_seen, pl.platform, pl.steam_id, sa.created, sa.state, sa.checked"
+            " FROM players p LEFT JOIN platforms pl ON pl.identity = p.identity"
+            " LEFT JOIN steam_accounts sa ON sa.steam_id = pl.steam_id"
+            " WHERE p.last_server = ? AND p.last_seen >= ? ORDER BY p.last_seen DESC LIMIT 100", server, since)
+
+    def save_steam_account(self, steam_id, created, state):
+        self.write("INSERT OR REPLACE INTO steam_accounts (steam_id, created, state, checked) VALUES (?, ?, ?, ?)",
+                   steam_id, created, state, now())
 
     def same_steam(self, steam_id, identity=""):
         """Every other account that joined from this Steam account."""

@@ -2926,6 +2926,31 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Something from the server", part)
         self.assertNotIn("Logged In!", part)
 
+    async def test_new_joiners_card(self):
+        self.db.saw_player("id-new", "Fresh_Face", "server-1", at=now() - 120)
+        self.db.saw_player("id-old", "Regular", "server-1", at=now() - 90 * 86400)
+        self.db.saw_player("id-old", "Regular", "server-1", at=now() - 300)
+        await self.login("boss", "boss-password")
+        page = await (await self.client.get("/server/server-1")).text()
+        self.assertIn("New joiners", page)
+        self.assertIn('data-base="/server/server-1/joiners.part"', page)
+        part = await (await self.client.get("/server/server-1/joiners.part?mins=30&steam=0")).text()
+        self.assertIn("Fresh_Face", part)
+        self.assertIn("Regular", part)
+        self.assertIn("First time", part.split("Fresh_Face")[1].split("</tr>")[0])
+        self.assertNotIn("First time", part.split("Regular")[1].split("</tr>")[0])
+        none =await (await self.client.get("/server/server-1/joiners.part?mins=bogus")).text()
+        self.assertIn("Fresh_Face", none)
+
+    async def test_new_joiners_steam_check_is_only_run_when_asked(self):
+        self.db.saw_player("id-new", "Fresh_Face", "server-1", at=now() - 120)
+        await self.login("boss", "boss-password")
+        with unittest.mock.patch("panel.web.steamage.refresh", new=unittest.mock.AsyncMock(return_value=False)) as refresh:
+            await self.client.get("/server/server-1/joiners.part?steam=0")
+            refresh.assert_not_called()
+            await self.client.get("/server/server-1/joiners.part?steam=1")
+            refresh.assert_awaited_once()
+
     async def test_feed_filter_reaches_past_a_busy_minute(self):
         self.db.add_feed("server-1", "sus", "Hubcaps got 7 kills in 30 seconds", at=1000)
         self.db.log("boss", "kick", "server-1", "Hubcaps", "camping")

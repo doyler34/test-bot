@@ -1,0 +1,24 @@
+{% if joiners %}
+<div class="scroll"><table class="players-table">
+  <thead><tr><th>Name</th><th>Joined</th><th>Account</th></tr></thead>
+  <tbody>
+  {% for j in joiners %}
+  <tr{% if j.watch %} class="watch"{% endif %}>
+    <td>{% if j.online %}<i class="dot ok" title="On the server now"></i>{% endif %}<a href="/player/{{ j.identity }}">{{ j.name }}</a>
+      {% if j.watch %}<span class="pill down" title="First time here on a new Steam account, or sharing an address with a banned account">Watch</span>{% endif %}
+      {% if j.first %}<span class="pill on" title="The panel hadn't seen this player before">First time</span>{% endif %}
+      {% if j.platform %}<span class="pill">{{ j.platform }}</span>{% endif %}
+      {% if j.alts and j.alts.banned %}<span class="pill down" title="Shares an IP with {{ j.alts.banned|join(', ') }}">Banned alt</span>
+      {% elif j.alts %}<span class="pill alt" title="{{ j.alts.count }} other account{{ 's' if j.alts.count > 1 }} from the same IP">{{ j.alts.count }} alt{{ 's' if j.alts.count > 1 }}</span>{% endif %}
+    </td>
+    <td class="muted">{{ j.ago }}</td>
+    <td>{% if j.account and j.account.new %}<span class="pill down">{{ j.account.text }}</span>
+      {% elif j.account %}<span class="muted">{{ j.account.text }}</span>
+      {% elif steam and j.platform %}<span class="muted">—</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="muted">Nobody has joined in the last {{ minutes }} minutes.</p>
+{% endif %}

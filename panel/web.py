@@ -26,7 +26,7 @@ from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, p
 from bot.mortar.wind import Wind
 
 from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP, XP_PER_TEAMKILL
-from . import archive, attacks, auth, ballistics, console, files, investigate, maptiles, memory, monitor, netcheck, outliers, site, whois, workshop
+from . import archive, attacks, auth, ballistics, console, files, investigate, joiners, maptiles, memory, monitor, netcheck, outliers, site, steamage, whois, workshop
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -1108,6 +1108,21 @@ async def feed_part(request):
     state = server_or_404(request, request.match_info["id"])
     show = request.query.get("show", "all")
     return render(request, "_feed.html", s=server_view(state), feed=request.app[DB].feed(state.config.id, show=show), show=show)
+
+
+async def joiners_part(request):
+    state = server_or_404(request, request.match_info["id"])
+    minutes = {"60": 60, "180": 180}.get(request.query.get("mins"), 30)
+    steam = request.query.get("steam") == "1"
+    db, at = request.app[DB], now()
+    since = at - minutes * 60
+    rows = db.joiners(state.config.id, since)
+    if steam and await steamage.refresh(db, rows, at):
+        rows = db.joiners(state.config.id, since)
+    alts = db.alt_summary([r["identity"] for r in rows]) if allowed(request, "ips") else {}
+    online = {p["identity"] for p in state.players if p["identity"]}
+    return render(request, "_joiners.html", s=server_view(state), minutes=minutes, steam=steam,
+                  joiners=joiners.describe(rows, at, since, online, alts, steam))
 
 
 def played(request, identities):
@@ -4649,6 +4664,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/server/{id}/memory.part", memory_part)
     app.router.add_get("/server/{id}/monitor", monitor_page)
     app.router.add_get("/server/{id}/feed.part", feed_part)
+    app.router.add_get("/server/{id}/joiners.part", joiners_part)
     app.router.add_get("/server/{id}/summary.part", summary_part)
     app.router.add_get("/server/{id}/game/{folder}", game_page)
     app.router.add_get("/server/{id}/game/{folder}/log", game_log)

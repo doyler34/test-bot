@@ -41,6 +41,26 @@ for (const box of document.querySelectorAll("[data-refresh]")) {
   }, every);
 }
 
+// The New joiners card keeps its time window and the Steam choice in the address it refreshes from.
+for (const card of document.querySelectorAll("[data-joiners]")) {
+  const body = card.querySelector("[data-refresh]");
+  const form = card.querySelector("form");
+  try {
+    const saved = JSON.parse(localStorage.getItem("joiners") || "{}");
+    if (saved.mins) form.elements.mins.value = saved.mins;
+    form.elements.steam.checked = Boolean(saved.steam);
+  } catch (err) {}
+  const update = () => {
+    const mins = form.elements.mins.value;
+    const steam = form.elements.steam.checked;
+    body.dataset.refresh = `${body.dataset.base}?mins=${mins}&steam=${steam ? 1 : 0}`;
+    try { localStorage.setItem("joiners", JSON.stringify({ mins, steam })); } catch (err) {}
+  };
+  form.addEventListener("change", () => { update(); refresh(body); });
+  update();
+  if (shown(body)) refresh(body); else missed.add(body);
+}
+
 function catchUp() {
   for (const box of missed) {
     if (!shown(box)) continue;

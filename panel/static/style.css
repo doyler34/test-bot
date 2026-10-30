@@ -208,6 +208,9 @@ body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(
 .feed .side-ussr { background: #c0392b; }
 .feed .side-fia { background: #4f9a47; }
 .feed .side-none { color: #33101f; }
+.joiner-options { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: .85rem; }
+.joiner-options select { margin-left: 4px; }
+.players-table tr.watch { background: rgba(231, 76, 60, .1); }
 .feed .k-sus { background: rgba(231, 76, 60, .12); }
 .feed .k-sus b { color: var(--red); }
 [data-filter="joins"] .feed li:not(.k-join):not(.k-leave):not(.k-side),
