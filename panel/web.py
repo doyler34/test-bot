@@ -4323,7 +4323,7 @@ async def save_doc(request, key, label, template, context):
     if action == "publish" and not problems:
         db.publish_discord_doc(key, text, who)
         audit(request, f"publish {label}")
-        flash(request, "Published. The bot updates Discord within a minute.")
+        flash(request, "Saved. It's in use now." if key == "staffalerts" else "Published. The bot updates Discord within a minute.")
         raise web.HTTPFound(back)
     db.save_discord_draft(key, text, who)
     if action == "publish" or problems:

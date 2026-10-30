@@ -2302,6 +2302,9 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         page = await (await self.client.get("/discord/staffalerts")).text()
         self.assertIn('data-kind="staffalerts"', page)
         self.assertIn("Rook teamkilled 3 players", page)
+        self.assertIn('<button name="action" value="publish">Save</button>', page)
+        self.assertNotIn("Save draft", page)
+        self.assertNotIn(">Publish<", page)
         token = await self.csrf("/discord/staffalerts")
         await self.client.post("/discord/staffalerts", data={"csrf": token, "action": "publish",
             "doc": json.dumps({"on": True, "count": "4", "seconds": "90", "ping_role": "Admin", "mines_on": False, "mines": "8",
@@ -2312,6 +2315,8 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
                                "mines": 8, "mines_ping_role": "Ticket Manager", "tk_kick": 5, "tk_ban": 8,
                                "tk_ban_length": 0, "mines_kick": 0, "mines_ban": 10, "mines_ban_length": 604800})
         page = await (await self.client.get("/discord/staffalerts")).text()
+        self.assertIn("In use now", page)
+        self.assertNotIn("hasn't reported in", page.split("In use now")[0].split("dc-status")[-1])
         self.assertIn('name="tk_kick" type="number" min="0" max="100" value="5"', page)
         self.assertIn('<option value="0" selected>Permanent</option>', page)
         await self.client.post("/discord/staffalerts", data={"csrf": token, "action": "publish",

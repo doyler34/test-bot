@@ -52,9 +52,8 @@
   </section>
   {% endif %}
   <div class="dc-actions">
-    <button name="action" value="publish">Publish</button>
-    <button name="action" value="save" class="ghost">Save draft</button>
-    {% if draft %}<button name="action" value="discard" class="ghost" data-confirm="Throw away the draft and go back to what's live?">Discard draft</button>{% endif %}
+    <button name="action" value="publish">Save</button>
+    {% if draft %}<button name="action" value="discard" class="ghost" data-confirm="Throw away the unsaved changes and go back to what's in use?">Discard changes</button>{% endif %}
   </div>
 </form>
 <script src="/static/discord.js?v={{ asset_version }}" defer></script>
