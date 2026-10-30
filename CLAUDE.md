@@ -1,6 +1,8 @@
 # OYB bot — deployment & sync notes
 
 ## What the user wants — read this first, every session
+Then read HANDOVER.md: where everything is and what state it's in.
+
 - **You never touch anything live. You give the command; the user runs it.**
   Live means the panel (`/root/oyb-panel`, service `oyb-panel`), the friend's
   bot (`~/Arma-bot`), the game server and AMP. Don't `git pull`, edit, restart
