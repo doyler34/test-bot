@@ -63,6 +63,24 @@ class RenderTests(unittest.TestCase):
         self.assertLessEqual(sum(len(e.description) for e in embeds), 6000)
         self.assertIn('128 players', embeds[-1].footer.text)
 
+    def test_a_board_with_sides_adds_a_side_column(self):
+        embed, = board_embeds('OYB Classic', [('Ann', 5, 1, 'US'), ('Bob', 3, 2, 'RU'), ('Cal', 0, 0, '-')], START)
+        self.assertRegex(embed.description, r'K\s+D\s+Side')
+        self.assertRegex(embed.description, r'Ann\s+5\s+1\s+US')
+        self.assertRegex(embed.description, r'Bob\s+3\s+2\s+RU')
+        self.assertRegex(embed.description, r'Cal\s+0\s+0\s+-')
+
+    def test_a_board_without_sides_has_no_side_column(self):
+        embed, = board_embeds('OYB Classic', rows(3), START)
+        self.assertNotIn('Side', embed.description)
+
+    def test_a_full_server_with_sides_still_fits_one_message(self):
+        full = [(f'Player {i}', 128 - i, i, ('US', 'RU', 'FIA')[i % 3]) for i in range(128)]
+        embeds = board_embeds('OYB Classic', full, START, END)
+        listed = sum(len(e.description.splitlines()) - 3 for e in embeds)
+        self.assertEqual(listed, 128)
+        self.assertLessEqual(sum(len(e.description) for e in embeds), 6000)
+
     def test_an_empty_board_still_renders(self):
         embed, = board_embeds('OYB Classic', [], START)
         self.assertIn('No linked players yet', embed.description)
@@ -187,6 +205,51 @@ class TickTests(unittest.IsolatedAsyncioTestCase):
             await self.board.tick()
         self.assertRegex(self.channel.send.await_args.kwargs['embeds'][0].description,
                          r'Test Player\s+0\s+0')
+
+    async def test_the_side_a_player_picked_is_shown(self):
+        with self.links.db:
+            record_presence(self.links.db, 's', stamp(START + timedelta(minutes=2)), self.identity, 'USSR')
+        with self.enable():
+            self.board.start('s', 'OYB Classic', START)
+            await self.board.tick()
+        self.assertRegex(self.channel.send.await_args.kwargs['embeds'][0].description,
+                         r'Test Player\s+0\s+0\s+RU')
+
+    async def test_the_latest_pick_wins_and_no_pick_is_a_dash(self):
+        with self.links.db:
+            record_presence(self.links.db, 's', stamp(START + timedelta(minutes=2)), self.identity, 'US')
+            record_presence(self.links.db, 's', stamp(START + timedelta(minutes=9)), self.identity, 'FIA')
+        with self.enable():
+            self.board.start('s', 'OYB Classic', START)
+            await self.board.tick()
+        self.assertRegex(self.channel.send.await_args.kwargs['embeds'][0].description,
+                         r'Test Player\s+0\s+0\s+FIA')
+        with self.links.db:
+            self.links.db.execute('UPDATE combat_presence SET faction=NULL')
+        self.board.matches['s']['rows'] = None
+        with self.enable():
+            await self.board.tick()
+        self.assertRegex(self.sent.edit.await_args.kwargs['embeds'][0].description,
+                         r'Test Player\s+0\s+0\s+-')
+
+    async def test_another_servers_picks_stay_off_this_board(self):
+        with self.links.db:
+            record_presence(self.links.db, 'arland', stamp(START + timedelta(minutes=2)), self.identity, 'US')
+            record_presence(self.links.db, 's', stamp(START + timedelta(minutes=3)), self.identity, 'FIA')
+        with self.enable():
+            self.board.start('s', 'OYB Classic', START)
+            await self.board.tick()
+        self.assertRegex(self.channel.send.await_args.kwargs['embeds'][0].description,
+                         r'Test Player\s+0\s+0\s+FIA')
+
+    async def test_an_older_database_gains_the_side_column_and_keeps_its_rows(self):
+        with self.links.db:
+            record_presence(self.links.db, 's', stamp(START + timedelta(minutes=2)), self.identity)
+            self.links.db.execute('ALTER TABLE combat_presence DROP COLUMN faction')
+        migrate(self.links.db)
+        columns = {row[1] for row in self.links.db.execute('PRAGMA table_info(combat_presence)')}
+        self.assertIn('faction', columns)
+        self.assertEqual(self.links.db.execute('SELECT COUNT(*) FROM combat_presence').fetchone()[0], 1)
 
     async def test_another_servers_kills_stay_off_this_board(self):
         with self.enable():

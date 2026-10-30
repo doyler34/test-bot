@@ -73,7 +73,7 @@ def scan(db, server, path, budget=4*1024*1024):
                 joined = parse_join(line)
                 if joined:
                     occurred = f'{initial_date+timedelta(days=event_day)}T{joined.clock}'
-                    record_presence(db,server,occurred,joined.identity)
+                    record_presence(db,server,occurred,joined.identity,joined.faction)
                 elif ': KILL ' in line:
                     LOG.warning('Unrecognised combat event at %s:%s; not counted',path,position)
             stream.seek(max(0,position-256))

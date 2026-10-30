@@ -30,11 +30,22 @@ def clean_name(value):
     return value[:NAME - 1] + '…' if len(value) > NAME else value
 
 
+SIDES = {'US': 'US', 'USSR': 'RU', 'FIA': 'FIA'}
+
+
+def side_code(faction):
+    """The short tag a board shows for a side. Civilians keep their own, and no pick is a dash."""
+    return SIDES.get(faction, (faction or '-')[:4])
+
+
 def table(selected, offset=0):
-    """Fixed-width standings block shared by the weekly and per-match boards."""
-    lines = [f"{'#':>{PLACE}}  {'Name':{NAME}} {'K':>{SCORE}} {'D':>{SCORE}}"]
-    for position, (name, kills, deaths) in enumerate(selected, offset + 1):
-        lines.append(f'{position:>{PLACE}}  {clean_name(name):{NAME}} {kills:>{SCORE}} {deaths:>{SCORE}}')
+    """Fixed-width standings block shared by the weekly and per-match boards. A row can carry the
+    player's side as a fourth value, which adds a Side column."""
+    sided = any(len(row) > 3 for row in selected)
+    lines = [f"{'#':>{PLACE}}  {'Name':{NAME}} {'K':>{SCORE}} {'D':>{SCORE}}" + ('  Side' if sided else '')]
+    for position, (name, kills, deaths, *side) in enumerate(selected, offset + 1):
+        line = f'{position:>{PLACE}}  {clean_name(name):{NAME}} {kills:>{SCORE}} {deaths:>{SCORE}}'
+        lines.append(f'{line}  {side[0]}' if sided and side else line)
     return '```text\n' + '\n'.join(lines) + '\n```'
 
 

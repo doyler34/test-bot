@@ -73,6 +73,9 @@ def migrate(db):
             server TEXT NOT NULL, occurred TEXT NOT NULL, identity TEXT NOT NULL,
             PRIMARY KEY(server, occurred, identity))''')
         db.execute('CREATE INDEX IF NOT EXISTS combat_presence_seen ON combat_presence(server,occurred)')
+        # The side each player picked, so a board can show it. Rows from before this keep NULL.
+        if 'faction' not in {row[1] for row in db.execute('PRAGMA table_info(combat_presence)')}:
+            db.execute('ALTER TABLE combat_presence ADD COLUMN faction TEXT')
 
 
 def record(db, server, occurred, event):
@@ -111,10 +114,10 @@ def record(db, server, occurred, event):
     return True
 
 
-def record_presence(db, server, occurred, identity):
+def record_presence(db, server, occurred, identity, faction=None):
     """Call inside the same transaction as the source checkpoint."""
-    return bool(db.execute('INSERT OR IGNORE INTO combat_presence VALUES (?,?,?)',
-                           (server, occurred, identity)).rowcount)
+    return bool(db.execute('INSERT OR IGNORE INTO combat_presence(server,occurred,identity,faction) VALUES (?,?,?,?)',
+                           (server, occurred, identity, faction)).rowcount)
 
 
 def totals(db, identity):
@@ -273,6 +276,16 @@ def recent_matches(db, identity, limit=10, scan=80):
         (*who, *who, scan, limit)).fetchall()
     return [dict(name=row[0], started=datetime.strptime(row[1], '%Y-%m-%dT%H:%M:%S.%f'),
                  kills=row[2], deaths=row[3]) for row in rows]
+
+
+def window_factions(db, guild, start, end, server):
+    """The side each linked member last picked on this server in the window, by Discord id."""
+    low, high = window(start, end)
+    rows = db.execute('''SELECT a.discord_id, p.faction FROM combat_presence p
+        JOIN account_links a ON a.identity=p.identity
+        WHERE p.server=? AND p.occurred>=? AND p.occurred<? AND p.faction IS NOT NULL AND a.guild=?
+        ORDER BY p.occurred''', (server, low, high, guild)).fetchall()
+    return dict(rows)
 
 
 def window_standings(db, guild, start, end=None, server=None):

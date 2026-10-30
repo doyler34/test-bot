@@ -12,10 +12,10 @@ import time
 import discord
 
 from bot.config import game_leaderboard_channel_id, live_board_channel_id
-from bot.discord.leaderboard_command import table
+from bot.discord.leaderboard_command import side_code, table
 from bot.discord.leaderboard_display import retry_delay
 from bot.discord.match_results import CHUNK, duration, match_tag, server_letter, titled
-from bot.storage.combat_store import match_number, window_standings
+from bot.storage.combat_store import match_number, window_factions, window_standings
 
 LOG = logging.getLogger('reforger.liveboard')
 POLL = 30
@@ -131,11 +131,12 @@ class LiveBoard:
 
     def rows(self, guild, server_id, started, ended=None):
         result = []
-        for member_id, kills, deaths, name in window_standings(
-                self.bot.account_links.db, guild.id, started, ended, server=server_id):
+        db = self.bot.account_links.db
+        sides = window_factions(db, guild.id, started, ended, server_id)
+        for member_id, kills, deaths, name in window_standings(db, guild.id, started, ended, server=server_id):
             member = guild.get_member(member_id)
             result.append((name or (member.display_name if member else f'Member {member_id}'),
-                           kills, deaths))
+                           kills, deaths, side_code(sides.get(member_id))))
         return result
 
     async def channel(self, guild):
