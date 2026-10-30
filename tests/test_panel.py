@@ -2937,10 +2937,37 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         part = await (await self.client.get("/server/server-1/joiners.part?mins=30&steam=0")).text()
         self.assertIn("Fresh_Face", part)
         self.assertIn("Regular", part)
-        self.assertIn("First time", part.split("Fresh_Face")[1].split("</tr>")[0])
-        self.assertNotIn("First time", part.split("Regular")[1].split("</tr>")[0])
+        self.assertIn("Never on OYB", part.split("Fresh_Face")[1].split("</tr>")[0])
+        self.assertNotIn("Never on OYB", part.split("Regular")[1].split("</tr>")[0])
         none =await (await self.client.get("/server/server-1/joiners.part?mins=bogus")).text()
         self.assertIn("Fresh_Face", none)
+
+    async def test_new_joiners_pc_only_and_custom_time(self):
+        for identity, name, platform, steam in (("id-pc", "On_Pc", "steam", "76561198000000001"), ("id-con", "On_Console", "console", "")):
+            self.db.saw_player(identity, name, "server-1", at=now() - 5 * 3600)
+            self.db.add_platforms([{"identity": identity, "platform": platform, "steam": steam, "at": now()}])
+        await self.login("boss", "boss-password")
+
+        async def card(query):
+            return await (await self.client.get("/server/server-1/joiners.part?" + query)).text()
+
+        self.assertNotIn("On_Pc", await card("mins=30&pc=1"))
+        day = await card("mins=1440&pc=1")
+        self.assertIn("On_Pc", day)
+        self.assertNotIn("On_Console", day)
+        self.assertIn("in the last 1 day", day)
+        self.assertIn("On_Console", await card("mins=1440&pc=0"))
+        self.assertIn("in the last 30 minutes", await card("mins=abc"))
+        self.assertIn("in the last 7 days", await card("mins=99999999"))
+
+    async def test_new_joiners_run_checks_more_steam_accounts(self):
+        await self.login("boss", "boss-password")
+        with unittest.mock.patch("panel.web.steamage.refresh", new=unittest.mock.AsyncMock(return_value=False)) as refresh:
+            await self.client.get("/server/server-1/joiners.part?steam=1")
+            await self.client.get("/server/server-1/joiners.part?steam=1&run=1")
+        limits = [call.kwargs["limit"] for call in refresh.await_args_list]
+        self.assertEqual(limits[0], 4)
+        self.assertGreater(limits[1], limits[0])
 
     async def test_new_joiners_steam_check_is_only_run_when_asked(self):
         self.db.saw_player("id-new", "Fresh_Face", "server-1", at=now() - 120)

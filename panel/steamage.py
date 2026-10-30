@@ -38,11 +38,16 @@ def stale(row, at) -> bool:
     return row["checked"] is None or row["checked"] < at - RECHECK
 
 
-async def refresh(db, rows, at) -> bool:
-    """Looks up a few accounts that haven't been asked about yet, a few at a time so a busy server doesn't
+def waiting() -> int:
+    """Seconds left before Steam is asked again, when it has said to slow down."""
+    return max(0, round(blocked_until - time.monotonic()))
+
+
+async def refresh(db, rows, at, limit=PER_REFRESH) -> bool:
+    """Looks up accounts that haven't been asked about yet, a few at a time so a busy server doesn't
     hammer Steam. True when something was saved."""
     global blocked_until
-    ids = list(dict.fromkeys(r["steam_id"] for r in rows if stale(r, at)))[:PER_REFRESH]
+    ids = list(dict.fromkeys(r["steam_id"] for r in rows if stale(r, at)))[:limit]
     if not ids or time.monotonic() < blocked_until:
         return False
     saved = False

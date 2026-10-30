@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from panel import steamage
 from panel.db import PanelDB
-from panel.joiners import describe
+from panel.joiners import describe, window_text
 from panel.steamage import parse, stale
 
 DAY = 86400
@@ -100,6 +100,26 @@ class JoinerTests(unittest.TestCase):
         self.db.save_steam_account("76561198000000001", AT - DAY, "public")
         self.assertFalse(self.rows(steam=True)["Back"]["watch"])
 
+    def test_never_on_oyb_comes_first_and_oyb_play_time_rules_it_out(self):
+        self.join("a", "Has_Played", AT - 600, AT - 100, platform="")
+        self.join("b", "Truly_New", AT - 900, AT - 900, platform="")
+        self.join("c", "Old_Hand", AT - 9 * DAY, AT - 50, platform="")
+        found = self.db.joiners("one", self.since)
+        order = describe(found, AT, self.since, set(), {}, False, known={"a"})
+        self.assertEqual([r["name"] for r in order], ["Truly_New", "Old_Hand", "Has_Played"])
+        self.assertTrue(order[0]["first"])
+        self.assertFalse(order[2]["first"])
+
+    def test_without_play_time_records_the_panels_own_sight_decides(self):
+        self.join("a", "Truly_New", AT - 900, AT - 900, platform="")
+        for known in (None, set()):
+            order = describe(self.db.joiners("one", self.since), AT, self.since, set(), {}, False, known=known)
+            self.assertTrue(order[0]["first"])
+
+    def test_the_time_looked_back_over_reads_plainly(self):
+        self.assertEqual([window_text(m) for m in (1, 30, 60, 90, 120, 1440, 4320)],
+                         ["1 minute", "30 minutes", "1 hour", "90 minutes", "2 hours", "1 day", "3 days"])
+
     def test_a_banned_alt_is_flagged_and_listed_first(self):
         self.join("a", "Quiet", AT - 100, AT - 100, platform="")
         self.join("b", "Evader", AT - 900, AT - 900, platform="")
@@ -170,6 +190,16 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual({r["created"] for r in self.db.joiners("one", 0)}, {epoch(2024, 5, 3)})
         self.assertFalse(self.run_refresh())
         self.assertEqual(len(FakeSteam.asked), 2)
+
+    def test_a_lower_limit_asks_about_fewer_accounts(self):
+        asyncio.run(steamage.refresh(self.db, self.db.joiners("one", 0), AT, limit=1))
+        self.assertEqual(len(FakeSteam.asked), 1)
+
+    def test_says_how_long_until_steam_is_asked_again(self):
+        self.assertEqual(steamage.waiting(), 0)
+        FakeSteam.status = 429
+        self.run_refresh()
+        self.assertTrue(0 < steamage.waiting() <= steamage.BACKOFF)
 
     def test_backs_off_when_steam_says_slow_down(self):
         FakeSteam.status = 429

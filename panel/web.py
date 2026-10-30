@@ -1110,19 +1110,42 @@ async def feed_part(request):
     return render(request, "_feed.html", s=server_view(state), feed=request.app[DB].feed(state.config.id, show=show), show=show)
 
 
+# The New joiners card can look back as far as the feed keeps its rows. Its Run button checks Steam
+# for more accounts at once than the card's own refreshes do.
+JOINER_MAX_MINUTES = 7 * 24 * 60
+JOINER_RUN_LOOKUPS = 15
+JOINER_SHOWN = 100
+
+
 async def joiners_part(request):
     state = server_or_404(request, request.match_info["id"])
-    minutes = {"60": 60, "180": 180}.get(request.query.get("mins"), 30)
-    steam = request.query.get("steam") == "1"
+    query = request.query
+    try:
+        minutes = min(max(int(query.get("mins", "30")), 1), JOINER_MAX_MINUTES)
+    except ValueError:
+        minutes = 30
+    pc_only, steam, run = query.get("pc") == "1", query.get("steam") == "1", query.get("run") == "1"
     db, at = request.app[DB], now()
     since = at - minutes * 60
-    rows = db.joiners(state.config.id, since)
-    if steam and await steamage.refresh(db, rows, at):
+
+    def listed():
         rows = db.joiners(state.config.id, since)
+        return [r for r in rows if r["platform"] == "steam"] if pc_only else rows
+
+    rows = listed()
+    if steam and await steamage.refresh(db, rows, at, limit=JOINER_RUN_LOOKUPS if run else steamage.PER_REFRESH):
+        rows = listed()
     alts = db.alt_summary([r["identity"] for r in rows]) if allowed(request, "ips") else {}
     online = {p["identity"] for p in state.players if p["identity"]}
-    return render(request, "_joiners.html", s=server_view(state), minutes=minutes, steam=steam,
-                  joiners=joiners.describe(rows, at, since, online, alts, steam))
+    stats = request.app[STATS]
+    known = set(stats.playtimes([r["identity"] for r in rows])) if stats.available else None
+    everyone = joiners.describe(rows, at, since, online, alts, steam, known)
+    pcs = [j for j in everyone if j["platform"] == "PC"]
+    return render(request, "_joiners.html", s=server_view(state), window=joiners.window_text(minutes), steam=steam, pc_only=pc_only,
+                  joiners=everyone[:JOINER_SHOWN], more=max(0, len(everyone) - JOINER_SHOWN), total=len(everyone),
+                  firsts=sum(j["first"] for j in everyone), steam_total=len(pcs),
+                  steam_done=sum(bool(j["account"]) and j["account"]["text"] != joiners.UNCHECKED for j in pcs),
+                  steam_wait=steamage.waiting())
 
 
 def played(request, identities):

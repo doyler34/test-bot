@@ -2,6 +2,15 @@ from datetime import datetime, timezone
 
 # A Steam account younger than this is called new.
 NEW_ACCOUNT_DAYS = 90
+UNCHECKED = "Steam age not checked yet"
+
+
+def window_text(minutes: int) -> str:
+    """"30 minutes", "2 hours", "3 days": the time looked back over, in the biggest unit that divides it."""
+    for size, word in ((1440, "day"), (60, "hour"), (1, "minute")):
+        if minutes % size == 0:
+            count = minutes // size
+            return f"{count} {word}{'' if count == 1 else 's'}"
 
 
 def ago(seconds: int) -> str:
@@ -21,21 +30,23 @@ def account(row, at):
         return {"text": "Steam since " + datetime.fromtimestamp(row["created"], timezone.utc).strftime("%b %Y"), "new": False}
     if row["state"]:
         return {"text": "Steam profile private", "new": False}
-    return {"text": "Steam age not checked yet", "new": False}
+    return {"text": UNCHECKED, "new": False}
 
 
-def describe(rows, at, since, online, alts, steam):
-    """The card's rows: newest first, with whoever looks worth a second look at the top. A first-time
-    player on a new Steam account, or one sharing an address with a banned account, gets a Watch tag."""
+def describe(rows, at, since, online, alts, steam, known=None):
+    """The card's rows. Whoever looks worth a second look is at the top (a first-time player on a new
+    Steam account, or one sharing an address with a banned account, gets a Watch tag), then everyone who has
+    never been on OYB, then the rest, newest first. known is who OYB has play time for, or None when the
+    panel has no play-time records to go by."""
     shown = []
     for row in rows:
         pc = row["platform"] == "steam"
         mine = alts.get(row["identity"])
-        first = row["first_seen"] >= since
+        first = row["first_seen"] >= since and not (known and row["identity"] in known)
         checked = account(row, at) if steam and pc else None
         watch = bool(first and checked and checked["new"]) or bool(mine and mine["banned"])
         shown.append({"identity": row["identity"], "name": row["name"], "ago": ago(at - row["last_seen"]),
                       "online": row["identity"] in online, "first": first,
                       "platform": "PC" if pc else "Console" if row["platform"] else "",
                       "account": checked, "alts": mine, "watch": watch, "at": row["last_seen"]})
-    return sorted(shown, key=lambda r: (not r["watch"], -r["at"]))
+    return sorted(shown, key=lambda r: (not r["watch"], not r["first"], -r["at"]))

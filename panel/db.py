@@ -1031,7 +1031,7 @@ class PanelDB:
             "SELECT p.identity, p.name, p.first_seen, p.last_seen, pl.platform, pl.steam_id, sa.created, sa.state, sa.checked"
             " FROM players p LEFT JOIN platforms pl ON pl.identity = p.identity"
             " LEFT JOIN steam_accounts sa ON sa.steam_id = pl.steam_id"
-            " WHERE p.last_server = ? AND p.last_seen >= ? ORDER BY p.last_seen DESC LIMIT 100", server, since)
+            " WHERE p.last_server = ? AND p.last_seen >= ? ORDER BY p.last_seen DESC LIMIT 1000", server, since)
 
     def save_steam_account(self, steam_id, created, state):
         self.write("INSERT OR REPLACE INTO steam_accounts (steam_id, created, state, checked) VALUES (?, ?, ?, ?)",

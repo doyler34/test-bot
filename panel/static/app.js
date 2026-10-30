@@ -41,22 +41,36 @@ for (const box of document.querySelectorAll("[data-refresh]")) {
   }, every);
 }
 
-// The New joiners card keeps its time window and the Steam choice in the address it refreshes from.
+// The New joiners card keeps its time, PC-only and Steam choices in the address it refreshes from.
+// Run asks again at once, and has the server check more Steam accounts than a plain refresh does.
 for (const card of document.querySelectorAll("[data-joiners]")) {
   const body = card.querySelector("[data-refresh]");
   const form = card.querySelector("form");
-  try {
-    const saved = JSON.parse(localStorage.getItem("joiners") || "{}");
-    if (saved.mins) form.elements.mins.value = saved.mins;
-    form.elements.steam.checked = Boolean(saved.steam);
-  } catch (err) {}
+  const saved = () => {
+    try { return JSON.parse(localStorage.getItem("joiners") || "{}"); } catch (err) { return {}; }
+  };
+  const was = saved();
+  if (was.amount) form.elements.amount.value = was.amount;
+  if (was.unit) form.elements.unit.value = was.unit;
+  if ("pc" in was) form.elements.pc.checked = was.pc;
+  form.elements.steam.checked = Boolean(was.steam);
+  const query = () => {
+    const amount = Math.max(1, Number(form.elements.amount.value) || 30);
+    const mins = Math.min(amount * Number(form.elements.unit.value), 10080);
+    return `mins=${mins}&pc=${form.elements.pc.checked ? 1 : 0}&steam=${form.elements.steam.checked ? 1 : 0}`;
+  };
   const update = () => {
-    const mins = form.elements.mins.value;
-    const steam = form.elements.steam.checked;
-    body.dataset.refresh = `${body.dataset.base}?mins=${mins}&steam=${steam ? 1 : 0}`;
-    try { localStorage.setItem("joiners", JSON.stringify({ mins, steam })); } catch (err) {}
+    body.dataset.refresh = `${body.dataset.base}?${query()}`;
+    const { amount, unit, pc, steam } = form.elements;
+    try { localStorage.setItem("joiners", JSON.stringify({ amount: amount.value, unit: unit.value, pc: pc.checked, steam: steam.checked })); } catch (err) {}
   };
   form.addEventListener("change", () => { update(); refresh(body); });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    body.dataset.refresh = `${body.dataset.base}?${query()}&run=1`;
+    await refresh(body);
+    update();
+  });
   update();
   if (shown(body)) refresh(body); else missed.add(body);
 }

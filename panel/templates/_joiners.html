@@ -1,3 +1,6 @@
+<p class="muted joiner-summary">{{ total }} joined{{ " on PC" if pc_only }} in the last {{ window }} ·{{ firsts }} never on OYB before
+  {%- if steam and steam_total %} · Steam age checked for {{ steam_done }} of {{ steam_total }}{% endif %}
+  {%- if steam_wait %} · Steam is limiting lookups, trying again in {{ (steam_wait / 60)|round(0, "ceil")|int }} min{% endif %}</p>
 {% if joiners %}
 <div class="scroll"><table class="players-table">
   <thead><tr><th>Name</th><th>Joined</th><th>Account</th></tr></thead>
@@ -6,7 +9,7 @@
   <tr{% if j.watch %} class="watch"{% endif %}>
     <td>{% if j.online %}<i class="dot ok" title="On the server now"></i>{% endif %}<a href="/player/{{ j.identity }}">{{ j.name }}</a>
       {% if j.watch %}<span class="pill down" title="First time here on a new Steam account, or sharing an address with a banned account">Watch</span>{% endif %}
-      {% if j.first %}<span class="pill on" title="The panel hadn't seen this player before">First time</span>{% endif %}
+      {% if j.first %}<span class="pill on" title="Not seen by the panel before this, and no OYB play time on record">Never on OYB</span>{% endif %}
       {% if j.platform %}<span class="pill">{{ j.platform }}</span>{% endif %}
       {% if j.alts and j.alts.banned %}<span class="pill down" title="Shares an IP with {{ j.alts.banned|join(', ') }}">Banned alt</span>
       {% elif j.alts %}<span class="pill alt" title="{{ j.alts.count }} other account{{ 's' if j.alts.count > 1 }} from the same IP">{{ j.alts.count }} alt{{ 's' if j.alts.count > 1 }}</span>{% endif %}
@@ -19,6 +22,7 @@
   {% endfor %}
   </tbody>
 </table></div>
+{% if more %}<p class="muted">…and {{ more }} more. Narrow the time to see them.</p>{% endif %}
 {% else %}
-<p class="muted">Nobody has joined in the last {{ minutes }} minutes.</p>
+<p class="muted">Nobody{{ " on PC" if pc_only }} has joined in that time.</p>
 {% endif %}
