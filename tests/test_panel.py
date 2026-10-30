@@ -2936,6 +2936,31 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.manager.state("server-1").config.log_dir = ""
         self.assertEqual(await victims("?range=game"), ["New"])
 
+    async def test_the_map_gets_the_start_bases_and_place_names(self):
+        from types import SimpleNamespace
+        from panel import mobs
+        mobs._seen.clear()
+        line = ("12:52:24.663 SCRIPT       : 2026-10-28 12:52:24 MOBsSelected: SCR_MOBSelectedData{, MOB_names=[a, b], "
+                "MOB_factions=[#AR-Faction_US, #AR-Faction_USSR], MOB_xs=[6437.16, 5384.56], MOB_ys=[1, 2], "
+                "MOB_zs=[5938.73, 11059.6]}\n")
+        await self.login("boss", "boss-password")
+        with tempfile.TemporaryDirectory() as root:
+            folder = Path(root, time.strftime("logs_%Y-%m-%d_%H-%M-%S", time.localtime(now() - 600)))
+            folder.mkdir()
+            (folder / "console.log").write_text("start\n" + line)
+            self.manager.state("server-1").config.log_dir = root
+            data = await (await self.client.get("/server/server-1/kills.json")).json()
+            self.assertEqual([(b["label"], round(b["x"]), round(b["z"])) for b in data["bases"]],
+                             [("US MOB", 6437, 5939), ("RU MOB", 5385, 11060)])
+        self.manager.state("server-1").config.log_dir = ""
+        self.assertEqual((await (await self.client.get("/server/server-1/kills.json")).json())["bases"], [])
+        everon = SimpleNamespace(describe=lambda: {"name": "Everon"})
+        with unittest.mock.patch("panel.web.mortar_map", return_value=everon):
+            places = (await (await self.client.get("/control-map/places.json")).json())["places"]
+        self.assertIn("Airbase Saint-Philippe", [p["name"] for p in places])
+        with unittest.mock.patch("panel.web.mortar_map", return_value=SimpleNamespace(describe=lambda: {"name": "Arland"})):
+            self.assertEqual((await (await self.client.get("/control-map/places.json")).json())["places"], [])
+
     async def test_only_owners_mark_admins(self):
         self.db.add_user("adm", auth.hash_password("adm-password"), "admin")
         await self.login("adm", "adm-password")

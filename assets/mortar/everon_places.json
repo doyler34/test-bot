@@ -1,0 +1,203 @@
+{
+ "_source": "Everon Conflict world (CTI_Campaign_Eden) base positions, with the game's English place names. x is east and z is north, in metres.",
+ "places": [
+  {
+   "name": "Airbase Saint-Philippe",
+   "kind": "base",
+   "x": 4980,
+   "z": 11948
+  },
+  {
+   "name": "Camurac",
+   "kind": "base",
+   "x": 6635,
+   "z": 3119
+  },
+  {
+   "name": "Calvary Hill",
+   "kind": "base",
+   "x": 3512,
+   "z": 5816
+  },
+  {
+   "name": "Coastal Base Chotain",
+   "kind": "base",
+   "x": 7473,
+   "z": 6698
+  },
+  {
+   "name": "Coastal Base Lamentin",
+   "kind": "base",
+   "x": 1089,
+   "z": 6029
+  },
+  {
+   "name": "Coastal Base Morton",
+   "kind": "base",
+   "x": 4982,
+   "z": 3847
+  },
+  {
+   "name": "Hornbeam Valley",
+   "kind": "base",
+   "x": 5377,
+   "z": 8334
+  },
+  {
+   "name": "Military Base Levie",
+   "kind": "base",
+   "x": 7449,
+   "z": 4306
+  },
+  {
+   "name": "Military Depot",
+   "kind": "base",
+   "x": 5229,
+   "z": 10702
+  },
+  {
+   "name": "Morton Valley",
+   "kind": "base",
+   "x": 4539,
+   "z": 4994
+  },
+  {
+   "name": "Old Wood",
+   "kind": "base",
+   "x": 3295,
+   "z": 4471
+  },
+  {
+   "name": "Pennants Pass",
+   "kind": "base",
+   "x": 8222,
+   "z": 2174
+  },
+  {
+   "name": "Quarry",
+   "kind": "base",
+   "x": 8793,
+   "z": 3897
+  },
+  {
+   "name": "Tiller's Find",
+   "kind": "base",
+   "x": 3790,
+   "z": 6998
+  },
+  {
+   "name": "Tower Entre-Deux",
+   "kind": "tower",
+   "x": 5859,
+   "z": 7260
+  },
+  {
+   "name": "Tower Régina",
+   "kind": "tower",
+   "x": 7690,
+   "z": 3056
+  }
+ ],
+ "mobs": [
+  [
+   5810.4,
+   10225.9
+  ],
+  [
+   2946.0,
+   4839.5
+  ],
+  [
+   6068.6,
+   5390.1
+  ],
+  [
+   7841.9,
+   4675.1
+  ],
+  [
+   9900.2,
+   2573.0
+  ],
+  [
+   8356.0,
+   4765.7
+  ],
+  [
+   7545.4,
+   6055.1
+  ],
+  [
+   7306.2,
+   7652.4
+  ],
+  [
+   5473.5,
+   8752.5
+  ],
+  [
+   5384.6,
+   11059.6
+  ],
+  [
+   4631.5,
+   11562.4
+  ],
+  [
+   4175.0,
+   9107.2
+  ],
+  [
+   3198.3,
+   7140.3
+  ],
+  [
+   2151.7,
+   6655.7
+  ],
+  [
+   2481.6,
+   6091.1
+  ],
+  [
+   1952.9,
+   5156.6
+  ],
+  [
+   2490.6,
+   4240.7
+  ],
+  [
+   3819.1,
+   5436.2
+  ],
+  [
+   5652.3,
+   4210.6
+  ],
+  [
+   6437.2,
+   5938.7
+  ],
+  [
+   6588.7,
+   2342.8
+  ],
+  [
+   3323.7,
+   3516.2
+  ],
+  [
+   6331.3,
+   8452.5
+  ],
+  [
+   5208.6,
+   4582.5
+  ],
+  [
+   5766.3,
+   9625.6
+  ]
+ ]
+}

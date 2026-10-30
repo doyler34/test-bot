@@ -131,8 +131,9 @@ async function startMap(box) {
   // Drawn inside a tab that may have been hidden: size it again when it shows.
   window.addEventListener("hashchange", () => setTimeout(() => { map.invalidateSize(); map.fitBounds(bounds); }, 0));
 
-  const layers = { dots: L.layerGroup().addTo(map), lines: L.layerGroup().addTo(map), heat: L.layerGroup(),
-    grid: L.layerGroup(), count: L.layerGroup().addTo(map) };
+  // Lines go in first so the dots sit on top of them.
+  const layers = { places: L.layerGroup().addTo(map), lines: L.layerGroup().addTo(map), dots: L.layerGroup().addTo(map),
+    bases: L.layerGroup().addTo(map), heat: L.layerGroup(), grid: L.layerGroup(), count: L.layerGroup().addTo(map) };
   const clock = (at) => new Date(at * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const text = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const who = (name, id) => (id ? `<a href="/player/${encodeURIComponent(id)}">${text(name || "Unknown")}</a>` : text(name || "Unknown"));
@@ -140,7 +141,7 @@ async function startMap(box) {
   const sub = panel.querySelector("[data-map-sub]");
   const rangePick = panel.querySelector("[data-map-range]");
   const serverPick = panel.querySelector("[data-map-server]");
-  const state = { lines: true, heat: false, grid: false, count: false, kills: [], radius: 250, spot: null };
+  const state = { names: true, lines: true, heat: false, grid: false, count: false, kills: [], bases: [], radius: 250, spot: null };
   let server = box.dataset.server;
 
   function drawGrid() {
@@ -190,6 +191,25 @@ async function startMap(box) {
       + ` of ${grid(e, n)} · ${tks} TK${tks === 1 ? "" : "s"} · ${ai} AI`;
   }
 
+  // The named bases and towers, drawn once.
+  async function drawPlaces() {
+    const reply = await fetch("/control-map/places.json", { credentials: "same-origin" });
+    if (!reply.ok) return;
+    for (const place of (await reply.json()).places) {
+      L.marker(toLatLng(place.x, place.z), { interactive: false, keyboard: false, icon: L.divIcon({
+        className: `place ${place.kind}`, iconSize: [0, 0], html: `<i></i><span>${text(place.name)}</span>` }) }).addTo(layers.places);
+    }
+  }
+
+  // Where each side started this game.
+  function drawBases() {
+    layers.bases.clearLayers();
+    for (const base of state.bases) {
+      L.marker(toLatLng(base.x, base.z), { interactive: false, keyboard: false, zIndexOffset: 1000, icon: L.divIcon({
+        className: `mob mob-${text(base.side).toLowerCase()}`, iconSize: [0, 0], html: `<i></i><b>${text(base.label)}</b>` }) }).addTo(layers.bases);
+    }
+  }
+
   function draw() {
     layers.dots.clearLayers();
     layers.lines.clearLayers();
@@ -197,14 +217,24 @@ async function startMap(box) {
       const kind = k.teamkill ? "t" : (k.ai || !k.killer ? "a" : "k");
       const colour = KILL_COLOURS[kind];
       const to = toLatLng(k.to[0], k.to[1]);
-      if (k.from) L.polyline([toLatLng(k.from[0], k.from[1]), to], { color: colour, weight: 1.5, dashArray: "4 4", interactive: false }).addTo(layers.lines);
+      let line = null;
+      if (k.from) {
+        const from = toLatLng(k.from[0], k.from[1]);
+        line = L.polyline([from, to], { color: colour, weight: 1, opacity: .4, interactive: false }).addTo(layers.lines);
+        L.circleMarker(from, { radius: 1.8, weight: 0, fillColor: colour, fillOpacity: .6, interactive: false }).addTo(layers.lines);
+      }
       const zone = ZONE_PART[k.zone] ? `<p class="kill-zone">Hit in the <b>${text(ZONE_WORDS[k.zone] || k.zone.toLowerCase())}</b></p>` : "";
       const details = `<div class="kill-pop">${ZONE_PART[k.zone] ? hitBody(k.zone) : ""}<div>`
         + `<b class="${kind}">${k.teamkill ? "Teamkill" : kind === "a" ? "Killed by AI or nobody" : "Kill"}</b>`
         + `<p>${k.ai ? text(k.killer || "AI") : who(k.killer, k.killer_id)} → ${who(k.victim, k.victim_id)}</p>`
         + `<p>${text(k.how || "unknown")}${k.distance ? `, ${k.distance} m` : ""}</p>${zone}`
         + `<p>${clock(k.at)} · grid ${grid(k.to[0], k.to[1])}</p></div></div>`;
-      L.circleMarker(to, { radius: touch ? 8 : 6, color: "#fff", weight: 1.5, fillColor: colour, fillOpacity: .95 })
+      // Teamkills stand out with a white ring; AI kills sit back.
+      const size = (kind === "t" ? 5 : kind === "a" ? 3.5 : 4) * (touch ? 1.5 : 1);
+      L.circleMarker(to, { radius: size, color: kind === "t" ? "#fff" : "#0d1013", weight: kind === "t" ? 1.5 : 1,
+        fillColor: colour, fillOpacity: kind === "a" ? .7 : .92 })
+        .on("mouseover", () => line && line.setStyle({ opacity: 1, weight: 2 }).bringToFront())
+        .on("mouseout", () => line && line.setStyle({ opacity: .4, weight: 1 }))
         .on("click", () => {
           // While counting, a dot is just a spot to count around.
           if (state.count) { state.spot = [...k.to]; state.zoomTo = true; drawCount(); return; }
@@ -223,6 +253,8 @@ async function startMap(box) {
     const other = option && option.dataset.mapName && !option.dataset.mapName.toLowerCase().includes(MAP.name.toLowerCase());
     if (other) {
       state.kills = [];
+      state.bases = [];
+      drawBases();
       draw();
       sub.textContent = `· ${option.textContent} is on ${option.dataset.mapName}; this map is ${MAP.name}`;
       return;
@@ -231,6 +263,8 @@ async function startMap(box) {
     if (!res.ok) return;
     const data = await res.json();
     state.kills = data.kills;
+    state.bases = data.bases || [];
+    drawBases();
     draw();
     sub.textContent = `· ${data.kills.length}${data.capped ? "+" : ""} kill${data.kills.length === 1 ? "" : "s"}`;
     sub.title = RANGE_WORDS[range];
@@ -244,6 +278,7 @@ async function startMap(box) {
       state[name] = !state[name];
       button.classList.toggle("on", state[name]);
       button.setAttribute("aria-pressed", state[name]);
+      if (name === "names") state.names ? layers.places.addTo(map) : layers.places.remove();
       if (name === "lines" && !state.heat) state.lines ? layers.lines.addTo(map) : layers.lines.remove();
       if (name === "heat") {
         // Squares instead of dots: the dots would hide them.
@@ -295,6 +330,7 @@ async function startMap(box) {
   });
   document.addEventListener("keydown", (event) => { if (event.key === "Escape" && panel.classList.contains("map-full-on")) full.click(); });
 
+  drawPlaces();
   load();
   setInterval(() => {
     const range = rangePick ? rangePick.value : "game";

@@ -36,6 +36,7 @@
             {% for sv in nav_servers %}<option value="{{ sv.id }}" data-map-name="{{ sv.map }}" {% if sv.id == s.id %}selected{% endif %}>{{ sv.name }}</option>{% endfor %}
           </select>
           {% endif %}
+          <button type="button" class="chip on" data-map-toggle="names" aria-pressed="true" title="Names of the bases and towers">Names</button>
           <button type="button" class="chip on" data-map-toggle="lines" aria-pressed="true" title="Lines from killer to victim">Lines</button>
           <button type="button" class="chip" data-map-toggle="heat" aria-pressed="false" title="Kills per 500 m square">Density</button>
           <button type="button" class="chip" data-map-toggle="grid" aria-pressed="false" title="1 km grid lines">Grid</button>

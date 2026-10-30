@@ -696,6 +696,15 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .ctl-legend .k, .ctl-kill.k { background: #f47b20; }
 .ctl-legend .t { background: #e0443a; }
 .ctl-legend .a { background: #b18cff; }
+.place, .mob { overflow: visible; pointer-events: none; }
+.place i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; background: #f5f6f8; border: 1.5px solid #0d1013; transform: rotate(45deg); box-shadow: 0 0 0 1px rgba(255, 255, 255, .35); }
+.place.tower i { border-radius: 50%; }
+.place span { position: absolute; left: 0; top: 7px; transform: translateX(-50%); font: 600 10.5px/1.1 var(--body); color: #fff; white-space: nowrap; text-shadow: 0 0 2px #000, 0 0 4px #000, 0 1px 3px #000; }
+.mob i { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--mob); background: rgba(13, 16, 19, .55); box-shadow: 0 0 0 2px #fff, 0 0 12px var(--mob); }
+.mob b { position: absolute; left: 0; bottom: 14px; transform: translateX(-50%); padding: 1px 6px; border-radius: 3px; background: var(--mob); color: #fff; font: 700 11px/1.3 var(--body); letter-spacing: .04em; white-space: nowrap; }
+.mob-us { --mob: #3f78c4; }
+.mob-ru { --mob: #c0392b; }
+.mob-fia { --mob: #4f9a47; }
 .leaflet-interactive.ctl-kill { stroke: #fff; stroke-width: 1.5; fill-opacity: .95; }
 .leaflet-interactive.ctl-kill.k { fill: #f47b20; }
 .leaflet-interactive.ctl-kill.t { fill: #e0443a; }

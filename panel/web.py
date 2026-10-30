@@ -26,7 +26,7 @@ from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, p
 from bot.mortar.wind import Wind
 
 from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP, XP_PER_TEAMKILL
-from . import archive, attacks, auth, ballistics, console, files, investigate, joiners, maptiles, memory, monitor, netcheck, outliers, site, steamage, whois, workshop
+from . import archive, attacks, auth, ballistics, console, files, investigate, joiners, maptiles, memory, mobs, monitor, netcheck, outliers, site, steamage, whois, workshop
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -2157,12 +2157,17 @@ KILL_RANGES = {"30m": 1800, "1h": 3600, "6h": 6 * 3600, "24h": 86400, "7d": 7 * 
 KILL_MAP_LIMIT = 3000
 
 
-def game_start(state):
-    """When the game now running began: the newest log folder's start. None when there's no log to go by."""
+def game_folder(state):
+    """The newest log folder, which is the game now running. None when there's no log to go by."""
     if not state.config.log_dir:
         return None
     folders = LogReader(state.config.log_dir).folders()
-    return folder_start(folders[-1]) if folders else None
+    return folders[-1] if folders else None
+
+
+def game_start(state):
+    folder = game_folder(state)
+    return folder_start(folder) if folder else None
 
 
 async def control_kills(request):
@@ -2171,7 +2176,9 @@ async def control_kills(request):
     # "This game" starts clean with each new game; with no log to go by it shows the last half hour.
     since = (game_start(state) if key == "game" else None) or now() - KILL_RANGES.get(key, 1800)
     rows = request.app[DB].map_kills(state.config.id, since, KILL_MAP_LIMIT)
-    return web.json_response({"capped": len(rows) == KILL_MAP_LIMIT, "kills": [{
+    folder = game_folder(state)
+    return web.json_response({"capped": len(rows) == KILL_MAP_LIMIT, "bases": mobs.read(folder / "console.log") if folder else [],
+                              "kills": [{
         "at": r["at"], "teamkill": r["kind"] == "teamkill", "ai": not r["killer"],
         "killer": r["killer_name"] or "", "killer_id": r["killer"], "victim": r["victim_name"], "victim_id": r["victim"],
         "how": DAMAGE.get(r["damage"], (r["damage"] or "").lower()),
@@ -2185,6 +2192,12 @@ async def control_map(request):
     if mapped is None:
         raise web.HTTPNotFound()
     return web.json_response({"map": mapped.describe()})
+
+
+async def control_places(request):
+    mapped = mortar_map()
+    named = mapped is not None and mapped.describe().get("name") == "Everon"
+    return web.json_response({"places": mobs.places() if named else []})
 
 
 async def control_tile(request):
@@ -4755,6 +4768,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/server/{id}/power/{action}", control_power)
     app.router.add_get("/server/{id}/kills.json", control_kills)
     app.router.add_get("/control-map/map.json", control_map)
+    app.router.add_get("/control-map/places.json", control_places)
     app.router.add_get("/control-map/tiles/{z}/{x}/{y}", control_tile)
     app.router.add_get("/control-map/picture", control_picture)
     app.router.add_get("/control-map/{name}", control_leaflet)
