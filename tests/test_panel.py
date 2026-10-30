@@ -2921,7 +2921,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         await self.login("boss", "boss-password")
         html = await (await self.client.get("/server/server-1")).text()
         self.assertIn("Live feed", html)
-        self.assertIn('side-us" title="US">US</i>GazLagom killed <i class="side side-none" title="No side picked">?</i>Sgt_Burd (120 m)', html)
+        self.assertIn('sidetag-us" title="US">US</i>GazLagom killed <i class="sidetag sidetag-none" title="No side picked">?</i>Sgt_Burd (120 m)', html)
         part = await (await self.client.get("/server/server-1/feed.part")).text()
         self.assertIn("Something from the server", part)
         self.assertNotIn("Logged In!", part)

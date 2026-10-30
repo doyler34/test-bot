@@ -203,11 +203,11 @@ body.has-full::after { content: ""; position: fixed; inset: 0; background: rgba(
 .feed .k-teamkill b, .feed .k-server b { color: var(--red); }
 .feed .k-admin b { color: #8fb4e6; }
 .feed .k-rcon b { color: #c49be0; }
-.feed .side { display: inline-block; min-width: 1.9em; margin-right: .4em; padding: 0 .3em; border-radius: 3px; background: #e66fa8; color: #fff; font-style: normal; font-size: .68rem; font-weight: 700; line-height: 1.5; text-align: center; vertical-align: 1px; }
-.feed .side-us { background: #3f78c4; }
-.feed .side-ussr { background: #c0392b; }
-.feed .side-fia { background: #4f9a47; }
-.feed .side-none { color: #33101f; }
+.feed .sidetag { display: inline-block; min-width: 1.9em; margin-right: .4em; padding: 0 .3em; border-radius: 3px; background: #e66fa8; color: #fff; font-style: normal; font-size: .68rem; font-weight: 700; line-height: 1.5; text-align: center; vertical-align: 1px; }
+.feed .sidetag-us { background: #3f78c4; }
+.feed .sidetag-ussr { background: #c0392b; }
+.feed .sidetag-fia { background: #4f9a47; }
+.feed .sidetag-none { color: #33101f; }
 .joiner-options { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: .85rem; }
 .joiner-options select { margin-left: 4px; }
 .players-table tr.watch { background: rgba(231, 76, 60, .1); }

@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from panel.db import PanelDB
 from panel.feedsides import feed_parts, sides_from
@@ -38,6 +39,16 @@ class SidesTests(unittest.TestCase):
     def test_other_rows_are_left_alone(self):
         self.assertEqual(feed_parts("rcon", "Ann killed Bob", {"Ann": "US"}), [("", "Ann killed Bob")])
         self.assertEqual(feed_parts("kill", "something odd", {}), [("", "something odd")])
+
+
+class MarkupTests(unittest.TestCase):
+    def test_tags_do_not_reuse_the_sidebar_class(self):
+        """The sidebar's own .side rule pins it to the left edge, so a tag called "side" would cover it."""
+        template = Path("panel/templates/_feed.html").read_text()
+        self.assertIn("sidetag", template)
+        self.assertNotRegex(template, r'class="side[ "]')
+        css = Path("panel/static/style.css").read_text()
+        self.assertNotRegex(css, r"\.feed \.side[ {-]")
 
 
 class FeedTests(unittest.TestCase):
