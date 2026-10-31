@@ -255,3 +255,36 @@ modded class SCR_ContentBrowserEditorComponent
 		Event_OnBrowserEntriesFiltered.Invoke();
 	}
 }
+
+// The cost on a building menu card follows a panel price, as the arsenal's item
+// cards do. Only the text on the card changes; the game's own costs, which its
+// checks read, are left alone (the server charges the price, above).
+modded class SCR_AssetCardFrontUIComponent
+{
+	protected ResourceName m_sOYBPrefab;
+
+	override void InitCard(int prefabID, SCR_UIInfo info, ResourceName prefab, SCR_UIInfo blockingBudgetInfo = null, SCR_ContentBrowserEditorComponent contentBrowser = null)
+	{
+		m_sOYBPrefab = prefab;
+		super.InitCard(prefabID, info, prefab, blockingBudgetInfo, contentBrowser);
+	}
+
+	override void UpdateBudgetCost(SCR_EntityBudgetValue entityBudgetCost = null)
+	{
+		int price;
+		if (!entityBudgetCost || entityBudgetCost.GetBudgetType() != EEditableEntityBudget.CAMPAIGN || m_sOYBPrefab.IsEmpty() || !OYB_VehicleSettings.Get().GetPrice(m_sOYBPrefab, price))
+		{
+			super.UpdateBudgetCost(entityBudgetCost);
+			return;
+		}
+
+		int own = OYB_VehicleBudget.OwnCampaignCost(SCR_EditableEntityUIInfo.ExtractEditableUIInfoFromPrefab(m_sOYBPrefab));
+		if (own < 0)
+		{
+			super.UpdateBudgetCost(entityBudgetCost);
+			return;
+		}
+
+		super.UpdateBudgetCost(new SCR_EntityBudgetValue(EEditableEntityBudget.CAMPAIGN, Math.Max(0, entityBudgetCost.GetBudgetValue() + price - own)));
+	}
+}
