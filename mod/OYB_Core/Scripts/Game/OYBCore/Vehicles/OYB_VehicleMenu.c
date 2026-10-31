@@ -288,7 +288,10 @@ modded class SCR_AssetCardFrontUIComponent
 			return;
 		}
 
-		super.UpdateBudgetCost(new SCR_EntityBudgetValue(EEditableEntityBudget.CAMPAIGN, Math.Max(0, entityBudgetCost.GetBudgetValue() + price - own)));
+		SCR_EntityBudgetValue shown = new SCR_EntityBudgetValue(EEditableEntityBudget.CAMPAIGN, Math.Max(0, entityBudgetCost.GetBudgetValue() + price - own));
+		if (OYB_CardLog.Take())
+			PrintFormat("OYB_CORE cards: card %1 priced %2, own cost %3, shows %4", FilePath.StripPath(m_sOYBPrefab.GetPath()), price, own, OYB_CardLog.One(shown));
+		super.UpdateBudgetCost(shown);
 	}
 }
 

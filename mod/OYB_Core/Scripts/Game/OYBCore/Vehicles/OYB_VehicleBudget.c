@@ -47,7 +47,7 @@ class OYB_VehicleBudget
 // again each time the settings change.
 class OYB_CardLog
 {
-	protected static const int LINES = 80;
+	protected static const int LINES = 600;
 	protected static int s_iLeft = LINES;
 
 	static void Restart(string why)
