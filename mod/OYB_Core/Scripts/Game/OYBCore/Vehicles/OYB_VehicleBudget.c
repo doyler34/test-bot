@@ -42,3 +42,45 @@ class OYB_VehicleBudget
 		return -1;
 	}
 }
+
+// A limited run of log lines about the building menu's card costs, started
+// again each time the settings change.
+class OYB_CardLog
+{
+	protected static const int LINES = 80;
+	protected static int s_iLeft = LINES;
+
+	static void Restart(string why)
+	{
+		s_iLeft = LINES;
+		PrintFormat("OYB_CORE cards: %1; logging the next %2 card costs", why, LINES);
+	}
+
+	static bool Take()
+	{
+		if (s_iLeft <= 0)
+			return false;
+
+		s_iLeft--;
+		return true;
+	}
+
+	static string One(SCR_EntityBudgetValue budget)
+	{
+		if (!budget)
+			return "nothing";
+		return typename.EnumToString(EEditableEntityBudget, budget.GetBudgetType()) + " " + budget.GetBudgetValue();
+	}
+
+	static string All(notnull array<ref SCR_EntityBudgetValue> budgets)
+	{
+		string text = "[";
+		foreach (int i, SCR_EntityBudgetValue budget : budgets)
+		{
+			if (i > 0)
+				text += ", ";
+			text += One(budget);
+		}
+		return text + "]";
+	}
+}

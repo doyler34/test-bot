@@ -25,7 +25,7 @@
 // "building", or empty when only found by the scan).
 class OYB_VehicleSettings
 {
-	static const string BUILD = "vehicles-2026-10-31e";
+	static const string BUILD = "vehicles-2026-10-31f";
 
 	protected static const string FOLDER = "$profile:OYB_Core";
 	protected static const string SETTINGS_FILE = "$profile:OYB_Core/vehicles.json";
@@ -149,6 +149,8 @@ class OYB_VehicleSettings
 
 		if (hiddenChanged)
 			SCR_CatalogEntitySpawnerComponent.OYB_RefreshAll();
+
+		OYB_CardLog.Restart(string.Format("settings applied, %1 hidden, %2 priced", m_Hidden.Count(), m_Prices.Count()));
 	}
 
 	//------------------------------------------------------------------------------------------------

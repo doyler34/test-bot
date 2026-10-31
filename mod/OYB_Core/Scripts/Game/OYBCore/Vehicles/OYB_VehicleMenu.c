@@ -271,6 +271,9 @@ modded class SCR_AssetCardFrontUIComponent
 
 	override void UpdateBudgetCost(SCR_EntityBudgetValue entityBudgetCost = null)
 	{
+		if (!m_sOYBPrefab.IsEmpty() && OYB_CardLog.Take())
+			PrintFormat("OYB_CORE cards: card %1 given %2", FilePath.StripPath(m_sOYBPrefab.GetPath()), OYB_CardLog.One(entityBudgetCost));
+
 		int price;
 		if (!entityBudgetCost || entityBudgetCost.GetBudgetType() != EEditableEntityBudget.CAMPAIGN || m_sOYBPrefab.IsEmpty() || !OYB_VehicleSettings.Get().GetPrice(m_sOYBPrefab, price))
 		{
@@ -286,5 +289,25 @@ modded class SCR_AssetCardFrontUIComponent
 		}
 
 		super.UpdateBudgetCost(new SCR_EntityBudgetValue(EEditableEntityBudget.CAMPAIGN, Math.Max(0, entityBudgetCost.GetBudgetValue() + price - own)));
+	}
+}
+
+// Finding why every card's cost goes when a price is set: what the game works
+// out for a card, what the card is then given, and the base's supplies and
+// building allowance at the time. Limited to a few lines after each change.
+modded class SCR_CampaignBuildingBudgetEditorComponent
+{
+	override bool GetEntityPreviewBudgetCosts(SCR_EditableEntityUIInfo entityUIInfo, out notnull array<ref SCR_EntityBudgetValue> budgetCosts)
+	{
+		bool result = super.GetEntityPreviewBudgetCosts(entityUIInfo, budgetCosts);
+		if (entityUIInfo && OYB_CardLog.Take())
+		{
+			int campaignMax, propsMax;
+			GetMaxBudgetValue(EEditableEntityBudget.CAMPAIGN, campaignMax);
+			GetMaxBudgetValue(EEditableEntityBudget.PROPS, propsMax);
+			PrintFormat("OYB_CORE cards: costs for %1: %2 (result %3); supplies used %4 of %5, props %6 of %7", entityUIInfo.GetName(), OYB_CardLog.All(budgetCosts), result,
+				GetCurrentBudgetValue(EEditableEntityBudget.CAMPAIGN), campaignMax, GetCurrentBudgetValue(EEditableEntityBudget.PROPS), propsMax);
+		}
+		return result;
 	}
 }
