@@ -24,9 +24,9 @@ modded class SCR_LoadingScreenComponent
 
 class OYB_LoadingScreen
 {
-	// The imported image (UI/Textures/LoadingScreen/OYB_LoadingScreen.edds, GUID
+	// The imported image (UI/Textures/LoadingScreen/OYB_LoadingScreen2.edds, GUID
 	// from its .meta). Empty keeps the game's own loading screen.
-	static const ResourceName IMAGE = "{77B814A1D59FDB3A}UI/Textures/LoadingScreen/OYB_LoadingScreen.edds";
+	static const ResourceName IMAGE = "{2ED5C3E0B314E7D4}UI/Textures/LoadingScreen/OYB_LoadingScreen2.edds";
 
 	// The image fills the screen at its own shape: as large as it needs to be to
 	// cover the screen, centred, so a screen of another shape crops the edges

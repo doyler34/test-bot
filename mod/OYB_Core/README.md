@@ -19,10 +19,10 @@ game has loaded its mods. The game's start-up splash, and the connecting and
 mod download before that, stay as they are: OYB Core's scripts only run once
 the mods are loaded.
 
-The image is `UI/Textures/LoadingScreen/OYB_LoadingScreen.edds`, imported in
+The image is `UI/Textures/LoadingScreen/OYB_LoadingScreen2.edds`, imported in
 Workbench from a 16:9 PNG; its resource name (GUID from the `.meta`) is
-`OYB_LoadingScreen.IMAGE`. To change the picture, re-import over the same file
-so the GUID stays.
+`OYB_LoadingScreen.IMAGE`. To change the picture, import a new PNG and put its
+resource name there.
 
 ## Vehicles: hiding, prices and limits
 
