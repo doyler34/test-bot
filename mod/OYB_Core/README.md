@@ -36,12 +36,9 @@ does `vehicle_list.json` and the panel's Vehicles page.
   server, and left out of every depot's list and refused there too. Hiding a
   single variant only works at depots; the building menu picks its random
   variant after the request is checked.
-- **Price**: at a depot, what it shows, checks and takes. In the building menu,
-  the vehicle's own supply cost: OYB replaces it where the game reads it, the
-  building budget component (the card and the supply check) and the vehicle's
-  editable entity component (the charge and the refund) (`OYB_VehicleBudget.c`). Crew costs come on top as the game
-  sets them. A variant costs what its vehicle costs. A vehicle whose building
-  cost is left to the game's per-type default can't be priced.
+- **Price**: at a depot, what it shows, checks and takes. A variant costs what
+  its vehicle costs. The building menu keeps the game's own costs: changing
+  them there broke every card's cost once a priced card was shown.
 - **Broken mod entries**: a building or Game Master menu entry whose prefab
   can't be loaded (a mod listing a file that isn't there) used to stop the
   game loading the menu's cards, so the cards after it showed no price. It's
