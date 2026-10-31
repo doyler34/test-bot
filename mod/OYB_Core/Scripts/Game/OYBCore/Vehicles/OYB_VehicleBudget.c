@@ -1,9 +1,9 @@
 // Part of the vehicle limiter (see OYB_VehicleSettings.c).
 
 // A vehicle's supply cost in the building menu. The game's costs there are
-// left alone: changing them where the game reads them broke every card's cost
-// once a priced card was shown. A price is charged on the server on top of the
-// game's own cost, and only the card's text shows it (see OYB_VehicleMenu.c).
+// left alone: putting the price on the cards broke every card's cost once a
+// priced card was shown. A price is charged on the server instead, on top of
+// the game's own cost (see OYB_VehicleMenu.c), so the card shows the game's.
 class OYB_VehicleBudget
 {
 	// The game's whole campaign cost, the entity's and its children's (crew).

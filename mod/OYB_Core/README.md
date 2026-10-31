@@ -38,10 +38,9 @@ does `vehicle_list.json` and the panel's Vehicles page.
   variant after the request is checked.
 - **Price**: at a depot, what it shows, checks and takes. In the building menu,
   the server checks the base has the price and takes the difference from the
-  game's own cost once the vehicle is placed, and the card's text shows the
-  price, as on the arsenal's cards. The game's own costs are left alone:
-  changing them there broke every card's cost once a priced card was shown. A
-  variant costs what its vehicle costs.
+  game's own cost once the vehicle is placed; the card still shows the game's
+  cost, as changing it there broke every card's cost once a priced card was
+  shown. A variant costs what its vehicle costs.
 - **Broken mod entries**: a building or Game Master menu entry whose prefab
   can't be loaded (a mod listing a file that isn't there) used to stop the
   game loading the menu's cards, so the cards after it showed no price. It's
