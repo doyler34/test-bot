@@ -25,7 +25,7 @@
 // "building", or empty when only found by the scan).
 class OYB_VehicleSettings
 {
-	static const string BUILD = "vehicles-2026-10-31g";
+	static const string BUILD = "vehicles-2026-10-31h";
 
 	protected static const string FOLDER = "$profile:OYB_Core";
 	protected static const string SETTINGS_FILE = "$profile:OYB_Core/vehicles.json";
@@ -49,6 +49,10 @@ class OYB_VehicleSettings
 	protected string m_sAcceptedText;
 	protected string m_sRefusedText;
 	protected bool m_bUnreadableLogged;
+	// Prices are read once a game: a change on the panel takes effect when the
+	// next game starts, not while one runs.
+	protected bool m_bPricesFixed;
+	protected bool m_bPriceChangeLogged;
 
 	protected bool m_bServerStarted;
 
@@ -167,6 +171,9 @@ class OYB_VehicleSettings
 		queue.Remove(StartCounting);
 
 		m_bServerStarted = false;
+		m_sAcceptedText = string.Empty;
+		m_bPricesFixed = false;
+		m_bPriceChangeLogged = false;
 		m_iDiscoverTries = 0;
 		m_iCountTries = 0;
 		m_bExportPending = true;
@@ -262,10 +269,38 @@ class OYB_VehicleSettings
 		m_sAcceptedText = text;
 		m_sRefusedText = string.Empty;
 
+		if (m_bPricesFixed)
+			KeepPrices(priceItems, priceCosts);
+		m_bPricesFixed = true;
+
 		OYB_VehicleLimits.Configure(limitsEnabled, groupNames, groupLimits, groupItems, groupOf, categoryNames, categoryLimits);
 		Apply(hidden, priceItems, priceCosts);
 		PrintFormat("OYB_CORE vehicle settings loaded: %1 hidden, %2 priced, limits %3, %4 groups, %5 category limits", m_Hidden.Count(), m_Prices.Count(), limitsEnabled, groupNames.Count(), categoryNames.Count());
 		SendToAll();
+	}
+
+	// Puts the prices in force back in place of the file's, saying once when the
+	// file's are different.
+	protected void KeepPrices(notnull array<string> priceItems, notnull array<int> priceCosts)
+	{
+		bool changed = priceItems.Count() != m_Prices.Count();
+		foreach (int i, string item : priceItems)
+		{
+			int cost;
+			if (!m_Prices.Find(item, cost) || i >= priceCosts.Count() || cost != priceCosts[i])
+				changed = true;
+		}
+
+		if (changed && !m_bPriceChangeLogged)
+		{
+			m_bPriceChangeLogged = true;
+			Print("OYB_CORE vehicle prices changed on the panel; they take effect when the next game starts");
+		}
+
+		array<string> hidden = {};
+		priceItems.Clear();
+		priceCosts.Clear();
+		GetLists(hidden, priceItems, priceCosts);
 	}
 
 	// Empty when the settings are usable, else what's wrong with them.
