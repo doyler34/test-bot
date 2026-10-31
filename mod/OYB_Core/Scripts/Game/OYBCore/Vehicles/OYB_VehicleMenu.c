@@ -21,18 +21,20 @@ modded class SCR_CampaignBuildingPlacingEditorComponent
 {
 	override protected bool CanPlaceEntityServer(IEntityComponentSource editableEntitySource, out EEditableEntityBudget blockingBudget, bool updatePreview, bool showNotification, int prefabID = -1, int playerID = -1, SCR_EditorPreviewParams params = null)
 	{
+		// Only a placing request on the server has a prefab ID. The game's
+		// supply check only gets the prefab's editable component, which doesn't
+		// say which prefab it is, so the price is matched to this one.
+		ResourceName prefab;
+		SCR_PlacingEditorComponentClass prefabData = SCR_PlacingEditorComponentClass.Cast(GetEditorComponentData());
+		if (prefabID >= 0 && Replication.IsServer() && prefabData)
+		{
+			prefab = prefabData.GetPrefab(prefabID);
+			OYB_VehicleBudget.SetPlacing(prefab);
+		}
+
 		if (!super.CanPlaceEntityServer(editableEntitySource, blockingBudget, updatePreview, showNotification, prefabID, playerID, params))
 			return false;
 
-		// Only a placing request on the server has a prefab ID.
-		if (prefabID < 0 || !Replication.IsServer())
-			return true;
-
-		SCR_PlacingEditorComponentClass prefabData = SCR_PlacingEditorComponentClass.Cast(GetEditorComponentData());
-		if (!prefabData)
-			return true;
-
-		ResourceName prefab = prefabData.GetPrefab(prefabID);
 		if (prefab.IsEmpty())
 			return true;
 

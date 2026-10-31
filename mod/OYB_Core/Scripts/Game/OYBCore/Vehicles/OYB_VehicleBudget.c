@@ -34,6 +34,27 @@ class OYB_VehicleBudget
 		return prefab;
 	}
 
+	// The prefab a placing request on the server is for, until the end of the
+	// frame the request is handled in (the supply checks and the spawn).
+	protected static ResourceName s_sPlacing;
+
+	static void SetPlacing(ResourceName prefab)
+	{
+		s_sPlacing = prefab;
+		GetGame().GetCallqueue().Remove(ClearPlacing);
+		GetGame().GetCallqueue().CallLater(ClearPlacing);
+	}
+
+	static ResourceName Placing()
+	{
+		return s_sPlacing;
+	}
+
+	protected static void ClearPlacing()
+	{
+		s_sPlacing = ResourceName.Empty;
+	}
+
 	// The game's own campaign cost for the entity itself, or -1 when it sets
 	// none.
 	static int OwnCampaignCost(SCR_EditableEntityUIInfo info)
@@ -128,7 +149,11 @@ modded class SCR_CampaignBuildingBudgetEditorComponent
 		if (!editableEntitySource)
 			return;
 
+		// A component source has no path of its own, so this mostly comes back
+		// empty; the prefab being placed is used then.
 		ResourceName prefab = SCR_BaseContainerTools.GetPrefabResourceName(editableEntitySource);
+		if (prefab.IsEmpty())
+			prefab = OYB_VehicleBudget.Placing();
 		OYB_VehicleBudget.ApplyPrice(prefab, SCR_EditableEntityComponentClass.GetInfo(editableEntitySource), budgetCosts, "check");
 	}
 }
