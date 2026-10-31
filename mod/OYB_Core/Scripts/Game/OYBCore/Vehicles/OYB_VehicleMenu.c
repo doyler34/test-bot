@@ -3,8 +3,9 @@
 // uses.
 
 // Vehicles from the building menu, which is where Conflict hands out vehicles:
-// a hidden vehicle can't be placed, and a vehicle whose group is at its limit
-// for the player's side is refused.
+// a hidden vehicle can't be placed, a vehicle whose group is at its limit for
+// the player's side is refused, and a panel price is charged on top of the
+// game's own cost.
 //
 // A building request runs in one go on the server (the CreateEntityServer RPC):
 // the game's checks (its own side's menu, cooldown, supplies) through
@@ -42,6 +43,20 @@ modded class SCR_CampaignBuildingPlacingEditorComponent
 			return false;
 		}
 
+		// The game has checked its own cost; a dearer price needs the rest too.
+		int extra = OYB_PriceExtra(prefab, SCR_EditableEntityComponentClass.GetInfo(editableEntitySource));
+		if (extra > 0)
+		{
+			SCR_ResourceConsumer consumer = OYB_SupplyConsumer();
+			int cost = OYB_VehicleBudget.CampaignCost(SCR_EditableEntityComponentClass.GetInfo(editableEntitySource)) + extra;
+			if (consumer && consumer.GetAggregatedResourceValue() < cost)
+			{
+				PrintFormat("OYB_CORE price: %1 costs %2, the base has %3, refused for player %4", FilePath.StripPath(prefab.GetPath()), cost, consumer.GetAggregatedResourceValue(), playerID);
+				blockingBudget = EEditableEntityBudget.CAMPAIGN;
+				return false;
+			}
+		}
+
 		string factionKey = OYB_FactionKey(playerID);
 		string group;
 		int count, limit;
@@ -69,9 +84,74 @@ modded class SCR_CampaignBuildingPlacingEditorComponent
 
 		foreach (SCR_EditableEntityComponent entity : entities)
 		{
-			if (entity && Vehicle.Cast(entity.GetOwner()))
-				OYB_VehicleLimits.Register(entity.GetOwner(), factionKey);
+			if (!entity || !Vehicle.Cast(entity.GetOwner()))
+				continue;
+
+			OYB_VehicleLimits.Register(entity.GetOwner(), factionKey);
+			OYB_ChargePrice(entity);
 		}
+	}
+
+	// What a panel price adds to (or takes off) the game's own cost for the
+	// vehicle itself; 0 without a price, or when the game sets no cost of its
+	// own to replace.
+	protected int OYB_PriceExtra(ResourceName prefab, SCR_EditableEntityUIInfo info)
+	{
+		int price;
+		if (!OYB_VehicleSettings.Get().GetPrice(prefab, price))
+			return 0;
+
+		int own = OYB_VehicleBudget.OwnCampaignCost(info);
+		if (own < 0)
+			return 0;
+
+		return price - own;
+	}
+
+	// The game has taken its own cost by now; this takes the difference to the
+	// price from the same base, or gives it back when the price is lower.
+	protected void OYB_ChargePrice(notnull SCR_EditableEntityComponent entity)
+	{
+		ResourceName prefab = SCR_ResourceNameUtils.GetPrefabName(entity.GetOwner());
+		int extra = OYB_PriceExtra(prefab, SCR_EditableEntityComponentClass.GetInfo(SCR_EditableEntityComponentClass.GetEditableEntitySource(Resource.Load(prefab))));
+		if (extra == 0)
+			return;
+
+		SCR_ResourceComponent resources = OYB_SupplyResources();
+		if (!resources)
+			return;
+
+		if (extra > 0)
+		{
+			SCR_ResourceConsumer consumer = resources.GetConsumer(EResourceGeneratorID.DEFAULT, EResourceType.SUPPLIES);
+			if (consumer)
+				consumer.RequestConsumtion(extra);
+		}
+		else
+		{
+			SCR_ResourceGenerator generator = resources.GetGenerator(EResourceGeneratorID.DEFAULT, EResourceType.SUPPLIES);
+			if (generator)
+				generator.RequestGeneration(-extra);
+		}
+		PrintFormat("OYB_CORE price: %1 placed, %2 supplies on top of the game's cost", FilePath.StripPath(prefab.GetPath()), extra);
+	}
+
+	// The supplies of the base (or vehicle) the building menu is open at.
+	protected SCR_ResourceComponent OYB_SupplyResources()
+	{
+		SCR_CampaignBuildingEditorComponent building = SCR_CampaignBuildingEditorComponent.Cast(FindEditorComponent(SCR_CampaignBuildingEditorComponent, false, true));
+		SCR_ResourceComponent resources;
+		if (!building || !building.GetProviderResourceComponent(resources) || !resources.IsResourceTypeEnabled())
+			return null;
+		return resources;
+	}
+
+	protected SCR_ResourceConsumer OYB_SupplyConsumer()
+	{
+		SCR_ResourceComponent resources = OYB_SupplyResources();
+		if (!resources)
+			return null;
+		return resources.GetConsumer(EResourceGeneratorID.DEFAULT, EResourceType.SUPPLIES);
 	}
 
 	// The requesting player's side, or when the player has none, the side of
