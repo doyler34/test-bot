@@ -25,7 +25,7 @@
 // "building", or empty when only found by the scan).
 class OYB_VehicleSettings
 {
-	static const string BUILD = "vehicles-2026-10-31d";
+	static const string BUILD = "vehicles-2026-10-31e";
 
 	protected static const string FOLDER = "$profile:OYB_Core";
 	protected static const string SETTINGS_FILE = "$profile:OYB_Core/vehicles.json";
@@ -120,9 +120,18 @@ class OYB_VehicleSettings
 		}
 	}
 
-	// What players need; the depots then rebuild their lists.
+	// What players need. The depots rebuild their lists only when what's hidden
+	// changed; a price is read when it's needed, so a price change leaves them
+	// alone.
 	void Apply(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts)
 	{
+		bool hiddenChanged = hidden.Count() != m_Hidden.Count();
+		foreach (string item : hidden)
+		{
+			if (!m_Hidden.Contains(item))
+				hiddenChanged = true;
+		}
+
 		m_Hidden.Clear();
 		foreach (string prefab : hidden)
 			m_Hidden.Insert(prefab);
@@ -138,7 +147,8 @@ class OYB_VehicleSettings
 			m_PricesByGuid.Set(SCR_ResourceNameUtils.GetPrefabGUID(priceItems[i]), priceCosts[i]);
 		}
 
-		SCR_CatalogEntitySpawnerComponent.OYB_RefreshAll();
+		if (hiddenChanged)
+			SCR_CatalogEntitySpawnerComponent.OYB_RefreshAll();
 	}
 
 	//------------------------------------------------------------------------------------------------
