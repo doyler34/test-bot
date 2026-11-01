@@ -7,7 +7,7 @@
     <h1>Server manager</h1>
     <p class="muted">Every server AMP runs on this box: power, console, settings, mods and files, without opening AMP.</p>
   </div>
-  {% if has_amp and folders %}<a class="button" href="/manage/new">+ New server</a>{% endif %}
+  {% if has_amp and folders and can("files") %}<a class="button" href="/manage/new">+ New server</a>{% endif %}
 </div>
 {% if not has_amp %}<div class="flash error">The panel has no AMP login yet, so only Files and Mods work. Add it under <a href="/settings/amp">Settings → AMP login</a>.</div>{% endif %}
 
@@ -34,7 +34,7 @@
     <div class="mgr-title">
       <span class="dot" aria-hidden="true"></span>
       <div>
-        <h2><a href="/manage/{{ f.name }}">{{ f.friendly or f.name }}</a></h2>
+        <h2><a href="{{ f.home }}">{{ f.friendly or f.name }}</a></h2>
         <p class="muted mono small">{{ f.name }}</p>
       </div>
       <span class="pill {{ 'on' if f.game else ('gold' if f.running else '') }}">{{ "Running" if f.game else ("Stopped" if f.running else "AMP off") }}</span>
@@ -49,9 +49,9 @@
       <div><b>{{ f.admins }}</b><span>Admins</span></div>
     </div>
     <nav class="mgr-links">
-      <a href="/manage/{{ f.name }}">Overview</a><a href="/manage/{{ f.name }}/console">Console</a>{% if can("amp_settings") %}<a href="/manage/{{ f.name }}/settings">Settings</a>{% endif %}{% if can("mods") %}<a href="/mods/{{ f.name }}">Mods</a>{% endif %}<a href="/files/{{ f.name }}">Files</a>
+      {% if can_on("power", f.name) %}<a href="/manage/{{ f.name }}">Overview</a>{% endif %}{% if can_on("files", f.name) %}<a href="/manage/{{ f.name }}/console">Console</a>{% endif %}{% if can_on("amp_settings", f.name) %}<a href="/manage/{{ f.name }}/settings">Settings</a>{% endif %}{% if can_on("mods", f.name) %}<a href="/mods/{{ f.name }}">Mods</a>{% endif %}{% if can_on("arsenal", f.name) %}<a href="/arsenal/{{ f.name }}">Arsenal</a>{% endif %}{% if can_on("vehicles", f.name) %}<a href="/vehicles/{{ f.name }}">Vehicles</a>{% endif %}{% if can_on("files", f.name) %}<a href="/files/{{ f.name }}">Files</a>{% endif %}
     </nav>
-    {% if can("power") and has_amp %}
+    {% if can_on("power", f.name) and has_amp %}
     <div class="mgr-actions">
       {% if f.running %}
       {% if f.game %}

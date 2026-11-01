@@ -149,6 +149,37 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         for tab in ("Overview", "Console", "Settings", "Mods", "Arsenal", "Files"):
             self.assertIn(f">{tab}</a>", tabs)
 
+    async def test_one_person_can_be_given_parts_of_one_server(self):
+        (self.root / "Plus02" / "Configs").mkdir(parents=True)
+        (self.root / "Plus02" / "GenericModule.kvp").write_text('App.AppSettings={"mods":""}')
+        self.db.add_user("mo", auth.hash_password("mo-password"), "moderator")
+        mo = self.db.user_by_name("mo")["id"]
+        token = await self.login("chief")
+        page = await (await self.client.get(f"/users/{mo}/access")).text()
+        self.assertIn('value="sm:Plus01:arsenal"', page)
+        await self.client.post(f"/users/{mo}", data={"csrf": token, "action": "grants", "grant": ["kick", "notes"]})
+        await self.client.post(f"/users/{mo}", data={"csrf": token, "action": "servers",
+                                                     "server": ["sm:Plus01:arsenal", "sm:Plus01:made-up", "sm:Nope:arsenal"]})
+        self.assertEqual(self.db.grants(mo), {"sm:Plus01:arsenal"})
+        await self.client.post(f"/users/{mo}", data={"csrf": token, "action": "grants", "grant": ["kick", "notes"]})
+        self.assertEqual(self.db.grants(mo), {"sm:Plus01:arsenal"})
+        self.assertEqual(self.db.audit()[0]["action"], "changed server access")
+
+        await self.client.post("/login", data={"username": "mo", "password": "mo-password"})
+        index = await (await self.client.get("/manage")).text()
+        self.assertIn('href="/manage"', index)
+        self.assertIn("Plus01", index)
+        self.assertNotIn("Plus02", index)
+        self.assertIn('href="/arsenal/Plus01"', index)
+        self.assertNotIn('href="/files/Plus01"', index)
+        self.assertNotIn("/manage/new", index)
+        arsenal = await (await self.client.get("/arsenal/Plus01")).text()
+        self.assertIn(">Arsenal</a>", arsenal)
+        self.assertNotIn(">Files</a>", arsenal)
+        for url in ("/arsenal/Plus02", "/files/Plus01", "/manage/Plus01", "/manage/Plus01/settings", "/mods/Plus01",
+                    "/vehicles/Plus01", "/manage/new"):
+            self.assertEqual((await self.client.get(url)).status, 403, url)
+
     async def test_mod_list_changes_go_through_amp(self):
         stored = {"value": '{"modId": "60C4CE4888FF4621", "name": "ACE Core"}'}
         amp = mock.Mock()

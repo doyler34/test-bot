@@ -22,4 +22,32 @@
   {% endif %}
   <div class="dc-actions"><button>Save access</button> <a class="button ghost" href="/users">Back</a></div>
 </form>
+
+{% if manager_instances %}
+<form class="card access-form" method="post" action="/users/{{ target.id }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="action" value="servers">
+  <h2>Server manager, server by server</h2>
+  <p class="muted">Tick what {{ target.username }} can do on each server, on top of the access above. They only see the servers
+    they have something ticked on. A part they already have on every server is shown as ticked and can't be unticked here.</p>
+  <div class="table-wrap">
+    <table class="server-access">
+      <thead><tr><th>Server</th>{% for perm, label in server_parts %}<th>{{ label }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for name in manager_instances %}
+        <tr>
+          <th scope="row" class="mono">{{ name }}</th>
+          {% for perm, label in server_parts %}
+          {% set everywhere = has(perm) %}
+          <td><input type="checkbox" name="server" value="{{ server_grant(name, perm) }}" aria-label="{{ label }} on {{ name }}"
+            {% if everywhere or server_grant(name, perm) in mine %}checked{% endif %}{% if everywhere %} disabled{% endif %}></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="dc-actions"><button>Save server access</button></div>
+</form>
+{% endif %}
 {% endblock %}

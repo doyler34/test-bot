@@ -77,6 +77,19 @@ GRANTS = (
     ("discord", "Every Discord page"),
 )
 
+# What the Server manager can give one person on one server only, ticked per
+# server on their Edit access page and stored as "sm:<server>:<permission>".
+SERVER_PARTS = (
+    ("power", "Power"),
+    ("files", "Console and files"),
+    ("amp_settings", "AMP settings"),
+    ("game_admins", "Game admins"),
+    ("mods", "Mods"),
+    ("arsenal", "Arsenal"),
+    ("vehicles", "Vehicles"),
+    ("delete_servers", "Delete"),
+)
+
 SESSION_SECONDS = 7 * 24 * 3600
 MIN_PASSWORD = 10
 
@@ -97,6 +110,20 @@ def allows(role: str, grants, permission: str) -> bool:
     if can(role, permission) or base in grants or permission in grants:
         return True
     return permission == "discord" and any(g.startswith("discord:") for g in grants)
+
+
+def server_grant(server: str, permission: str) -> str:
+    return f"sm:{server}:{permission}"
+
+
+def allows_on(role: str, grants, permission: str, server: str) -> bool:
+    """Everywhere as above, or ticked for this one server."""
+    return allows(role, grants, permission) or server_grant(server, permission) in grants
+
+
+def granted_servers(grants) -> set[str]:
+    """The servers someone has anything ticked on."""
+    return {g.split(":")[1] for g in grants if g.startswith("sm:") and g.count(":") == 2}
 
 
 def hash_password(password: str) -> str:

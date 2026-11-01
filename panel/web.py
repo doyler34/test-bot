@@ -164,6 +164,8 @@ def render(request, template, **context):
         user=user,
         csrf=request.get(CSRF, ""),
         can=(lambda perm: bool(user) and allowed(request, perm)),
+        can_on=(lambda perm, server: bool(user) and allowed_on(request, perm, server)),
+        can_manage=bool(user) and manager_servers(request) != set(),
         servers=request.app[CONFIG].servers,
         nav_servers=[{"id": st.config.id, "name": st.config.name, "online": st.online, "map": st.query.get("map") or ""}
                      for st in request.app[MANAGER].states.values()],
@@ -204,6 +206,25 @@ def allowed(request, permission):
 def require(request, permission):
     if not allowed(request, permission):
         raise web.HTTPForbidden(text="You do not have permission for that.")
+
+
+def allowed_on(request, permission, server):
+    """Allowed everywhere, or ticked for this one server in the Server manager."""
+    if named(request):
+        return True
+    return auth.allows_on(request[USER]["role"], request.get(GRANTS, set()), permission, server)
+
+
+def require_on(request, permission):
+    if not allowed_on(request, permission, request.match_info["inst"]):
+        raise web.HTTPForbidden(text="You do not have permission for that.")
+
+
+def manager_servers(request):
+    """The Server manager servers this person may see: None for all of them."""
+    if allowed(request, "files"):
+        return None
+    return auth.granted_servers(request.get(GRANTS, set()))
 
 
 def audit(request, action, server="", target="", detail="", ok=True):
@@ -2702,7 +2723,7 @@ def manage_tabs(request, inst, current):
             "mods": f"/mods/{inst}", "arsenal": f"/arsenal/{inst}", "vehicles": f"/vehicles/{inst}",
             "files": f"/files/{inst}"}
     return [{"key": key, "label": label, "url": urls[key], "on": key == current}
-            for key, label, perm in MANAGE_TABS if allowed(request, perm)]
+            for key, label, perm in MANAGE_TABS if allowed_on(request, perm, inst)]
 
 
 async def files_index(request):
@@ -2724,12 +2745,16 @@ def manage_card(request, root, name, amp_info, panel_states):
             "mods": len(files.parse_mods(settings.get("mods", ""))), "admins": len(parse_ids(settings.get("admins", ""))),
             "max": settings.get("$MaxUsers", ""), "players": len(live.players) if live and live.online else None,
             "map": (live.query.get("map") if live and live.online else "") or "",
-            "panel_id": live.config.id if live else ""}
+            "panel_id": live.config.id if live else "",
+            "home": next((tab["url"] for tab in manage_tabs(request, name, "")), f"/manage/{name}")}
 
 
 async def manage_index(request):
-    """Every AMP server on the box, like AMP's Instances page."""
-    require(request, "files")
+    """Every AMP server on the box, like AMP's Instances page; someone given only
+    some servers sees just those."""
+    only = manager_servers(request)
+    if only is not None and not only:
+        raise web.HTTPForbidden(text="You do not have permission for that.")
     root = request.app[FILES_ROOT]
     amp_info = {}
     if request.app[AMP]:
@@ -2739,7 +2764,8 @@ async def manage_index(request):
             pass
     panel_states = {(st.config.amp_instance or amp_instance_name(st.config.log_dir)): st
                     for st in request.app[MANAGER].states.values()}
-    folders = [manage_card(request, root, name, amp_info, panel_states) for name in files.instances(root)]
+    folders = [manage_card(request, root, name, amp_info, panel_states) for name in files.instances(root)
+               if only is None or name in only]
     totals = {"running": sum(1 for f in folders if f["game"]), "players": sum(f["players"] or 0 for f in folders),
               "memory": sum(f["game"]["memory"] for f in folders if f["game"])}
     return render(request, "manage_index.html", folders=folders, root=root, has_amp=bool(request.app[AMP]),
@@ -2930,7 +2956,7 @@ async def finish_setup(app, name, settings, start, pause=5, patience=600, downlo
 async def manage_delete(request):
     """Delete a whole server, carefully: named accounts only, its name typed out,
     stopped first and backed up before AMP removes it."""
-    require(request, "delete_servers")
+    require_on(request, "delete_servers")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     form = await request.post()
@@ -2965,7 +2991,7 @@ async def manage_delete(request):
 
 async def manage_newgame(request):
     """A new game on one server: stop it, put its save aside (kept, not deleted) and start it again."""
-    require(request, "power")
+    require_on(request, "power")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     back = f"/manage/{inst}"
@@ -3003,7 +3029,7 @@ async def manage_newgame(request):
 
 
 async def manage_overview(request):
-    require(request, "power")
+    require_on(request, "power")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     running, status, error = files.amp_running(base), {}, ""
@@ -3015,13 +3041,13 @@ async def manage_overview(request):
     metrics = [{"name": name, **m} for name, m in (status.get("Metrics") or {}).items() if isinstance(m, dict)]
     return render(request, "manage_overview.html", inst=inst, running=running, error=error, metrics=metrics,
                   state=AMP_STATES.get(status.get("State"), "Unknown") if status else "", uptime=status.get("Uptime", ""),
-                  has_amp=bool(request.app[AMP]), can_delete=allowed(request, "delete_servers"),
+                  has_amp=bool(request.app[AMP]), can_delete=allowed_on(request, "delete_servers", inst),
                   tabs=manage_tabs(request, inst, "overview"))
 
 
 async def manage_power(request):
     """The game server's own power buttons, through that server's AMP."""
-    require(request, "power")
+    require_on(request, "power")
     inst, action = request.match_info["inst"], request.match_info["action"]
     server_folder(request)
     if action not in ("start", "stop", "restart", "update"):
@@ -3039,7 +3065,7 @@ async def manage_power(request):
 
 
 async def manage_console(request):
-    require(request, "files")
+    require_on(request, "files")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     if request.method == "POST":
@@ -3119,7 +3145,7 @@ def setting_text(setting):
 
 
 async def manage_settings(request):
-    require(request, "amp_settings")
+    require_on(request, "amp_settings")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     running, groups, error = files.amp_running(base), [], ""
@@ -3161,13 +3187,13 @@ async def manage_settings(request):
     listed = {a["id"] for a in admins or []}
     ready = [{"id": i, "name": (request.app[DB].player(i) or {"name": i})["name"]} for i in sorted(staff - listed)]
     return render(request, "manage_settings.html", inst=inst, running=running, error=error, groups=groups,
-                  admins=admins, ready=ready, max_admins=MAX_ADMINS, can_admins=allowed(request, "game_admins"),
+                  admins=admins, ready=ready, max_admins=MAX_ADMINS, can_admins=allowed_on(request, "game_admins", inst),
                   value=setting_text, slug=lambda title: re.sub(r"[^a-z]+", "-", title.lower()).strip("-"),
                   tabs=manage_tabs(request, inst, "settings"))
 
 
 async def file_browser(request):
-    require(request, "files")
+    require_on(request, "files")
     inst = request.match_info["inst"]
     base, path = server_folder(request, request.match_info.get("rel", ""))
     if not path.exists():
@@ -3192,7 +3218,7 @@ async def file_browser(request):
 
 
 async def file_action(request):
-    require(request, "files")
+    require_on(request, "files")
     inst = request.match_info["inst"]
     base, path = server_folder(request, request.match_info.get("rel", ""))
     rel = files.relative(base, path)
@@ -3315,7 +3341,7 @@ def admin_list(db, value):
 
 async def manage_admins(request):
     """Add or take off one in-game admin on one server, from its Settings tab."""
-    require(request, "game_admins")
+    require_on(request, "game_admins")
     inst = request.match_info["inst"]
     server_folder(request)
     form = await request.post()
@@ -3353,7 +3379,7 @@ OURS = "ours"
 
 
 async def mods_page(request):
-    require(request, "mods")
+    require_on(request, "mods")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     on_disk, mods, error = files.downloaded_mods(base), [], ""
@@ -3398,7 +3424,7 @@ async def mods_page(request):
     category_links = ({"": mods_link(tag="")} | {value: mods_link(tag=value) for value in workshop.CATEGORIES}
                       | {OURS: mods_link(tag=OURS)})
     return render(request, "mods.html", inst=inst, mods=mods, on_disk=on_disk, spare=spare, error=error,
-                  running=running, can_files=allowed(request, "files"), tabs=manage_tabs(request, inst, "mods"),
+                  running=running, can_files=allowed_on(request, "files", inst), tabs=manage_tabs(request, inst, "mods"),
                   using=using, browse=browse, browse_error=browse_error, browse_q=query, browse_sort=sort, ours=ours,
                   browse_tag=tag, categories=workshop.CATEGORIES, category_links=category_links,
                   sorts=workshop.SORTS, sort_links=sort_links, links=links,
@@ -3450,7 +3476,7 @@ async def add_many_mods(request, inst, base, form):
 
 
 async def mods_change(request):
-    require(request, "mods")
+    require_on(request, "mods")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     form = await request.post()
@@ -3627,7 +3653,7 @@ def limit_text(limit):
 
 async def vehicles_page(request):
     """Hide vehicles, change what depot vehicles cost and limit how many each side may have."""
-    require(request, "vehicles")
+    require_on(request, "vehicles")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     error, vehicles = "", None
@@ -3674,7 +3700,7 @@ async def vehicles_page(request):
 
 
 async def vehicles_change(request):
-    require(request, "vehicles")
+    require_on(request, "vehicles")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     form = await request.post()
@@ -3857,7 +3883,7 @@ async def vehicles_change(request):
 
 async def arsenal_page(request):
     """Hide items from the OYB Arsenal and change what they cost, per server."""
-    require(request, "arsenal")
+    require_on(request, "arsenal")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     error, items, hidden, prices, extras, moved, sides, renames = "", None, set(), {}, {}, {}, {}, {}
@@ -3897,7 +3923,7 @@ async def arsenal_page(request):
 
 
 async def arsenal_change(request):
-    require(request, "arsenal")
+    require_on(request, "arsenal")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     form = await request.post()
@@ -4064,7 +4090,7 @@ async def arsenal_change(request):
 
 async def instance_power(request):
     """Start or stop a whole AMP instance from the panel."""
-    require(request, "power")
+    require_on(request, "power")
     inst, action = request.match_info["inst"], request.match_info["action"]
     server_folder(request)
     if action not in ("start", "stop"):
@@ -4570,7 +4596,9 @@ async def access_page(request):
     mine = db.grants(target["id"])
     return render(request, "user_access.html", target=target, mine=mine, grant_list=auth.GRANTS,
                   discord_pages=DISCORD_PAGES, role_can=auth.can,
-                  has=lambda key: auth.allows(target["role"], mine, key))
+                  has=lambda key: auth.allows(target["role"], mine, key),
+                  server_parts=auth.SERVER_PARTS, server_grant=auth.server_grant,
+                  manager_instances=files.instances(request.app[FILES_ROOT]))
 
 
 async def add_user(request):
@@ -4622,11 +4650,23 @@ async def change_user(request):
         if "discord" in chosen:
             chosen = {g for g in chosen if not g.startswith("discord:")}
         before = db.grants(target["id"])
+        chosen |= {g for g in before if g.startswith("sm:")}
         db.set_grants(target["id"], chosen)
         if chosen != before:
             audit(request, "changed access", target=target["username"],
                   detail=", ".join(sorted(chosen)) or "role only")
         flash(request, f"{target['username']}'s extra access saved.")
+    elif action == "servers":
+        ticked = set(form.getall("server", []))
+        chosen = {auth.server_grant(name, perm) for name in files.instances(request.app[FILES_ROOT])
+                  for perm, _ in auth.SERVER_PARTS if auth.server_grant(name, perm) in ticked}
+        before = db.grants(target["id"])
+        db.set_grants(target["id"], {g for g in before if not g.startswith("sm:")} | chosen)
+        if chosen != {g for g in before if g.startswith("sm:")}:
+            audit(request, "changed server access", target=target["username"],
+                  detail=", ".join(sorted(g[3:] for g in chosen)) or "none")
+        flash(request, f"{target['username']}'s server access saved.")
+        raise web.HTTPFound(f"/users/{target['id']}/access")
     elif action in ("disable", "enable"):
         if action == "disable" and (target["id"] == request[USER]["id"] or last_owner):
             flash(request, "You can't disable yourself or the last senior admin.", "error")
