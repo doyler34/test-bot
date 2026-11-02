@@ -119,7 +119,7 @@ def inherited(library, text, key, ident, want):
     return None
 
 
-def describe(library, text):
+def describe(library, text, unknown):
     parts = []
     for key in LISTS:
         found = entries(text, key)
@@ -130,7 +130,7 @@ def describe(library, text):
             kind = kind or (inherited(library, text, key, ident, 1) if ident else None)
             if value is None and ident:
                 value = inherited(library, text, key, ident, 2)
-            shown.append(f"{kind or 'PROPS (no type set)'} {value if value is not None else '?'}")
+            shown.append(f"{kind or unknown} {value if value is not None else '?'}")
         parts.append(f"{LIST_NAMES[key]}: {', '.join(shown)}")
     return parts
 
@@ -143,8 +143,13 @@ def default_addons():
 
 
 def game_paks(addons):
-    data = addons.parent.parent / "addons" / "data"
-    return [Pak(p) for p in sorted(data.glob("*.pak"))] if data.is_dir() else []
+    """The game's own paks, found near the mods (a server keeps them in addons/data)."""
+    for folder in list(addons.parents)[:4]:
+        for data in [folder / "addons" / "data", *folder.glob("*/addons/data"), *folder.glob("*/*/addons/data")]:
+            paks = sorted(data.glob("data*.pak"))
+            if paks:
+                return data, [Pak(p) for p in paks]
+    return None, []
 
 
 def mods(addons):
@@ -156,9 +161,15 @@ def mods(addons):
 
 def vehicles(addons, want):
     every = list(mods(addons))
-    game = game_paks(addons)
+    data, game = game_paks(addons)
     library = Library(game + [pak for _, paks in every for pak in paks])
-    print(f"Mods in {addons}" + ("" if game else "  (the game's own files weren't found, so types left to them show as no type set)"))
+    print(f"Mods in {addons}")
+    if game:
+        print(f"The game's own files: {data}")
+        unknown = "PROPS (no type set)"
+    else:
+        print("THE GAME'S OWN FILES WEREN'T FOUND: a type left to them shows as 'type unknown'.")
+        unknown = "type unknown"
     for name, paks in every:
         shown, quiet = [], 0
         for pak in paks:
@@ -166,7 +177,7 @@ def vehicles(addons, want):
                 if not path.endswith(".et") or "/vehicles/" not in path.lower() or want not in path.lower():
                     continue
                 text = pak.text(path)
-                parts = describe(library, text) if text else []
+                parts = describe(library, text, unknown) if text else []
                 if not parts:
                     quiet += 1
                     continue
