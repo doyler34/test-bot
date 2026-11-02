@@ -66,21 +66,27 @@ class Pak:
 
 
 class Library:
-    """Every prefab by path, the mods' over the game's, read when first asked for."""
+    """Every prefab by path, read when first asked for. A mod can override one of the
+    game's with a file holding only what it changes, so every copy is kept, the
+    mods' first."""
 
     def __init__(self, paks):
         self.where, self.cache = {}, {}
         for pak in paks:
             for path in pak.files:
                 if path.endswith(".et"):
-                    self.where[path.lower()] = (pak, path)
+                    self.where.setdefault(path.lower(), []).insert(0, (pak, path))
 
-    def text(self, path):
+    def texts(self, path):
         key = path.lower()
         if key not in self.cache:
-            found = self.where.get(key)
-            self.cache[key] = found[0].text(found[1]) if found else None
+            self.cache[key] = [t for t in (pak.text(name) for pak, name in self.where.get(key, [])) if t]
         return self.cache[key]
+
+    def text(self, path):
+        """The copy that names the prefab it comes from, else the first."""
+        found = self.texts(path)
+        return next((t for t in found if PARENT.match(t)), found[0] if found else None)
 
 
 def block(text, key):
@@ -109,15 +115,20 @@ def entries(text, key):
 
 
 def inherited(library, text, key, ident, want):
-    """What the prefab's ancestors give an entry: want 1 for its type, 2 for its value."""
+    """What the prefab's ancestors give an entry: want 1 for its type, 2 for its value.
+    Every copy of an ancestor counts, a mod's override before the game's own."""
     for _ in range(30):
         parent = PARENT.match(text)
-        text = library.text(parent[1]) if parent else None
+        if not parent:
+            return None
+        copies = library.texts(parent[1])
+        for copy in copies:
+            for entry in entries(copy, key) or []:
+                if entry[0] == ident and entry[want] is not None:
+                    return entry[want]
+        text = library.text(parent[1])
         if not text:
             return None
-        for entry in entries(text, key) or []:
-            if entry[0] == ident and entry[want] is not None:
-                return entry[want]
     return None
 
 
@@ -231,14 +242,15 @@ def raw(addons, want):
                     if not parent:
                         print("  (no parent on its first line)")
                         break
-                    found = library.where.get(parent[1].lower())
+                    found = library.where.get(parent[1].lower(), [])
+                    print(f"  from {parent[1]}  [{', '.join('in ' + pak.path.parent.name for pak, _ in found) or 'NOT FOUND'}]")
+                    for copy in library.texts(parent[1]):
+                        listed = entries(copy, "m_EntityBudgetCost")
+                        if listed is not None:
+                            print("    " + ", ".join(f"{i or 'no id'} {k or '-'} {v if v is not None else '-'}" for i, k, v in listed))
                     text = library.text(parent[1])
-                    print(f"  from {parent[1]}  [{'in ' + found[0].path.parent.name if found else 'NOT FOUND'}]")
                     if not text:
                         break
-                    listed = entries(text, "m_EntityBudgetCost")
-                    if listed is not None:
-                        print("    " + ", ".join(f"{i or 'no id'} {k or '-'} {v if v is not None else '-'}" for i, k, v in listed))
                 print()
 
 
