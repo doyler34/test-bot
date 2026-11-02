@@ -5,6 +5,8 @@ read straight out of the mods' .pak files.
     python3 dev/vehicle_mods.py --prices [addons folder] [filter]   every supply cost
     python3 dev/vehicle_mods.py --raw [addons folder] filter        a vehicle's budget lists as written,
                                                                      and the prefabs it comes from
+    python3 dev/vehicle_mods.py --plan [addons folder]              which mod each vehicle with a changed
+                                                                     cost in OYB_vehicle_plan.csv comes from
 
 The addons folder defaults to the first server under /home/amp/.ampdata that has
 one; the game's own files are found next to it, to work out what a prefab
@@ -13,6 +15,7 @@ looked up there; one with no type anywhere is the game's default, building
 space (PROPS), and is marked "no type set". The filter keeps files whose path
 has that word in it.
 """
+import csv
 import re
 import struct
 import sys
@@ -254,11 +257,31 @@ def raw(addons, want):
                 print()
 
 
+def plan(addons, want):
+    rows = list(csv.DictReader(open(Path(__file__).with_name("OYB_vehicle_plan.csv"), encoding="utf-8")))
+    changed = [r for r in rows if r["Game cost"] != r["Planned cost"]]
+    every = list(mods(addons))
+    _, game = game_paks(addons)
+    library = Library(game + [pak for _, paks in every for pak in paks])
+    owners = {}
+    for row in changed:
+        found = library.where.get(row["Prefab file"].lower(), [])
+        # The copy that names its parent is the vehicle itself; one that doesn't is another mod's override.
+        whole = [pak for pak, name in found if PARENT.match(pak.text(name) or "")]
+        owner = whole[-1].path.parent.name if whole else (found[-1][0].path.parent.name if found else "NOT FOUND")
+        owners.setdefault(owner, []).append(row)
+    print(f"{len(changed)} vehicles with a changed cost, by the mod they come from:")
+    for owner, listed in sorted(owners.items()):
+        print(f"\n== {owner}: {len(listed)}")
+        for row in listed:
+            print(f"  {row['Prefab file']}  {row['Game cost']} -> {row['Planned cost']}")
+
+
 def main():
     args = sys.argv[1:]
     mode = vehicles
-    if args and args[0] in ("--prices", "--raw"):
-        mode, args = {"--prices": prices, "--raw": raw}[args[0]], args[1:]
+    if args and args[0] in ("--prices", "--raw", "--plan"):
+        mode, args = {"--prices": prices, "--raw": raw, "--plan": plan}[args[0]], args[1:]
     addons = Path(args[0]) if args else default_addons()
     want = args[1].lower() if len(args) > 1 else ""
     if not addons or not addons.is_dir():
