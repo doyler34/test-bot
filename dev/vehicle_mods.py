@@ -1,12 +1,15 @@
-"""What every mod on a server sets for its vehicles: the costs and budgets in each
-vehicle prefab, read straight out of the mods' .pak files.
+"""What every mod on a server sets for its vehicles, and every supply cost it sets,
+read straight out of the mods' .pak files.
 
-    python3 dev/vehicle_mods.py [addons folder] [name filter]
+    python3 dev/vehicle_mods.py [addons folder] [filter]            vehicles' budgets
+    python3 dev/vehicle_mods.py --prices [addons folder] [filter]   every supply cost
 
 The addons folder defaults to the first server under /home/amp/.ampdata that has
-one. Only prefabs that set a cost or budget of their own are printed; the rest
-of a mod's vehicles are counted. A budget type shown as "?" is left to the
-prefab it comes from.
+one; the game's own files are found next to it, to work out what a prefab
+takes from the one it's based on. A budget entry with no type of its own is
+looked up there; one with no type anywhere is the game's default, building
+space (PROPS), and is marked "no type set". The filter keeps files whose path
+has that word in it.
 """
 import re
 import struct
@@ -15,15 +18,28 @@ import zlib
 from pathlib import Path
 
 LISTS = ("m_EntityBudgetCost", "m_EntityChildrenBudgetCost", "m_aCrewEntityBudgetCost", "m_aPassengerEntityBudgetCost")
-SINGLE = re.compile(r"^\s*(m_iSupplyCost|m_iBuildingCost|m_eEntityType|m_EntityType)\s+(\S+)", re.M)
+LIST_NAMES = {"m_EntityBudgetCost": "own", "m_EntityChildrenBudgetCost": "children",
+              "m_aCrewEntityBudgetCost": "crew", "m_aPassengerEntityBudgetCost": "passengers"}
+ENTRY = re.compile(r'SCR_EntityBudgetValue\s*(?:"\{([0-9A-F]+)\}")?\s*\{([^{}]*)\}')
 PARENT = re.compile(r'^\w+\s*:\s*"\{[0-9A-F]+\}([^"]+)"')
+PREFAB = re.compile(r'm_sEntityPrefab\s+"\{[0-9A-F]+\}([^"]+)"')
+COST = re.compile(r"\b(m_iSupplyCost|m_fSpawnSupplyCost|m_iSupplyRefundAmount)\s+(-?[\d.]+)")
 
 
-def entries(pak):
-    """(path, offset, packed size, compressed) for every file in a PAC1 pak."""
-    found = []
+class Pak:
+    def __init__(self, path):
+        self.path, self.files = path, {}
+        with open(path, "rb") as f:
+            if f.read(12)[8:12] != b"PAC1":
+                return
+            while len(head := f.read(8)) == 8:
+                tag, length = head[:4], struct.unpack(">I", head[4:])[0]
+                if tag == b"FILE":
+                    self.walk(f.read(length), 0, "")
+                else:
+                    f.seek(length, 1)
 
-    def walk(buf, pos, prefix):
+    def walk(self, buf, pos, prefix):
         kind, size = buf[pos], buf[pos + 1]
         name = buf[pos + 2:pos + 2 + size].decode("utf-8", "replace")
         pos += 2 + size
@@ -32,29 +48,37 @@ def entries(pak):
             count = struct.unpack_from("<I", buf, pos)[0]
             pos += 4
             for _ in range(count):
-                pos = walk(buf, pos, path)
+                pos = self.walk(buf, pos, path)
             return pos
         offset, packed, _ = struct.unpack_from("<III", buf, pos)
-        found.append((path, offset, packed, struct.unpack_from(">I", buf, pos + 16)[0] != 0))
+        self.files[path] = (offset, packed, struct.unpack_from(">I", buf, pos + 16)[0] != 0)
         return pos + 24
 
-    with open(pak, "rb") as f:
-        if f.read(12)[8:12] != b"PAC1":
-            return found
-        while len(head := f.read(8)) == 8:
-            tag, length = head[:4], struct.unpack(">I", head[4:])[0]
-            if tag == b"FILE":
-                walk(f.read(length), 0, "")
-            else:
-                f.seek(length, 1)
-    return found
+    def text(self, path):
+        offset, packed, compressed = self.files[path]
+        with open(self.path, "rb") as f:
+            f.seek(offset)
+            raw = f.read(packed)
+        raw = zlib.decompress(raw) if compressed else raw
+        return None if raw[:4] in (b"FORM", b"EBIN") else raw.decode("utf-8", "replace")
 
 
-def read(pak, entry):
-    with open(pak, "rb") as f:
-        f.seek(entry[1])
-        raw = f.read(entry[2])
-    return zlib.decompress(raw) if entry[3] else raw
+class Library:
+    """Every prefab by path, the mods' over the game's, read when first asked for."""
+
+    def __init__(self, paks):
+        self.where, self.cache = {}, {}
+        for pak in paks:
+            for path in pak.files:
+                if path.endswith(".et"):
+                    self.where[path.lower()] = (pak, path)
+
+    def text(self, path):
+        key = path.lower()
+        if key not in self.cache:
+            found = self.where.get(key)
+            self.cache[key] = found[0].text(found[1]) if found else None
+        return self.cache[key]
 
 
 def block(text, key):
@@ -69,23 +93,45 @@ def block(text, key):
     return text[at.end():i - 1]
 
 
-def budgets(inside):
-    """'PROPS 14000, CAMPAIGN 1375' from a budget list; a type the prefab leaves to its parent shows as '?'."""
+def entries(text, key):
+    """[(id, type or None, value or None)] in one budget list, or None without the list."""
+    inside = block(text, key)
+    if inside is None:
+        return None
     out = []
-    for entry in re.findall(r'SCR_EntityBudgetValue\s*(?:"\{[0-9A-F]+\}")?\s*\{([^{}]*)\}', inside):
-        kind = re.search(r"m_BudgetType\s+(\w+)", entry)
-        value = re.search(r"m_Value\s+(-?\d+)", entry)
-        out.append(f"{kind[1] if kind else '?'} {value[1] if value else '?'}")
-    return ", ".join(out)
+    for ident, body in ENTRY.findall(inside):
+        kind = re.search(r"m_BudgetType\s+(\w+)", body)
+        value = re.search(r"m_Value\s+(-?\d+)", body)
+        out.append((ident, kind[1] if kind else None, int(value[1]) if value else None))
+    return out
 
 
-def describe(text):
+def inherited(library, text, key, ident, want):
+    """What the prefab's ancestors give an entry: want 1 for its type, 2 for its value."""
+    for _ in range(30):
+        parent = PARENT.match(text)
+        text = library.text(parent[1]) if parent else None
+        if not text:
+            return None
+        for entry in entries(text, key) or []:
+            if entry[0] == ident and entry[want] is not None:
+                return entry[want]
+    return None
+
+
+def describe(library, text):
     parts = []
     for key in LISTS:
-        inside = block(text, key)
-        if inside is not None:
-            parts.append(f"{key.replace('m_a', '').replace('m_', '')}: [{budgets(inside)}]")
-    parts += [f"{key[3:]} {value}" for key, value in SINGLE.findall(text) if "Cost" in key]
+        found = entries(text, key)
+        if found is None:
+            continue
+        shown = []
+        for ident, kind, value in found:
+            kind = kind or (inherited(library, text, key, ident, 1) if ident else None)
+            if value is None and ident:
+                value = inherited(library, text, key, ident, 2)
+            shown.append(f"{kind or 'PROPS (no type set)'} {value if value is not None else '?'}")
+        parts.append(f"{LIST_NAMES[key]}: {', '.join(shown)}")
     return parts
 
 
@@ -96,24 +142,31 @@ def default_addons():
     return None
 
 
-def main():
-    addons = Path(sys.argv[1]) if len(sys.argv) > 1 else default_addons()
-    want = sys.argv[2].lower() if len(sys.argv) > 2 else ""
-    if not addons or not addons.is_dir():
-        sys.exit("No addons folder found; give it as the first argument.")
-    print(f"Mods in {addons}")
+def game_paks(addons):
+    data = addons.parent.parent / "addons" / "data"
+    return [Pak(p) for p in sorted(data.glob("*.pak"))] if data.is_dir() else []
+
+
+def mods(addons):
     for mod in sorted(p for p in addons.iterdir() if p.is_dir()):
+        paks = [Pak(p) for p in sorted(mod.glob("*.pak"))]
+        if paks:
+            yield mod.name.rsplit("_", 1)[0], paks
+
+
+def vehicles(addons, want):
+    every = list(mods(addons))
+    game = game_paks(addons)
+    library = Library(game + [pak for _, paks in every for pak in paks])
+    print(f"Mods in {addons}" + ("" if game else "  (the game's own files weren't found, so types left to them show as no type set)"))
+    for name, paks in every:
         shown, quiet = [], 0
-        for pak in sorted(mod.glob("*.pak")):
-            for entry in entries(pak):
-                path = entry[0]
+        for pak in paks:
+            for path in sorted(pak.files):
                 if not path.endswith(".et") or "/vehicles/" not in path.lower() or want not in path.lower():
                     continue
-                raw = read(pak, entry)
-                if raw[:4] in (b"FORM", b"EBIN"):
-                    continue
-                text = raw.decode("utf-8", "replace")
-                parts = describe(text)
+                text = pak.text(path)
+                parts = describe(library, text) if text else []
                 if not parts:
                     quiet += 1
                     continue
@@ -121,8 +174,45 @@ def main():
                 shown.append(f"  {path}" + (f"  (from {parent[1].rsplit('/', 1)[-1]})" if parent else "")
                              + "\n    " + " | ".join(parts))
         if shown or quiet:
-            print(f"\n== {mod.name.rsplit('_', 1)[0]}: {len(shown)} vehicle prefabs set costs, {quiet} don't")
-            print("\n".join(shown))
+            print(f"\n== {name}: {len(shown)} vehicle prefabs set budgets, {quiet} don't")
+            if shown:
+                print("\n".join(shown))
+
+
+def prices(addons, want):
+    print(f"Supply costs set by the mods in {addons}")
+    for name, paks in mods(addons):
+        lines = []
+        for pak in paks:
+            for path in sorted(pak.files):
+                if not path.endswith((".conf", ".et")) or want not in path.lower():
+                    continue
+                text = pak.text(path)
+                if not text or not COST.search(text):
+                    continue
+                # A catalogue's costs belong to the entry prefab named before them.
+                marks = [(m.start(), m[1].rsplit("/", 1)[-1]) for m in PREFAB.finditer(text)]
+                for cost in COST.finditer(text):
+                    owner = next((label for at, label in reversed(marks) if at < cost.start()), "")
+                    lines.append(f"  {path.rsplit('/', 1)[-1]}  {owner + '  ' if owner else ''}{cost[1][3:]} {cost[2]}")
+        if lines:
+            print(f"\n== {name}: {len(lines)} costs")
+            print("\n".join(lines))
+
+
+def main():
+    args = sys.argv[1:]
+    mode = vehicles
+    if args and args[0] == "--prices":
+        mode, args = prices, args[1:]
+    addons = Path(args[0]) if args else default_addons()
+    want = args[1].lower() if len(args) > 1 else ""
+    if not addons or not addons.is_dir():
+        sys.exit("No addons folder found; give it as the first argument.")
+    try:
+        mode(addons, want)
+    except BrokenPipeError:
+        pass
 
 
 if __name__ == "__main__":
