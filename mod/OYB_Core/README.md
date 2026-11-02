@@ -24,6 +24,13 @@ Workbench from a 16:9 PNG; its resource name (GUID from the `.meta`) is
 `OYB_LoadingScreen.IMAGE`. To change the picture, import a new PNG and put its
 resource name there.
 
+## Mods OYB Core needs
+
+To change the costs of other mods' vehicles (the list is `dev/OYB_vehicle_plan.csv`),
+Core overrides them, so it depends on those mods and only loads where they're
+installed: 4x4PickupTruck, Mi8AITA, WCS_AH-64D, WCS_AH-6M, WCS_BMP-3, WCS_M2A2,
+WCS_Mi-24V, WCS_T-72, Zagoria89BMP2 and Zagoria89Leopard2A4.
+
 ## Vehicles: hiding and limits
 
 `Scripts/Game/OYBCore/Vehicles/`, driven from the OYB panel's **Vehicles** tab.
