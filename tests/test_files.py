@@ -1,9 +1,11 @@
+import io
 import json
 import os
 import re
 import tempfile
 import time
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -436,6 +438,40 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         page = await (await self.client.get("/vehicles/Plus01")).text()
         self.assertIn("No vehicle list yet", page)
         self.assertIn(">Vehicles</a>", page)
+
+    async def test_planned_costs_stay_on_the_panel_and_download_as_excel(self):
+        folder = self.vehicle_profile()
+        m998, covered, mi8 = ("{V1}Prefabs/Vehicles/Wheeled/M998/M998.et",
+                              "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et", "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et")
+        token = await self.login("boss")
+        post = lambda **data: self.client.post("/vehicles/Plus01", data={"csrf": token, **data})
+        await post(action="plan", prefab=mi8, cost="2000")
+        await post(action="plan", prefab=m998, cost="-5")                       # not a cost
+        await post(action="plan", prefab="{X}Nope.et", cost="10")              # not on the server
+        self.assertEqual(self.db.vehicle_plans("Plus01"), {mi8: 2000})
+        self.assertFalse((folder / "vehicles.json").exists())                  # nothing written for the game
+        page = await (await self.client.get("/vehicles/Plus01")).text()
+        self.assertIn('value="2000"', page)
+        self.assertIn("/vehicles/Plus01/costs.xlsx", page)
+        planned = await (await self.client.get("/vehicles/Plus01", params={"show": "planned"})).text()
+        self.assertIn("Mi-8MT", planned)
+        self.assertNotIn(">M998<", planned)
+
+        reply = await self.client.get("/vehicles/Plus01/costs.xlsx")
+        self.assertEqual(reply.status, 200)
+        self.assertIn("attachment", reply.headers["Content-Disposition"])
+        book = zipfile.ZipFile(io.BytesIO(await reply.read()))
+        names = book.read("xl/workbook.xml").decode()
+        for sheet in ("All factions", "RU", "US"):
+            self.assertIn(f'name="{sheet}"', names)
+        everything = book.read("xl/worksheets/sheet1.xml").decode()
+        self.assertIn("Mi-8MT", everything)
+        self.assertIn("<v>2000</v>", everything)
+        self.assertNotIn("M998_covered", everything)                           # variants cost what their vehicle does
+
+        await post(action="plan", prefab=mi8, cost="")
+        self.assertEqual(self.db.vehicle_plans("Plus01"), {})
+        self.assertEqual(self.db.audit()[0]["action"], "vehicles plan")
 
     async def test_vehicles_can_be_hidden_and_prices_are_gone(self):
         self.vehicle_profile()

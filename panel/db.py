@@ -341,6 +341,15 @@ CREATE TABLE IF NOT EXISTS warnings (
     withdrawn_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS warnings_identity ON warnings (identity);
+-- Costs staff mean to give a server's vehicles later: kept here only, nothing in game reads them.
+CREATE TABLE IF NOT EXISTS vehicle_plans (
+    server TEXT NOT NULL,
+    prefab TEXT NOT NULL,
+    cost INTEGER NOT NULL,
+    by TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (server, prefab)
+);
 """
 
 
@@ -387,6 +396,21 @@ class PanelDB:
         cur = self.db.execute(sql, args)
         self.db.commit()
         return cur.lastrowid
+
+    # planned vehicle costs
+
+    def vehicle_plans(self, server):
+        """{prefab: planned cost} for one server."""
+        return {r["prefab"]: r["cost"] for r in self.all("SELECT prefab, cost FROM vehicle_plans WHERE server = ?", server)}
+
+    def plan_vehicle(self, server, prefab, cost, by):
+        """Set a planned cost, or with None take it off."""
+        if cost is None:
+            self.write("DELETE FROM vehicle_plans WHERE server = ? AND prefab = ?", server, prefab)
+        else:
+            self.write("INSERT INTO vehicle_plans (server, prefab, cost, by, at) VALUES (?, ?, ?, ?, ?)"
+                       " ON CONFLICT (server, prefab) DO UPDATE SET cost = excluded.cost, by = excluded.by, at = excluded.at",
+                       server, prefab, cost, by, now())
 
     # users
 

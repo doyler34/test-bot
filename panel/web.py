@@ -26,7 +26,7 @@ from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, p
 from bot.mortar.wind import Wind
 
 from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP, XP_PER_TEAMKILL
-from . import archive, attacks, auth, ballistics, console, files, investigate, joiners, maptiles, memory, mobs, monitor, netcheck, outliers, site, steamage, whois, workshop
+from . import archive, attacks, auth, ballistics, console, files, investigate, joiners, maptiles, memory, mobs, monitor, netcheck, outliers, site, steamage, whois, workshop, xlsx
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -3583,7 +3583,7 @@ def arsenal_link(inst, filters, page=1):
     return f"/arsenal/{inst}?" + urlencode({k: v for k, v in values.items() if v})
 
 
-VEHICLE_SHOW = {"": "Everything", "offered": "In a menu", "hidden": "Hidden",
+VEHICLE_SHOW = {"": "Everything", "offered": "In a menu", "hidden": "Hidden", "planned": "Planned cost",
                 "grouped": "In a limit group", "variants": "Variants only"}
 
 
@@ -3611,7 +3611,7 @@ def vehicle_limit_text(vehicle, settings):
     return f"{vehicle['category']} ({limit} per side)"
 
 
-def vehicle_matches(vehicles, filters, settings):
+def vehicle_matches(vehicles, filters, settings, plans=None):
     """The vehicles the filters let through; every search word has to be in the name or prefab."""
     words = filters["q"].lower().split()
     found = []
@@ -3627,12 +3627,46 @@ def vehicle_matches(vehicles, filters, settings):
             continue
         show = filters["show"]
         if ((show == "hidden" and vehicle["prefab"] not in settings["hidden"])
+                or (show == "planned" and vehicle["prefab"] not in (plans or {}))
                 or (show == "grouped" and not vehicle_group(vehicle, settings["members"]))
                 or (show == "variants" and not vehicle["variant_of"])
                 or (show == "offered" and not vehicle["menus"])):
             continue
         found.append(vehicle)
     return found
+
+
+VEHICLE_FACTIONS = {"USSR": "RU"}
+
+
+async def vehicle_costs_export(request):
+    """Every vehicle with a cost, by faction, with the planned costs: an Excel file."""
+    require_on(request, "vehicles")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    try:
+        vehicles = files.vehicle_list(base) or []
+    except (OSError, ValueError) as exc:
+        raise web.HTTPNotFound(text=f"Couldn't read the vehicle list: {exc}")
+    plans = request.app[DB].vehicle_plans(inst)
+    order = {"Helicopters": 0, "Planes": 1, "Armour": 2, "Other": 3, "Trucks": 4, "Cars": 5, "Turrets": 6}
+    rows = []
+    for v in vehicles:
+        cost, planned = v["build_cost"], plans.get(v["prefab"])
+        if v["variant_of"] or (cost is None and v["price"] is None and planned is None):
+            continue
+        for faction in str(v["factions"]).split(",") if v["factions"] else [""]:
+            rows.append([VEHICLE_FACTIONS.get(faction, faction) or "none", v["name"], v["category"], cost, v["price"], planned,
+                         v["prefab"].split("}", 1)[-1]])
+    rows.sort(key=lambda r: (r[0], order.get(r[2], 9), -(r[3] or r[4] or 0), r[1]))
+    header = ["Faction", "Vehicle", "Category", "Building menu cost", "Depot cost", "Planned cost", "Prefab file"]
+    widths = [10, 46, 13, 18, 12, 13, 70]
+    sheets = [("All factions", header, rows, widths)]
+    for faction in sorted({r[0] for r in rows}):
+        sheets.append((faction, header[1:], [r[1:] for r in rows if r[0] == faction], widths[1:]))
+    return web.Response(body=xlsx.workbook(sheets), headers={
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": f'attachment; filename="{inst}_vehicle_costs.xlsx"'})
 
 
 def vehicle_link(inst, filters, page=1):
@@ -3657,11 +3691,12 @@ async def vehicles_page(request):
     except (OSError, ValueError) as exc:
         error = f"Couldn't read the vehicle files: {exc}"
     filters = vehicle_filters(request.query)
+    plans = request.app[DB].vehicle_plans(inst)
     try:
         page = max(1, int(request.query.get("page", "1")))
     except ValueError:
         page = 1
-    found = vehicle_matches(vehicles or [], filters, settings)
+    found = vehicle_matches(vehicles or [], filters, settings, plans)
     pages = max(1, -(-len(found) // ARSENAL_PAGE_SIZE))
     page = min(page, pages)
     shown = found[(page - 1) * ARSENAL_PAGE_SIZE:page * ARSENAL_PAGE_SIZE]
@@ -3679,7 +3714,7 @@ async def vehicles_page(request):
     process = files.game_process(base)
     # Written before the running game started: the running game hasn't written its own yet.
     stale = bool(age and process and age < time.time() - process["up"])
-    return render(request, "vehicles.html", list_info=list_info, stale=stale,
+    return render(request, "vehicles.html", list_info=list_info, stale=stale, plans=plans,
                   categories_all=files.VEHICLE_CATEGORIES, per_category=per_category, vehicle_limit_text=vehicle_limit_text, inst=inst, tabs=manage_tabs(request, inst, "vehicles"), error=error,
                   vehicles=vehicles, shown=shown, found=len(found), settings=settings, names=names,
                   members_per_group=members_per_group, vehicle_group=vehicle_group, limit_text=limit_text,
@@ -3728,6 +3763,22 @@ async def vehicles_change(request):
         if not 0 <= number <= files.ARSENAL_MAX_PRICE:
             fail(f"{what} is a whole number from 0 to {files.ARSENAL_MAX_PRICE:,}.")
         return number
+
+    if action == "plan":
+        # Only kept on the panel, for changing the costs in a mod later: the server never sees it.
+        if prefab not in by_prefab:
+            fail("That vehicle isn't in this server's list.")
+        cost = form.get("cost", "").strip()
+        if cost:
+            planned = read_number("cost", "A planned cost")
+            request.app[DB].plan_vehicle(inst, prefab, planned, request[USER]["username"])
+            message = f"{name}: planned cost {planned}."
+        else:
+            request.app[DB].plan_vehicle(inst, prefab, None, request[USER]["username"])
+            message = f"{name}: planned cost taken off."
+        audit(request, "vehicles plan", inst, name, cost or "cleared")
+        flash(request, message + " Nothing changes in game.")
+        raise web.HTTPFound(back)
 
     def read_limit():
         """An empty box is unlimited."""
@@ -4813,6 +4864,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/arsenal/{inst}", arsenal_page)
     app.router.add_post("/arsenal/{inst}", arsenal_change)
     app.router.add_get("/vehicles/{inst}", vehicles_page)
+    app.router.add_get("/vehicles/{inst}/costs.xlsx", vehicle_costs_export)
     app.router.add_post("/vehicles/{inst}", vehicles_change)
     app.router.add_route("GET", "/console", console_page)
     app.router.add_post("/console", console_page)
