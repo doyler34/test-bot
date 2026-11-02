@@ -3,6 +3,8 @@ read straight out of the mods' .pak files.
 
     python3 dev/vehicle_mods.py [addons folder] [filter]            vehicles' budgets
     python3 dev/vehicle_mods.py --prices [addons folder] [filter]   every supply cost
+    python3 dev/vehicle_mods.py --raw [addons folder] filter        a vehicle's budget lists as written,
+                                                                     and the prefabs it comes from
 
 The addons folder defaults to the first server under /home/amp/.ampdata that has
 one; the game's own files are found next to it, to work out what a prefab
@@ -211,11 +213,40 @@ def prices(addons, want):
             print("\n".join(lines))
 
 
+def raw(addons, want):
+    every = list(mods(addons))
+    data, game = game_paks(addons)
+    library = Library(game + [pak for _, paks in every for pak in paks])
+    for name, paks in every:
+        for pak in paks:
+            for path in sorted(pak.files):
+                if not path.endswith(".et") or want not in path.lower():
+                    continue
+                text = pak.text(path)
+                if not text or block(text, "m_EntityBudgetCost") is None:
+                    continue
+                print(f"== {name}: {path}\n{text.splitlines()[0]}\n m_EntityBudgetCost {{{block(text, 'm_EntityBudgetCost')}}}")
+                for _ in range(30):
+                    parent = PARENT.match(text)
+                    if not parent:
+                        print("  (no parent on its first line)")
+                        break
+                    found = library.where.get(parent[1].lower())
+                    text = library.text(parent[1])
+                    print(f"  from {parent[1]}  [{'in ' + found[0].path.parent.name if found else 'NOT FOUND'}]")
+                    if not text:
+                        break
+                    listed = entries(text, "m_EntityBudgetCost")
+                    if listed is not None:
+                        print("    " + ", ".join(f"{i or 'no id'} {k or '-'} {v if v is not None else '-'}" for i, k, v in listed))
+                print()
+
+
 def main():
     args = sys.argv[1:]
     mode = vehicles
-    if args and args[0] == "--prices":
-        mode, args = prices, args[1:]
+    if args and args[0] in ("--prices", "--raw"):
+        mode, args = {"--prices": prices, "--raw": raw}[args[0]], args[1:]
     addons = Path(args[0]) if args else default_addons()
     want = args[1].lower() if len(args) > 1 else ""
     if not addons or not addons.is_dir():
