@@ -1,0 +1,94 @@
+Vehicle,Category,Building menu cost,Depot cost,Prefab file
+AH64D Base,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/AH64D_Base.et
+AH64D Desert AGM114L X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/Desert/AH64D_Desert_AGM114L_X2.et
+AH64D Desert AGM114L X4,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/Desert/AH64D_Desert_AGM114L_X4.et
+AH64D Desert AGM65 X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/Desert/AH64D_Desert_AGM65_X2.et
+AH64D Desert AGM65 X4,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/Desert/AH64D_Desert_AGM65_X4.et
+AH64D Desert AIM9 X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/Desert/AH64D_Desert_AIM9_X2.et
+AH64D Desert M261,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/Desert/AH64D_Desert_M261.et
+AH64D RAF AGM114L X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RAF/AH64D_RAF_AGM114L_X2.et
+AH64D RAF AGM114L X4,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RAF/AH64D_RAF_AGM114L_X4.et
+AH64D RAF AGM65 X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RAF/AH64D_RAF_AGM65_X2.et
+AH64D RAF AGM65 X4,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RAF/AH64D_RAF_AGM65_X4.et
+AH64D RAF AIM9 X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RAF/AH64D_RAF_AIM9_X2.et
+AH64D RAF M261,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RAF/AH64D_RAF_M261.et
+AH64D RNLAF AGM114L X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RNLAF/AH64D_RNLAF_AGM114L_X2.et
+AH64D RNLAF AGM114L X4,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RNLAF/AH64D_RNLAF_AGM114L_X4.et
+AH64D RNLAF AGM65 X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RNLAF/AH64D_RNLAF_AGM65_X2.et
+AH64D RNLAF AGM65 X4,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RNLAF/AH64D_RNLAF_AGM65_X4.et
+AH64D RNLAF AIM9 X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RNLAF/AH64D_RNLAF_AIM9_X2.et
+AH64D RNLAF M261,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/RNLAF/AH64D_RNLAF_M261.et
+AH64D USArmy AGM114L X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/USArmy/AH64D_USArmy_AGM114L_X2.et
+AH64D USArmy AGM114L X4,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/USArmy/AH64D_USArmy_AGM114L_X4.et
+AH64D USArmy AGM65 X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/USArmy/AH64D_USArmy_AGM65_X2.et
+AH64D USArmy AGM65 X4,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/USArmy/AH64D_USArmy_AGM65_X4.et
+AH64D USArmy AIM9 X2,Helicopters,6800,,Prefabs/Vehicles/Helicopters/AH64D/USArmy/AH64D_USArmy_AIM9_X2.et
+UH-1H Helicopter Gunship – HE,Helicopters,2500,,Prefabs/Vehicles/Helicopters/UH1H/UH1H_armed_gunship_HE.et
+UH-1H Helicopter Gunship – HE,Helicopters,2500,,Prefabs/Vehicles/Helicopters/UH1H/UH1H_armed_gunship_HE_sharkNose.et
+UH-1H Helicopter Gunship – HEDP,Helicopters,2500,,Prefabs/Vehicles/Helicopters/UH1H/UH1H_armed_gunship_HEDP.et
+UH-1H Helicopter Gunship – HEDP,Helicopters,2500,,Prefabs/Vehicles/Helicopters/UH1H/UH1H_armed_gunship_HEDP_sharkNose.et
+UH1H armed M261,Helicopters,2000,,Prefabs/Vehicles/Helicopters/UH1H/UH1H_armed_M261.et
+UH1H armed M261 SharkNose,Helicopters,2000,,Prefabs/Vehicles/Helicopters/UH1H/UH1H_armed_M261_SharkNose.et
+AH6M AIM92X1,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/AH6M_AIM92X1.et
+AH6M AIM92X2,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/AH6M_AIM92X2.et
+AH6M ATGMX1,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/AH6M_ATGMX1.et
+AH6M ATGMX2,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/AH6M_ATGMX2.et
+AH6M GAU19,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/AH6M_GAU19.et
+AH6M M134,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/AH6M_M134.et
+AH6M RKT,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/AH6M_RKT.et
+AH6M RKTO,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/AH6M_RKTO.et
+AH6M Scout,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/AH6M_Scout.et
+MH6M,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/MH6M.et
+MH6M Repair,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/MH6M_Repair.et
+MH6M Supply,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/MH6M_Supply.et
+UH-1H Armed Transport Helicopter,Helicopters,1500,,Prefabs/Vehicles/Helicopters/UH1H/UH1H_armed.et
+UH-1H Cargo,Helicopters,1250,,Prefabs/Vehicles/Helicopters/UH1H/UH1H_Cargo.et
+UH-1H Transport Helicopter,Helicopters,1250,,Prefabs/Vehicles/Helicopters/UH1H/UH1H.et
+M2A3 BUSK Desert,Armour,4000,,Prefabs/Vehicles/Tracked/M2A2/M2A3/M2A3_BUSK_Desert.et
+M2A3 BUSK MERDC,Armour,4000,,Prefabs/Vehicles/Tracked/M2A2/M2A3/M2A3_BUSK_MERDC.et
+M2A3 BUSK OD,Armour,4000,,Prefabs/Vehicles/Tracked/M2A2/M2A3/M2A3_BUSK_OD.et
+M2A3 Desert,Armour,4000,,Prefabs/Vehicles/Tracked/M2A2/M2A3/M2A3_Desert.et
+M2A3 MERDC,Armour,4000,,Prefabs/Vehicles/Tracked/M2A2/M2A3/M2A3_MERDC.et
+M2A3 OD,Armour,4000,,Prefabs/Vehicles/Tracked/M2A2/M2A3/M2A3_OD.et
+Leopard 2A4,Armour,2800,,Leopard2A4.et
+M2A2 BUSK Desert,Armour,2500,,Prefabs/Vehicles/Tracked/M2A2/M2A2_BUSK_Desert.et
+M2A2 BUSK MERDC,Armour,2500,,Prefabs/Vehicles/Tracked/M2A2/M2A2_BUSK_MERDC.et
+M2A2 BUSK OD,Armour,2500,,Prefabs/Vehicles/Tracked/M2A2/M2A2_BUSK_OD.et
+M2A2 Desert,Armour,2000,,Prefabs/Vehicles/Tracked/M2A2/M2A2_Desert.et
+M2A2 MERDC,Armour,2000,,Prefabs/Vehicles/Tracked/M2A2/M2A2_MERDC.et
+M2A2 OD,Armour,2000,,Prefabs/Vehicles/Tracked/M2A2/M2A2_OD.et
+LAV-25 Reconnaissance Vehicle,Armour,1800,,Prefabs/Vehicles/Wheeled/Conflict_Variants/LAV25_Conflict.et
+LAV-25 Reconnaissance Vehicle,Armour,1800,,Prefabs/Vehicles/Wheeled/Conflict_Variants/LAV25_MERDC_Conflict.et
+RHIB Transport,Armour,750,,Prefabs/Vehicles/Naval/RHIB/RHIB_Transport.et
+RHIB Gunboat,Other,750,,Prefabs/Vehicles/Naval/RHIB/RHIB_Gunboat.et
+Mobile Command Unit,Trucks,420,,Prefabs/MP/Campaign/Assets/CampaignMobileAssemblyWest.et
+Kamaz5350 Arsenal Camo,Trucks,380,,Prefabs/Vehicles/Wheeled/KamAZ5350/Camo/Kamaz5350_Arsenal_Camo.et
+M923A1 Arsenal Truck,Trucks,380,,Prefabs/Vehicles/Wheeled/M923A1/M923A1_arsenal_MERDC.et
+M923A1 ZU23 MERDC,Trucks,300,,Prefabs/Vehicles/Wheeled/M923A1/M923A1_ZU23_MERDC.et
+M923A1 Construction Truck,Trucks,260,,Prefabs/Vehicles/Wheeled/M923A1/M923A1_engineer_MERDC.et
+Kamaz5350 Transport Camo,Trucks,200,,Prefabs/Vehicles/Wheeled/KamAZ5350/Camo/Kamaz5350_Transport_Camo.et
+Kamaz5350 Transport Covered Camo,Trucks,200,,Prefabs/Vehicles/Wheeled/KamAZ5350/Camo/Kamaz5350_Transport_Covered_Camo.et
+M923A1 Transport Truck,Trucks,200,,Prefabs/Vehicles/Wheeled/M923A1/M923A1_transport_MERDC.et
+M923A1 Transport Truck - Canopy,Trucks,200,,Prefabs/Vehicles/Wheeled/M923A1/M923A1_transport_covered_MERDC.et
+Kamaz5350 Repair Camo,Trucks,175,,Prefabs/Vehicles/Wheeled/KamAZ5350/Camo/Kamaz5350_Repair_Camo.et
+M923A1 Repair Truck,Trucks,175,,Prefabs/Vehicles/Wheeled/M923A1/M923A1_repair_MERDC.et
+Kamaz5350 Fuel Camo,Trucks,160,,Prefabs/Vehicles/Wheeled/KamAZ5350/Camo/Kamaz5350_Fuel_Camo.et
+M923A1 Fuel Truck,Trucks,160,,Prefabs/Vehicles/Wheeled/M923A1/M923A1_tanker_MERDC.et
+M1025 armed BGM71,Cars,675,,Prefabs/Vehicles/Wheeled/M998/M1025_armed_BGM71.et
+M1025 armed BGM71 MERDC,Cars,675,,Prefabs/Vehicles/Wheeled/M998/M1025_armed_BGM71_MERDC.et
+M1025 armed M134,Cars,675,,Prefabs/Vehicles/Wheeled/M998/M1025_armed_M134.et
+M1025 armed M134 MERDC,Cars,675,,Prefabs/Vehicles/Wheeled/M998/M1025_armed_M134_MERDC.et
+M1025 Light Armored Vehicle - M2,Cars,475,,Prefabs/Vehicles/Wheeled/Conflict_Variants/M1025_armed_M2HB_Conflict.et
+M1025 Light Armored Vehicle - M2,Cars,475,,Prefabs/Vehicles/Wheeled/Conflict_Variants/M1025_armed_M2HB_MERDC_Conflict.et
+M1025 armed M2HB Conflict Scope,Cars,475,,Prefabs/Vehicles/Wheeled/Conflict_Variants/M1025_armed_M2HB_Conflict_Scope.et
+M1025 armed M2HB MERDC Conflict Scope,Cars,475,,Prefabs/Vehicles/Wheeled/Conflict_Variants/M1025_armed_M2HB_MERDC_Conflict_Scope.et
+M151A2 Armed Off-road - M2,Cars,280,,Prefabs/Vehicles/Wheeled/M151A2/M151A2_M2HB_MERDC.et
+M997 Ambulance,Cars,225,,Prefabs/Vehicles/Wheeled/M998/M997_maxi_ambulance_MERDC.et
+M998 Light Utility Vehicle - Canopy,Cars,200,,Prefabs/Vehicles/Wheeled/M998/M998_covered_long_MERDC.et
+M998 Light Utility Vehicle,Cars,150,,Prefabs/Vehicles/Wheeled/M998/M998_covered_MERDC.et
+M998 Light Utility Vehicle - Open Top,Cars,150,,Prefabs/Vehicles/Wheeled/M998/M998_uncovered_MERDC.et
+M151A2 Off-road,Cars,120,,Prefabs/Vehicles/Wheeled/M151A2/M151A2_transport_MERDC.et
+M151A2 Off-road - Open Top,Cars,110,,Prefabs/Vehicles/Wheeled/M151A2/M151A2_MERDC.et
+4X4 Truck Armed 50 Transport - US,Cars,0,,Prefabs/Vehicles/Wheeled/Pickup/Onyx_01_4x4_Pickup_Transport_US_50.et
+4X4 Truck Cargo - US,Cars,0,,Prefabs/Vehicles/Wheeled/Pickup/Onyx_01_4x4_Pickup_Cargo_US.et
+4X4 Truck Transport - US,Cars,0,,Prefabs/Vehicles/Wheeled/Pickup/Onyx_01_4x4_Pickup_Transport_US.et

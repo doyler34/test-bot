@@ -1,0 +1,26 @@
+Vehicle,Category,Building menu cost,Depot cost,Prefab file
+BTR-70 Armored Personnel Carrier,Armour,975,,Prefabs/Vehicles/Wheeled/BTR70/BTR70_FIA.et
+BRDM-2 Reconnaissance Vehicle,Armour,900,,Prefabs/Vehicles/Wheeled/BRDM2/BRDM2_FIA.et
+T72B FIA,Other,4600,,Prefabs/Vehicles/Tracked/T72B/T72B_FIA.et
+T72A FIA,Other,3000,,Prefabs/Vehicles/Tracked/T72A/T72A_FIA.et
+Ural-4320 Command Truck,Trucks,420,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_FIA_command.et
+Ural-4320 Arsenal Truck,Trucks,380,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_Arsenal_FIA.et
+Ural4320 ZU23 FIA,Trucks,300,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_ZU23_FIA.et
+Ural-4320 Construction Truck,Trucks,260,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_engineer_FIA.et
+Ural-4320 Transport Truck,Trucks,200,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_FIA_transport.et
+Ural-4320 Transport Truck - Canopy,Trucks,200,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_FIA_transport_covered.et
+Ural-4320 Repair Truck,Trucks,175,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_repair_FIA.et
+Ural-4320 Fuel Truck,Trucks,160,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_FIA_tanker.et
+UAZ-469 Off-road - PKM,Cars,280,,Prefabs/Vehicles/Wheeled/UAZ469/UAZ469_PKM_FIA.et
+UAZ-469 Off-road - UK-59,Cars,250,,Prefabs/Vehicles/Wheeled/UAZ469/UAZ469_UK59_FIA.et
+UAZ-452A Ambulance,Cars,225,,Prefabs/Vehicles/Wheeled/UAZ452/UAZ452_ambulance_FIA.et
+UAZ-452 Cargo Van,Cars,200,,Prefabs/Vehicles/Wheeled/UAZ452/UAZ452_cargo_FIA.et
+UAZ-452 Transport Van,Cars,200,,Prefabs/Vehicles/Wheeled/UAZ452/UAZ452_transport_FIA.et
+UAZ-469 Off-road,Cars,150,,Prefabs/Vehicles/Wheeled/UAZ469/UAZ469_FIA.et
+UAZ-469 Off-road - Open Top,Cars,125,,Prefabs/Vehicles/Wheeled/UAZ469/UAZ469_FIA_uncovered.et
+S1203 Cargo,Cars,75,,Prefabs/Vehicles/Wheeled/S1203/S1203_cargo_FIA.et
+S1203 Minibus,Cars,75,,Prefabs/Vehicles/Wheeled/S1203/S1203_transport_FIA.et
+S105 Car,Cars,40,,Prefabs/Vehicles/Wheeled/S105/S105_FIA.et
+4X4 Truck Armed DSHK Transport - FIA,Cars,0,,Prefabs/Vehicles/Wheeled/Pickup/Onyx_01_4x4_Pickup_Transport_FIA_Dshk.et
+4X4 Truck Cargo - FIA,Cars,0,,Prefabs/Vehicles/Wheeled/Pickup/Onyx_01_4x4_Pickup_Cargo_FIA.et
+4X4 Truck Transport - FIA,Cars,0,,Prefabs/Vehicles/Wheeled/Pickup/Onyx_01_4x4_Pickup_Transport_FIA.et

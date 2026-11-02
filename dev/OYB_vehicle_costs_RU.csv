@@ -1,0 +1,69 @@
+Vehicle,Category,Building menu cost,Depot cost,Prefab file
+Mi24P Armed 9M114,Helicopters,8000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24P_Armed_9M114.et
+Mi24P Armed GUV8700,Helicopters,8000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24P_Armed_GUV8700.et
+Mi24P Armed R60,Helicopters,8000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24P_Armed_R60.et
+Mi24V Armed UPK23,Helicopters,8000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Armed_UPK23.et
+Mi24V Armed 9M114,Helicopters,7000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Armed_9M114.et
+Mi24V Armed 9M120 X16,Helicopters,7000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Armed_9M120_X16.et
+Mi24V Armed GUV8700,Helicopters,7000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Armed_GUV8700.et
+Mi24V Armed R60,Helicopters,7000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Armed_R60.et
+Mi24V Armed S8,Helicopters,7000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Armed_S8.et
+Mi24V Armed FAB250,Helicopters,6000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Armed_FAB250.et
+Mi24V Armed S5,Helicopters,6000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Armed_S5.et
+Mi-8MT Helicopter Gunship – HE,Helicopters,2625,,Prefabs/Vehicles/Helicopters/Mi8MT/Mi8MT_armed_gunship_HE.et
+Mi-8MT Helicopter Gunship – HEDP,Helicopters,2625,,Prefabs/Vehicles/Helicopters/Mi8MT/Mi8MT_armed_gunship_HEDP.et
+Mi24V Transport,Helicopters,2000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Transport.et
+Mi-8MT Armed Transport Helicopter,Helicopters,1625,,Prefabs/Vehicles/Helicopters/Mi8MT/Mi8MT_armed.et
+Mi8MT armed FAB250,Helicopters,1625,,Prefabs/Vehicles/Helicopters/Mi8MT/Mi8MT_armed_FAB250.et
+Mi8MT armed UPK23,Helicopters,1625,,Prefabs/Vehicles/Helicopters/Mi8MT/Mi8MT_armed_UPK23.et
+Mi8MT armed rockets,Helicopters,1625,,Prefabs/Vehicles/Helicopters/Mi8MT/Mi8MT_armed_rockets.et
+AH6M OPFOR AIM92X1,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/AH6M_OPFOR_AIM92X1.et
+AH6M OPFOR AIM92X2,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/AH6M_OPFOR_AIM92X2.et
+AH6M OPFOR ATGMX1,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/AH6M_OPFOR_ATGMX1.et
+AH6M OPFOR ATGMX2,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/AH6M_OPFOR_ATGMX2.et
+AH6M OPFOR GAU19,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/AH6M_OPFOR_GAU19.et
+AH6M OPFOR M134,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/AH6M_OPFOR_M134.et
+AH6M OPFOR RKT,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/AH6M_OPFOR_RKT.et
+AH6M OPFOR RKTO,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/AH6M_OPFOR_RKTO.et
+AH6M OPFOR Scout,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/AH6M_OPFOR_Scout.et
+MH6M OPFOR,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/MH6M_OPFOR.et
+MH6M OPFOR Repair,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/MH6M_OPFOR_Repair.et
+MH6M OPFOR Supply,Helicopters,1500,,Prefabs/Vehicles/Helicopters/AH6M/OPFOR/MH6M_OPFOR_Supply.et
+Mi-8MT Cargo,Helicopters,1375,,Prefabs/Vehicles/Helicopters/Mi8MT/Mi8MT_unarmed_cargo.et
+Mi-8MT Transport Helicopter,Helicopters,1375,,Prefabs/Vehicles/Helicopters/Mi8MT/Mi8MT_unarmed_transport.et
+Mi24V Supply,Helicopters,1000,,Prefabs/Vehicles/Helicopters/Mi24/Mi24V_Supply.et
+Mi8MT armed GUV8700,Helicopters,750,,Prefabs/Vehicles/Helicopters/Mi8MT/Mi8MT_armed_GUV8700.et
+BMP3 Base,Armour,3000,,Prefabs/Vehicles/Tracked/BMP3/BMP3_Base.et
+BMP-2  Konkurs (Brush Camo),Armour,2500,,IFV/BMP2/BMP2_Brush_Camo_ATGM.et
+BMP-2 Konkurs (Camo),Armour,2500,,IFV/BMP2/BMP2_Camo_ATGM.et
+BMP-2 Konkurs (Olive),Armour,2500,,IFV/BMP2/BMP2_Olive_taloshatchtest_ATGM.et
+BMP-2 Konkurs (Separatist),Armour,2500,,IFV/BMP2/BMP2_Separatist_ATGM.et
+BMP-2 (Brush Camo),Armour,2000,,IFV/BMP2/BMP2_Brush_Camo.et
+BMP-2 (Camo),Armour,2000,,IFV/BMP2/BMP2_Camo.et
+BMP-2 (Olive),Armour,2000,,IFV/BMP2/BMP2_Olive_taloshatchtest.et
+BMP-2 (Separatist),Armour,2000,,IFV/BMP2/BMP2_Separatist.et
+BTR-70 Armored Personnel Carrier,Armour,975,,Prefabs/Vehicles/Wheeled/Conflict_Variants/BTR70_Conflict.et
+BRDM-2 Reconnaissance Vehicle,Armour,900,,Prefabs/Vehicles/Wheeled/Conflict_Variants/BRDM2_Conflict.et
+T72B Base,Other,4600,,Prefabs/Vehicles/Tracked/T72B/T72B_Base.et
+T72A Base,Other,3000,,Prefabs/Vehicles/Tracked/T72A/T72A_Base.et
+Mobile Command Unit,Trucks,420,,Prefabs/MP/Campaign/Assets/CampaignMobileAssemblyEast.et
+Kamaz5350 Arsenal,Trucks,380,,Prefabs/Vehicles/Wheeled/KamAZ5350/Green/Kamaz5350_Arsenal.et
+Ural-4320 Arsenal Truck,Trucks,380,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_Arsenal.et
+Ural4320 ZU23,Trucks,300,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_ZU23.et
+Kamaz5350 Engineer,Trucks,260,,Prefabs/Vehicles/Wheeled/KamAZ5350/Green/Kamaz5350_Engineer.et
+Ural-4320 Construction Truck,Trucks,260,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_engineer.et
+Kamaz5350 Transport,Trucks,200,,Prefabs/Vehicles/Wheeled/KamAZ5350/Green/Kamaz5350_Transport.et
+Kamaz5350 Transport Covered,Trucks,200,,Prefabs/Vehicles/Wheeled/KamAZ5350/Green/Kamaz5350_Transport_Covered.et
+Ural-4320 Transport Truck,Trucks,200,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_transport.et
+Ural-4320 Transport Truck - Canopy,Trucks,200,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_transport_covered.et
+Kamaz5350 Repair,Trucks,175,,Prefabs/Vehicles/Wheeled/KamAZ5350/Green/Kamaz5350_Repair.et
+Ural-4320 Repair Truck,Trucks,175,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_repair.et
+Kamaz5350 Fuel,Trucks,160,,Prefabs/Vehicles/Wheeled/KamAZ5350/Green/Kamaz5350_Fuel.et
+Ural-4320 Fuel Truck,Trucks,160,,Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_tanker.et
+UAZ469 Kornet,Cars,675,,Prefabs/Vehicles/Wheeled/UAZ469/UAZ469_Kornet.et
+UAZ-469 Off-road - PKM,Cars,280,,Prefabs/Vehicles/Wheeled/UAZ469/UAZ469_PKM.et
+UAZ-452A Ambulance,Cars,225,,Prefabs/Vehicles/Wheeled/UAZ452/UAZ452_ambulance.et
+UAZ-452 Cargo Van,Cars,200,,Prefabs/Vehicles/Wheeled/UAZ452/UAZ452_cargo.et
+UAZ-452 Transport Van,Cars,200,,Prefabs/Vehicles/Wheeled/UAZ452/UAZ452_transport.et
+UAZ-469 Off-road,Cars,150,,Prefabs/Vehicles/Wheeled/UAZ469/UAZ469.et
+UAZ-469 Off-road - Open Top,Cars,125,,Prefabs/Vehicles/Wheeled/UAZ469/UAZ469_uncovered.et
