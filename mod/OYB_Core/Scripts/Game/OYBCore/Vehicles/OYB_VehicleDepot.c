@@ -1,24 +1,24 @@
 // Part of the vehicle limiter (see OYB_VehicleSettings.c). This file is named to
 // compile before OYB_VehicleSettings.c, which calls the methods added here.
 
-// Getting the panel's vehicle settings to players (hidden vehicles and prices
-// change what each depot shows), and telling a player when a vehicle is at its
+// Getting the panel's vehicle settings to players (hidden vehicles change what
+// each depot shows), and telling a player when a vehicle is at its
 // limit. The server sends the settings once when a player joins and again only
 // when they change; limits stay on the server.
 modded class SCR_PlayerController
 {
-	void OYB_SendVehicleSettings(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts)
+	void OYB_SendVehicleSettings(notnull array<string> hidden)
 	{
 		if (GetGame().GetPlayerController() == this)
 			return;
 
-		Rpc(OYB_RpcDo_VehicleSettings, hidden, priceItems, priceCosts);
+		Rpc(OYB_RpcDo_VehicleSettings, hidden);
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
-	protected void OYB_RpcDo_VehicleSettings(array<string> hidden, array<string> priceItems, array<int> priceCosts)
+	protected void OYB_RpcDo_VehicleSettings(array<string> hidden)
 	{
-		OYB_VehicleSettings.Get().Apply(hidden, priceItems, priceCosts);
+		OYB_VehicleSettings.Get().Apply(hidden);
 	}
 
 	void OYB_SendVehicleLimitReached(string group, int count, int limit)
@@ -39,9 +39,8 @@ modded class SCR_PlayerController
 }
 
 // The depots (the game's catalog spawner) with the panel's settings: hidden
-// vehicles and variants are left out of the list, a set price is what it shows
-// and charges, and a vehicle whose group is at its limit for that side isn't
-// spawned (see OYB_VehicleLimits.c).
+// vehicles and variants are left out of the list, and a vehicle whose group is
+// at its limit for that side isn't spawned (see OYB_VehicleLimits.c).
 //
 // A depot request runs in one go on the server: the request RPC calls
 // InitiateSpawn, which runs the game's own checks (supplies, side, rank,
@@ -121,19 +120,9 @@ modded class SCR_CatalogEntitySpawnerComponent
 	}
 }
 
-// A set price is the vehicle's cost wherever the game asks for it (the depot's
-// list, its supply check and what it takes), and hidden variants aren't picked.
+// Hidden variants aren't picked.
 modded class SCR_EntityCatalogSpawnerData
 {
-	override int GetSupplyCost()
-	{
-		int price;
-		if (OYB_VehicleSettings.Get().GetPrice(m_sDefaultPrefab, price))
-			return price;
-
-		return super.GetSupplyCost();
-	}
-
 	// The catalogue's own cost, for the panel's list.
 	int OYB_GetOwnSupplyCost()
 	{

@@ -1,9 +1,8 @@
-// The vehicle settings, made on the OYB panel's Vehicles page: vehicles to hide,
-// price overrides, and the limit groups (see OYB_VehicleLimits.c).
+// The vehicle settings, made on the OYB panel's Vehicles page: vehicles to hide
+// and the limit groups (see OYB_VehicleLimits.c). Costs are always the game's.
 //
 // $profile:OYB_Core/vehicles.json (written by the panel):
 //   { "hidden": [prefab, ...],
-//     "priceItems": [prefab, ...], "priceCosts": [supplies, ...],
 //     "limitsEnabled": true (false turns every limit off),
 //     "groupNames": [name, ...], "groupLimits": [-1 unlimited, 0 none, or N, ...],
 //     "groupItems": [prefab, ...], "groupOf": [group name, ...],
@@ -25,7 +24,7 @@
 // "building", or empty when only found by the scan).
 class OYB_VehicleSettings
 {
-	static const string BUILD = "vehicles-2026-10-31h";
+	static const string BUILD = "vehicles-2026-11-02a";
 
 	protected static const string FOLDER = "$profile:OYB_Core";
 	protected static const string SETTINGS_FILE = "$profile:OYB_Core/vehicles.json";
@@ -41,18 +40,12 @@ class OYB_VehicleSettings
 	protected static ref OYB_VehicleSettings s_Instance;
 
 	protected ref set<ResourceName> m_Hidden = new set<ResourceName>();
-	protected ref map<ResourceName, int> m_Prices = new map<ResourceName, int>();
-	protected ref map<string, int> m_PricesByGuid = new map<string, int>();
 
 	// Settings file state: the text in force, and the last text refused.
 	protected bool m_bHaveSettings;
 	protected string m_sAcceptedText;
 	protected string m_sRefusedText;
 	protected bool m_bUnreadableLogged;
-	// Prices are read once a game: a change on the panel takes effect when the
-	// next game starts, not while one runs.
-	protected bool m_bPricesFixed;
-	protected bool m_bPriceChangeLogged;
 
 	protected bool m_bServerStarted;
 
@@ -94,40 +87,15 @@ class OYB_VehicleSettings
 		return m_Hidden.Contains(prefab);
 	}
 
-	// A vehicle's price override; a variant costs what its vehicle costs. Also
-	// matched by GUID, as a prefab read from a component source may come
-	// without the same path spelling.
-	bool GetPrice(ResourceName prefab, out int price)
-	{
-		if (prefab.IsEmpty())
-			return false;
-
-		if (m_Prices.Find(prefab, price) || m_PricesByGuid.Find(SCR_ResourceNameUtils.GetPrefabGUID(prefab), price))
-			return true;
-
-		ResourceName vehicle = OYB_VehicleLimits.VariantOf(prefab);
-		if (vehicle.IsEmpty())
-			return false;
-
-		return m_Prices.Find(vehicle, price) || m_PricesByGuid.Find(SCR_ResourceNameUtils.GetPrefabGUID(vehicle), price);
-	}
-
-	void GetLists(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts)
+	void GetHidden(notnull array<string> hidden)
 	{
 		foreach (ResourceName hiddenPrefab : m_Hidden)
 			hidden.Insert(hiddenPrefab);
-
-		foreach (ResourceName pricedPrefab, int cost : m_Prices)
-		{
-			priceItems.Insert(pricedPrefab);
-			priceCosts.Insert(cost);
-		}
 	}
 
 	// What players need. The depots rebuild their lists only when what's hidden
-	// changed; a price is read when it's needed, so a price change leaves them
-	// alone.
-	void Apply(notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts)
+	// changed.
+	void Apply(notnull array<string> hidden)
 	{
 		bool hiddenChanged = hidden.Count() != m_Hidden.Count();
 		foreach (string item : hidden)
@@ -140,21 +108,8 @@ class OYB_VehicleSettings
 		foreach (string prefab : hidden)
 			m_Hidden.Insert(prefab);
 
-		m_Prices.Clear();
-		m_PricesByGuid.Clear();
-		for (int i = 0; i < Math.Min(priceItems.Count(), priceCosts.Count()); i++)
-		{
-			if (priceCosts[i] < 0 || priceItems[i].IsEmpty())
-				continue;
-
-			m_Prices.Set(priceItems[i], priceCosts[i]);
-			m_PricesByGuid.Set(SCR_ResourceNameUtils.GetPrefabGUID(priceItems[i]), priceCosts[i]);
-		}
-
 		if (hiddenChanged)
 			SCR_CatalogEntitySpawnerComponent.OYB_RefreshAll();
-
-		OYB_CardLog.Restart(string.Format("settings applied, %1 hidden, %2 priced", m_Hidden.Count(), m_Prices.Count()));
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -172,8 +127,6 @@ class OYB_VehicleSettings
 
 		m_bServerStarted = false;
 		m_sAcceptedText = string.Empty;
-		m_bPricesFixed = false;
-		m_bPriceChangeLogged = false;
 		m_iDiscoverTries = 0;
 		m_iCountTries = 0;
 		m_bExportPending = true;
@@ -242,8 +195,6 @@ class OYB_VehicleSettings
 			return;
 
 		array<string> hidden = {};
-		array<string> priceItems = {};
-		array<int> priceCosts = {};
 		bool limitsEnabled = true;
 		array<string> groupNames = {};
 		array<int> groupLimits = {};
@@ -256,7 +207,7 @@ class OYB_VehicleSettings
 		// can be empty for a moment, which isn't.
 		if (exists)
 		{
-			string error = Parse(text, hidden, priceItems, priceCosts, limitsEnabled, groupNames, groupLimits, groupItems, groupOf, categoryNames, categoryLimits);
+			string error = Parse(text, hidden, limitsEnabled, groupNames, groupLimits, groupItems, groupOf, categoryNames, categoryLimits);
 			if (!error.IsEmpty())
 			{
 				m_sRefusedText = text;
@@ -269,42 +220,14 @@ class OYB_VehicleSettings
 		m_sAcceptedText = text;
 		m_sRefusedText = string.Empty;
 
-		if (m_bPricesFixed)
-			KeepPrices(priceItems, priceCosts);
-		m_bPricesFixed = true;
-
 		OYB_VehicleLimits.Configure(limitsEnabled, groupNames, groupLimits, groupItems, groupOf, categoryNames, categoryLimits);
-		Apply(hidden, priceItems, priceCosts);
-		PrintFormat("OYB_CORE vehicle settings loaded: %1 hidden, %2 priced, limits %3, %4 groups, %5 category limits", m_Hidden.Count(), m_Prices.Count(), limitsEnabled, groupNames.Count(), categoryNames.Count());
+		Apply(hidden);
+		PrintFormat("OYB_CORE vehicle settings loaded: %1 hidden, limits %2, %3 groups, %4 category limits", m_Hidden.Count(), limitsEnabled, groupNames.Count(), categoryNames.Count());
 		SendToAll();
 	}
 
-	// Puts the prices in force back in place of the file's, saying once when the
-	// file's are different.
-	protected void KeepPrices(notnull array<string> priceItems, notnull array<int> priceCosts)
-	{
-		bool changed = priceItems.Count() != m_Prices.Count();
-		foreach (int i, string item : priceItems)
-		{
-			int cost;
-			if (!m_Prices.Find(item, cost) || i >= priceCosts.Count() || cost != priceCosts[i])
-				changed = true;
-		}
-
-		if (changed && !m_bPriceChangeLogged)
-		{
-			m_bPriceChangeLogged = true;
-			Print("OYB_CORE vehicle prices changed on the panel; they take effect when the next game starts");
-		}
-
-		array<string> hidden = {};
-		priceItems.Clear();
-		priceCosts.Clear();
-		GetLists(hidden, priceItems, priceCosts);
-	}
-
 	// Empty when the settings are usable, else what's wrong with them.
-	protected static string Parse(string text, notnull array<string> hidden, notnull array<string> priceItems, notnull array<int> priceCosts, out bool limitsEnabled,
+	protected static string Parse(string text, notnull array<string> hidden, out bool limitsEnabled,
 		notnull array<string> groupNames, notnull array<int> groupLimits, notnull array<string> groupItems, notnull array<string> groupOf,
 		notnull array<string> categoryNames, notnull array<int> categoryLimits)
 	{
@@ -317,8 +240,6 @@ class OYB_VehicleSettings
 			return "not valid JSON";
 
 		context.ReadValue("hidden", hidden);
-		context.ReadValue("priceItems", priceItems);
-		context.ReadValue("priceCosts", priceCosts);
 		if (!context.ReadValue("limitsEnabled", limitsEnabled))
 			limitsEnabled = true;
 		context.ReadValue("groupNames", groupNames);
@@ -336,18 +257,10 @@ class OYB_VehicleSettings
 				return "a category limit below -1";
 		}
 
-		if (priceItems.Count() != priceCosts.Count())
-			return "priceItems and priceCosts differ in length";
 		if (groupNames.Count() != groupLimits.Count())
 			return "groupNames and groupLimits differ in length";
 		if (groupItems.Count() != groupOf.Count())
 			return "groupItems and groupOf differ in length";
-
-		foreach (int cost : priceCosts)
-		{
-			if (cost < 0)
-				return "a negative price";
-		}
 
 		foreach (int i, string name : groupNames)
 		{
@@ -372,10 +285,8 @@ class OYB_VehicleSettings
 			return;
 
 		array<string> hidden = {};
-		array<string> priceItems = {};
-		array<int> priceCosts = {};
-		GetLists(hidden, priceItems, priceCosts);
-		controller.OYB_SendVehicleSettings(hidden, priceItems, priceCosts);
+		GetHidden(hidden);
+		controller.OYB_SendVehicleSettings(hidden);
 	}
 
 	protected void SendToAll()
@@ -811,8 +722,8 @@ class OYB_VehicleSettings
 		return prefabs;
 	}
 
-	// The vehicle's own supply cost in the building menu (what a price
-	// override replaces; crew costs come on top as the game sets them), or -1
+	// The vehicle's own supply cost in the building menu (crew costs come on
+	// top as the game sets them), or -1
 	// when the prefab sets none and the game falls back to a cost for the
 	// entity type.
 	protected static int BuildCost(ResourceName prefab)

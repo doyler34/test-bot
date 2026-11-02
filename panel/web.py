@@ -3583,7 +3583,7 @@ def arsenal_link(inst, filters, page=1):
     return f"/arsenal/{inst}?" + urlencode({k: v for k, v in values.items() if v})
 
 
-VEHICLE_SHOW = {"": "Everything", "offered": "In a menu", "hidden": "Hidden", "priced": "Price changed",
+VEHICLE_SHOW = {"": "Everything", "offered": "In a menu", "hidden": "Hidden",
                 "grouped": "In a limit group", "variants": "Variants only"}
 
 
@@ -3627,19 +3627,12 @@ def vehicle_matches(vehicles, filters, settings):
             continue
         show = filters["show"]
         if ((show == "hidden" and vehicle["prefab"] not in settings["hidden"])
-                or (show == "priced" and vehicle["prefab"] not in settings["prices"])
                 or (show == "grouped" and not vehicle_group(vehicle, settings["members"]))
                 or (show == "variants" and not vehicle["variant_of"])
                 or (show == "offered" and not vehicle["menus"])):
             continue
         found.append(vehicle)
     return found
-
-
-def vehicle_priceable(vehicle):
-    """Whether a price set on the panel changes anything for this vehicle: it's sold at
-    a depot, or the building menu gives it a supply cost of its own to replace."""
-    return not vehicle["variant_of"] and ("depot" in vehicle["menus"] or vehicle["build_cost"] is not None)
 
 
 def vehicle_link(inst, filters, page=1):
@@ -3652,12 +3645,12 @@ def limit_text(limit):
 
 
 async def vehicles_page(request):
-    """Hide vehicles, change what depot vehicles cost and limit how many each side may have."""
+    """Hide vehicles and limit how many each side may have."""
     require_on(request, "vehicles")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
     error, vehicles = "", None
-    settings = {"hidden": set(), "prices": {}, "enabled": True, "groups": {}, "members": {}, "categories": {}}
+    settings = {"hidden": set(), "enabled": True, "groups": {}, "members": {}, "categories": {}}
     try:
         vehicles = files.vehicle_list(base)
         settings = files.vehicle_settings(base)
@@ -3686,7 +3679,7 @@ async def vehicles_page(request):
     process = files.game_process(base)
     # Written before the running game started: the running game hasn't written its own yet.
     stale = bool(age and process and age < time.time() - process["up"])
-    return render(request, "vehicles.html", list_info=list_info, stale=stale, vehicle_priceable=vehicle_priceable,
+    return render(request, "vehicles.html", list_info=list_info, stale=stale,
                   categories_all=files.VEHICLE_CATEGORIES, per_category=per_category, vehicle_limit_text=vehicle_limit_text, inst=inst, tabs=manage_tabs(request, inst, "vehicles"), error=error,
                   vehicles=vehicles, shown=shown, found=len(found), settings=settings, names=names,
                   members_per_group=members_per_group, vehicle_group=vehicle_group, limit_text=limit_text,
@@ -3714,11 +3707,11 @@ async def vehicles_change(request):
     except (OSError, ValueError) as exc:
         flash(request, f"Couldn't read the vehicle files: {exc}", "error")
         raise web.HTTPFound(back)
-    hidden, prices, groups, members = settings["hidden"], settings["prices"], settings["groups"], settings["members"]
+    hidden, groups, members = settings["hidden"], settings["groups"], settings["members"]
     by_prefab = {v["prefab"]: v for v in vehicles}
     prefab = form.get("prefab", "")
-    if (action in ("hide", "show", "price", "reset", "set_group")
-            and prefab not in by_prefab and prefab not in hidden and prefab not in prices and prefab not in members):
+    if (action in ("hide", "show", "set_group")
+            and prefab not in by_prefab and prefab not in hidden and prefab not in members):
         flash(request, "That vehicle isn't in this server's list.", "error")
         raise web.HTTPFound(back)
     name = by_prefab.get(prefab, {}).get("name") or prefab.rsplit("/", 1)[-1]
@@ -3754,16 +3747,6 @@ async def vehicles_change(request):
     elif action == "show":
         hidden.discard(prefab)
         message = f"{name} is back in the building menu and depots."
-    elif action == "price":
-        if by_prefab.get(prefab, {}).get("variant_of"):
-            fail("A variant costs what its vehicle costs.")
-        if prefab in by_prefab and not vehicle_priceable(by_prefab[prefab]):
-            fail(f"{name} isn't offered with a price of its own at a depot or in the building menu, so a price wouldn't do anything.")
-        prices[prefab] = read_number("cost", "A price")
-        message = f"{name} now costs {prices[prefab]}."
-    elif action == "reset":
-        prices.pop(prefab, None)
-        message = f"{name} is back to its normal price."
     elif action == "limits":
         settings["enabled"] = form.get("enabled") == "1"
         name = "limits"
@@ -3834,16 +3817,6 @@ async def vehicles_change(request):
         elif change == "show":
             hidden.difference_update(targets)
             done, outcome = len(targets), "shown again"
-        elif change == "price":
-            cost = read_number("cost", "A price")
-            priceable = [p for p in bases if vehicle_priceable(by_prefab[p])]
-            for target in priceable:
-                prices[target] = cost
-            done, outcome = len(priceable), f"now cost {cost}"
-        elif change == "reset":
-            for target in targets:
-                prices.pop(target, None)
-            done, outcome = len(targets), "back to their normal price"
         elif change == "group":
             group = read_group("to_group", allow_none=True)
             for target in bases:
@@ -3858,8 +3831,7 @@ async def vehicles_change(request):
         name = f"{done} vehicles: {change}"
         message = f"{done} vehicle{'s' if done != 1 else ''} {outcome}."
         if skipped:
-            message += (f" {skipped} skipped: variants follow their vehicle, and only vehicles sold at a depot"
-                        " or with a building cost of their own can be priced.")
+            message += f" {skipped} skipped: variants follow their vehicle."
     elif action in ("hide_found", "show_found"):
         found = [v["prefab"] for v in vehicle_matches(vehicles, vehicle_filters(form), settings)]
         if action == "hide_found":

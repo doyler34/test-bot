@@ -2,7 +2,7 @@
 {% block title %}{{ inst }} vehicles · OYB Control{% endblock %}
 {% block body %}
 {% include "_manage_tabs.html" %}
-<p class="muted">Every vehicle on this server, mods included (OYB Core mod). Set a limit per side for each category below; hide, price or group single vehicles in the list. Hiding just a variant only works at depots, and in the building menu crew costs come on top of a price. The server picks changes up within a minute, no restart needed.</p>
+<p class="muted">Every vehicle on this server, mods included (OYB Core mod). Set a limit per side for each category below; hide or group single vehicles in the list. Hiding just a variant only works at depots. Costs are always the game's own. The server picks changes up within a minute, no restart needed.</p>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
 {% if vehicles is none %}
@@ -86,7 +86,7 @@
 <section class="card">
   {% if stale %}<div class="flash error">This list is from before the server last started; the running server hasn't written its own yet. Wait a minute and reload. If it stays like this, check the OYB_CORE lines in the server log.</div>{% endif %}
   {% if list_info.scan_complete is false %}<p class="muted small">The server was still scanning its mods for vehicles when it wrote this list; reload in a minute for the rest.</p>{% endif %}
-  <p class="muted small">{{ vehicles|length }} vehicles and variants{% if listed_at %} · listed {{ listed_at }}{% endif %}{% if list_info.build %} · OYB Core {{ list_info.build }}{% endif %} · {{ settings.hidden|length }} hidden · {{ settings.prices|length }} with a changed price · {{ settings.members|length }} in limit groups</p>
+  <p class="muted small">{{ vehicles|length }} vehicles and variants{% if listed_at %} · listed {{ listed_at }}{% endif %}{% if list_info.build %} · OYB Core {{ list_info.build }}{% endif %} · {{ settings.hidden|length }} hidden · {{ settings.members|length }} in limit groups</p>
   <form method="get" action="/vehicles/{{ inst }}" class="grid">
     <label>Search <input name="q" value="{{ filters.q }}" placeholder="Name, e.g. m998" maxlength="80" autocomplete="off"></label>
     <label>Category
@@ -117,16 +117,14 @@
     <select name="scope" aria-label="Which vehicles"><option value="picked">Ticked vehicles</option><option value="found">All {{ found }} shown</option></select>
     <select name="change" aria-label="Change">
       <option value="hide">Hide</option><option value="show">Show</option>
-      <option value="price">Set price</option><option value="reset">Reset price</option>
       <option value="group">Put in group</option>
     </select>
-    <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" placeholder="Price" aria-label="Price" class="price">
     <select name="to_group" aria-label="Group"><option value="">Their category</option>{% for g in settings.groups|sort %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select>
     <button class="small">Apply</button>
   </form>
-  <p class="muted small">Tick vehicles in the list, or pick "All {{ found }} shown" to change everything the filter shows (a whole category, say). A price needs a number, and "Put in group" the group or "Their category".</p>
+  <p class="muted small">Tick vehicles in the list, or pick "All {{ found }} shown" to change everything the filter shows (a whole category, say). "Put in group" needs the group or "Their category".</p>
   <div class="scroll"><table class="stack">
-    <thead><tr><th><input type="checkbox" data-check-all="pick" aria-label="Tick every vehicle on this page"></th><th>Vehicle</th><th>Category</th><th>Factions</th><th>Offered</th><th>Price</th><th>Limit</th><th></th></tr></thead>
+    <thead><tr><th><input type="checkbox" data-check-all="pick" aria-label="Tick every vehicle on this page"></th><th>Vehicle</th><th>Category</th><th>Factions</th><th>Offered</th><th>Cost</th><th>Limit</th><th></th></tr></thead>
     <tbody>
     {% for v in shown %}
     {% set is_hidden = v.prefab in settings.hidden %}
@@ -139,24 +137,10 @@
       <td data-label="Category">{{ v.category }}</td>
       <td data-label="Factions">{{ v.factions|replace(",", ", ") }}</td>
       <td data-label="Offered">{% if v.menus %}{{ v.menus|map("replace", "building", "building menu")|join(", ") }}{% else %}<span class="muted small">not in a menu (found in the server's mods)</span>{% endif %}</td>
-      <td data-label="Price">
+      <td data-label="Cost">
         {% if v.build_cost is not none and not v.variant_of %}<div class="small">building menu: {{ v.build_cost }}</div>{% endif %}
         {% if v.price is not none and not v.variant_of %}<div class="small">depot: {{ v.price }}</div>{% endif %}
-        {% if v.variant_of %}<span class="muted small">as its vehicle</span>{% elif not vehicle_priceable(v) %}<span class="muted small">{{ "the game's default" if v.menus else "not sold" }}</span>{% else %}
-        <form method="post" action="/vehicles/{{ inst }}" class="inline">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="price">
-          <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ settings.prices.get(v.prefab, v.price if v.price is not none else v.build_cost or 0) }}" aria-label="Price of {{ v.name }}" class="price">
-          <button class="small">Set</button>
-        </form>
-        {% if v.prefab in settings.prices %}
-        <span class="muted small">changed on the panel</span>
-        <form method="post" action="/vehicles/{{ inst }}" class="inline">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reset">
-          <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <button class="small ghost">Reset</button>
-        </form>
-        {% endif %}{% endif %}
+        {% if v.variant_of %}<span class="muted small">as its vehicle</span>{% elif v.build_cost is none and v.price is none %}<span class="muted small">{{ "the game's default" if v.menus else "not sold" }}</span>{% endif %}
       </td>
       <td data-label="Limit">
         <div class="muted small">{{ vehicle_limit_text(v, settings) }}</div>

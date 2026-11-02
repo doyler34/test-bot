@@ -507,19 +507,17 @@ VEHICLE_CATEGORIES = ("Helicopters", "Planes", "Armour", "Trucks", "Cars", "Turr
 
 
 def vehicle_settings(base):
-    """The server's vehicle settings: {"hidden": set of prefabs, "prices": {prefab: price},
+    """The server's vehicle settings: {"hidden": set of prefabs,
     "enabled": limits on or off, "groups": {name: limit, -1 unlimited, 0 none},
     "members": {prefab: group name}, "categories": {category: limit}}. A category's limit
     covers every vehicle of that category in no group."""
-    settings = {"hidden": set(), "prices": {}, "enabled": True, "groups": {}, "members": {}, "categories": {}}
+    settings = {"hidden": set(), "enabled": True, "groups": {}, "members": {}, "categories": {}}
     profile = profile_folder(base)
     path = profile / VEHICLE_FOLDER / "vehicles.json" if profile else None
     if not path or not path.is_file():
         return settings
     data = json.loads(path.read_text(encoding="utf-8") or "{}")
     settings["hidden"] = {prefab for prefab in data.get("hidden") or [] if isinstance(prefab, str)}
-    settings["prices"] = {prefab: cost for prefab, cost in zip(data.get("priceItems") or [], data.get("priceCosts") or [])
-                          if isinstance(prefab, str) and prefab and arsenal_price(cost)}
     settings["enabled"] = data.get("limitsEnabled") is not False
     settings["groups"] = {name: limit for name, limit in zip(data.get("groupNames") or [], data.get("groupLimits") or [])
                           if isinstance(name, str) and VEHICLE_GROUP_NAME.fullmatch(name) and isinstance(limit, int)
@@ -541,11 +539,10 @@ def save_vehicle_settings(base, settings):
     if not folder.exists():
         folder.mkdir()
         hand_over(folder)
-    priced, groups = sorted(settings["prices"].items()), sorted(settings["groups"].items())
+    groups = sorted(settings["groups"].items())
     categories = sorted((name, limit) for name, limit in settings.get("categories", {}).items() if limit != VEHICLE_UNLIMITED)
     members = sorted((prefab, group) for prefab, group in settings["members"].items() if group in settings["groups"])
     data = {"version": 2, "hidden": sorted(settings["hidden"]),
-            "priceItems": [prefab for prefab, _ in priced], "priceCosts": [cost for _, cost in priced],
             "limitsEnabled": bool(settings["enabled"]),
             "groupNames": [name for name, _ in groups], "groupLimits": [limit for _, limit in groups],
             "groupItems": [prefab for prefab, _ in members], "groupOf": [group for _, group in members],

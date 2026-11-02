@@ -24,7 +24,7 @@ Workbench from a 16:9 PNG; its resource name (GUID from the `.meta`) is
 `OYB_LoadingScreen.IMAGE`. To change the picture, import a new PNG and put its
 resource name there.
 
-## Vehicles: hiding, prices and limits
+## Vehicles: hiding and limits
 
 `Scripts/Game/OYBCore/Vehicles/`, driven from the OYB panel's **Vehicles** tab.
 In Conflict (game 1.8.0.13) vehicles come from the **building menu**; the old
@@ -36,12 +36,8 @@ does `vehicle_list.json` and the panel's Vehicles page.
   server, and left out of every depot's list and refused there too. Hiding a
   single variant only works at depots; the building menu picks its random
   variant after the request is checked.
-- **Price**: at a depot, what it shows, checks and takes. In the building menu,
-  the server checks the base has the price and takes the difference from the
-  game's own cost once the vehicle is placed, and the card's text shows the
-  price, as on the arsenal's cards. The game's own costs are left alone:
-  changing them there broke every card's cost once a priced card was shown. A
-  variant costs what its vehicle costs.
+- **Costs** are always the game's own, at depots and in the building menu: OYB
+  changes no prices or supplies.
 - **Broken mod entries**: a building or Game Master menu entry whose prefab
   can't be loaded (a mod listing a file that isn't there) used to stop the
   game loading the menu's cards, so the cards after it showed no price. It's
@@ -55,7 +51,7 @@ does `vehicle_list.json` and the panel's Vehicles page.
 
 Settings: `$profile:OYB_Core/vehicles.json`, written by the panel (whole, by
 replacing the file) and read by the server every minute:
-`{"hidden": [...], "priceItems": [...], "priceCosts": [...], "limitsEnabled": true,
+`{"hidden": [...], "limitsEnabled": true,
 "groupNames": [...], "groupLimits": [...], "groupItems": [...], "groupOf": [...],
 "categoryNames": [...], "categoryLimits": [...]}`.
 `limitsEnabled: false` turns every limit off. A group's limit of -1 is
@@ -124,7 +120,7 @@ summary line whenever it changes (catalogue entries, building list size, scan
 progress, row count) with per-faction details. An empty result or a failed
 write never replaces a list already written; it's tried again.
 
-Files: `OYB_VehicleBudget.c` (building-menu prices),
+Files: `OYB_VehicleBudget.c` (building-menu costs for the list),
 `OYB_VehicleDepot.c` (depot, catalogue data, game mode and player controller
 additions), `OYB_VehicleLimits.c` (counting and limits), `OYB_VehicleMenu.c`
 (the building menu) and `OYB_VehicleSettings.c` (settings and the panel's list).

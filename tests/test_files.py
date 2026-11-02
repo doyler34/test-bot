@@ -437,7 +437,7 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("No vehicle list yet", page)
         self.assertIn(">Vehicles</a>", page)
 
-    async def test_vehicles_can_be_hidden_and_repriced(self):
+    async def test_vehicles_can_be_hidden_and_prices_are_gone(self):
         self.vehicle_profile()
         covered, mi8 = "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et", "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et"
         token = await self.login("boss")
@@ -446,13 +446,14 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(name, page)
         self.assertLess(page.index("M998_covered"), page.index("Mi-8MT"))       # variants follow their vehicle
 
+        self.assertNotIn('value="price"', page)
+        folder = self.root / "Plus01" / "arma-reforger" / "1874900" / "AReforgerMaster" / "profile" / "OYB_Core"
+        (folder / "vehicles.json").write_text(json.dumps({"hidden": [], "priceItems": [mi8], "priceCosts": [900]}))
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide", "prefab": covered})
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": mi8, "cost": "900"})
-        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "price", "prefab": covered, "cost": "1"})
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide", "prefab": "{X}Nope.et"})
-        settings = files.vehicle_settings(self.root / "Plus01")
-        self.assertEqual((settings["hidden"], settings["prices"]), ({covered}, {mi8: 900}))
-        await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "reset", "prefab": mi8})
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], {covered})
+        self.assertNotIn("priceItems", json.loads((folder / "vehicles.json").read_text()))   # an old price is wiped
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "hide_found", "cat": "Helicopters"})
         self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], {covered, mi8})
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "show_found"})
@@ -483,18 +484,13 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         for text in ("building menu: 300", "variant of M1025", "T-72 (mod)", "not in a menu", "OYB Core vehicles-test"):
             self.assertIn(text, page)
         post = lambda **data: self.client.post("/vehicles/Plus01", data={"csrf": token, **data})
-        await post(action="price", prefab=humvee, cost="50")       # building menu cost of its own
-        await post(action="price", prefab=uaz, cost="90")          # depot
-        await post(action="price", prefab=variant, cost="10")      # a variant costs what its vehicle costs
-        await post(action="price", prefab=mod, cost="10")          # in no menu: a price would do nothing
         await post(action="hide", prefab=humvee)
         await post(action="hide", prefab=mod)
-        settings = files.vehicle_settings(self.root / "Plus01")
-        self.assertEqual((settings["prices"], settings["hidden"]), ({humvee: 50, uaz: 90}, {humvee, mod}))
+        self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], {humvee, mod})
 
     def test_vehicle_settings_are_replaced_whole(self):
         folder = self.vehicle_profile()
-        files.save_vehicle_settings(self.root / "Plus01", {"hidden": {"{V1}a.et"}, "prices": {}, "enabled": True,
+        files.save_vehicle_settings(self.root / "Plus01", {"hidden": {"{V1}a.et"}, "enabled": True,
                                                            "groups": {"Cars": 2}, "members": {"{V1}a.et": "Cars"}})
         self.assertEqual(json.loads((folder / "vehicles.json").read_text())["groupLimits"], [2])
         self.assertFalse((folder / "vehicles.json.new").exists())
@@ -576,18 +572,13 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('name="pick"', page)
         self.assertIn('form="vehicle-bulk"', page)
         bulk = lambda *picks, **data: self.client.post("/vehicles/Plus01", data=[("csrf", token), ("action", "bulk"), *[("pick", p) for p in picks], *data.items()])
-        await bulk(m998, mi8, change="price", cost="700")
-        await bulk(covered, change="price", cost="5")                              # a variant: skipped
-        settings = files.vehicle_settings(self.root / "Plus01")
-        self.assertEqual(settings["prices"], {m998: 700, mi8: 700})
         await bulk(scope="found", cat="Cars", change="hide")                       # everything the filter shows
         self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], {m998, covered})
         await bulk(m998, covered, change="show")
-        await bulk(m998, change="reset")
         await self.client.post("/vehicles/Plus01", data={"csrf": token, "action": "group_add", "name": "Jeeps", "count": "1"})
         await bulk(m998, covered, change="group", to_group="Jeeps")
         settings = files.vehicle_settings(self.root / "Plus01")
-        self.assertEqual((settings["hidden"], settings["prices"], settings["members"]), (set(), {mi8: 700}, {m998: "Jeeps"}))
+        self.assertEqual((settings["hidden"], settings["members"]), (set(), {m998: "Jeeps"}))
         await bulk(change="hide")                                                  # nothing ticked
         self.assertEqual(files.vehicle_settings(self.root / "Plus01")["hidden"], set())
 

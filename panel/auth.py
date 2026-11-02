@@ -69,7 +69,7 @@ GRANTS = (
     ("mortar", "Use the mortar calculator (being tested)"),
     ("mods", "Change which mods each server runs"),
     ("arsenal", "Change each server's arsenal: hidden items and prices"),
-    ("vehicles", "Change each server's vehicle depots: hidden vehicles, prices and limits"),
+    ("vehicles", "Change each server's vehicles: hidden vehicles and limits"),
     ("files", "Server manager: start and stop servers' AMP, files, game console"),
     ("amp_settings", "Server manager: change AMP settings"),
     ("console", "Box console: run commands on the machine"),
