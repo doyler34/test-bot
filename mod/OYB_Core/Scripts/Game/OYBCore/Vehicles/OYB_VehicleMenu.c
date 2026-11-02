@@ -178,3 +178,37 @@ modded class SCR_ContentBrowserEditorComponent
 	}
 }
 
+
+// A vehicle doesn't count against a base's building limit, as the game's own
+// vehicles don't (they have no props cost). Some modded helicopters carry one
+// big enough that a couple of them filled a base's whole limit, after which
+// nothing could be built there. Whatever placing or removing a vehicle adds to
+// the base's count is taken off again.
+modded class SCR_CampaignBuildingManagerComponent
+{
+	override protected void OnEntityCoreBudgetUpdated(EEditableEntityBudget entityBudget, int originalBudgetValue, int budgetChange, int updatedBudgetValue, SCR_EditableEntityComponent entity)
+	{
+		SCR_CampaignBuildingProviderComponent provider;
+		int before;
+		if (entity && !IsProxy() && Vehicle.Cast(entity.GetOwnerScripted()))
+		{
+			SCR_ResourceComponent resources;
+			if (GetResourceComponent(entity.GetOwnerScripted(), resources) && resources.GetOwner())
+				provider = SCR_CampaignBuildingProviderComponent.Cast(resources.GetOwner().FindComponent(SCR_CampaignBuildingProviderComponent));
+			if (provider)
+				before = provider.GetCurrentPropValue();
+		}
+
+		super.OnEntityCoreBudgetUpdated(entityBudget, originalBudgetValue, budgetChange, updatedBudgetValue, entity);
+
+		if (!provider)
+			return;
+
+		int added = provider.GetCurrentPropValue() - before;
+		if (added == 0)
+			return;
+
+		provider.AddPropValue(-added);
+		PrintFormat("OYB_CORE vehicles: %1 would have changed the base's building count by %2, left as it was", FilePath.StripPath(SCR_ResourceNameUtils.GetPrefabName(entity.GetOwnerScripted()).GetPath()), added);
+	}
+}

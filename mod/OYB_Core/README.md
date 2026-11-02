@@ -38,6 +38,11 @@ does `vehicle_list.json` and the panel's Vehicles page.
   variant after the request is checked.
 - **Costs** are always the game's own, at depots and in the building menu: OYB
   changes no prices or supplies.
+- **Base building limit**: a vehicle placed at a base doesn't count against
+  the base's building limit, as the game's own vehicles don't. Some modded
+  helicopters carry a props cost big enough that two of them filled a base's
+  whole limit; the change is taken off again and logged as `OYB_CORE vehicles:
+  … would have changed the base's building count`.
 - **Broken mod entries**: a building or Game Master menu entry whose prefab
   can't be loaded (a mod listing a file that isn't there) used to stop the
   game loading the menu's cards, so the cards after it showed no price. It's
