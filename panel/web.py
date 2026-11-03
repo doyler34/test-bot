@@ -3583,7 +3583,7 @@ def arsenal_link(inst, filters, page=1):
     return f"/arsenal/{inst}?" + urlencode({k: v for k, v in values.items() if v})
 
 
-VEHICLE_SHOW = {"": "Everything", "offered": "In a menu", "hidden": "Hidden", "planned": "Planned cost",
+VEHICLE_SHOW = {"": "Everything", "offered": "In a menu", "hidden": "Hidden", "planned": "Cost set on the panel",
                 "grouped": "In a limit group", "variants": "Variants only"}
 
 
@@ -3637,10 +3637,30 @@ def vehicle_matches(vehicles, filters, settings, plans=None):
 
 
 VEHICLE_FACTIONS = {"USSR": "RU"}
+PASTED_PREFAB = re.compile(r"[^\s,;]+\.et\b")
+
+
+def pasted_costs(text, vehicles):
+    """({prefab: cost}, lines not matched) from rows pasted out of the costs spreadsheet: each
+    row's prefab file, and the first whole number on it as the cost."""
+    by_path = {v["prefab"].split("}", 1)[-1].lower(): v["prefab"] for v in vehicles if not v["variant_of"]}
+    found, unknown = {}, 0
+    for line in text.splitlines():
+        path = PASTED_PREFAB.search(line)
+        if not path:
+            continue
+        cells = [c.strip().replace(",", "") for c in re.split(r"\t|;|,(?=\S)", line[:path.start()])]
+        cost = next((int(c) for c in cells if c.isdigit()), None)
+        prefab = by_path.get(path[0].lower())
+        if prefab is None or cost is None or cost > files.ARSENAL_MAX_PRICE:
+            unknown += 1
+            continue
+        found[prefab] = cost
+    return found, unknown
 
 
 async def vehicle_costs_export(request):
-    """Every vehicle with a cost, by faction, with the planned costs: an Excel file."""
+    """Every vehicle with a cost, by faction, with the costs set for the next game: an Excel file."""
     require_on(request, "vehicles")
     inst = request.match_info["inst"]
     base, _ = server_folder(request)
@@ -3659,7 +3679,7 @@ async def vehicle_costs_export(request):
             rows.append([VEHICLE_FACTIONS.get(faction, faction) or "none", v["name"], v["category"], cost, v["price"], planned,
                          v["prefab"].split("}", 1)[-1]])
     rows.sort(key=lambda r: (r[0], order.get(r[2], 9), -(r[3] or r[4] or 0), r[1]))
-    header = ["Faction", "Vehicle", "Category", "Building menu cost", "Depot cost", "Planned cost", "Prefab file"]
+    header = ["Faction", "Vehicle", "Category", "Building menu cost", "Depot cost", "Cost from next game", "Prefab file"]
     widths = [10, 46, 13, 18, 12, 13, 70]
     sheets = [("All factions", header, rows, widths)]
     for faction in sorted({r[0] for r in rows}):
@@ -3764,20 +3784,36 @@ async def vehicles_change(request):
             fail(f"{what} is a whole number from 0 to {files.ARSENAL_MAX_PRICE:,}.")
         return number
 
-    if action == "plan":
-        # Only kept on the panel, for changing the costs in a mod later: the server never sees it.
-        if prefab not in by_prefab:
-            fail("That vehicle isn't in this server's list.")
-        cost = form.get("cost", "").strip()
-        if cost:
-            planned = read_number("cost", "A planned cost")
-            request.app[DB].plan_vehicle(inst, prefab, planned, request[USER]["username"])
-            message = f"{name}: planned cost {planned}."
+    if action in ("plan", "plan_paste"):
+        # Building menu costs OYB Core sets when the next game starts.
+        db = request.app[DB]
+        if action == "plan":
+            if prefab not in by_prefab:
+                fail("That vehicle isn't in this server's list.")
+            cost = form.get("cost", "").strip()
+            if cost:
+                planned = read_number("cost", "A cost")
+                db.plan_vehicle(inst, prefab, planned, request[USER]["username"])
+                message = f"{name} costs {planned} from the next game."
+            else:
+                db.plan_vehicle(inst, prefab, None, request[USER]["username"])
+                message = f"{name} goes back to its own cost at the next game."
+            detail = cost or "cleared"
         else:
-            request.app[DB].plan_vehicle(inst, prefab, None, request[USER]["username"])
-            message = f"{name}: planned cost taken off."
-        audit(request, "vehicles plan", inst, name, cost or "cleared")
-        flash(request, message + " Nothing changes in game.")
+            found, unknown = pasted_costs(form.get("pasted", ""), vehicles)
+            for target, planned in found.items():
+                db.plan_vehicle(inst, target, planned, request[USER]["username"])
+            name, detail = f"{len(found)} vehicles", f"{len(found)} pasted, {unknown} not matched"
+            message = f"{len(found)} vehicle cost{'s' if len(found) != 1 else ''} set from the next game."
+            if unknown:
+                message += f" {unknown} line{'s' if unknown != 1 else ''} didn't match a vehicle on this server."
+        try:
+            files.save_vehicle_costs(base, db.vehicle_plans(inst))
+        except (files.FileError, OSError) as exc:
+            audit(request, f"vehicles {action}", inst, name, str(exc), ok=False)
+            fail(f"Saved on the panel, but the server's file couldn't be written: {exc}")
+        audit(request, f"vehicles {action}", inst, name, detail)
+        flash(request, message + " Restart the mission or start a new game for it to apply.")
         raise web.HTTPFound(back)
 
     def read_limit():

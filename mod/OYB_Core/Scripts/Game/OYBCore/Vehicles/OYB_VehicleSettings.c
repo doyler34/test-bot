@@ -24,7 +24,7 @@
 // "building", or empty when only found by the scan).
 class OYB_VehicleSettings
 {
-	static const string BUILD = "vehicles-2026-11-02b";
+	static const string BUILD = "vehicles-2026-11-03a";
 
 	protected static const string FOLDER = "$profile:OYB_Core";
 	protected static const string SETTINGS_FILE = "$profile:OYB_Core/vehicles.json";
@@ -298,7 +298,7 @@ class OYB_VehicleSettings
 	}
 
 	// False when the file is there but can't be opened.
-	protected static bool ReadFile(string path, out bool exists, out string text)
+	static bool ReadFile(string path, out bool exists, out string text)
 	{
 		text = string.Empty;
 		exists = FileIO.FileExists(path);

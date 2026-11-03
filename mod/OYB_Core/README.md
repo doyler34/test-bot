@@ -24,13 +24,6 @@ Workbench from a 16:9 PNG; its resource name (GUID from the `.meta`) is
 `OYB_LoadingScreen.IMAGE`. To change the picture, import a new PNG and put its
 resource name there.
 
-## Mods OYB Core needs
-
-To change the costs of other mods' vehicles (the list is `dev/OYB_vehicle_plan.csv`),
-Core overrides them, so it depends on those mods and only loads where they're
-installed: 4x4PickupTruck, Mi8AITA, WCS_AH-64D, WCS_AH-6M, WCS_BMP-3, WCS_M2A2,
-WCS_Mi-24V, WCS_T-72, Zagoria89BMP2 and Zagoria89Leopard2A4.
-
 ## Vehicles: hiding and limits
 
 `Scripts/Game/OYBCore/Vehicles/`, driven from the OYB panel's **Vehicles** tab.
@@ -43,8 +36,14 @@ does `vehicle_list.json` and the panel's Vehicles page.
   server, and left out of every depot's list and refused there too. Hiding a
   single variant only works at depots; the building menu picks its random
   variant after the request is checked.
-- **Costs** are always the game's own, at depots and in the building menu: OYB
-  changes no prices or supplies.
+- **Costs**: a vehicle's building menu cost can be set on the panel. The panel
+  writes `$profile:OYB_Core/vehicle_costs.json`; when a game starts the server
+  puts each cost into the vehicle's own data, and sends the list to each
+  player as they join, so the card, the supply check and the charge all read
+  it as if the vehicle came with it. A change takes effect at the next game,
+  and a vehicle taken off the list gets its own cost back then. The log says
+  `OYB_CORE costs: N vehicle costs set for this game`, and names any vehicle
+  whose cost didn't take. Depot prices stay the game's.
 - **Base building limit**: a vehicle placed at a base doesn't count against
   the base's building limit, as the game's own vehicles don't. Some modded
   helicopters carry a props cost big enough that two of them filled a base's

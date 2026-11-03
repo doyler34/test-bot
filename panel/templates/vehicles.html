@@ -109,8 +109,17 @@
 
 <section class="card">
   <h2>{{ found }} vehicle{{ "s" if found != 1 }}{% if pages > 1 %} <span class="muted small">page {{ page }} of {{ pages }}</span>{% endif %}</h2>
-  <p class="muted small">Planned costs are kept on the panel only, for changing the costs in a mod later: nothing changes in game.
-    {{ plans|length }} planned. <a class="button small ghost" href="/vehicles/{{ inst }}/costs.xlsx">Download costs (Excel)</a></p>
+  <p class="muted small">A new cost is the vehicle's building menu cost from the next game (a mission restart or a new game), set by OYB Core.
+    Empty it to go back to the vehicle's own cost. {{ plans|length }} set. <a class="button small ghost" href="/vehicles/{{ inst }}/costs.xlsx">Download costs (Excel)</a></p>
+  <details class="paste-costs">
+    <summary>Paste costs from the spreadsheet</summary>
+    <form method="post" action="/vehicles/{{ inst }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="plan_paste"><input type="hidden" name="back" value="{{ back }}">
+      <p class="muted small">Copy rows from the costs spreadsheet and paste them here. Each row needs its prefab file; the first whole number on the row is its new cost.</p>
+      <textarea name="pasted" rows="8" aria-label="Pasted rows"></textarea>
+      <button class="small">Set these costs</button>
+    </form>
+  </details>
   {% if found %}
   <form id="vehicle-bulk" method="post" action="/vehicles/{{ inst }}" class="row-actions" data-confirm="Change these vehicles?">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="bulk">
@@ -147,7 +156,7 @@
         <form method="post" action="/vehicles/{{ inst }}" class="inline plan">
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="plan">
           <input type="hidden" name="prefab" value="{{ v.prefab }}"><input type="hidden" name="back" value="{{ back }}">
-          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ plans.get(v.prefab, '') }}" placeholder="Planned" aria-label="Planned cost of {{ v.name }}" class="price">
+          <input name="cost" type="number" min="0" max="{{ max_price }}" step="1" value="{{ plans.get(v.prefab, '') }}" placeholder="New cost" aria-label="Cost of {{ v.name }} from the next game" class="price">
           <button class="small ghost">Save</button>
         </form>
         {% endif %}

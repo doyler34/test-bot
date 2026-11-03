@@ -550,6 +550,20 @@ def save_vehicle_settings(base, settings):
     write_whole(folder / "vehicles.json", json.dumps(data, indent=1) + "\n")
 
 
+def save_vehicle_costs(base, costs):
+    """Write the building menu costs OYB Core sets on vehicles when the next game starts."""
+    profile = profile_folder(base)
+    if profile is None:
+        raise FileError("This server has no game profile folder yet. Start it once first.")
+    folder = profile / VEHICLE_FOLDER
+    if not folder.exists():
+        folder.mkdir()
+        hand_over(folder)
+    listed = sorted(costs.items())
+    data = {"version": 1, "prefabs": [prefab for prefab, _ in listed], "costs": [cost for _, cost in listed]}
+    write_whole(folder / "vehicle_costs.json", json.dumps(data, indent=1) + "\n")
+
+
 def new_game(root, base):
     """Put this server's save aside so its next start is a fresh game. The save is moved
     to a folder of its own, not deleted. Returns where it went, or None if there was none."""

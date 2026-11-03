@@ -439,7 +439,7 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("No vehicle list yet", page)
         self.assertIn(">Vehicles</a>", page)
 
-    async def test_planned_costs_stay_on_the_panel_and_download_as_excel(self):
+    async def test_costs_are_written_for_the_next_game_and_download_as_excel(self):
         folder = self.vehicle_profile()
         m998, covered, mi8 = ("{V1}Prefabs/Vehicles/Wheeled/M998/M998.et",
                               "{V2}Prefabs/Vehicles/Wheeled/M998/M998_covered.et", "{V3}Prefabs/Vehicles/Helicopters/Mi8/Mi8MT.et")
@@ -449,7 +449,9 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         await post(action="plan", prefab=m998, cost="-5")                       # not a cost
         await post(action="plan", prefab="{X}Nope.et", cost="10")              # not on the server
         self.assertEqual(self.db.vehicle_plans("Plus01"), {mi8: 2000})
-        self.assertFalse((folder / "vehicles.json").exists())                  # nothing written for the game
+        saved = json.loads((folder / "vehicle_costs.json").read_text())
+        self.assertEqual((saved["prefabs"], saved["costs"]), ([mi8], [2000]))
+        self.assertFalse((folder / "vehicles.json").exists())                  # hiding and limits untouched
         page = await (await self.client.get("/vehicles/Plus01")).text()
         self.assertIn('value="2000"', page)
         self.assertIn("/vehicles/Plus01/costs.xlsx", page)
@@ -469,8 +471,19 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("<v>2000</v>", everything)
         self.assertNotIn("M998_covered", everything)                           # variants cost what their vehicle does
 
+        # Rows pasted out of the spreadsheet: the prefab file and the first whole number.
+        pasted = ("M998\tCars\t450\t100\tPrefabs/Vehicles/Wheeled/M998/M998.et\n"
+                  "M998_covered\tCars\t9\t0\tPrefabs/Vehicles/Wheeled/M998/M998_covered.et\n"   # a variant
+                  "Mystery\tCars\t5\t\tPrefabs/Vehicles/Nope.et\n"
+                  "a header line\n")
+        await post(action="plan_paste", pasted=pasted)
+        self.assertEqual(self.db.vehicle_plans("Plus01"), {mi8: 2000, m998: 450})
+        saved = json.loads((folder / "vehicle_costs.json").read_text())
+        self.assertEqual(dict(zip(saved["prefabs"], saved["costs"])), {mi8: 2000, m998: 450})
+
         await post(action="plan", prefab=mi8, cost="")
-        self.assertEqual(self.db.vehicle_plans("Plus01"), {})
+        self.assertEqual(self.db.vehicle_plans("Plus01"), {m998: 450})
+        self.assertEqual(json.loads((folder / "vehicle_costs.json").read_text())["prefabs"], [m998])
         self.assertEqual(self.db.audit()[0]["action"], "vehicles plan")
 
     async def test_vehicles_can_be_hidden_and_prices_are_gone(self):

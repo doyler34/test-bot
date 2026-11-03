@@ -21,6 +21,20 @@ modded class SCR_PlayerController
 		OYB_VehicleSettings.Get().Apply(hidden);
 	}
 
+	void OYB_SendVehicleCosts(notnull array<string> prefabs, notnull array<int> costs)
+	{
+		if (GetGame().GetPlayerController() == this)
+			return;
+
+		Rpc(OYB_RpcDo_VehicleCosts, prefabs, costs);
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
+	protected void OYB_RpcDo_VehicleCosts(array<string> prefabs, array<int> costs)
+	{
+		OYB_VehicleCosts.Apply(prefabs, costs);
+	}
+
 	void OYB_SendVehicleLimitReached(string group, int count, int limit)
 	{
 		if (GetGame().GetPlayerController() == this)
@@ -160,6 +174,7 @@ modded class SCR_BaseGameMode
 
 		if (Replication.IsServer())
 		{
+			OYB_VehicleCosts.LoadAndApply();
 			OYB_VehicleSettings.Get().ResetSession();
 			GetGame().GetCallqueue().Remove(OYB_StartVehicleSettings);
 			GetGame().GetCallqueue().CallLater(OYB_StartVehicleSettings, 2000);
@@ -182,5 +197,14 @@ modded class SCR_BaseGameMode
 	protected void OYB_SendVehicleSettings(int playerId)
 	{
 		OYB_VehicleSettings.Get().SendTo(playerId);
+
+		SCR_PlayerController controller = SCR_PlayerController.Cast(GetGame().GetPlayerManager().GetPlayerController(playerId));
+		if (!controller)
+			return;
+
+		array<string> prefabs = {};
+		array<int> costs = {};
+		OYB_VehicleCosts.GetLists(prefabs, costs);
+		controller.OYB_SendVehicleCosts(prefabs, costs);
 	}
 }
