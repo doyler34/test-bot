@@ -33,7 +33,7 @@ def unpack(raw, size):
     return raw if len(raw) == size else None
 
 
-def world_files(pak):
+def world_files(pak, raw=False):
     data = pak.read_bytes()
     if data[:4] != b"FORM" or data[8:12] != b"PAC1":
         return
@@ -55,7 +55,7 @@ def world_files(pak):
             continue
         body = unpack(data[offset:offset + packed], real)
         if body and b"CampaignMilitaryBase" in body:
-            yield name.decode(), body.decode("utf-8", "replace")
+            yield name.decode(), body if raw else body.decode("utf-8", "replace")
 
 
 ENTITY = re.compile(r'^\s*(?:\$grp\s+)?\w+\s*:\s*"[^"]*"\s*\{', re.M)
@@ -72,6 +72,17 @@ def bases(text):
             continue
         ident = re.search(r'\bID\s+"([0-9A-Fa-f]{16})"', block)
         yield place.group(1), float(coords.group(1)), float(coords.group(3)), ident.group(1) if ident else ""
+
+
+def copy(folder, out, wanted="CTI_Campaign_Eden.ent"):
+    """Write the Everon world file, unpacked, to `out`."""
+    for pak in sorted(Path(folder).glob("*.pak")):
+        for name, text in world_files(pak, raw=True):
+            if name == wanted:
+                Path(out).write_bytes(text)
+                print(f"wrote {out} ({len(text)} bytes)")
+                return
+    print("not found")
 
 
 def show(folder, wanted="CTI_Campaign_Eden.ent"):
@@ -104,7 +115,10 @@ def main(folder):
 
 
 if __name__ == "__main__":
-    if "--show" in sys.argv:
+    if "--copy" in sys.argv:
+        args = [a for a in sys.argv[1:] if a != "--copy"]
+        copy(args[0], args[1])
+    elif "--show" in sys.argv:
         show(next(a for a in sys.argv[1:] if a != "--show"))
     else:
         main(sys.argv[1] if len(sys.argv) > 1 else ".")
