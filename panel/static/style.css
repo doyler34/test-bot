@@ -1824,10 +1824,9 @@ form.rename input[name=name] { display: inline-block; width: 12em; margin: 0; pa
   input, select, textarea, body.app .top-search input { font-size: 16px !important; }
 }
 
-.class-bars { list-style: none; padding: 0; margin: 8px 0 16px; display: grid; gap: 6px; max-width: 420px; }
-.class-bars li { display: grid; grid-template-columns: 120px 1fr 44px; align-items: center; gap: 8px; }
-.class-bars i { display: block; height: 8px; border-radius: 4px; background: var(--accent, #f47b20); min-width: 2px; }
-.class-bars b { text-align: right; font-weight: 600; }
+.kit-other { margin: 6px 0; }
+.kit-other summary { cursor: pointer; }
+.kit-other .kit { margin-top: 6px; }
 .kit, .kit ul { list-style: none; margin: 0; padding-left: 16px; }
 .kit { padding-left: 0; columns: 2 260px; }
 .kit > li { break-inside: avoid; margin-bottom: 6px; }

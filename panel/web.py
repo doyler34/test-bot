@@ -1582,11 +1582,11 @@ async def player_page(request):
     fight = db.combat(identity)
     fight.update(hit=body_map(fight["hit"]), hit_by=body_map(fight["hit_by"]))
     warnings, platform = db.visible_warnings(identity), db.platform(identity)
-    kit = db.loadout(identity)
-    if kit["latest"]:
-        kit["latest"]["items"] = json.loads(kit["latest"]["loadout"])
-    kit["total"] = sum(c["times"] for c in kit["classes"])
-    return render(request, "player.html", identity=identity, player=db.player(identity), combat=fight, loadout=kit,
+    kits = db.loadouts(identity)
+    for kit in kits:
+        kit["items"] = json.loads(kit["loadout"])
+    return render(request, "player.html", identity=identity, player=db.player(identity), combat=fight,
+                  loadouts=kits, loadout_total=sum(k["times"] for k in kits),
                   average=combat_average(db),
                   stats=stats, stats_here=oyb.available, linked_via=linked_via,
                   ips=db.ips(identity) if allowed(request, "ips") else [],

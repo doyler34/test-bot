@@ -354,7 +354,7 @@ class ServerManager:
             await asyncio.sleep(self.config.poll_seconds)
 
     async def _watch_loadouts(self, state: ServerState):
-        """After each autosave: every player's saved loadout and its class, counted for those on the server."""
+        """After each autosave: every player's saved loadout, counted for those on the server."""
         while not self._stopping:
             try:
                 await self.read_loadouts(state)
@@ -376,9 +376,8 @@ class ServerManager:
             if not person["loadout"]:
                 continue
             items = loadouts.tree(person["loadout"], names)
-            kind, _ = loadouts.classify(items)
-            rows.append({"identity": identity, "side": person["side"], "class": kind,
-                         "weapon": ", ".join(loadouts.weapons(items)), "loadout": json.dumps(items)})
+            rows.append({"identity": identity, "side": person["side"], "kit": loadouts.fingerprint(items),
+                         "title": loadouts.title(items), "loadout": json.dumps(items)})
         online = {p.get("identity") for p in state.players if p.get("identity")}
         self.db.add_loadouts(state.config.id, found[1], rows, online)
 

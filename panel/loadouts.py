@@ -1,8 +1,9 @@
-"""Each player's saved arsenal loadout, read from the game's autosave, and the class it makes them.
+"""Each player's saved arsenal loadout, read from the game's autosave.
 
 The save's "Player" section has one record per player: their identity (16 bytes), the side they're on, and,
 when they've saved one at an arsenal, their loadout as JSON. Items in it are prefab IDs; the names come from
 the "{ID}Prefabs/....et" references written all through the game's own configs and prefabs."""
+import hashlib
 import json
 import mmap
 import re
@@ -158,29 +159,16 @@ def flat(items):
         yield from flat(item["items"])
 
 
-# The first rule that matches a loadout names its class. Each is (class, path pattern, how many it takes).
-RULES = (
-    ("Anti-tank", r"/Weapons/Launchers/", 1),
-    ("Machine gunner", r"/Weapons/MachineGuns/", 1),
-    ("Marksman", r"/Weapons/(Rifles|Snipers?)/[^/]*/[^/]*(SVD|M21|M24|Sniper|DMR)", 1),
-    ("Medic", r"/Items/Medicine/(Saline|MedicalKit|MedicBag|Medkit)", 2),
-    ("Grenadier", r"/Weapons/(Rifles|Grenades|Ammo)/.*(M203|GP25|GP-25|M79|M433|M406|VOG|UGL)", 1),
-    ("Engineer", r"/Weapons/(Mines|Explosives)/|/Items/Equipment/(Kits|Tools)/.*(Repair|Engineer|Shovel|Entrench)", 1),
-    ("Radio operator", r"/Items/Equipment/Radios/.*(PRC77|R148|Backpack|Long)", 1),
-    ("Rifleman", r"/Weapons/Rifles/", 1),
-)
-
-
-def classify(items):
-    """(class, the item that decided it) for a loadout tree; ("Unarmed", "") when nothing matches."""
-    paths = [i["path"] for i in flat(items) if i["path"]]
-    for name, pattern, need in RULES:
-        hits = [p for p in paths if re.search(pattern, p, re.I)]
-        if len(hits) >= need:
-            return name, label(hits[0])
-    return "Unarmed", ""
-
-
 def weapons(items):
     """The weapons carried, by name."""
     return [i["name"] for i in flat(items) if re.search(r"/Weapons/(Rifles|MachineGuns|Launchers|Handguns|Snipers?)/", i["path"])]
+
+
+def title(items):
+    """A short name for a loadout: its weapons, or what it's mostly made of when it has none."""
+    return " · ".join(weapons(items)) or "No weapon"
+
+
+def fingerprint(items):
+    """The same for two saves of the same loadout, different when anything in it changes."""
+    return hashlib.sha1(json.dumps(items, sort_keys=True).encode()).hexdigest()[:16]

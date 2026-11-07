@@ -1,23 +1,26 @@
-{% if loadout.latest or loadout.classes %}
+{% if loadouts %}
 <section class="card loadout-card">
-  <h2>Class &amp; loadout</h2>
-  {% if loadout.classes %}
-  <p>Most used class: <b>{{ loadout.classes[0].class }}</b>
-    <span class="muted">· from their saved loadout at {{ loadout.total }} autosave{{ "s" if loadout.total != 1 }} while they were on</span></p>
-  <ul class="class-bars">
-    {% for c in loadout.classes %}
-    <li><span>{{ c.class }}</span><i style="width: {{ (100 * c.times / loadout.total)|round|int }}%"></i><b>{{ (100 * c.times / loadout.total)|round|int }}%</b></li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-  {% if loadout.latest %}
-  <h3>Saved loadout <span class="muted">· {{ loadout.latest.class }}{% if loadout.latest.side %} · {{ loadout.latest.side }}{% endif %} · read {{ loadout.latest.saved|ago }}</span></h3>
-  {% if loadout.latest.weapon %}<p>Weapons: {{ loadout.latest.weapon }}</p>{% endif %}
+  <h2>Saved loadouts</h2>
+  {% set top = loadouts[0] %}
+  <p>Most used: <b>{{ top.title }}</b>
+    <span class="muted">· {{ (100 * top.times / loadout_total)|round|int }}% of {{ loadout_total }} autosave{{ "s" if loadout_total != 1 }} while they were on{% if top.side %} · {{ top.side }}{% endif %}</span></p>
   <ul class="kit">
-    {% for item in loadout.latest["items"] recursive %}
+    {% for item in top["items"] recursive %}
     <li>{{ item.name }}{% if item["items"] %}<ul>{{ loop(item["items"]) }}</ul>{% endif %}</li>
     {% endfor %}
   </ul>
+  {% if loadouts|length > 1 %}
+  <h3>Their other loadouts</h3>
+  {% for kit in loadouts[1:] %}
+  <details class="kit-other">
+    <summary>{{ kit.title }} <span class="muted">· {{ (100 * kit.times / loadout_total)|round|int }}% · last {{ kit.last|ago }}</span></summary>
+    <ul class="kit">
+      {% for item in kit["items"] recursive %}
+      <li>{{ item.name }}{% if item["items"] %}<ul>{{ loop(item["items"]) }}</ul>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endfor %}
   {% endif %}
 </section>
 {% endif %}

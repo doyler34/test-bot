@@ -49,11 +49,12 @@ class LoadoutTests(unittest.TestCase):
                          ["Magazine 556x45 STANAG 30rnd M855 Ball", "FFFFFFFFFFFFFFFF"])
         self.assertEqual(loadouts.weapons(items), ["Rifle M16A2"])
 
-    def test_classes(self):
-        self.assertEqual(loadouts.classify(loadouts.tree(kit(MAG), NAMES))[0], "Rifleman")
-        self.assertEqual(loadouts.classify(loadouts.tree(kit(LAUNCHER, MAG), NAMES)), ("Anti-tank", "Launcher M72A3"))
-        self.assertEqual(loadouts.classify(loadouts.tree(kit(SALINE, SALINE), NAMES))[0], "Medic")
-        self.assertEqual(loadouts.classify([]), ("Unarmed", ""))
+    def test_title_and_fingerprint(self):
+        rifle = loadouts.tree(kit(MAG), NAMES)
+        self.assertEqual(loadouts.title(loadouts.tree(kit(LAUNCHER, MAG), NAMES)), "Rifle M16A2 · Launcher M72A3")
+        self.assertEqual(loadouts.title([]), "No weapon")
+        self.assertEqual(loadouts.fingerprint(rifle), loadouts.fingerprint(loadouts.tree(kit(MAG), NAMES)))
+        self.assertNotEqual(loadouts.fingerprint(rifle), loadouts.fingerprint(loadouts.tree(kit(MAG, MAG), NAMES)))
 
     def test_label(self):
         self.assertEqual(loadouts.label("Prefabs/Items/Medicine/MorphineInjection_01/MorphineInjection_01.et"),
@@ -61,17 +62,17 @@ class LoadoutTests(unittest.TestCase):
 
 
 class LoadoutStoreTests(unittest.TestCase):
-    def test_counts_classes_only_for_players_on(self):
+    def test_counts_each_loadout_only_for_players_on(self):
         db = PanelDB(":memory:")
-        row = {"identity": PLAYER, "side": "US", "class": "Medic", "weapon": "Rifle M16A2", "loadout": "[]"}
-        away = dict(row, identity=str(uuid.uuid4()))
-        db.add_loadouts("s1", 100, [row, away], {PLAYER})
-        db.add_loadouts("s1", 200, [dict(row, **{"class": "Anti-tank"})], {PLAYER})
-        db.add_loadouts("s1", 300, [dict(row, **{"class": "Anti-tank"})], {PLAYER})
-        mine = db.loadout(PLAYER)
-        self.assertEqual(mine["latest"]["class"], "Anti-tank")
-        self.assertEqual([(c["class"], c["times"]) for c in mine["classes"]], [("Anti-tank", 2), ("Medic", 1)])
-        self.assertEqual(db.loadout(away["identity"])["classes"], [])
+        medic = {"identity": PLAYER, "side": "US", "kit": "a", "title": "Rifle M16A2", "loadout": "[]"}
+        at = dict(medic, kit="b", title="Rifle M16A2 · Launcher M72A3")
+        away = dict(medic, identity=str(uuid.uuid4()))
+        db.add_loadouts("s1", 100, [medic, away], {PLAYER})
+        db.add_loadouts("s1", 200, [at], {PLAYER})
+        db.add_loadouts("s1", 300, [at], {PLAYER})
+        mine = db.loadouts(PLAYER)
+        self.assertEqual([(k["title"], k["times"]) for k in mine], [("Rifle M16A2 · Launcher M72A3", 2), ("Rifle M16A2", 1)])
+        self.assertEqual(db.loadouts(away["identity"]), [])
         self.assertEqual(db.loadout_save_read("s1"), 300)
 
 
