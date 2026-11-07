@@ -208,6 +208,19 @@ def grep(folder, text, kinds=(b".c", b".conf")):
                         print(f"{name.decode()}: {line.strip()[:200]}")
 
 
+def cat(folder, wanted):
+    """Print one file from the paks, by its name."""
+    for pak in sorted(Path(folder).glob("*.pak")):
+        for name, offset, packed, real in names_in(pak):
+            if name == wanted:
+                with open(pak, "rb") as handle:
+                    handle.seek(offset)
+                    body = unpack(handle.read(packed), real)
+                print(body.decode("utf-8", "replace") if body else "couldn't unpack it")
+                return
+    print("not found")
+
+
 def copy(folder, out, wanted="CTI_Campaign_Eden.ent"):
     """Write the Everon world file, unpacked, to `out`."""
     for pak in sorted(Path(folder).glob("*.pak")):
@@ -249,7 +262,10 @@ def main(folder):
 
 
 if __name__ == "__main__":
-    if "--grep" in sys.argv:
+    if "--cat" in sys.argv:
+        args = [a for a in sys.argv[1:] if a != "--cat"]
+        cat(args[0], args[1])
+    elif "--grep" in sys.argv:
         args = [a for a in sys.argv[1:] if a != "--grep"]
         grep(args[0], args[1])
     elif "--items" in sys.argv:
