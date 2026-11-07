@@ -2195,6 +2195,10 @@ def place_key(name):
     return re.sub(r"[^a-z]", "", name.lower().replace("base", ""))
 
 
+# The main objectives the map heading scores, like the game's own "4 - 4". Empty: it scores every base instead.
+MAIN_OBJECTIVES = ()
+
+
 def base_control(state, db):
     """Who holds each base, from the newest autosave of the game now running; None when there isn't one."""
     if not state.config.log_dir:
@@ -2214,7 +2218,10 @@ def base_control(state, db):
         counts[side or "none"] = counts.get(side or "none", 0) + 1
         name = campaign_save.label(known[base]) if base in known else None
         held.append({"side": side, "name": name, "place": places.get(place_key(name)) if name else None})
-    return {"saved": found[1], "counts": counts, "bases": held}
+    main = {place_key(name) for name in MAIN_OBJECTIVES}
+    scored = [b for b in held if b["name"] and place_key(b["name"]) in main] if main else held
+    score = {side: sum(1 for b in scored if b["side"] == side) for side in ("US", "USSR")}
+    return {"saved": found[1], "counts": counts, "bases": held, "score": score, "objectives": bool(main)}
 
 
 async def control_kills(request):

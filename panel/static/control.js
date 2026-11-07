@@ -205,20 +205,25 @@ async function startMap(box) {
   }
 
   // Who holds each base, from the game's last autosave: the named places take the owner's colour.
+  // With a save to go by, a place nobody has taken is FIA's.
   function drawControl() {
     const owners = new Map((state.control?.bases || []).filter((b) => b.place).map((b) => [b.place, OWNER[b.side] || ""]));
     for (const [name, mark] of placeMarks) {
       const el = mark.getElement();
       if (!el) continue;
-      for (const side of Object.values(OWNER)) el.classList.toggle(`own-${side}`, owners.get(name) === side);
+      const owner = state.control ? (owners.get(name) || "fia") : "";
+      for (const side of Object.values(OWNER)) el.classList.toggle(`own-${side}`, owner === side);
     }
   }
 
-  function controlWords() {
+  // The game's own way of showing it: US 4 - 4 USSR.
+  function scoreHtml() {
     const c = state.control;
     if (!c) return "";
-    const n = (side) => c.counts[side] || 0;
-    return ` · Bases US ${n("US")} · USSR ${n("USSR")} · FIA ${n("FIA")} (save ${clock(c.saved)})`;
+    const what = c.objectives ? "main objectives" : "bases";
+    return `<span class="map-score" title="${what} held, from the game's autosave at ${text(clock(c.saved))}">`
+      + `<b class="side-us">US</b> <b class="side-us n">${c.score.US}</b><i>-</i>`
+      + `<b class="side-ru n">${c.score.USSR}</b> <b class="side-ru">USSR</b></span>`;
   }
 
   function controlList() {
@@ -301,7 +306,7 @@ async function startMap(box) {
     drawBases();
     drawControl();
     draw();
-    sub.textContent = `· ${data.kills.length}${data.capped ? "+" : ""} kill${data.kills.length === 1 ? "" : "s"}${controlWords()}`;
+    sub.innerHTML = `${scoreHtml()}<span class="map-kills">${data.kills.length}${data.capped ? "+" : ""} kill${data.kills.length === 1 ? "" : "s"}</span>`;
     sub.title = RANGE_WORDS[range] + controlList();
   }
 
