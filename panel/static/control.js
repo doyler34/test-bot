@@ -198,8 +198,8 @@ async function startMap(box) {
     const reply = await fetch("/control-map/places.json", { credentials: "same-origin" });
     if (!reply.ok) return;
     for (const place of (await reply.json()).places) {
-      placeMarks.set(place.name, L.marker(toLatLng(place.x, place.z), { interactive: false, keyboard: false, icon: L.divIcon({
-        className: `place ${place.kind}`, iconSize: [0, 0], html: `<i></i><span>${text(place.name)}</span>` }) }).addTo(layers.places));
+      placeMarks.set(place.key || place.name, L.marker(toLatLng(place.x, place.z), { interactive: false, keyboard: false, icon: L.divIcon({
+        className: `place ${place.kind}${place.key ? " conflict" : ""}`, iconSize: [0, 0], html: `<i></i><span>${text(place.name)}</span>` }) }).addTo(layers.places));
     }
     drawControl();
   }
@@ -207,11 +207,11 @@ async function startMap(box) {
   // Who holds each base, from the game's last autosave: the named places take the owner's colour.
   // With a save to go by, a place nobody has taken is FIA's.
   function drawControl() {
-    const owners = new Map((state.control?.bases || []).filter((b) => b.place).map((b) => [b.place, OWNER[b.side] || ""]));
-    for (const [name, mark] of placeMarks) {
+    const owners = new Map((state.control?.bases || []).filter((b) => b.key).map((b) => [b.key, OWNER[b.side] || ""]));
+    for (const [key, mark] of placeMarks) {
       const el = mark.getElement();
-      if (!el) continue;
-      const owner = state.control ? (owners.get(name) || "fia") : "";
+      if (!el || !el.classList.contains("conflict")) continue;
+      const owner = state.control ? (owners.get(key) || "fia") : "";
       for (const side of Object.values(OWNER)) el.classList.toggle(`own-${side}`, owner === side);
     }
   }

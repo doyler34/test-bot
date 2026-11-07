@@ -7,6 +7,9 @@ from functools import lru_cache
 from pathlib import Path
 
 PLACES = Path(__file__).resolve().parents[1] / "assets" / "mortar" / "everon_places.json"
+CONFLICT = Path(__file__).resolve().parents[1] / "assets" / "mortar" / "everon_conflict_bases.json"
+# A named place this close to a Conflict base is the same spot.
+SAME_SPOT = 300
 LINE = re.compile(r"MOBsSelected: SCR_MOBSelectedData\{(.*?)\}")
 SIDES = {"US": "US", "USSR": "RU", "FIA": "FIA"}
 # The line is written close to the start of a game.
@@ -58,5 +61,8 @@ def read(path, at=None):
 
 @lru_cache(maxsize=1)
 def places():
-    """The named bases and towers on Everon, each with where it is."""
-    return json.loads(PLACES.read_text(encoding="utf-8"))["places"]
+    """Every Conflict base on Everon (each with its map key), then the other named places that aren't one."""
+    bases = json.loads(CONFLICT.read_text(encoding="utf-8"))["places"]
+    others = [p for p in json.loads(PLACES.read_text(encoding="utf-8"))["places"]
+              if all((p["x"] - b["x"]) ** 2 + (p["z"] - b["z"]) ** 2 > SAME_SPOT ** 2 for b in bases)]
+    return bases + others

@@ -1,4 +1,5 @@
 import json
+import time
 import struct
 import tempfile
 import unittest
@@ -63,21 +64,35 @@ class CampaignSaveTests(unittest.TestCase):
             for number, saved in (("savepoint001", 100), ("savepoint002", 200)):
                 folder = game / number
                 (folder / "WorldState").mkdir(parents=True)
-                (folder / "meta-info.json").write_text(json.dumps({"m_iSavedAtUnix": saved}))
+                (folder / "meta-info.json").write_text(json.dumps({"m_iSavedAtUnix": saved, "m_iStartedUnix": 50}))
                 (folder / "WorldState" / "x.blob").write_bytes(save([record(TILLERS, "US" if saved == 200 else "USSR")]))
-            path, saved = campaign_save.newest(str(logs))
-            self.assertEqual(saved, 200)
+            path, saved, started = campaign_save.newest(str(logs))
+            self.assertEqual((saved, started), (200, 50))
             self.assertEqual(campaign_save.read(path)["bases"], [(TILLERS, "US")])
             self.assertIsNone(campaign_save.newest(str(root / "nowhere" / "logs")))
 
 
 class BaseNamesTests(unittest.TestCase):
-    def test_names_are_kept_and_updated(self):
+    def test_names_are_kept_per_game(self):
         db = PanelDB(":memory:")
-        self.assertEqual(db.base_names("s1", {TILLERS: "TillersFind"}), {TILLERS: "TillersFind"})
-        self.assertEqual(db.base_names("s1"), {TILLERS: "TillersFind"})
-        self.assertEqual(db.base_names("s2"), {})
-        self.assertEqual(db.base_names("s1", {TILLERS: "Tillers"}), {TILLERS: "Tillers"})
+        game = int(time.time())
+        self.assertEqual(db.base_names("s1", game, {TILLERS: "TillersFind"}), {TILLERS: "TillersFind"})
+        self.assertEqual(db.base_names("s1", game), {TILLERS: "TillersFind"})
+        self.assertEqual(db.base_names("s1", game + 1), {})
+        self.assertEqual(db.base_names("s2", game), {})
+        self.assertEqual(db.base_names("s1", game, {TILLERS: "Tillers"}), {TILLERS: "Tillers"})
+
+
+class PlacesTests(unittest.TestCase):
+    def test_every_conflict_base_is_on_the_map_once(self):
+        from panel import mobs
+        found = mobs.places()
+        keys = [p["key"] for p in found if p.get("key")]
+        self.assertEqual(len(keys), 39)
+        self.assertIn("TillersFind", keys)
+        names = [p["name"] for p in found]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertNotIn("Camurac", names)
 
 
 if __name__ == "__main__":

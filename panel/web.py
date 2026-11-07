@@ -2195,7 +2195,8 @@ def place_key(name):
     return re.sub(r"[^a-z]", "", name.lower().replace("base", ""))
 
 
-# The main objectives the map heading scores, like the game's own "4 - 4". Empty: it scores every base instead.
+# The main objectives the map heading scores, like the game's own "4 - 4", by name or map key. Empty: it scores
+# every base instead.
 MAIN_OBJECTIVES = ()
 
 
@@ -2211,15 +2212,15 @@ def base_control(state, db):
     read = campaign_save.read(found[0])
     if not read:
         return None
-    known = db.base_names(state.config.id, read["names"])
-    places = {place_key(p["name"]): p["name"] for p in mobs.places()}
+    known = db.base_names(state.config.id, found[2], read["names"])
+    nice = {p["key"]: p["name"] for p in mobs.places() if p.get("key")}
     counts, held = {}, []
     for base, side in read["bases"]:
         counts[side or "none"] = counts.get(side or "none", 0) + 1
-        name = campaign_save.label(known[base]) if base in known else None
-        held.append({"side": side, "name": name, "place": places.get(place_key(name)) if name else None})
+        key = known.get(base)
+        held.append({"side": side, "key": key, "name": nice.get(key) or campaign_save.label(key) if key else None})
     main = {place_key(name) for name in MAIN_OBJECTIVES}
-    scored = [b for b in held if b["name"] and place_key(b["name"]) in main] if main else held
+    scored = [b for b in held if b["key"] and {place_key(b["key"]), place_key(b["name"])} & main] if main else held
     score = {side: sum(1 for b in scored if b["side"] == side) for side in ("US", "USSR")}
     return {"saved": found[1], "counts": counts, "bases": held, "score": score, "objectives": bool(main)}
 

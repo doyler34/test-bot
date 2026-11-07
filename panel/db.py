@@ -314,6 +314,13 @@ CREATE TABLE IF NOT EXISTS base_names (
     name TEXT NOT NULL,
     PRIMARY KEY (server, base)
 );
+CREATE TABLE IF NOT EXISTS game_base_names (
+    server TEXT NOT NULL,
+    game INTEGER NOT NULL,
+    base TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (server, game, base)
+);
 CREATE TABLE IF NOT EXISTS incidents (
     id INTEGER PRIMARY KEY,
     server TEXT NOT NULL,
@@ -1049,13 +1056,16 @@ class PanelDB:
                 self.db.execute("INSERT OR IGNORE INTO kills_read VALUES (?, ?)", (server, folder))
                 self.db.execute("INSERT OR IGNORE INTO kill_places_read VALUES (?, ?)", (server, folder))
 
-    def base_names(self, server, learned=None):
-        """Names of the server's Conflict bases by base ID, keeping any new ones learned from a save."""
-        known = {r["base"]: r["name"] for r in self.all("SELECT base, name FROM base_names WHERE server = ?", server)}
+    def base_names(self, server, game, learned=None):
+        """Names of the Conflict bases by base ID for one game (the save's IDs may not last past a restart),
+        keeping any new ones learned from a save. Games over a week old are let go."""
+        known = {r["base"]: r["name"] for r in self.all(
+            "SELECT base, name FROM game_base_names WHERE server = ? AND game = ?", server, game)}
         new = {base: name for base, name in (learned or {}).items() if known.get(base) != name}
         if new:
-            self.db.executemany("INSERT OR REPLACE INTO base_names VALUES (?, ?, ?)",
-                                [(server, base, name) for base, name in new.items()])
+            self.db.executemany("INSERT OR REPLACE INTO game_base_names VALUES (?, ?, ?, ?)",
+                                [(server, game, base, name) for base, name in new.items()])
+            self.db.execute("DELETE FROM game_base_names WHERE game < ?", (now() - 7 * 86400,))
             self.db.commit()
             known.update(new)
         return known

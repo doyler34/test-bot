@@ -1,0 +1,278 @@
+{
+ "source": "Conflict - Everon (CTI_Campaign_Eden.ent): every base with a map name",
+ "places": [
+  {
+   "key": "Airbase",
+   "name": "Airbase Saint-Philippe",
+   "kind": "base",
+   "x": 4980,
+   "z": 11948
+  },
+  {
+   "key": "AndresBeacon",
+   "name": "Andre's Beacon",
+   "kind": "base",
+   "x": 6853,
+   "z": 8200
+  },
+  {
+   "key": "BlackLake",
+   "name": "Black Lake",
+   "kind": "base",
+   "x": 9452,
+   "z": 2946
+  },
+  {
+   "key": "CalvaryHill",
+   "name": "Calvary Hill",
+   "kind": "base",
+   "x": 3512,
+   "z": 5816
+  },
+  {
+   "key": "Chotain",
+   "name": "Chotain",
+   "kind": "base",
+   "x": 6991,
+   "z": 6075
+  },
+  {
+   "key": "Coastal_Chotain",
+   "name": "Coastal Base Chotain",
+   "kind": "base",
+   "x": 7473,
+   "z": 6698
+  },
+  {
+   "key": "Coastal_Lamentin",
+   "name": "Coastal Base Lamentin",
+   "kind": "base",
+   "x": 1089,
+   "z": 6029
+  },
+  {
+   "key": "Coastal_Morton",
+   "name": "Coastal Base Morton",
+   "kind": "base",
+   "x": 4982,
+   "z": 3847
+  },
+  {
+   "key": "Durras",
+   "name": "Durras",
+   "kind": "base",
+   "x": 8896,
+   "z": 2709
+  },
+  {
+   "key": "EntreDeux",
+   "name": "Entre-Deux",
+   "kind": "base",
+   "x": 6015,
+   "z": 7178
+  },
+  {
+   "key": "Figari",
+   "name": "Figari",
+   "kind": "base",
+   "x": 5126,
+   "z": 5496
+  },
+  {
+   "key": "GoatBay",
+   "name": "Goat Bay",
+   "kind": "base",
+   "x": 6635,
+   "z": 3119
+  },
+  {
+   "key": "Gravette",
+   "name": "Gravette",
+   "kind": "base",
+   "x": 4012,
+   "z": 7883
+  },
+  {
+   "key": "HQ_North",
+   "name": "HQ North",
+   "kind": "base",
+   "x": 4406,
+   "z": 11035
+  },
+  {
+   "key": "HQ_South",
+   "name": "HQ South",
+   "kind": "base",
+   "x": 10173,
+   "z": 1540
+  },
+  {
+   "key": "HornbeamValley",
+   "name": "Hornbeam Valley",
+   "kind": "base",
+   "x": 5377,
+   "z": 8334
+  },
+  {
+   "key": "Kermovan",
+   "name": "Kermovan",
+   "kind": "base",
+   "x": 6437,
+   "z": 9667
+  },
+  {
+   "key": "Laruns",
+   "name": "Laruns",
+   "kind": "base",
+   "x": 7403,
+   "z": 5281
+  },
+  {
+   "key": "LeMoule",
+   "name": "Le Moule",
+   "kind": "base",
+   "x": 2439,
+   "z": 5438
+  },
+  {
+   "key": "Levie",
+   "name": "Levie",
+   "kind": "base",
+   "x": 7460,
+   "z": 4816
+  },
+  {
+   "key": "MaidensBay",
+   "name": "Maiden's Bay",
+   "kind": "base",
+   "x": 5229,
+   "z": 10702
+  },
+  {
+   "key": "Meaux",
+   "name": "Meaux",
+   "kind": "base",
+   "x": 4511,
+   "z": 9770
+  },
+  {
+   "key": "Levie_Base",
+   "name": "Military Base Levie",
+   "kind": "base",
+   "x": 7449,
+   "z": 4306
+  },
+  {
+   "key": "MilitaryHospital",
+   "name": "Military Hospital",
+   "kind": "base",
+   "x": 3939,
+   "z": 8456
+  },
+  {
+   "key": "Montignac",
+   "name": "Montignac",
+   "kind": "base",
+   "x": 5124,
+   "z": 6981
+  },
+  {
+   "key": "PennantsPass",
+   "name": "Pennant's Pass",
+   "kind": "base",
+   "x": 8222,
+   "z": 2174
+  },
+  {
+   "key": "PinewoodLake",
+   "name": "Pinewood Lake",
+   "kind": "base",
+   "x": 4440,
+   "z": 6237
+  },
+  {
+   "key": "Provins",
+   "name": "Provins",
+   "kind": "base",
+   "x": 5574,
+   "z": 5895
+  },
+  {
+   "key": "Quarry",
+   "name": "Quarry",
+   "kind": "base",
+   "x": 8793,
+   "z": 3897
+  },
+  {
+   "key": "Richemont",
+   "name": "Richemont",
+   "kind": "base",
+   "x": 4539,
+   "z": 4994
+  },
+  {
+   "key": "Regina",
+   "name": "Régina",
+   "kind": "base",
+   "x": 7294,
+   "z": 2175
+  },
+  {
+   "key": "ShepherdsPond",
+   "name": "Shepherd's Pond",
+   "kind": "base",
+   "x": 3295,
+   "z": 4471
+  },
+  {
+   "key": "SimonsWood",
+   "name": "Simon's Wood",
+   "kind": "base",
+   "x": 6579,
+   "z": 5136
+  },
+  {
+   "key": "TillersFind",
+   "name": "Tiller's Find",
+   "kind": "base",
+   "x": 3790,
+   "z": 6998
+  },
+  {
+   "key": "Tower_EntreDeux",
+   "name": "Tower Entre-Deux",
+   "kind": "tower",
+   "x": 5859,
+   "z": 7260
+  },
+  {
+   "key": "Tower_Regina",
+   "name": "Tower Régina",
+   "kind": "tower",
+   "x": 7690,
+   "z": 3056
+  },
+  {
+   "key": "Tyrone",
+   "name": "Tyrone",
+   "kind": "base",
+   "x": 5007,
+   "z": 8921
+  },
+  {
+   "key": "Vernon",
+   "name": "Vernon",
+   "kind": "base",
+   "x": 9128,
+   "z": 2292
+  },
+  {
+   "key": "Villeneuf",
+   "name": "Villeneuf",
+   "kind": "base",
+   "x": 2910,
+   "z": 6494
+  }
+ ]
+}

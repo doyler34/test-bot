@@ -17,17 +17,18 @@ _cache = {}
 
 
 def newest(log_dir):
-    """The newest autosave of the game, as (blob path, saved at unix time), or None."""
+    """The newest autosave of the game, as (blob path, saved at, game started at) in unix time, or None."""
     root = Path(log_dir).parent / "profile" / ".save" / "game"
     best = None
     for meta in root.glob("*Campaign*/playthrough*/savepoint*/meta-info.json"):
         try:
-            saved = int(json.loads(meta.read_text(encoding="utf-8"))["m_iSavedAtUnix"])
+            info = json.loads(meta.read_text(encoding="utf-8"))
+            saved, started = int(info["m_iSavedAtUnix"]), int(info.get("m_iStartedUnix") or 0)
         except (OSError, ValueError, KeyError, TypeError):
             continue
         blobs = sorted((meta.parent / "WorldState").glob("*.blob"))
         if blobs and (best is None or saved > best[1]):
-            best = (blobs[0], saved)
+            best = (blobs[0], saved, started)
     return best
 
 
