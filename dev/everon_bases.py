@@ -74,6 +74,35 @@ def bases(text):
         yield place.group(1), float(coords.group(1)), float(coords.group(3)), ident.group(1) if ident else ""
 
 
+def names_in(pak):
+    """Every file name in a pak's table, as (name, offset, packed size, real size)."""
+    data = pak.read_bytes()
+    if data[:4] != b"FORM" or data[8:12] != b"PAC1":
+        return
+    table = next(((start, size) for tag, start, size in chunks(data) if tag == b"FILE"), None)
+    if not table:
+        return
+    files = data[table[0]:table[0] + table[1]]
+    for hit in re.finditer(rb"[\x01]([\x03-\x7f])", files):
+        length = hit.group(1)[0]
+        name = files[hit.end():hit.end() + length]
+        if re.fullmatch(rb"[A-Za-z0-9_.\- ]+\.[A-Za-z0-9]{1,8}", name) and hit.end() + length + 12 <= len(files):
+            yield (name.decode(), *struct.unpack_from("<III", files, hit.end() + length))
+
+
+def survey(folder):
+    """What kinds of files the paks hold, and any that could map prefab IDs to names."""
+    import collections
+    kinds = collections.Counter()
+    for pak in sorted(Path(folder).glob("*.pak")):
+        for name, offset, packed, real in names_in(pak):
+            kind = name.rsplit(".", 1)[-1].lower()
+            kinds[kind] += 1
+            if kind in ("rdb", "meta", "conf") and ("resource" in name.lower() or kind == "rdb"):
+                print(f"{pak.name}: {name} ({real} bytes)")
+    print(dict(kinds.most_common(25)))
+
+
 def copy(folder, out, wanted="CTI_Campaign_Eden.ent"):
     """Write the Everon world file, unpacked, to `out`."""
     for pak in sorted(Path(folder).glob("*.pak")):
@@ -115,7 +144,9 @@ def main(folder):
 
 
 if __name__ == "__main__":
-    if "--copy" in sys.argv:
+    if "--survey" in sys.argv:
+        survey(next(a for a in sys.argv[1:] if a != "--survey"))
+    elif "--copy" in sys.argv:
         args = [a for a in sys.argv[1:] if a != "--copy"]
         copy(args[0], args[1])
     elif "--show" in sys.argv:
