@@ -74,6 +74,21 @@ def bases(text):
         yield place.group(1), float(coords.group(1)), float(coords.group(3)), ident.group(1) if ident else ""
 
 
+def show(folder, wanted="CTI_Campaign_Eden.ent"):
+    """Print the lines around the first few bases in the Everon file, to see how they're written."""
+    for pak in sorted(Path(folder).glob("*.pak")):
+        for name, text in world_files(pak):
+            if name != wanted:
+                continue
+            lines = text.splitlines()
+            print(f"# {pak.name}: {name}, {len(lines)} lines")
+            hits = [i for i, line in enumerate(lines) if "MapLocation_" in line or "CampaignMilitaryBase" in line][:4]
+            for i in hits:
+                print(f"--- line {i}")
+                print("\n".join(lines[max(0, i - 25):i + 8]))
+            return
+
+
 def main(folder):
     paks = sorted(Path(folder).glob("*.pak"))
     print(f"{len(paks)} pak files")
@@ -89,4 +104,7 @@ def main(folder):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else ".")
+    if "--show" in sys.argv:
+        show(next(a for a in sys.argv[1:] if a != "--show"))
+    else:
+        main(sys.argv[1] if len(sys.argv) > 1 else ".")
