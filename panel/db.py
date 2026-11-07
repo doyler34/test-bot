@@ -314,6 +314,26 @@ CREATE TABLE IF NOT EXISTS base_names (
     name TEXT NOT NULL,
     PRIMARY KEY (server, base)
 );
+CREATE TABLE IF NOT EXISTS player_loadouts (
+    identity TEXT PRIMARY KEY,
+    server TEXT NOT NULL,
+    side TEXT,
+    class TEXT NOT NULL,
+    weapon TEXT,
+    loadout TEXT NOT NULL,
+    saved INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS loadout_classes (
+    identity TEXT NOT NULL,
+    class TEXT NOT NULL,
+    times INTEGER NOT NULL,
+    last INTEGER NOT NULL,
+    PRIMARY KEY (identity, class)
+);
+CREATE TABLE IF NOT EXISTS loadout_saves (
+    server TEXT PRIMARY KEY,
+    saved INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS game_base_names (
     server TEXT NOT NULL,
     game INTEGER NOT NULL,
@@ -1069,6 +1089,32 @@ class PanelDB:
             self.db.commit()
             known.update(new)
         return known
+
+    def loadout_save_read(self, server):
+        """The time of the last autosave whose loadouts were counted for this server, 0 if none."""
+        row = self.one("SELECT saved FROM loadout_saves WHERE server = ?", server)
+        return row["saved"] if row else 0
+
+    def add_loadouts(self, server, saved, rows, online):
+        """Keep each player's newest saved loadout, and count one more time on their class for those on now."""
+        self.db.executemany(
+            "INSERT INTO player_loadouts VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(identity) DO UPDATE SET"
+            " server = excluded.server, side = excluded.side, class = excluded.class, weapon = excluded.weapon,"
+            " loadout = excluded.loadout, saved = excluded.saved WHERE excluded.saved >= saved",
+            [(r["identity"], server, r["side"], r["class"], r["weapon"], r["loadout"], saved) for r in rows])
+        self.db.executemany(
+            "INSERT INTO loadout_classes VALUES (?, ?, 1, ?) ON CONFLICT(identity, class)"
+            " DO UPDATE SET times = times + 1, last = excluded.last",
+            [(r["identity"], r["class"], saved) for r in rows if r["identity"] in online])
+        self.db.execute("INSERT OR REPLACE INTO loadout_saves VALUES (?, ?)", (server, saved))
+        self.db.commit()
+
+    def loadout(self, identity):
+        """A player's newest saved loadout and how often each class has been theirs, most first."""
+        row = self.one("SELECT * FROM player_loadouts WHERE identity = ?", identity)
+        classes = self.all("SELECT class, times, last FROM loadout_classes WHERE identity = ? ORDER BY times DESC, last DESC",
+                           identity)
+        return {"latest": dict(row) if row else None, "classes": [dict(r) for r in classes]}
 
     def map_kills(self, server, since, limit=3000):
         """Kills with a place on the map, newest first."""

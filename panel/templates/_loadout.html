@@ -1,0 +1,23 @@
+{% if loadout.latest or loadout.classes %}
+<section class="card loadout-card">
+  <h2>Class &amp; loadout</h2>
+  {% if loadout.classes %}
+  <p>Most used class: <b>{{ loadout.classes[0].class }}</b>
+    <span class="muted">· from their saved loadout at {{ loadout.total }} autosave{{ "s" if loadout.total != 1 }} while they were on</span></p>
+  <ul class="class-bars">
+    {% for c in loadout.classes %}
+    <li><span>{{ c.class }}</span><i style="width: {{ (100 * c.times / loadout.total)|round|int }}%"></i><b>{{ (100 * c.times / loadout.total)|round|int }}%</b></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if loadout.latest %}
+  <h3>Saved loadout <span class="muted">· {{ loadout.latest.class }}{% if loadout.latest.side %} · {{ loadout.latest.side }}{% endif %} · read {{ loadout.latest.saved|ago }}</span></h3>
+  {% if loadout.latest.weapon %}<p>Weapons: {{ loadout.latest.weapon }}</p>{% endif %}
+  <ul class="kit">
+    {% for item in loadout.latest["items"] recursive %}
+    <li>{{ item.name }}{% if item["items"] %}<ul>{{ loop(item["items"]) }}</ul>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endif %}

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
-from . import alerts as alert_colours, archive, attacks, memory, monitor, netcheck
+from . import alerts as alert_colours, archive, attacks, campaign_save, loadouts, memory, monitor, netcheck
 from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
@@ -32,6 +32,8 @@ POWER_RCON = ("restart_mission", "shutdown")
 POWER_SERVICE = ("start", "stop", "restart")
 # Only act on what happened just now, never on old log lines read back after a restart.
 AUTO_FRESH = 300
+# How often to look for a new autosave to read loadouts from.
+LOADOUT_POLL = 60
 AUTO_KICK_GAP = 600
 # A warned player's next teamkill this close, by bullet or similar, earns an automatic ban.
 WARNED_METRES = 100
@@ -164,6 +166,7 @@ class ServerManager:
         for state in self.states.values():
             if state.config.log_dir:
                 self._tasks.append(asyncio.create_task(self._watch_logs(state)))
+                self._tasks.append(asyncio.create_task(self._watch_loadouts(state)))
 
     async def stop(self):
         # On 3.11 a cancel that lands as a wait_for finishes can be swallowed,
@@ -349,6 +352,35 @@ class ServerManager:
             except Exception:
                 log.exception("reading logs failed for %s", state.config.id)
             await asyncio.sleep(self.config.poll_seconds)
+
+    async def _watch_loadouts(self, state: ServerState):
+        """After each autosave: every player's saved loadout and its class, counted for those on the server."""
+        while not self._stopping:
+            try:
+                await self.read_loadouts(state)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("reading loadouts failed for %s", state.config.id)
+            await asyncio.sleep(LOADOUT_POLL)
+
+    async def read_loadouts(self, state: ServerState):
+        found = campaign_save.newest(state.config.log_dir)
+        if not found or found[1] <= self.db.loadout_save_read(state.config.id) or self.db.path == ":memory:":
+            return
+        cache = Path(self.db.path).parent / "prefab_names.json"
+        names = await asyncio.to_thread(loadouts.names, loadouts.pak_dir(state.config.log_dir), cache)
+        people = await asyncio.to_thread(lambda: loadouts.players(found[0].read_bytes()))
+        rows = []
+        for identity, person in people.items():
+            if not person["loadout"]:
+                continue
+            items = loadouts.tree(person["loadout"], names)
+            kind, _ = loadouts.classify(items)
+            rows.append({"identity": identity, "side": person["side"], "class": kind,
+                         "weapon": ", ".join(loadouts.weapons(items)), "loadout": json.dumps(items)})
+        online = {p.get("identity") for p in state.players if p.get("identity")}
+        self.db.add_loadouts(state.config.id, found[1], rows, online)
 
     async def _maintain(self):
         """Once an hour, for every server at once: old rows out of the database and old saved logs off the disk.
