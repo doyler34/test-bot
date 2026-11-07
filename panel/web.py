@@ -26,7 +26,7 @@ from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, p
 from bot.mortar.wind import Wind
 
 from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP, XP_PER_TEAMKILL
-from . import archive, attacks, auth, ballistics, console, files, investigate, joiners, maptiles, memory, mobs, monitor, netcheck, outliers, site, steamage, whois, workshop, xlsx
+from . import archive, attacks, auth, ballistics, campaign_save, console, files, investigate, joiners, maptiles, memory, mobs, monitor, netcheck, outliers, site, steamage, whois, workshop, xlsx
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -2191,6 +2191,32 @@ def game_start(state):
     return folder_start(folder) if folder else None
 
 
+def place_key(name):
+    return re.sub(r"[^a-z]", "", name.lower().replace("base", ""))
+
+
+def base_control(state, db):
+    """Who holds each base, from the newest autosave of the game now running; None when there isn't one."""
+    if not state.config.log_dir:
+        return None
+    found = campaign_save.newest(state.config.log_dir)
+    start = game_start(state)
+    # A save left from the game before this one doesn't count.
+    if not found or (start and found[1] < start - 60):
+        return None
+    read = campaign_save.read(found[0])
+    if not read:
+        return None
+    known = db.base_names(state.config.id, read["names"])
+    places = {place_key(p["name"]): p["name"] for p in mobs.places()}
+    counts, held = {}, []
+    for base, side in read["bases"]:
+        counts[side or "none"] = counts.get(side or "none", 0) + 1
+        name = campaign_save.label(known[base]) if base in known else None
+        held.append({"side": side, "name": name, "place": places.get(place_key(name)) if name else None})
+    return {"saved": found[1], "counts": counts, "bases": held}
+
+
 async def control_kills(request):
     state = server_or_404(request, request.match_info["id"])
     key = request.query.get("range", "game")
@@ -2199,6 +2225,7 @@ async def control_kills(request):
     rows = request.app[DB].map_kills(state.config.id, since, KILL_MAP_LIMIT)
     folder = game_folder(state)
     return web.json_response({"capped": len(rows) == KILL_MAP_LIMIT, "bases": mobs.read(folder / "console.log") if folder else [],
+                              "control": base_control(state, request.app[DB]),
                               "kills": [{
         "at": r["at"], "teamkill": r["kind"] == "teamkill", "ai": not r["killer"],
         "killer": r["killer_name"] or "", "killer_id": r["killer"], "victim": r["victim_name"], "victim_id": r["victim"],

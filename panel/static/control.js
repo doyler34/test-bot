@@ -141,7 +141,9 @@ async function startMap(box) {
   const sub = panel.querySelector("[data-map-sub]");
   const rangePick = panel.querySelector("[data-map-range]");
   const serverPick = panel.querySelector("[data-map-server]");
-  const state = { names: true, lines: true, heat: false, grid: false, count: false, kills: [], bases: [], radius: 250, spot: null };
+  const state = { names: true, lines: true, heat: false, grid: false, count: false, kills: [], bases: [], control: null, radius: 250, spot: null };
+  const placeMarks = new Map();
+  const OWNER = { US: "us", USSR: "ru", FIA: "fia" };
   let server = box.dataset.server;
 
   function drawGrid() {
@@ -196,9 +198,38 @@ async function startMap(box) {
     const reply = await fetch("/control-map/places.json", { credentials: "same-origin" });
     if (!reply.ok) return;
     for (const place of (await reply.json()).places) {
-      L.marker(toLatLng(place.x, place.z), { interactive: false, keyboard: false, icon: L.divIcon({
-        className: `place ${place.kind}`, iconSize: [0, 0], html: `<i></i><span>${text(place.name)}</span>` }) }).addTo(layers.places);
+      placeMarks.set(place.name, L.marker(toLatLng(place.x, place.z), { interactive: false, keyboard: false, icon: L.divIcon({
+        className: `place ${place.kind}`, iconSize: [0, 0], html: `<i></i><span>${text(place.name)}</span>` }) }).addTo(layers.places));
     }
+    drawControl();
+  }
+
+  // Who holds each base, from the game's last autosave: the named places take the owner's colour.
+  function drawControl() {
+    const owners = new Map((state.control?.bases || []).filter((b) => b.place).map((b) => [b.place, OWNER[b.side] || ""]));
+    for (const [name, mark] of placeMarks) {
+      const el = mark.getElement();
+      if (!el) continue;
+      for (const side of Object.values(OWNER)) el.classList.toggle(`own-${side}`, owners.get(name) === side);
+    }
+  }
+
+  function controlWords() {
+    const c = state.control;
+    if (!c) return "";
+    const n = (side) => c.counts[side] || 0;
+    return ` · Bases US ${n("US")} · USSR ${n("USSR")} · FIA ${n("FIA")} (save ${clock(c.saved)})`;
+  }
+
+  function controlList() {
+    const c = state.control;
+    if (!c) return "";
+    const lines = ["US", "USSR", "FIA"].map((side) => {
+      const named = c.bases.filter((b) => b.side === side && b.name).map((b) => b.name).sort();
+      const unnamed = c.bases.filter((b) => b.side === side && !b.name).length;
+      return `${side}: ${named.join(", ") || "none named yet"}${unnamed ? ` + ${unnamed} not named yet` : ""}`;
+    });
+    return `\n\nBases from the game's last autosave:\n${lines.join("\n")}\nNo owner: ${c.counts.none || 0}`;
   }
 
   // Where each side started this game.
@@ -254,6 +285,8 @@ async function startMap(box) {
     if (other) {
       state.kills = [];
       state.bases = [];
+      state.control = null;
+      drawControl();
       drawBases();
       draw();
       sub.textContent = `· ${option.textContent} is on ${option.dataset.mapName}; this map is ${MAP.name}`;
@@ -264,10 +297,12 @@ async function startMap(box) {
     const data = await res.json();
     state.kills = data.kills;
     state.bases = data.bases || [];
+    state.control = data.control || null;
     drawBases();
+    drawControl();
     draw();
-    sub.textContent = `· ${data.kills.length}${data.capped ? "+" : ""} kill${data.kills.length === 1 ? "" : "s"}`;
-    sub.title = RANGE_WORDS[range];
+    sub.textContent = `· ${data.kills.length}${data.capped ? "+" : ""} kill${data.kills.length === 1 ? "" : "s"}${controlWords()}`;
+    sub.title = RANGE_WORDS[range] + controlList();
   }
 
   rangePick?.addEventListener("change", load);
@@ -278,7 +313,7 @@ async function startMap(box) {
       state[name] = !state[name];
       button.classList.toggle("on", state[name]);
       button.setAttribute("aria-pressed", state[name]);
-      if (name === "names") state.names ? layers.places.addTo(map) : layers.places.remove();
+      if (name === "names") { state.names ? layers.places.addTo(map) : layers.places.remove(); drawControl(); }
       if (name === "lines" && !state.heat) state.lines ? layers.lines.addTo(map) : layers.lines.remove();
       if (name === "heat") {
         // Squares instead of dots: the dots would hide them.

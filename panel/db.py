@@ -308,6 +308,12 @@ CREATE TABLE IF NOT EXISTS kills_read (
     folder TEXT NOT NULL,
     PRIMARY KEY (server, folder)
 );
+CREATE TABLE IF NOT EXISTS base_names (
+    server TEXT NOT NULL,
+    base TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (server, base)
+);
 CREATE TABLE IF NOT EXISTS incidents (
     id INTEGER PRIMARY KEY,
     server TEXT NOT NULL,
@@ -1042,6 +1048,17 @@ class PanelDB:
             if folder:
                 self.db.execute("INSERT OR IGNORE INTO kills_read VALUES (?, ?)", (server, folder))
                 self.db.execute("INSERT OR IGNORE INTO kill_places_read VALUES (?, ?)", (server, folder))
+
+    def base_names(self, server, learned=None):
+        """Names of the server's Conflict bases by base ID, keeping any new ones learned from a save."""
+        known = {r["base"]: r["name"] for r in self.all("SELECT base, name FROM base_names WHERE server = ?", server)}
+        new = {base: name for base, name in (learned or {}).items() if known.get(base) != name}
+        if new:
+            self.db.executemany("INSERT OR REPLACE INTO base_names VALUES (?, ?, ?)",
+                                [(server, base, name) for base, name in new.items()])
+            self.db.commit()
+            known.update(new)
+        return known
 
     def map_kills(self, server, since, limit=3000):
         """Kills with a place on the map, newest first."""
