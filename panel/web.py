@@ -2741,14 +2741,14 @@ AMP_STATES = {0: "Stopped", 5: "Getting ready", 7: "Configuring", 10: "Starting"
               80: "Waiting for input", 100: "Failed", 200: "Suspended", 250: "Maintenance"}
 MANAGE_TABS = (("overview", "Overview", "power"), ("console", "Console", "files"), ("settings", "Settings", "amp_settings"),
                ("mods", "Mods", "mods"), ("arsenal", "Arsenal", "arsenal"), ("vehicles", "Vehicles", "vehicles"),
-               ("files", "Files", "files"))
+               ("announcements", "Announcements", "announcements"), ("files", "Files", "files"))
 
 
 def manage_tabs(request, inst, current):
     """The sub-tabs along the top of one server's pages, only the ones this person can open."""
     urls = {"overview": f"/manage/{inst}", "console": f"/manage/{inst}/console", "settings": f"/manage/{inst}/settings",
             "mods": f"/mods/{inst}", "arsenal": f"/arsenal/{inst}", "vehicles": f"/vehicles/{inst}",
-            "files": f"/files/{inst}"}
+            "announcements": f"/announcements/{inst}", "files": f"/files/{inst}"}
     return [{"key": key, "label": label, "url": urls[key], "on": key == current}
             for key, label, perm in MANAGE_TABS if allowed_on(request, perm, inst)]
 
@@ -3967,6 +3967,77 @@ async def vehicles_change(request):
     raise web.HTTPFound(back)
 
 
+async def announcements_page(request):
+    """The hints OYB Core shows each player: a heading, and one message at a time under it."""
+    require_on(request, "announcements")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    error, found = "", {"title": "OYB", "messages": [], "every": 30}
+    players = {"afk": 0, "afk_players": 0, "teamkill": files.TEAMKILL_MESSAGE, "rules": ""}
+    try:
+        found = files.announcements(base)
+        players = files.player_settings(base)
+    except (OSError, ValueError) as exc:
+        error = f"Couldn't read the OYB Core files: {exc}"
+    return render(request, "announcements.html", inst=inst, tabs=manage_tabs(request, inst, "announcements"), error=error,
+                  found=found, players=players, rules_max=files.RULES_MAX_LENGTH, max_messages=files.ANNOUNCE_MAX_MESSAGES, max_length=files.ANNOUNCE_MAX_LENGTH)
+
+
+async def announcements_change(request):
+    require_on(request, "announcements")
+    inst = request.match_info["inst"]
+    base, _ = server_folder(request)
+    form = await request.post()
+    back = f"/announcements/{inst}"
+
+    def fail(text):
+        flash(request, text, "error")
+        raise web.HTTPFound(back)
+
+    if form.get("action") == "players":
+        try:
+            afk, afk_players = int(form.get("afk", "").strip() or 0), int(form.get("afk_players", "").strip() or 0)
+        except ValueError:
+            afk = afk_players = -1
+        if not 0 <= afk <= 240 or not 0 <= afk_players <= 256:
+            fail("AFK minutes are 0 to 240 (0 is off), players 0 to 256.")
+        teamkill = " ".join(form.get("teamkill", "").split())
+        if len(teamkill) > files.ANNOUNCE_MAX_LENGTH:
+            fail(f"The teamkill message is at most {files.ANNOUNCE_MAX_LENGTH} letters.")
+        rules = "\n".join(line.rstrip() for line in form.get("rules", "").strip().splitlines())
+        if len(rules) > files.RULES_MAX_LENGTH:
+            fail(f"The rules are at most {files.RULES_MAX_LENGTH} letters.")
+        try:
+            files.save_player_settings(base, afk, afk_players, teamkill, rules)
+        except (files.FileError, OSError) as exc:
+            audit(request, "announcements players", inst, "", str(exc), ok=False)
+            fail(f"The server's file couldn't be written: {exc}")
+        audit(request, "announcements players", inst, "", f"AFK {afk} min with {afk_players}+ on, teamkill {'on' if teamkill else 'off'}, rules {'on' if rules else 'off'}")
+        flash(request, "Saved. Restart the mission or start a new game for it to apply.")
+        raise web.HTTPFound(back)
+
+    title = " ".join(form.get("title", "").split()) or "OYB"
+    messages = [" ".join(line.split()) for line in form.get("messages", "").splitlines() if line.strip()]
+    try:
+        every = int(form.get("every", "").strip())
+    except ValueError:
+        every = 0
+    if not 1 <= every <= 240:
+        fail("How often is a whole number of minutes from 1 to 240.")
+    if len(messages) > files.ANNOUNCE_MAX_MESSAGES:
+        fail(f"At most {files.ANNOUNCE_MAX_MESSAGES} messages.")
+    if any(len(text) > files.ANNOUNCE_MAX_LENGTH for text in [title, *messages]):
+        fail(f"Each message is at most {files.ANNOUNCE_MAX_LENGTH} letters.")
+    try:
+        files.save_announcements(base, title, messages, every)
+    except (files.FileError, OSError) as exc:
+        audit(request, "announcements", inst, "", str(exc), ok=False)
+        fail(f"The server's file couldn't be written: {exc}")
+    audit(request, "announcements", inst, "", f"{len(messages)} messages every {every} min")
+    flash(request, "Saved. Restart the mission or start a new game for it to apply.")
+    raise web.HTTPFound(back)
+
+
 async def arsenal_page(request):
     """Hide items from the OYB Arsenal and change what they cost, per server."""
     require_on(request, "arsenal")
@@ -4929,6 +5000,8 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/vehicles/{inst}", vehicles_page)
     app.router.add_get("/vehicles/{inst}/costs.xlsx", vehicle_costs_export)
     app.router.add_post("/vehicles/{inst}", vehicles_change)
+    app.router.add_get("/announcements/{inst}", announcements_page)
+    app.router.add_post("/announcements/{inst}", announcements_change)
     app.router.add_route("GET", "/console", console_page)
     app.router.add_post("/console", console_page)
     app.router.add_route("GET", "/network", network_page)

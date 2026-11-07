@@ -24,6 +24,39 @@ Workbench from a 16:9 PNG; its resource name (GUID from the `.meta`) is
 `OYB_LoadingScreen.IMAGE`. To change the picture, import a new PNG and put its
 resource name there.
 
+## Announcements
+
+`Scripts/Game/OYBCore/Announcements/OYB_Announcements.c`, set on the OYB
+panel's **Announcements** tab. Each player sees them as a hint box on their own
+screen, never in chat: the title as its heading and a message under it. The
+welcome shows once they're in the world, then the messages every so many
+minutes, in turn. The panel puts all its lines into one message, written as
+both the welcome and the only message, so the same popup shows each time. The panel writes
+`$profile:OYB_Core/announcements.json`; the server reads it when a game starts
+and sends it to each player as they join, so a change applies from the next
+game. The log says `OYB_CORE announcements: welcome 1, N messages every M minutes`.
+
+## Rules, AFK kick and teamkill popup
+
+`Scripts/Game/OYBCore/Players/OYB_Players.c`, set on the panel's
+**Announcements** tab, which writes `$profile:OYB_Core/players.json`, read when
+a game starts.
+
+- **AFK kick**: each player's game tells the server when its camera or
+  character moved. A player with neither for the set minutes gets a warning
+  popup, and a minute later is kicked. Admins and Game Masters are never
+  kicked; it can be limited to when enough players are on. Off (0) until set.
+- **Rules**: each joining player gets them in the game's own one-button dialog
+  (`SCR_CommonDialogs.CreateTimeoutOkDialog`, retitled) and has to press OK;
+  closing it any other way brings it back. Their game keeps the rules they
+  accepted in its own `$profile:OYB_Core/rules_accepted.json`, so they only
+  see them again once the rules change.
+- **Teamkill popup**: the killer sees the panel's message straight away, for a
+  kill the game counts as a teamkill.
+
+The log says `OYB_CORE players: AFK kick after N minutes ...`, and names
+anyone kicked for being AFK.
+
 ## Vehicles: hiding and limits
 
 `Scripts/Game/OYBCore/Vehicles/`, driven from the OYB panel's **Vehicles** tab.

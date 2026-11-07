@@ -39,6 +39,7 @@ PERMISSIONS = {
     "mods": "owner",
     "arsenal": "owner",
     "vehicles": "owner",
+    "announcements": "owner",
     "files": "manager",
     "amp_settings": "manager",
     # Commands on the box, and deleting a whole server: ticked per person.
@@ -70,6 +71,7 @@ GRANTS = (
     ("mods", "Change which mods each server runs"),
     ("arsenal", "Change each server's arsenal: hidden items and prices"),
     ("vehicles", "Change each server's vehicles: hidden vehicles and limits"),
+    ("announcements", "Change each server's in-game announcements"),
     ("files", "Server manager: start and stop servers' AMP, files, game console"),
     ("amp_settings", "Server manager: change AMP settings"),
     ("console", "Box console: run commands on the machine"),
@@ -87,6 +89,7 @@ SERVER_PARTS = (
     ("mods", "Mods"),
     ("arsenal", "Arsenal"),
     ("vehicles", "Vehicles"),
+    ("announcements", "Announcements"),
     ("delete_servers", "Delete"),
 )
 

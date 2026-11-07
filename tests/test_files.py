@@ -439,6 +439,31 @@ class FileManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("No vehicle list yet", page)
         self.assertIn(">Vehicles</a>", page)
 
+    async def test_announcements_are_written_for_oyb_core(self):
+        folder = self.vehicle_profile()
+        token = await self.login("boss")
+        page = await (await self.client.get("/announcements/Plus01")).text()
+        self.assertIn(">Announcements</a>", page)
+        post = lambda **data: self.client.post("/announcements/Plus01", data={"csrf": token, **data})
+        await post(title="Join  our Discord", messages="One\n\n  Two  \nThree\n", every="20")
+        saved = json.loads((folder / "announcements.json").read_text())
+        # One popup with every message, on spawning and again every 20 minutes.
+        self.assertEqual((saved["title"], saved["welcome"], saved["messages"], saved["everyMinutes"]),
+                         ("Join our Discord", "One\nTwo\nThree", ["One\nTwo\nThree"], 20))
+        await post(title="", messages="x" * 301, every="20")                      # too long
+        await post(title="", messages="", every="0")                              # not a time
+        self.assertEqual(json.loads((folder / "announcements.json").read_text())["panelMessages"], ["One", "Two", "Three"])
+        page = await (await self.client.get("/announcements/Plus01")).text()
+        self.assertIn("One\nTwo\nThree</textarea>", page)
+        await post(action="players", afk="15", afk_players="20", teamkill="No  teamkilling", rules="1. Be nice  \r\n2. No TK\r\n")
+        saved = json.loads((folder / "players.json").read_text())
+        self.assertEqual((saved["afkMinutes"], saved["afkMinPlayers"], saved["teamkillMessage"], saved["rules"]),
+                         (15, 20, "No teamkilling", "1. Be nice\n2. No TK"))
+        await post(action="players", afk="-1", afk_players="0", teamkill="")         # not a time
+        self.assertEqual(json.loads((folder / "players.json").read_text())["afkMinutes"], 15)
+        await self.login("chief")
+        self.assertEqual((await self.client.get("/announcements/Plus01")).status, 403)
+
     async def test_costs_are_written_for_the_next_game_and_download_as_excel(self):
         folder = self.vehicle_profile()
         m998, covered, mi8 = ("{V1}Prefabs/Vehicles/Wheeled/M998/M998.et",

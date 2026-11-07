@@ -564,6 +564,85 @@ def save_vehicle_costs(base, costs):
     write_whole(folder / "vehicle_costs.json", json.dumps(data, indent=1) + "\n")
 
 
+ANNOUNCE_MAX_MESSAGES = 10
+ANNOUNCE_MAX_LENGTH = 300
+
+
+def announcements(base):
+    """The hints OYB Core shows each player: {"title", "messages", "every"} (minutes). The popup
+    has the title as its heading and every message under it, a line each."""
+    found = {"title": "OYB", "messages": [], "every": 30}
+    profile = profile_folder(base)
+    path = profile / VEHICLE_FOLDER / "announcements.json" if profile else None
+    if not path or not path.is_file():
+        return found
+    data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    if isinstance(data.get("title"), str) and data["title"].strip():
+        found["title"] = data["title"]
+    listed = data.get("panelMessages")
+    if not isinstance(listed, list):
+        listed = [data.get("welcome")] + list(data.get("messages") or [])
+    found["messages"] = [m for m in listed if isinstance(m, str) and m.strip()]
+    if isinstance(data.get("everyMinutes"), int) and not isinstance(data["everyMinutes"], bool):
+        found["every"] = data["everyMinutes"]
+    return found
+
+
+def save_announcements(base, title, messages, every):
+    """Write the hints OYB Core shows each player from the next game: every message in one
+    popup, a line each, as Core's welcome on spawning and again every so many minutes."""
+    profile = profile_folder(base)
+    if profile is None:
+        raise FileError("This server has no game profile folder yet. Start it once first.")
+    folder = profile / VEHICLE_FOLDER
+    if not folder.exists():
+        folder.mkdir()
+        hand_over(folder)
+    welcome = "\n".join(messages)
+    turns = [welcome] if welcome else []
+    data = {"version": 2, "title": title, "welcome": welcome, "messages": turns, "everyMinutes": every,
+            "panelMessages": messages}
+    write_whole(folder / "announcements.json", json.dumps(data, indent=1) + "\n")
+
+
+TEAMKILL_MESSAGE = "You killed a teammate. Teamkilling is bannable."
+
+
+def player_settings(base):
+    """AFK kick, the teamkill popup and the rules OYB Core uses: {"afk", "afk_players",
+    "teamkill", "rules"}; afk is minutes, 0 off."""
+    found = {"afk": 0, "afk_players": 0, "teamkill": TEAMKILL_MESSAGE, "rules": ""}
+    profile = profile_folder(base)
+    path = profile / VEHICLE_FOLDER / "players.json" if profile else None
+    if not path or not path.is_file():
+        return found
+    data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    for key, field in (("afk", "afkMinutes"), ("afk_players", "afkMinPlayers")):
+        if isinstance(data.get(field), int) and not isinstance(data[field], bool):
+            found[key] = data[field]
+    if isinstance(data.get("teamkillMessage"), str):
+        found["teamkill"] = data["teamkillMessage"]
+    if isinstance(data.get("rules"), str):
+        found["rules"] = data["rules"]
+    return found
+
+
+RULES_MAX_LENGTH = 2000
+
+
+def save_player_settings(base, afk, afk_players, teamkill, rules=""):
+    """Write the AFK kick and teamkill popup settings OYB Core reads when the next game starts."""
+    profile = profile_folder(base)
+    if profile is None:
+        raise FileError("This server has no game profile folder yet. Start it once first.")
+    folder = profile / VEHICLE_FOLDER
+    if not folder.exists():
+        folder.mkdir()
+        hand_over(folder)
+    data = {"version": 1, "afkMinutes": afk, "afkMinPlayers": afk_players, "teamkillMessage": teamkill, "rules": rules}
+    write_whole(folder / "players.json", json.dumps(data, indent=1) + "\n")
+
+
 def new_game(root, base):
     """Put this server's save aside so its next start is a fresh game. The save is moved
     to a folder of its own, not deleted. Returns where it went, or None if there was none."""
