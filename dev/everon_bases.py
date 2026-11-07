@@ -103,6 +103,27 @@ def survey(folder):
     print(dict(kinds.most_common(25)))
 
 
+def entry(folder, wanted="DefaultPlayerControllerMP_Campaign.et", guid="D39FCAB93FC4FB02"):
+    """Print the table bytes around one file's name, and where a known prefab ID shows up in the tables."""
+    raw = bytes.fromhex(guid)
+    for pak in sorted(Path(folder).glob("*.pak")):
+        data = pak.read_bytes()
+        table = next(((start, size) for tag, start, size in chunks(data) if tag == b"FILE"), None)
+        if not table:
+            continue
+        files = data[table[0]:table[0] + table[1]]
+        at = files.find(wanted.encode())
+        if at >= 0:
+            print(f"{pak.name}: name at {at}: {files[at - 4:at + len(wanted) + 48].hex(' ')}")
+        for label, key in (("as written", raw), ("reversed", raw[::-1])):
+            spot = files.find(key)
+            if spot >= 0:
+                print(f"{pak.name}: ID {label} in the table at {spot}, name {at}")
+            spot = data.find(key)
+            if spot >= 0:
+                print(f"{pak.name}: ID {label} in the pak at {spot}")
+
+
 def copy(folder, out, wanted="CTI_Campaign_Eden.ent"):
     """Write the Everon world file, unpacked, to `out`."""
     for pak in sorted(Path(folder).glob("*.pak")):
@@ -144,7 +165,9 @@ def main(folder):
 
 
 if __name__ == "__main__":
-    if "--survey" in sys.argv:
+    if "--entry" in sys.argv:
+        entry(next(a for a in sys.argv[1:] if a != "--entry"))
+    elif "--survey" in sys.argv:
         survey(next(a for a in sys.argv[1:] if a != "--survey"))
     elif "--copy" in sys.argv:
         args = [a for a in sys.argv[1:] if a != "--copy"]
