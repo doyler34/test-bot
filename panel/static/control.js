@@ -300,13 +300,13 @@ async function startMap(box) {
     const res = await fetch(`/server/${encodeURIComponent(server)}/kills.json?range=${range}`, { credentials: "same-origin" });
     if (!res.ok) return;
     const data = await res.json();
-    state.kills = data.kills.filter((k) => !k.ai && k.killer);    // kills by AI or nobody stay off the map
+    state.kills = data.kills;
     state.bases = data.bases || [];
     state.control = data.control || null;
     drawBases();
     drawControl();
     draw();
-    sub.innerHTML = `${scoreHtml()}<span class="map-kills">${state.kills.length}${data.capped ? "+" : ""} kill${state.kills.length === 1 ? "" : "s"}</span>`;
+    sub.innerHTML = `${scoreHtml()}<span class="map-kills">${data.kills.length}${data.capped ? "+" : ""} kill${data.kills.length === 1 ? "" : "s"}</span>`;
     sub.title = RANGE_WORDS[range] + controlList();
   }
 
