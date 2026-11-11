@@ -39,6 +39,7 @@ box). Never send the user anywhere else.
 cd /root/Arma-bot-upload.StfK1D
 git fetch origin && git reset --hard origin/main
 git -C /root/test-bot pull --ff-only origin main
+git -C /root/test-bot push origin main
 git -C /root/test-bot archive HEAD | tar -x -C .
 grep -rIlE --exclude-dir=.git 'doyler34|test-bot' . | xargs -r sed -i 's#doyler34/test-bot#Gazlagom/Arma-bot#g; s#doyler34#Gazlagom#g; s#test-bot#Arma-bot#g'
 git add -A
@@ -47,6 +48,8 @@ git push origin HEAD
 ```
 
 - `origin` in the upload folder points at Gazlagom.
+- The sync also pushes `/root/test-bot` to doyler34 first (the panel updates
+  from there), so it asks for two tokens: doyler34's, then Gazlagom's.
 - The scrub must catch the bare repo name too: docs and `dev/` scripts say
   `cd /root/test-bot` without any `doyler34` next to it, so a grep for
   `doyler34` alone never even opens those files. Verify a change to the scrub
@@ -64,7 +67,7 @@ git push origin HEAD
 - "nothing to commit" means Gazlagom is already current.
 - Give it to the user as one line, with a commit message describing what
   actually changed since the last sync:
-  `cd /root/Arma-bot-upload.StfK1D && git fetch origin && git reset --hard origin/main && git -C /root/test-bot pull --ff-only origin main && git -C /root/test-bot archive HEAD | tar -x -C . && grep -rIlE --exclude-dir=.git 'doyler34|test-bot' . | xargs -r sed -i 's#doyler34/test-bot#Gazlagom/Arma-bot#g; s#doyler34#Gazlagom#g; s#test-bot#Arma-bot#g' && git add -A && git -c user.name='Gazlagom' -c user.email='327911930+Gazlagom@users.noreply.github.com' commit -m '<describe the changes>' && git push origin HEAD`
+  `cd /root/Arma-bot-upload.StfK1D && git fetch origin && git reset --hard origin/main && git -C /root/test-bot pull --ff-only origin main && git -C /root/test-bot push origin main && git -C /root/test-bot archive HEAD | tar -x -C . && grep -rIlE --exclude-dir=.git 'doyler34|test-bot' . | xargs -r sed -i 's#doyler34/test-bot#Gazlagom/Arma-bot#g; s#doyler34#Gazlagom#g; s#test-bot#Arma-bot#g' && git add -A && git -c user.name='Gazlagom' -c user.email='327911930+Gazlagom@users.noreply.github.com' commit -m '<describe the changes>' && git push origin HEAD`
 
 ## After syncing — the user updates what's live
 - Friend's bot: `cd ~/Arma-bot && git pull && oyb restart`
