@@ -6,6 +6,17 @@ from bot.discord.category_timer import matches_category
 LOG = logging.getLogger("reforger.layout")
 
 
+async def guild_channels(guild):
+    """Every channel in the server from Discord itself. A channel of a type this discord.py
+    doesn't know yet makes the whole list fail, so then fall back to the gateway cache,
+    which leaves such channels out."""
+    try:
+        return await guild.fetch_channels()
+    except discord.InvalidData as exc:
+        LOG.warning("Listing channels from the cache instead: %s", exc)
+        return list(guild.channels)
+
+
 async def remove_timer_categories(bot, guild):
     """Delete the retired per-server timer categories (SERVER ONE/TWO/THREE).
 
@@ -14,7 +25,7 @@ async def remove_timer_categories(bot, guild):
     the SERVER STATS channels instead.
     """
     try:
-        channels = await guild.fetch_channels()
+        channels = await guild_channels(guild)
     except discord.HTTPException:
         LOG.exception("Retiring server categories deferred; check Manage Channels")
         return
@@ -36,7 +47,7 @@ async def remove_timer_categories(bot, guild):
 
 async def cleanup_legacy_layout(bot, guild):
     try:
-        channels = await guild.fetch_channels()
+        channels = await guild_channels(guild)
         shared = {c.id for c in bot.channels_by_server.values()}
         for server in bot.config.servers:
             topic = f"OYB • {server.id} • Settings, rules and match notifications"
@@ -65,7 +76,7 @@ async def cleanup_legacy_layout(bot, guild):
                 else:
                     LOG.warning("Keeping legacy channel %s because it contains other messages", channel.id)
         # Fetch again so recently deleted text channels don't make empty categories look occupied.
-        channels = await guild.fetch_channels()
+        channels = await guild_channels(guild)
         occupied = {getattr(c, "category_id", None) for c in channels}
         keep = {c.id for c in bot.category_timers.channels.values()}
         for category in channels:

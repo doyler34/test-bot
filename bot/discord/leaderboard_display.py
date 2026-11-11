@@ -9,6 +9,7 @@ import discord
 from bot.config import staging_enabled, leaderboard_channel_id
 from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
 from bot.storage.combat_store import week_start
+from bot.discord.server_layout import guild_channels
 
 LOG = logging.getLogger('reforger.leaderboard')
 CHANNEL_NAME = 'leaderboard'
@@ -188,7 +189,7 @@ class LeaderboardDisplay:
         if channel is None:
             # Cache miss/first run: REST inventory avoids duplicate creation when
             # the gateway cache lags.
-            channels = [c for c in await guild.fetch_channels() if isinstance(c, discord.TextChannel)]
+            channels = [c for c in await guild_channels(guild) if isinstance(c, discord.TextChannel)]
             channel = next((c for c in channels if c.id == state['channel']), None)
             if channel is None:
                 matches = [c for c in channels if c.topic == MARKER or c.name.casefold() == CHANNEL_NAME.casefold()]

@@ -45,6 +45,13 @@ class LayoutTests(unittest.IsolatedAsyncioTestCase):
         self.old.delete.assert_awaited_once()
         self.duplicate.delete.assert_awaited_once()
 
+    async def test_a_channel_type_discord_py_doesnt_know_doesnt_stop_the_cleanup(self):
+        # Discord added channel type 20 and fetch_channels rejects the whole list over it.
+        self.guild.fetch_channels = AsyncMock(side_effect=discord.InvalidData("Unknown channel type 20 for channel ID 1."))
+        self.guild.channels = [self.old, self.duplicate]
+        await cleanup_legacy_layout(self.bot, self.guild)
+        self.old.delete.assert_awaited_once()
+
     async def test_preserves_user_messages_and_occupied_categories(self):
         self.info.author.id = 123
         self.guild.fetch_channels.side_effect = [[self.old, self.duplicate]] * 2
