@@ -39,6 +39,11 @@ def line(clock='15:30:54.085', killer=PILOT, at=(3912.0, 60.0, 8516.0), damage='
             f"With last inflicted damage type {damage} to the 'Chest' hit zone\n")
 
 
+def guild(members):
+    found = {i: SimpleNamespace(display_name=n) for i, n in members.items()}
+    return SimpleNamespace(id=1, get_member=found.get)
+
+
 def spot(occurred, killer=PILOT, at=(3912.0, 60.0, 8516.0), damage='EXPLOSIVE', server='one'):
     return (server, occurred, killer, damage, *at)
 
@@ -127,13 +132,15 @@ class StoreTests(unittest.TestCase):
         self.path.write_text(line() + line('15:31:00.000') + line('15:32:00.000', killer=GROUNDED,
                              at=(3912.0, 12.0, 8516.0)), encoding='utf-8')
         scan(self.db, 'one', self.path)
-        # No approved name on file, so the member stands in for it; the grounded killer isn't listed.
-        self.assertEqual(standings(self.db, 1, Ground(), WEEK), [('Member 10', 2)])
+        # No approved name on file, so their Discord name is shown; the grounded killer isn't listed.
+        self.assertEqual(standings(self.db, guild({10: 'Atticus'}), Ground(), WEEK), [('Atticus', 2)])
+        # Someone who has left the server keeps their place under their member number.
+        self.assertEqual(standings(self.db, guild({}), Ground(), WEEK), [('Member 10', 2)])
 
     def test_last_weeks_kills_are_not_this_weeks(self):
         self.path.write_text(line(), encoding='utf-8')
         scan(self.db, 'one', self.path)
-        self.assertEqual(standings(self.db, 1, Ground(), WEEK + timedelta(days=7)), [])
+        self.assertEqual(standings(self.db, guild({}), Ground(), WEEK + timedelta(days=7)), [])
 
 
 class RenderTests(unittest.TestCase):

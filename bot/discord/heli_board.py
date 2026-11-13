@@ -27,16 +27,21 @@ COLOUR = 0x5B8DB8
 
 
 def standings(db, guild, ground, start, end=None):
-    """[(name, heli kills)] for linked players, most first."""
+    """[(name, heli kills)] for linked players, most first. `guild` is the Discord guild, so a member
+    with no approved name shows under their Discord name, the same as on the main board."""
     counted = heli_kills(killer_spots(db, start, end), ground)
-    names = linked_names(db, guild)
+    names = linked_names(db, guild.id)
     members = {}
     for identity, kills in counted.items():
         if identity in names:
             member_id, name = names[identity]
             total, known = members.get(member_id, (0, None))
-            members[member_id] = (total + kills, known or name or f'Member {member_id}')
-    return sorted(((name, kills) for kills, name in members.values()), key=lambda r: (-r[1], r[0].lower()))
+            members[member_id] = (total + kills, known or name)
+    rows = []
+    for member_id, (kills, name) in members.items():
+        member = guild.get_member(member_id) if not name else None
+        rows.append((name or (member.display_name if member else f'Member {member_id}'), kills))
+    return sorted(rows, key=lambda r: (-r[1], r[0].lower()))
 
 
 def week_tag(start):
@@ -112,7 +117,7 @@ class HeliBoard:
             start = week_start(now)
             if self.week is not None and self.week != start and self.message is not None:
                 # The week is over: leave the old board as its final result.
-                last = standings(db, guild.id, ground, self.week, start)
+                last = standings(db, guild, ground, self.week, start)
                 await self.message.edit(embed=board_embed(last, self.week, final=True),
                                         allowed_mentions=discord.AllowedMentions.none())
                 LOG.info('Heli board for the week of %s finalised', self.week.date())
@@ -120,7 +125,7 @@ class HeliBoard:
             if self.week != start:
                 self.week = start
                 self.message = await self.adopt(channel, start)
-            embed = board_embed(standings(db, guild.id, ground, start), start)
+            embed = board_embed(standings(db, guild, ground, start), start)
             if self.message is None:
                 self.message = await channel.send(embed=embed, silent=True,
                                                   allowed_mentions=discord.AllowedMentions.none())
