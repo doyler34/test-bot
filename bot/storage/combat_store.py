@@ -47,6 +47,11 @@ def migrate(db):
             db.execute('ALTER TABLE combat_events ADD COLUMN distance REAL')
         if 'damage_type' not in columns:
             db.execute('ALTER TABLE combat_events ADD COLUMN damage_type TEXT')
+        # Where the killer stood, for the heli board. Older rows keep NULL until
+        # the logs they came from are read again.
+        for axis in ('killer_x', 'killer_y', 'killer_z'):
+            if axis not in columns:
+                db.execute(f'ALTER TABLE combat_events ADD COLUMN {axis} REAL')
         # Every window query filters on time first.
         db.execute('CREATE INDEX IF NOT EXISTS combat_events_occurred ON combat_events(occurred)')
         # A match asks for one server over one span. Without this the planner
@@ -78,14 +83,19 @@ def migrate(db):
             db.execute('ALTER TABLE combat_presence ADD COLUMN faction TEXT')
 
 
+def event_key(occurred, event):
+    return hashlib.sha256(json.dumps([occurred,event.victim,event.killer,event.relation],separators=(',',':')).encode()).hexdigest()
+
+
 def record(db, server, occurred, event):
     """Call inside the same transaction as the source checkpoint."""
-    key = hashlib.sha256(json.dumps([occurred,event.victim,event.killer,event.relation],separators=(',',':')).encode()).hexdigest()
+    key = event_key(occurred, event)
+    spot = getattr(event,'killer_at',None) or (None, None, None)
     cursor = db.execute('''INSERT OR IGNORE INTO combat_events
-        (server,event_key,occurred,victim,killer,relation,distance,damage_type)
-        VALUES (?,?,?,?,?,?,?,?)''',
+        (server,event_key,occurred,victim,killer,relation,distance,damage_type,killer_x,killer_y,killer_z)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
         (server,key,occurred,event.victim,event.killer,event.relation,
-         getattr(event,'distance',None),getattr(event,'damage_type',None)))
+         getattr(event,'distance',None),getattr(event,'damage_type',None),*spot))
     if not cursor.rowcount:
         return False
     observed = datetime.now(timezone.utc).isoformat()
@@ -112,6 +122,29 @@ def record(db, server, occurred, event):
                 teamkills=teamkills+excluded.teamkills,updated_at=excluded.updated_at''',
                 (event.killer,killer_faction,kills,teamkills,observed))
     return True
+
+
+def fill_killer_spot(db, server, occurred, event):
+    """Adds where the killer stood to a kill saved before positions were kept; nothing else changes."""
+    if not getattr(event, 'killer_at', None):
+        return 0
+    return db.execute('''UPDATE combat_events SET killer_x=?, killer_y=?, killer_z=?
+        WHERE server=? AND event_key=? AND killer_y IS NULL''',
+        (*event.killer_at, server, event_key(occurred, event))).rowcount
+
+
+def killer_spots(db, start, end=None):
+    """Every player-vs-player enemy kill in the window that has the killer's position, oldest first."""
+    low, high = window(start, end)
+    return db.execute(f'''SELECT server, occurred, killer, damage_type, killer_x, killer_y, killer_z
+        FROM combat_events WHERE occurred>=? AND occurred<? AND {SCORED} AND relation='ENEMY'
+          AND killer_y IS NOT NULL ORDER BY occurred''', (low, high)).fetchall()
+
+
+def linked_names(db, guild):
+    """{game identity: (Discord id, approved name)} for every linked account in the guild."""
+    return {row[0]: (row[1], row[2]) for row in db.execute(
+        f'SELECT a.identity, a.discord_id, {NAME} FROM account_links a WHERE a.guild=?', (guild,))}
 
 
 def record_presence(db, server, occurred, identity, faction=None):

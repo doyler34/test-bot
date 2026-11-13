@@ -32,6 +32,7 @@ from bot.discord.help_command import HelpCommand
 from bot.web.server import MortarWeb
 from bot.discord.leaderboard_display import LeaderboardDisplay
 from bot.discord.weekly_winners import WeeklyWinners
+from bot.discord.heli_board import HeliBoard
 from bot.discord.live_board import LiveBoard
 from bot.discord.match_results import MatchResults
 from bot.ranks.message_xp import award_message
@@ -154,6 +155,7 @@ class NotificationBot(TimerBot):
         self.weekly_winners = WeeklyWinners(self)
         self.match_results = MatchResults(self)
         self.live_board = LiveBoard(self)
+        self.heli_board = HeliBoard(self)
         self.combat_ingestor = CombatIngestor(self)
         self.server_stats = ServerStats(self)
         self.maintenance = Maintenance(self)
@@ -365,6 +367,7 @@ class NotificationBot(TimerBot):
             self._jobs.append(asyncio.create_task(self.leaderboard_display.run()))
             self._jobs.append(asyncio.create_task(self.weekly_winners.run()))
             self._jobs.append(asyncio.create_task(self.live_board.run()))
+            self._jobs.append(asyncio.create_task(self.heli_board.run()))
             self._jobs.append(asyncio.create_task(self.server_stats.run()))
             self._jobs.append(asyncio.create_task(self.maintenance.run()))
             self._jobs.append(asyncio.create_task(self.ban_roles.run()))

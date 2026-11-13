@@ -95,6 +95,11 @@ def live_board_channel_id() -> int | None:
     return _channel_id("LIVE_BOARD_CHANNEL_ID", None)
 
 
+def heli_board_channel_id() -> int | None:
+    """Where this week's heli kills board lives. Unset turns it off."""
+    return _channel_id("HELI_BOARD_CHANNEL_ID", None)
+
+
 def mortar_command_enabled() -> bool:
     """Offer /mortar in Discord. On unless MORTAR_COMMAND_ENABLED says off."""
     return os.getenv("MORTAR_COMMAND_ENABLED", "on").strip().lower() not in ("0", "false", "no", "off")

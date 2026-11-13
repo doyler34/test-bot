@@ -9,7 +9,7 @@ import re
 import sqlite3
 
 from bot.tracking.combat_parser import parse_join, parse_kill
-from bot.storage.combat_store import record, record_presence
+from bot.storage.combat_store import fill_killer_spot, record, record_presence
 
 LOG = logging.getLogger('reforger.combat')
 STAMP = re.compile(r'^(\d{2}:\d{2}:\d{2}\.\d{3})')
@@ -78,6 +78,50 @@ def backfill_sides(database, servers):
             if date and db.execute('SELECT 1 FROM combat_presence WHERE server=? AND faction IS NULL'
                                    ' AND occurred>=? LIMIT 1', (server.id,date[1])).fetchone():
                 filled += fill_sides(db,server.id,paths[-1])
+    return filled
+
+
+def fill_spots(db, server, path):
+    """Adds the killer's position to kills from this log that were saved before positions were kept.
+    Only rows without one are touched; the source's checkpoint and the totals are left alone."""
+    date = FOLDER.fullmatch(path.parent.name)
+    if not date:
+        return 0
+    initial_date = datetime.strptime(date[1],'%Y-%m-%d').date()
+    day, clock, event_day, filled = 0, None, 0, 0
+    with db:
+        db.execute('BEGIN IMMEDIATE')
+        with path.open('rb') as stream:
+            for raw in stream:
+                if not raw.endswith(b'\n'):
+                    break  # still being written
+                line = raw.decode('utf-8','replace').rstrip('\r\n')
+                stamp = STAMP.match(line)
+                if stamp:
+                    current = stamp[1]
+                    if int(current[:2]) > 23 or int(current[3:5]) > 59 or int(current[6:8]) > 59:
+                        continue
+                    event_day, day, clock = advance(day, clock, current)
+                event = parse_kill(line)
+                if event and event.killer_at:
+                    occurred = f'{initial_date+timedelta(days=event_day)}T{event.clock}'
+                    filled += fill_killer_spot(db,server,occurred,event)
+    return filled
+
+
+def backfill_spots(database, servers, since):
+    """Once per start: positions for the kills in every log that began on or after `since` (a date)."""
+    filled = 0
+    with closing(sqlite3.connect(database,timeout=10)) as db:
+        from bot.config import configure_connection
+        configure_connection(db)
+        for server in servers:
+            if not server.enabled:
+                continue
+            for path in sorted(Path(server.log_dir).glob('logs_*/console.log')):
+                date = FOLDER.fullmatch(path.parent.name)
+                if date and date[1] >= since.isoformat():
+                    filled += fill_spots(db,server.id,path)
     return filled
 
 

@@ -11,6 +11,8 @@ DISTANCE = re.compile(r'\[(\d+(?:\.\d+)?)m away from the corpse\]')
 # "With last inflicted damage type KINETIC to the 'RArm' hit zone" — the only
 # cause-of-death detail vanilla records; there is no weapon anywhere in the log.
 DAMAGE = re.compile(r'With last inflicted damage type ([A-Z][A-Z_]*)\b')
+# "who was at that time at <3912.02, 13.8667, 8516.17>" - east, height above sea, north.
+KILLER_AT = re.compile(r'who was at that time at <(-?\d+(?:\.\d+)?), (-?\d+(?:\.\d+)?), (-?\d+(?:\.\d+)?)>')
 # "INFO: Faction: player Someone (playerID = 1 | UUID = ...) has joined faction
 # #AR-Faction_US (US)" — written for everyone who picks a side, whether or not
 # they ever fire a shot, so it is the only record of who was actually present.
@@ -30,6 +32,12 @@ class KillEvent:
     killer_faction: str | None = None
     distance: float | None = None
     damage_type: str | None = None
+    killer_at: tuple | None = None
+
+
+def killer_at(text):
+    match = KILLER_AT.search(text)
+    return tuple(float(v) for v in match.groups()) if match else None
 
 
 def faction(text):
@@ -126,7 +134,7 @@ def parse_kill(line):
     if not killer or 'UUID =' in killer[1]:
         return None
     return KillEvent(clock, relation, identity, killer[0], victim_faction, faction(killer[1]),
-                     metres, damage)
+                     metres, damage, killer_at(killer[1]))
 
 
 def pieces_before(rest):
