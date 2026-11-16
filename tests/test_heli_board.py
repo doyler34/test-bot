@@ -12,7 +12,7 @@ import discord
 from bot.discord import heli_board
 from bot.discord.heli_board import HeliBoard, board_embed, ours, standings, week_tag
 from bot.storage.account_links import AccountLinks
-from bot.storage.combat_store import BOSTON, killer_spots, migrate, record
+from bot.storage.combat_store import BOSTON, killer_spots, migrate, record, window_standings
 from bot.tracking.combat_ingestor import backfill_spots, scan
 from bot.tracking.combat_parser import parse_kill
 from bot.tracking.heli import heli_kills
@@ -102,6 +102,14 @@ class StoreTests(unittest.TestCase):
     def tearDown(self):
         self.links.close()
         self.tmp.cleanup()
+
+    def test_heli_kills_are_left_off_the_main_board(self):
+        self.path.write_text(line() + line('15:31:00.000', killer=GROUNDED, at=(3912.0, 25.0, 8516.0))
+                             + line('15:32:00.000', at=(3912.0, 25.0, 8516.0)), encoding='utf-8')
+        scan(self.db, 'one', self.path)
+        rows = window_standings(self.db, 1, WEEK, ground=Ground())
+        self.assertEqual([(r[0], r[1]) for r in rows], [(10, 1), (11, 1)])
+        self.assertEqual(window_standings(self.db, 1, WEEK, server='two', ground=Ground()), [])
 
     def test_new_kills_keep_the_killers_position(self):
         self.path.write_text(line(), encoding='utf-8')

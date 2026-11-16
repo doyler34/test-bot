@@ -321,8 +321,8 @@ def window_factions(db, guild, start, end, server):
     return dict(rows)
 
 
-def window_standings(db, guild, start, end=None, server=None):
-    """One row per linked player, best kills first.
+def window_standings(db, guild, start, end=None, server=None, ground=None):
+    """One row per linked player, best kills first. Heli kills are left out (they have their own board).
 
     `server` narrows it to one server's events, which a single match's board
     needs: OYB runs several servers at once, so a time window on its own also
@@ -338,7 +338,7 @@ def window_standings(db, guild, start, end=None, server=None):
         SELECT identity, 0, 0 FROM combat_presence
         WHERE occurred>=? AND occurred<?{scope}
     """ if server is not None else ""
-    return db.execute(f'''
+    rows = db.execute(f'''
         WITH scored AS (
             SELECT victim, killer, relation FROM combat_events
             WHERE occurred>=? AND occurred<?{scope} AND {SCORED}
@@ -357,3 +357,24 @@ def window_standings(db, guild, start, end=None, server=None):
         GROUP BY a.discord_id
         ORDER BY SUM(t.kills) DESC, SUM(t.deaths) ASC, a.discord_id ASC''',
         (*where, *(where if server is not None else ()), guild)).fetchall()
+    return without_heli_kills(db, guild, rows, start, end, server, ground)
+
+
+def without_heli_kills(db, guild, rows, start, end, server, ground):
+    """Takes each member's heli kills off their kills. No Everon heights yet = nothing taken off."""
+    from bot.mortar import heights
+    from bot.tracking.heli import heli_kills
+    ground = ground or heights.load()
+    if ground is None or not rows:
+        return rows
+    spots = [s for s in killer_spots(db, start, end) if server is None or s[0] == server]
+    counted = heli_kills(spots, ground)
+    if not counted:
+        return rows
+    owner = dict(db.execute('SELECT identity, discord_id FROM account_links WHERE guild=?', (guild,)).fetchall())
+    heli = {}
+    for identity, kills in counted.items():
+        if identity in owner:
+            heli[owner[identity]] = heli.get(owner[identity], 0) + kills
+    rows = [(r[0], max(0, r[1] - heli.get(r[0], 0)), *r[2:]) for r in rows]
+    return sorted(rows, key=lambda r: (-r[1], r[2], r[0]))
