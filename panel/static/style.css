@@ -700,6 +700,7 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .ctl-legend .k, .ctl-kill.k { background: #f47b20; }
 .ctl-legend .t { background: #e0443a; }
 .ctl-legend .a { background: #b18cff; }
+.ctl-legend .p { background: #fff; border: 2px solid #3f78c4; box-sizing: border-box; }
 .place, .mob { overflow: visible; pointer-events: none; }
 .place i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; background: #f5f6f8; border: 1.5px solid #0d1013; transform: rotate(45deg); box-shadow: 0 0 0 1px rgba(255, 255, 255, .35); }
 .place.tower i { border-radius: 50%; }
@@ -721,6 +722,14 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .mob-us { --mob: #3f78c4; }
 .mob-ru { --mob: #c0392b; }
 .mob-fia { --mob: #4f9a47; }
+.pin { overflow: visible; --pin: #8a8f96; }
+.pin i { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--pin); border: 2px solid #fff; box-shadow: 0 0 6px rgba(0, 0, 0, .6); }
+.pin b { position: absolute; left: 9px; top: -9px; padding: 0 5px; border-radius: 3px; background: rgba(13, 16, 19, .8); color: #fff; font: 600 11px/1.5 var(--body); white-space: nowrap; pointer-events: none; }
+.pin-us { --pin: #3f78c4; }
+.pin-ru { --pin: #c0392b; }
+.pin-fia { --pin: #4f9a47; }
+.pin-off i { opacity: .45; border-color: #c9ccd0; }
+.pin-dead i { background: #0d1013; border-color: var(--pin); }
 .leaflet-interactive.ctl-kill { stroke: #fff; stroke-width: 1.5; fill-opacity: .95; }
 .leaflet-interactive.ctl-kill.k { fill: #f47b20; }
 .leaflet-interactive.ctl-kill.t { fill: #e0443a; }

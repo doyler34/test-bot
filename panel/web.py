@@ -26,7 +26,7 @@ from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, p
 from bot.mortar.wind import Wind
 
 from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP, XP_PER_TEAMKILL
-from . import archive, attacks, auth, ballistics, campaign_save, console, files, investigate, joiners, maptiles, memory, mobs, monitor, netcheck, outliers, site, steamage, whois, workshop, xlsx
+from . import archive, attacks, auth, ballistics, campaign_save, console, files, investigate, joiners, maptiles, memory, mobs, monitor, netcheck, outliers, save_world, site, steamage, whois, workshop, xlsx
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -2245,6 +2245,24 @@ async def control_kills(request):
         "distance": round(r["distance"]) if r["distance"] else None, "zone": r["zone"] or None,
         "from": [r["killer_x"], r["killer_y"]] if r["killer_x"] is not None else None,
         "to": [r["victim_x"], r["victim_y"]]} for r in rows]})
+
+
+async def control_players(request):
+    """Every player's last saved position, from the newest autosave of the game now running."""
+    state = server_or_404(request, request.match_info["id"])
+    db = request.app[DB]
+    found = campaign_save.newest(state.config.log_dir) if state.config.log_dir else None
+    start = game_start(state)
+    if not found or (start and found[1] < start - 60):
+        return web.json_response({"saved": None, "players": []})
+    read = await asyncio.get_running_loop().run_in_executor(None, save_world.players, found[0])
+    online = {p["identity"]: p["name"] for p in state.players if p.get("identity")} if state.online else {}
+    rows = []
+    for p in read or []:
+        known = db.player(p["identity"])
+        rows.append({**p, "online": p["identity"] in online,
+                     "name": online.get(p["identity"]) or (known["name"] if known else "")})
+    return web.json_response({"saved": found[1], "players": rows})
 
 
 async def control_map(request):
@@ -4976,6 +4994,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/control", control_redirect)
     app.router.add_post("/server/{id}/power/{action}", control_power)
     app.router.add_get("/server/{id}/kills.json", control_kills)
+    app.router.add_get("/server/{id}/players.json", control_players)
     app.router.add_get("/control-map/map.json", control_map)
     app.router.add_get("/control-map/places.json", control_places)
     app.router.add_get("/control-map/tiles/{z}/{x}/{y}", control_tile)

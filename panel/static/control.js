@@ -133,7 +133,8 @@ async function startMap(box) {
 
   // Lines go in first so the dots sit on top of them.
   const layers = { places: L.layerGroup().addTo(map), lines: L.layerGroup().addTo(map), dots: L.layerGroup().addTo(map),
-    bases: L.layerGroup().addTo(map), heat: L.layerGroup(), grid: L.layerGroup(), count: L.layerGroup().addTo(map) };
+    bases: L.layerGroup().addTo(map), heat: L.layerGroup(), grid: L.layerGroup(), count: L.layerGroup().addTo(map),
+    players: L.layerGroup().addTo(map) };
   const clock = (at) => new Date(at * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const text = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const who = (name, id) => (id ? `<a href="/player/${encodeURIComponent(id)}">${text(name || "Unknown")}</a>` : text(name || "Unknown"));
@@ -141,7 +142,8 @@ async function startMap(box) {
   const sub = panel.querySelector("[data-map-sub]");
   const rangePick = panel.querySelector("[data-map-range]");
   const serverPick = panel.querySelector("[data-map-server]");
-  const state = { names: true, lines: true, heat: false, grid: false, count: false, kills: [], bases: [], control: null, radius: 250, spot: null };
+  const state = { names: true, lines: true, heat: false, grid: false, count: false, players: true, kills: [], bases: [], control: null,
+    radius: 250, spot: null, people: [], saved: null };
   const placeMarks = new Map();
   const OWNER = { US: "us", USSR: "ru", FIA: "fia" };
   let server = box.dataset.server;
@@ -282,6 +284,32 @@ async function startMap(box) {
     drawCount();
   }
 
+  function drawPlayers() {
+    layers.players.clearLayers();
+    const saved = state.saved ? `Position from the ${clock(state.saved)} autosave` : "";
+    for (const p of state.people) {
+      const side = OWNER[p.faction] || "none";
+      const status = p.dead ? "Dead body" : p.online ? "Online" : "Offline";
+      const xp = p.xp != null ? ` · ${p.xp.toLocaleString()} XP` : "";
+      L.marker(toLatLng(p.x, p.z), { keyboard: false, zIndexOffset: p.online ? 2000 : 1500, icon: L.divIcon({
+        className: `pin pin-${side}${p.online ? "" : " pin-off"}${p.dead ? " pin-dead" : ""}`, iconSize: [0, 0],
+        html: `<i></i>${p.online && p.name ? `<b>${text(p.name)}</b>` : ""}` }) })
+        .bindPopup(`<div class="kill-pop"><div><b>${who(p.name || "Unknown player", p.identity)}</b>`
+          + `<p>${text(p.faction || "No side")}${xp}</p><p>${status} · grid ${grid(p.x, p.z)}</p>`
+          + `<p class="muted">${saved}</p></div></div>`, { maxWidth: 280 })
+        .addTo(layers.players);
+    }
+  }
+
+  async function loadPlayers() {
+    const res = await fetch(`/server/${encodeURIComponent(server)}/players.json`, { credentials: "same-origin" });
+    if (!res.ok) return;
+    const data = await res.json();
+    state.people = data.players || [];
+    state.saved = data.saved;
+    drawPlayers();
+  }
+
   async function load() {
     if (map.getContainer().querySelector(".leaflet-popup")) return;    // don't pull a popup out from under someone
     const range = rangePick ? rangePick.value : "game";
@@ -291,9 +319,11 @@ async function startMap(box) {
       state.kills = [];
       state.bases = [];
       state.control = null;
+      state.people = [];
       drawControl();
       drawBases();
       draw();
+      drawPlayers();
       sub.textContent = `· ${option.textContent} is on ${option.dataset.mapName}; this map is ${MAP.name}`;
       return;
     }
@@ -308,6 +338,7 @@ async function startMap(box) {
     draw();
     sub.innerHTML = `${scoreHtml()}<span class="map-kills">${data.kills.length}${data.capped ? "+" : ""} kill${data.kills.length === 1 ? "" : "s"}</span>`;
     sub.title = RANGE_WORDS[range] + controlList();
+    loadPlayers();
   }
 
   rangePick?.addEventListener("change", load);
@@ -325,6 +356,7 @@ async function startMap(box) {
         if (state.heat) { drawHeat(); layers.heat.addTo(map); layers.dots.remove(); layers.lines.remove(); }
         else { layers.heat.remove(); layers.dots.addTo(map); if (state.lines) layers.lines.addTo(map); }
       }
+      if (name === "players") state.players ? layers.players.addTo(map) : layers.players.remove();
       if (name === "grid") { if (state.grid) { drawGrid(); layers.grid.addTo(map); } else layers.grid.remove(); }
       if (name === "count") {
         box.classList.toggle("counting", state.count);
