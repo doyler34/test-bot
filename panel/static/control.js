@@ -132,7 +132,7 @@ async function startMap(box) {
   window.addEventListener("hashchange", () => setTimeout(() => { map.invalidateSize(); map.fitBounds(bounds); }, 0));
 
   // Lines go in first so the dots sit on top of them.
-  const layers = { places: L.layerGroup().addTo(map), lines: L.layerGroup().addTo(map), dots: L.layerGroup().addTo(map),
+  const layers = { places: L.layerGroup().addTo(map), lines: L.layerGroup(), dots: L.layerGroup().addTo(map),
     bases: L.layerGroup().addTo(map), heat: L.layerGroup(), grid: L.layerGroup(), count: L.layerGroup().addTo(map),
     players: L.layerGroup().addTo(map), vehicles: L.layerGroup(), mines: L.layerGroup(), weapons: L.layerGroup() };
   const clock = (at) => new Date(at * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -142,7 +142,7 @@ async function startMap(box) {
   const sub = panel.querySelector("[data-map-sub]");
   const rangePick = panel.querySelector("[data-map-range]");
   const serverPick = panel.querySelector("[data-map-server]");
-  const state = { names: true, lines: true, heat: false, grid: false, count: false, players: true, vehicles: false, mines: false, weapons: false,
+  const state = { names: true, lines: false, heat: false, grid: false, count: false, players: true, vehicles: false, mines: false, weapons: false,
     kills: [], bases: [], control: null, radius: 250, spot: null, people: [], things: { vehicles: [], mines: [], weapons: [] }, saved: null };
   const placeMarks = new Map();
   const OWNER = { US: "us", USSR: "ru", FIA: "fia" };
@@ -392,7 +392,11 @@ async function startMap(box) {
     state.zoomTo = true;
     drawCount();
   });
-  map.on("zoomend", () => { if (state.heat) drawHeat(); });
+  // Player names only once zoomed in; over the whole island they hide everything else.
+  const near = map.getBoundsZoom(bounds) + 1.5;
+  const showNames = () => box.classList.toggle("map-near", map.getZoom() >= near);
+  showNames();
+  map.on("zoomend", () => { showNames(); if (state.heat) drawHeat(); });
   map.on("popupopen", () => {
     if (!touch) return;
     panel.classList.remove("map-tools-open");

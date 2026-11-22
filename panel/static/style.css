@@ -726,8 +726,14 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .mob-ru { --mob: #c0392b; }
 .mob-fia { --mob: #4f9a47; }
 .pin { overflow: visible; --pin: #8a8f96; }
-.pin i { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--pin); border: 2px solid #fff; box-shadow: 0 0 6px rgba(0, 0, 0, .6); }
-.pin b { position: absolute; left: 9px; top: -9px; padding: 0 5px; border-radius: 3px; background: rgba(13, 16, 19, .8); color: #fff; font: 600 11px/1.5 var(--body); white-space: nowrap; pointer-events: none; }
+.pin i { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--pin); border: 1.5px solid #fff; box-shadow: 0 0 4px rgba(0, 0, 0, .6); }
+.pin b { display: none; position: absolute; left: 8px; top: -8px; padding: 0 4px; border-radius: 3px; background: rgba(13, 16, 19, .7); color: #fff; font: 600 10px/1.5 var(--body); white-space: nowrap; pointer-events: none; }
+#ctl-map.map-near .pin b, .pin:hover b { display: block; }
+.pin:hover { z-index: 9999 !important; }
+@media (pointer: coarse) {
+  .pin i { left: -7px; top: -7px; width: 14px; height: 14px; }
+  .thing i { left: -7px; top: -7px; width: 14px; height: 14px; }
+}
 .pin-us { --pin: #3f78c4; }
 .pin-ru { --pin: #c0392b; }
 .pin-fia { --pin: #4f9a47; }
@@ -1502,8 +1508,14 @@ body.app .side-nav a, body.app .side-group summary, body.app .side-off { font-si
 body.map-open { overflow: hidden; }
 @media (max-width: 720px) {
   .dash #ctl-map, #ctl-map { height: min(65vh, 440px); }
-  .map-range, .map-tools select, .map-tools .chip, .map-layers { font-size: .85rem; padding: 6px 10px; }
-  .map-tools { top: 48px; }
+  .map-range, .map-tools select, .map-tools .chip { font-size: .85rem; padding: 6px 10px; }
+  /* On a phone the layer buttons are one scrolling row above the map instead of a box over it. */
+  .map-wrap, .ctl-map-panel.map-full-on .map-wrap { display: flex; flex-direction: column; }
+  .map-layers { display: none; }
+  .map-tools, .map-tools-open .map-tools { display: flex; position: static; order: -1; flex-direction: row; flex-wrap: nowrap; overflow-x: auto;
+    gap: 6px; padding: 0 0 8px; background: none; border: 0; border-radius: 0; scrollbar-width: none; }
+  .map-tools::-webkit-scrollbar { display: none; }
+  .map-tools select, .map-tools .chip { flex: none; white-space: nowrap; }
   .ctl-map-panel.map-full-on { padding: 8px; }
 }
 
