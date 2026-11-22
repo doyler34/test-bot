@@ -1508,14 +1508,8 @@ body.app .side-nav a, body.app .side-group summary, body.app .side-off { font-si
 body.map-open { overflow: hidden; }
 @media (max-width: 720px) {
   .dash #ctl-map, #ctl-map { height: min(65vh, 440px); }
-  .map-range, .map-tools select, .map-tools .chip { font-size: .85rem; padding: 6px 10px; }
-  /* On a phone the layer buttons are one scrolling row above the map instead of a box over it. */
-  .map-wrap, .ctl-map-panel.map-full-on .map-wrap { display: flex; flex-direction: column; }
-  .map-layers { display: none; }
-  .map-tools, .map-tools-open .map-tools { display: flex; position: static; order: -1; flex-direction: row; flex-wrap: nowrap; overflow-x: auto;
-    gap: 6px; padding: 0 0 8px; background: none; border: 0; border-radius: 0; scrollbar-width: none; }
-  .map-tools::-webkit-scrollbar { display: none; }
-  .map-tools select, .map-tools .chip { flex: none; white-space: nowrap; }
+  .map-range, .map-tools select, .map-tools .chip, .map-layers { font-size: .85rem; padding: 6px 10px; }
+  .map-tools { top: 48px; }
   .ctl-map-panel.map-full-on { padding: 8px; }
 }
 
