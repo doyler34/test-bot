@@ -2248,21 +2248,25 @@ async def control_kills(request):
 
 
 async def control_players(request):
-    """Every player's last saved position, from the newest autosave of the game now running."""
+    """Every player's last saved position, and the vehicles, mines and placed weapons, from the newest
+    autosave of the game now running."""
     state = server_or_404(request, request.match_info["id"])
     db = request.app[DB]
     found = campaign_save.newest(state.config.log_dir) if state.config.log_dir else None
     start = game_start(state)
     if not found or (start and found[1] < start - 60):
-        return web.json_response({"saved": None, "players": []})
-    read = await asyncio.get_running_loop().run_in_executor(None, save_world.players, found[0])
+        return web.json_response({"saved": None, "players": [], "vehicles": [], "mines": [], "weapons": []})
+    loop = asyncio.get_running_loop()
+    read = await loop.run_in_executor(None, save_world.players, found[0])
+    things = await loop.run_in_executor(None, save_world.things, found[0]) or {}
     online = {p["identity"]: p["name"] for p in state.players if p.get("identity")} if state.online else {}
     rows = []
     for p in read or []:
         known = db.player(p["identity"])
         rows.append({**p, "online": p["identity"] in online,
                      "name": online.get(p["identity"]) or (known["name"] if known else "")})
-    return web.json_response({"saved": found[1], "players": rows})
+    return web.json_response({"saved": found[1], "players": rows, "vehicles": things.get("vehicles", []),
+                              "mines": things.get("mines", []), "weapons": things.get("weapons", [])})
 
 
 async def control_map(request):

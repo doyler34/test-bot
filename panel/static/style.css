@@ -701,6 +701,9 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .ctl-legend .t { background: #e0443a; }
 .ctl-legend .a { background: #b18cff; }
 .ctl-legend .p { background: #fff; border: 2px solid #3f78c4; box-sizing: border-box; }
+.ctl-legend .v { background: #8a8f96; border-radius: 2px; }
+.ctl-legend .m { background: #ffd23f; border-radius: 0; transform: rotate(45deg) scale(.8); }
+.ctl-legend .g { background: #e0443a; border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .place, .mob { overflow: visible; pointer-events: none; }
 .place i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; background: #f5f6f8; border: 1.5px solid #0d1013; transform: rotate(45deg); box-shadow: 0 0 0 1px rgba(255, 255, 255, .35); }
 .place.tower i { border-radius: 50%; }
@@ -730,6 +733,11 @@ b.na { color: var(--muted); font-family: var(--body); font-size: .85rem; font-we
 .pin-fia { --pin: #4f9a47; }
 .pin-off i { opacity: .45; border-color: #c9ccd0; }
 .pin-dead i { background: #0d1013; border-color: var(--pin); }
+.thing { overflow: visible; --pin: #8a8f96; }
+.thing i { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; background: var(--pin); border: 1.5px solid #fff; box-shadow: 0 0 4px rgba(0, 0, 0, .6); }
+.thing-car i { border-radius: 2px; }
+.thing-mine i { left: -4px; top: -4px; width: 8px; height: 8px; background: #ffd23f; border-color: #0d1013; transform: rotate(45deg); }
+.thing-gun i { background: #e0443a; clip-path: polygon(50% 0, 100% 100%, 0 100%); border: 0; width: 12px; height: 12px; left: -6px; top: -6px; }
 .leaflet-interactive.ctl-kill { stroke: #fff; stroke-width: 1.5; fill-opacity: .95; }
 .leaflet-interactive.ctl-kill.k { fill: #f47b20; }
 .leaflet-interactive.ctl-kill.t { fill: #e0443a; }

@@ -16,6 +16,7 @@ from pathlib import Path
 PREFABS = Path(__file__).resolve().parent.parent / "assets" / "save" / "prefabs.json"
 _prefabs = None
 _cache = {}
+_things_cache = {}
 
 
 class Bad(Exception):
@@ -244,16 +245,74 @@ def read(path):
     return out
 
 
+def side_of(name):
+    """A vehicle's side going by its prefab name; the save doesn't say."""
+    if "CIV" in name or name.startswith(("S105", "S1203", "T601", "V2101")):
+        return ""
+    if "FIA" in name:
+        return "FIA"
+    if "MERDC" in name or name.startswith(("M151", "M923", "M998", "M1025", "UH1H")):
+        return "US"
+    return "USSR"
+
+
+def read_things(path):
+    """Vehicles, mines and placed weapons (tripod guns, mortars) from one save file; None if it can't be read."""
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return None
+    out = {"vehicles": [], "mines": [], "weapons": []}
+    try:
+        for section, record in records(data):
+            if section not in ("Vehicle", "Item", "Turret"):
+                continue
+            _, value, parts = split(record)
+            found, zones = None, {}
+            for part in parts:
+                if found is None and Bits(value, part[0], part[1]).take(1) == 0:
+                    found = entity(value, *part)
+                    if found:
+                        continue
+                for comp in components(value, part):
+                    got = exactly(hit_zones, value, *comp)
+                    if got:
+                        zones.update(got["zones"])
+            if not found or not found["pos"]:
+                continue
+            name = prefab_name(found["prefab"]).rsplit("/", 1)[-1][:-3]
+            x, _, z = found["pos"]
+            spot = {"name": name, "x": round(x, 1), "z": round(z, 1)}
+            if section == "Vehicle":
+                out["vehicles"].append({**spot, "faction": side_of(name) if name else "", "wreck": zones.get("Hull", 1) <= 0})
+            elif section == "Item" and name.startswith("Mine_"):
+                out["mines"].append({**spot, "name": name[5:]})
+            elif section == "Turret" and name:
+                out["weapons"].append({**spot, "name": name.replace("Deployable_Tripod_", "")})
+    except (struct.error, IndexError, Bad, ValueError):
+        return None
+    return out
+
+
+def things(path):
+    """read_things(), kept until the file changes."""
+    return cached(path, read_things, _things_cache)
+
+
 def players(path):
     """read(), kept until the file changes."""
+    return cached(path, read, _cache)
+
+
+def cached(path, reader, cache):
     try:
         stamp = Path(path).stat().st_mtime_ns
     except OSError:
         return None
-    hit = _cache.get(str(path))
+    hit = cache.get(str(path))
     if hit and hit[0] == stamp:
         return hit[1]
-    got = read(path)
-    _cache.clear()
-    _cache[str(path)] = (stamp, got)
+    got = reader(path)
+    cache.clear()
+    cache[str(path)] = (stamp, got)
     return got

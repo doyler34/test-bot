@@ -134,7 +134,7 @@ async function startMap(box) {
   // Lines go in first so the dots sit on top of them.
   const layers = { places: L.layerGroup().addTo(map), lines: L.layerGroup().addTo(map), dots: L.layerGroup().addTo(map),
     bases: L.layerGroup().addTo(map), heat: L.layerGroup(), grid: L.layerGroup(), count: L.layerGroup().addTo(map),
-    players: L.layerGroup().addTo(map) };
+    players: L.layerGroup().addTo(map), vehicles: L.layerGroup(), mines: L.layerGroup(), weapons: L.layerGroup() };
   const clock = (at) => new Date(at * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const text = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const who = (name, id) => (id ? `<a href="/player/${encodeURIComponent(id)}">${text(name || "Unknown")}</a>` : text(name || "Unknown"));
@@ -142,8 +142,8 @@ async function startMap(box) {
   const sub = panel.querySelector("[data-map-sub]");
   const rangePick = panel.querySelector("[data-map-range]");
   const serverPick = panel.querySelector("[data-map-server]");
-  const state = { names: true, lines: true, heat: false, grid: false, count: false, players: true, kills: [], bases: [], control: null,
-    radius: 250, spot: null, people: [], saved: null };
+  const state = { names: true, lines: true, heat: false, grid: false, count: false, players: true, vehicles: false, mines: false, weapons: false,
+    kills: [], bases: [], control: null, radius: 250, spot: null, people: [], things: { vehicles: [], mines: [], weapons: [] }, saved: null };
   const placeMarks = new Map();
   const OWNER = { US: "us", USSR: "ru", FIA: "fia" };
   let server = box.dataset.server;
@@ -301,13 +301,28 @@ async function startMap(box) {
     }
   }
 
+  function drawThings() {
+    const saved = state.saved ? `<p class="muted">From the ${clock(state.saved)} autosave</p>` : "";
+    const name = (n) => text(n ? n.replace(/_/g, " ") : "Unknown");
+    const mark = (layer, cls, title, lines) => (t) => L.marker(toLatLng(t.x, t.z), { keyboard: false, icon: L.divIcon({ className: cls(t), iconSize: [0, 0], html: "<i></i>" }) })
+      .bindPopup(`<div class="kill-pop"><div><b>${title(t)}</b>${lines(t)}<p>Grid ${grid(t.x, t.z)}</p>${saved}</div></div>`, { maxWidth: 280 })
+      .addTo(layers[layer]);
+    for (const layer of ["vehicles", "mines", "weapons"]) layers[layer].clearLayers();
+    state.things.vehicles.forEach(mark("vehicles", (t) => `thing thing-car pin-${OWNER[t.faction] || "none"}${t.wreck ? " pin-dead" : ""}`,
+      (t) => name(t.name), (t) => `<p>${text(t.faction || "Civilian or unknown")}${t.wreck ? " · wreck" : ""}</p>`));
+    state.things.mines.forEach(mark("mines", () => "thing thing-mine", (t) => `${name(t.name)} mine`, () => ""));
+    state.things.weapons.forEach(mark("weapons", () => "thing thing-gun", (t) => name(t.name), () => ""));
+  }
+
   async function loadPlayers() {
     const res = await fetch(`/server/${encodeURIComponent(server)}/players.json`, { credentials: "same-origin" });
     if (!res.ok) return;
     const data = await res.json();
     state.people = data.players || [];
+    state.things = { vehicles: data.vehicles || [], mines: data.mines || [], weapons: data.weapons || [] };
     state.saved = data.saved;
     drawPlayers();
+    drawThings();
   }
 
   async function load() {
@@ -320,10 +335,12 @@ async function startMap(box) {
       state.bases = [];
       state.control = null;
       state.people = [];
+      state.things = { vehicles: [], mines: [], weapons: [] };
       drawControl();
       drawBases();
       draw();
       drawPlayers();
+      drawThings();
       sub.textContent = `· ${option.textContent} is on ${option.dataset.mapName}; this map is ${MAP.name}`;
       return;
     }
@@ -356,7 +373,7 @@ async function startMap(box) {
         if (state.heat) { drawHeat(); layers.heat.addTo(map); layers.dots.remove(); layers.lines.remove(); }
         else { layers.heat.remove(); layers.dots.addTo(map); if (state.lines) layers.lines.addTo(map); }
       }
-      if (name === "players") state.players ? layers.players.addTo(map) : layers.players.remove();
+      if (["players", "vehicles", "mines", "weapons"].includes(name)) state[name] ? layers[name].addTo(map) : layers[name].remove();
       if (name === "grid") { if (state.grid) { drawGrid(); layers.grid.addTo(map); } else layers.grid.remove(); }
       if (name === "count") {
         box.classList.toggle("counting", state.count);
