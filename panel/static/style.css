@@ -1848,3 +1848,4 @@ form.rename input[name=name] { display: inline-block; width: 12em; margin: 0; pa
 .kit { padding-left: 0; columns: 2 260px; }
 .kit > li { break-inside: avoid; margin-bottom: 6px; }
 .kit ul li { color: var(--muted, #9aa3ad); font-size: .92em; }
+.kit-count { font-weight: 600; }

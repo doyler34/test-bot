@@ -6,7 +6,7 @@
     <span class="muted">· {{ (100 * top.times / loadout_total)|round|int }}% of {{ loadout_total }} autosave{{ "s" if loadout_total != 1 }} while they were on{% if top.side %} · {{ top.side }}{% endif %}</span></p>
   <ul class="kit">
     {% for item in top["items"] recursive %}
-    <li>{{ item.name }}{% if item["items"] %}<ul>{{ loop(item["items"]) }}</ul>{% endif %}</li>
+    <li>{{ item.name }}{% if item.count > 1 %} <b class="kit-count">×{{ item.count }}</b>{% endif %}{% if item["items"] %}<ul>{{ loop(item["items"]) }}</ul>{% endif %}</li>
     {% endfor %}
   </ul>
   {% if loadouts|length > 1 %}
@@ -16,7 +16,7 @@
     <summary>{{ kit.title }} <span class="muted">· {{ (100 * kit.times / loadout_total)|round|int }}% · last {{ kit.last|ago }}</span></summary>
     <ul class="kit">
       {% for item in kit["items"] recursive %}
-      <li>{{ item.name }}{% if item["items"] %}<ul>{{ loop(item["items"]) }}</ul>{% endif %}</li>
+      <li>{{ item.name }}{% if item.count > 1 %} <b class="kit-count">×{{ item.count }}</b>{% endif %}{% if item["items"] %}<ul>{{ loop(item["items"]) }}</ul>{% endif %}</li>
       {% endfor %}
     </ul>
   </details>

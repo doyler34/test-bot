@@ -26,7 +26,7 @@ from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, p
 from bot.mortar.wind import Wind
 
 from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP, XP_PER_TEAMKILL
-from . import archive, attacks, auth, ballistics, campaign_save, console, files, investigate, joiners, maptiles, memory, mobs, monitor, netcheck, outliers, save_world, site, steamage, whois, workshop, xlsx
+from . import archive, attacks, auth, ballistics, campaign_save, console, files, investigate, joiners, loadouts, maptiles, memory, mobs, monitor, netcheck, outliers, save_world, site, steamage, whois, workshop, xlsx
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -1584,7 +1584,7 @@ async def player_page(request):
     warnings, platform = db.visible_warnings(identity), db.platform(identity)
     kits = db.loadouts(identity)
     for kit in kits:
-        kit["items"] = json.loads(kit["loadout"])
+        kit["items"] = loadouts.grouped(json.loads(kit["loadout"]))
     return render(request, "player.html", identity=identity, player=db.player(identity), combat=fight,
                   loadouts=kits, loadout_total=sum(k["times"] for k in kits),
                   average=combat_average(db),

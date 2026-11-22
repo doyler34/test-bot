@@ -153,6 +153,20 @@ def tree(loadout, prefab_names):
     return walk(loadout.get("arsenalLoadout") or {})
 
 
+def grouped(items):
+    """The same tree with identical things in one container shown once, with how many there are."""
+    out, seen = [], {}
+    for item in items:
+        inner = grouped(item["items"])
+        key = json.dumps([item["name"], inner], sort_keys=True)
+        if key in seen:
+            seen[key]["count"] += 1
+            continue
+        seen[key] = {**item, "items": inner, "count": 1}
+        out.append(seen[key])
+    return out
+
+
 def flat(items):
     for item in items:
         yield item
