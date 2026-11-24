@@ -2313,7 +2313,11 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         doc = json.loads(self.db.discord_doc("staffalerts")["published"])
         self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin", "mines_on": False,
                                "mines": 8, "mines_ping_role": "Ticket Manager", "tk_kick": 5, "tk_ban": 8,
-                               "tk_ban_length": 0, "mines_kick": 0, "mines_ban": 10, "mines_ban_length": 604800})
+                               "tk_ban_length": 0, "mines_kick": 0, "mines_ban": 10, "mines_ban_length": 604800,
+                               # Not sent by this form, so the stacked loadout part keeps its defaults.
+                               "loadout_on": True, "loadout_scopes": 5, "loadout_morphine": 20,
+                               "loadout_ping_role": "", "loadout_kick": False, "loadout_ban": False,
+                               "loadout_ban_length": 86400})
         page = await (await self.client.get("/discord/staffalerts")).text()
         self.assertIn("In use now", page)
         self.assertNotIn("hasn't reported in", page.split("In use now")[0].split("dc-status")[-1])

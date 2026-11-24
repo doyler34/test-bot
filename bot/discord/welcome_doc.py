@@ -360,7 +360,9 @@ AUTO_BAN_LENGTHS = (1800, 3600, 21600, 86400, 259200, 604800, 1209600, 2592000, 
 
 def default_staffalerts():
     return {"on": True, "count": 3, "seconds": 60, "ping_role": "", "mines_on": True, "mines": 5, "mines_ping_role": "",
-            "tk_kick": 0, "tk_ban": 0, "tk_ban_length": 86400, "mines_kick": 0, "mines_ban": 0, "mines_ban_length": 86400}
+            "tk_kick": 0, "tk_ban": 0, "tk_ban_length": 86400, "mines_kick": 0, "mines_ban": 0, "mines_ban_length": 86400,
+            "loadout_on": True, "loadout_scopes": 5, "loadout_morphine": 20, "loadout_ping_role": "",
+            "loadout_kick": False, "loadout_ban": False, "loadout_ban_length": 86400}
 
 
 def check_staffalerts(raw):
@@ -405,6 +407,14 @@ def check_staffalerts(raw):
         if kick and ban and ban <= kick:
             problems.append(f"The ban for {what} has to be at more than the kick, or there'd be no kick first.")
         doc.update({f"{kind}_kick": kick, f"{kind}_ban": ban, f"{kind}_ban_length": length(f"{kind}_ban_length")})
+    # Stacked saved loadouts (the supplies refund glitch): more than this many scopes or morphine. Pages saved
+    # before this part existed leave the alert on and the kick and ban off.
+    doc.update(loadout_on=bool(raw.get("loadout_on", True)),
+               loadout_scopes=number("loadout_scopes", 1, 100, "Scopes"),
+               loadout_morphine=number("loadout_morphine", 1, 200, "Morphine"),
+               loadout_ping_role=str(raw.get("loadout_ping_role", "") or "").strip()[:100],
+               loadout_kick=bool(raw.get("loadout_kick")), loadout_ban=bool(raw.get("loadout_ban")),
+               loadout_ban_length=length("loadout_ban_length"))
     return doc, problems
 
 

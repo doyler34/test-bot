@@ -55,6 +55,25 @@
     </div>
     <p class="muted">Counted over the whole game, like the alert, and can't be lower than the alert's count. A ban still happens if they've left, since their mines keep killing. Switch one on to use it. Admins are never kicked or banned automatically. Each one is posted in the staff channel, the live feed and the audit log.</p>
   </section>
+  <section class="card">
+    <h2>Stacked loadouts</h2>
+    <p class="muted">The supplies refund glitch shows up as a saved arsenal loadout stuffed with scopes or morphine. After each autosave the panel counts both in every player's saved loadout for this game. When someone has more than this, the bot posts it in the staff channel once per game, with how many they had.</p>
+    <label class="check"><input type="checkbox" name="loadout_on" {% if doc.loadout_on %}checked{% endif %}> Post stacked loadout alerts</label>
+    <div class="grid">
+      <label>More than this many scopes <input name="loadout_scopes" type="number" min="1" max="100" value="{{ doc.loadout_scopes }}" inputmode="numeric"></label>
+      <label>More than this much morphine <input name="loadout_morphine" type="number" min="1" max="200" value="{{ doc.loadout_morphine }}" inputmode="numeric"></label>
+      <label class="span">Role to ping <span class="muted">(optional, e.g. Admin; blank pings nobody)</span>
+        <input name="loadout_ping_role" value="{{ doc.loadout_ping_role }}" maxlength="100" placeholder="Admin"></label>
+    </div>
+    <h3>Automatic kick or ban</h3>
+    <div class="grid">
+      <label class="check"><input type="checkbox" name="loadout_kick" {% if doc.loadout_kick %}checked{% endif %}> Automatic kick</label>
+      <label class="check"><input type="checkbox" name="loadout_ban" {% if doc.loadout_ban %}checked{% endif %}> Automatic ban</label>
+      <label>Ban for
+        <select name="loadout_ban_length">{% for value, label in auto_lengths %}<option value="{{ value }}" {% if value == doc.loadout_ban_length %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    </div>
+    <p class="muted">Kick only: kicked each time a save still shows the loadout (at most every 5 minutes). Ban only: banned straight away. Both: kicked the first time, and banned if a save 5 minutes or more after the kick still has it. Someone who has already left can't be kicked, so with the ban on they're banned. Admins are never kicked or banned automatically. Each one is posted in the staff channel, the live feed and the audit log.</p>
+  </section>
   {% if recent %}
   <section class="card">
     <h2>Recent alerts</h2>

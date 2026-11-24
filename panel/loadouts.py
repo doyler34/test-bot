@@ -186,3 +186,16 @@ def title(items):
 def fingerprint(items):
     """The same for two saves of the same loadout, different when anything in it changes."""
     return hashlib.sha1(json.dumps(items, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def stacked(items):
+    """(scopes, morphine) in a saved loadout, counting everything nested in it. A loadout stuffed with either is
+    how the supplies refund glitch shows up."""
+    scopes = morphine = 0
+    for item in flat(items):
+        path = item.get("path") or ""
+        if "/Weapons/Attachments/Optics/" in path:
+            scopes += 1
+        elif "/Medicine/MorphineInjection" in path:
+            morphine += 1
+    return scopes, morphine

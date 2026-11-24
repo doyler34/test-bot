@@ -2586,7 +2586,7 @@ DISCORD_GROUPS = (
         ("matchping", "\"Match started\" alerts, and who gets pinged for which server."),
         ("weekly", "The top 3 when the weekly leaderboard resets on Monday."),
         ("bans", "The DM a banned player gets, and the card in their ban ticket."),
-        ("staffalerts", "Alerts to staff when someone teamkills several players in a short time."),
+        ("staffalerts", "Alerts, kicks and bans for mass teamkills, AP mine spam and stacked loadouts."),
     )),
     ("Posting yourself", (
         ("posts", "Your own messages: announcements, events, FAQs, with buttons if you want."),

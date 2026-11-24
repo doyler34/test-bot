@@ -70,7 +70,11 @@ if (form && form.dataset.kind === "staffalerts") {
       mines_on: field("mines_on").checked, mines: field("mines").value, mines_ping_role: field("mines_ping_role").value,
       tk_kick: auto("tk_kick"), tk_ban: auto("tk_ban"), tk_ban_length: field("tk_ban_length").value,
       mines_kick: auto("mines_kick"), mines_ban: auto("mines_ban"),
-      mines_ban_length: field("mines_ban_length").value });
+      mines_ban_length: field("mines_ban_length").value,
+      loadout_on: field("loadout_on").checked, loadout_scopes: field("loadout_scopes").value,
+      loadout_morphine: field("loadout_morphine").value, loadout_ping_role: field("loadout_ping_role").value,
+      loadout_kick: field("loadout_kick").checked, loadout_ban: field("loadout_ban").checked,
+      loadout_ban_length: field("loadout_ban_length").value });
   });
 }
 if (form && form.dataset.kind === "feedback") {
