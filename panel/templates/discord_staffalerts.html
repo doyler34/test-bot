@@ -57,7 +57,7 @@
   </section>
   <section class="card">
     <h2>Stacked loadouts</h2>
-    <p class="muted">The supplies refund glitch shows up as a saved arsenal loadout stuffed with scopes or morphine. After each autosave the panel counts both in every player's saved loadout for this game. When someone has more than this, the bot posts it in the staff channel once per game, with how many they had.</p>
+    <p class="muted">The supplies refund glitch shows up as a player stuffed with scopes or morphine. After each autosave the panel counts both in what every player's character is carrying, and in the arsenal loadout it spawned from (a loadout saved earlier, or on the other side, doesn't count). When someone has more than this, the bot posts it in the staff channel once per game, with how many they had.</p>
     <label class="check"><input type="checkbox" name="loadout_on" {% if doc.loadout_on %}checked{% endif %}> Post stacked loadout alerts</label>
     <div class="grid">
       <label>More than this many scopes <input name="loadout_scopes" type="number" min="1" max="100" value="{{ doc.loadout_scopes }}" inputmode="numeric"></label>

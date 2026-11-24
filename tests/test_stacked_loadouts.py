@@ -41,6 +41,26 @@ class Counting(unittest.TestCase):
                           doc["loadout_kick"], doc["loadout_ban"]), (True, 5, 20, False, False))
 
 
+class SpawnKit(unittest.TestCase):
+    LOADOUT = {"faction": "US", "arsenalLoadout": {"prefab": "AAAAAAAAAAAAAAAA", "storages": [
+        {"id": "SCR_CharacterInventoryStorageComponent:1", "slots": {
+            str(n): {"prefab": "5C095D3E8F1B9A00"} for n in range(25)}}]}}
+    NAMES = {"5C095D3E8F1B9A00": MORPHINE}
+
+    def test_counts_when_the_character_spawned_from_it(self):
+        self.assertEqual(ServerManager.spawn_kit({"loadout": self.LOADOUT}, "AAAAAAAAAAAAAAAA", self.NAMES), (0, 25))
+
+    def test_ignored_when_they_are_playing_something_else(self):
+        # e.g. a loadout saved earlier as US while now playing RU
+        self.assertEqual(ServerManager.spawn_kit({"loadout": self.LOADOUT}, "BBBBBBBBBBBBBBBB", self.NAMES), (0, 0))
+        self.assertEqual(ServerManager.spawn_kit(None, "AAAAAAAAAAAAAAAA", self.NAMES), (0, 0))
+
+    def test_carried_items_are_counted_by_prefab(self):
+        guids = {"5C095D3E8F1B9A00": 21, "1111111111111111": 4}
+        names = {**self.NAMES, "1111111111111111": SCOPE}
+        self.assertEqual(loadouts.stacked_carried(guids, names), (4, 21))
+
+
 class StackedLoadouts(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.db = PanelDB(":memory:")
@@ -61,9 +81,10 @@ class StackedLoadouts(unittest.IsolatedAsyncioTestCase):
     def settings(self, **extra):
         self.db.publish_discord_doc("staffalerts", json.dumps({"on": True, "count": 3, "seconds": 60, **extra}), "gaz")
 
-    async def save(self, scopes=31, morphine=100, saved=None, game=GAME):
+    async def save(self, scopes=31, morphine=100, saved=None, game=GAME, kit=(0, 0)):
         online = {p["identity"] for p in self.state.players}
-        await self.manager.stacked_loadouts(self.state, saved or now(), game, [(BUFORD, scopes, morphine)], online)
+        await self.manager.stacked_loadouts(self.state, saved or now(), game, [(BUFORD, (scopes, morphine), kit)],
+                                            online)
 
     def titles(self):
         return [a["title"] for a in self.db.staff_alerts()]
@@ -79,7 +100,7 @@ class StackedLoadouts(unittest.IsolatedAsyncioTestCase):
         await self.save()
         alert = self.db.staff_alerts()[0]
         self.assertEqual(self.titles(), ["Stacked loadout on Server 1"])
-        self.assertIn("**Buford** has a saved loadout with 31 scopes and 100 morphine", alert["text"])
+        self.assertIn("**Buford** is carrying 31 scopes and 100 morphine on Server 1", alert["text"])
         await self.save(game=GAME + 1)   # a new game starts the count again
         self.assertEqual(len(self.titles()), 2)
         self.assertEqual(self.kicked, [])   # kick and ban are off unless switched on
@@ -87,7 +108,14 @@ class StackedLoadouts(unittest.IsolatedAsyncioTestCase):
     async def test_only_what_is_over_the_limit_is_named(self):
         self.settings()
         await self.save(scopes=1, morphine=22)
-        self.assertIn("with 22 morphine on Server 1", self.db.staff_alerts()[0]["text"])
+        self.assertIn("is carrying 22 morphine on Server 1", self.db.staff_alerts()[0]["text"])
+
+    async def test_the_loadout_they_spawned_from_counts_when_it_has_more(self):
+        self.settings(loadout_kick=True)
+        await self.save(scopes=1, morphine=0, kit=(31, 100))
+        texts = " | ".join(a["text"] for a in self.db.staff_alerts())
+        self.assertIn("**Buford** spawned with a loadout of 31 scopes and 100 morphine on Server 1", texts)
+        self.assertIn("was kicked for spawning with a loadout of 31 scopes and 100 morphine", texts)
 
     async def test_kick_only(self):
         self.settings(loadout_kick=True)

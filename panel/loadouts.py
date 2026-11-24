@@ -3,6 +3,7 @@
 The save's "Player" section has one record per player: their identity (16 bytes), the side they're on, and,
 when they've saved one at an arsenal, their loadout as JSON. Items in it are prefab IDs; the names come from
 the "{ID}Prefabs/....et" references written all through the game's own configs and prefabs."""
+from collections import Counter
 import hashlib
 import json
 import mmap
@@ -188,14 +189,30 @@ def fingerprint(items):
     return hashlib.sha1(json.dumps(items, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def stacked_kind(path):
+    """"scope", "morphine" or None for a prefab path: what the stacked loadout check counts."""
+    if "/Weapons/Attachments/Optics/" in path:
+        return "scope"
+    if "/Medicine/MorphineInjection" in path:
+        return "morphine"
+    return None
+
+
 def stacked(items):
     """(scopes, morphine) in a saved loadout, counting everything nested in it. A loadout stuffed with either is
     how the supplies refund glitch shows up."""
-    scopes = morphine = 0
-    for item in flat(items):
-        path = item.get("path") or ""
-        if "/Weapons/Attachments/Optics/" in path:
-            scopes += 1
-        elif "/Medicine/MorphineInjection" in path:
-            morphine += 1
-    return scopes, morphine
+    kinds = Counter(stacked_kind(item.get("path") or "") for item in flat(items))
+    return kinds["scope"], kinds["morphine"]
+
+
+def stacked_carried(guids, prefab_names):
+    """(scopes, morphine) among carried items, given as a Counter of prefab GUIDs (see carried.py)."""
+    kinds = Counter()
+    for guid, n in guids.items():
+        kinds[stacked_kind(prefab_names.get(guid, ""))] += n
+    return kinds["scope"], kinds["morphine"]
+
+
+def arsenal_prefab(loadout):
+    """The character prefab a saved arsenal loadout spawns, so it can be told whether a character came from it."""
+    return ((loadout or {}).get("arsenalLoadout") or {}).get("prefab", "")

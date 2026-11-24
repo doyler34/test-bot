@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
-from . import alerts as alert_colours, archive, attacks, campaign_save, loadouts, memory, monitor, netcheck
+from . import alerts as alert_colours, archive, attacks, campaign_save, carried, loadouts, memory, monitor, netcheck
 from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
@@ -375,7 +375,9 @@ class ServerManager:
             return
         cache = Path(self.db.path).parent / "prefab_names.json"
         names = await asyncio.to_thread(loadouts.names, loadouts.pak_dir(state.config.log_dir), cache)
-        people = await asyncio.to_thread(lambda: loadouts.players(found[0].read_bytes()))
+        data = await asyncio.to_thread(found[0].read_bytes)
+        people = await asyncio.to_thread(loadouts.players, data)
+        holding = await asyncio.to_thread(carried.read, data) or {}
         rows, stacked = [], []
         for identity, person in people.items():
             if not person["loadout"]:
@@ -383,32 +385,50 @@ class ServerManager:
             items = loadouts.tree(person["loadout"], names)
             rows.append({"identity": identity, "side": person["side"], "kit": loadouts.fingerprint(items),
                          "title": loadouts.title(items), "loadout": json.dumps(items)})
-            stacked.append((identity, *loadouts.stacked(items)))
+        for identity, body in holding.items():
+            stacked.append((identity, loadouts.stacked_carried(body["items"], names), self.spawn_kit(
+                people.get(identity), body["prefab"], names)))
         online = {p.get("identity") for p in state.players if p.get("identity")}
         self.db.add_loadouts(state.config.id, found[1], rows, online)
         await self.stacked_loadouts(state, found[1], found[2], stacked, online)
 
+    @staticmethod
+    def spawn_kit(person, character_prefab, names):
+        """(scopes, morphine) in the saved loadout, only if the character on the field spawned from it: an item
+        still as it spawned is saved without its name, so the loadout is the only way to see those. A loadout
+        saved earlier on another side, or one they didn't spawn with, says nothing about what they carry."""
+        loadout = (person or {}).get("loadout")
+        if not loadout or not character_prefab or loadouts.arsenal_prefab(loadout) != character_prefab:
+            return 0, 0
+        return loadouts.stacked(loadouts.tree(loadout, names))
+
     async def stacked_loadouts(self, state: ServerState, saved: int, game: int, counted, online):
-        """Saved loadouts with more scopes or morphine than the Staff alerts page allows (the supplies refund
-        glitch): one staff alert per player per game, then the automatic kick and/or ban if switched on.
-        With both on, the first time is a kick, and a save made STACK_RETRY after it that still has the
-        loadout is a ban. Someone who has left can't be kicked, so with the ban on they're banned."""
+        """Players with more scopes or morphine than the Staff alerts page allows (the supplies refund glitch),
+        counted from what their character carries in the save, or the loadout it spawned from where that's more:
+        one staff alert per player per game, then the automatic kick and/or ban if switched on.
+        With both on, the first time is a kick, and a save made STACK_RETRY after it that still has them over
+        is a ban. Someone who has left can't be kicked, so with the ban on they're banned.
+        `counted` is [(identity, (carried scopes, morphine), (spawn loadout scopes, morphine))]."""
         settings = self.staff_alert_settings()
         if state.loadout_game != game:
             state.loadout_game, state.loadout_flags = game, {}
         scope_limit, morphine_limit = settings["loadout_scopes"], settings["loadout_morphine"]
-        for identity, scopes, morphine in counted:
+        for identity, holding, kit in counted:
+            scopes, morphine = max(holding[0], kit[0]), max(holding[1], kit[1])
             if scopes <= scope_limit and morphine <= morphine_limit:
                 continue
             player = next((p for p in state.players if p.get("identity") == identity), None)
             known = self.db.player_names(identity)
             name = (player or {}).get("name") or (known[0]["name"] if known else identity)
-            over = [f"{scopes} scopes" if scopes > scope_limit else "", f"{morphine} morphine" if morphine > morphine_limit else ""]
-            what = f"a saved loadout with {' and '.join(o for o in over if o)}"
+            over = " and ".join(o for o in (f"{scopes} scopes" if scopes > scope_limit else "",
+                                            f"{morphine} morphine" if morphine > morphine_limit else "") if o)
+            on_them = holding >= kit
+            what = f"is carrying {over}" if on_them else f"spawned with a loadout of {over}"
+            why = f"carrying {over}" if on_them else f"spawning with a loadout of {over}"
             flag = state.loadout_flags.setdefault(identity, {"alerted": False, "kicked": 0, "banned": False})
             if not flag["alerted"]:
                 flag["alerted"] = True
-                text = (f"**{name}** has {what} on {state.config.name} (limits {scope_limit} scopes, "
+                text = (f"**{name}** {what} on {state.config.name} (limits {scope_limit} scopes, "
                         f"{morphine_limit} morphine). Most likely the supplies refund glitch.")
                 if settings["loadout_on"]:
                     self.db.add_staff_alert(state.config.id, now(), f"Stacked loadout on {state.config.name}", text)
@@ -424,7 +444,7 @@ class ServerManager:
                 await self.kick_everywhere(identity)
                 flag["banned"] = True
                 length = f"for {length_text(seconds)}" if seconds else "permanently"
-                title, text = f"Auto-banned on {state.config.name}", f"**{name}** was banned {length} for having {what}."
+                title, text = f"Auto-banned on {state.config.name}", f"**{name}** was banned {length} for {why}."
             elif kick_on and here and (not flag["kicked"] or saved - flag["kicked"] >= STACK_RETRY):
                 try:
                     await self.kick(state.config.id, player["id"])
@@ -432,7 +452,7 @@ class ServerManager:
                     log.warning("Automatic kick failed on %s: %s", state.config.id, exc)
                     continue
                 flag["kicked"] = now()
-                title, text = f"Auto-kicked on {state.config.name}", f"**{name}** was kicked for having {what}."
+                title, text = f"Auto-kicked on {state.config.name}", f"**{name}** was kicked for {why}."
             else:
                 continue
             action = "ban" if flag["banned"] else "kick"
