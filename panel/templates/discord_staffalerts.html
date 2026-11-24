@@ -72,7 +72,7 @@
       <label>Ban for
         <select name="loadout_ban_length">{% for value, label in auto_lengths %}<option value="{{ value }}" {% if value == doc.loadout_ban_length %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
     </div>
-    <p class="muted">Kick only: kicked each time a save still shows the loadout (at most every 5 minutes). Ban only: banned straight away. Both: kicked the first time, and banned if a save 5 minutes or more after the kick still has it. Someone who has already left can't be kicked, so with the ban on they're banned. Admins are never kicked or banned automatically. Each one is posted in the staff channel, the live feed and the audit log.</p>
+    <p class="muted">Kick only: kicked each time a save still shows the loadout (at most every 5 minutes). Ban only: banned straight away. Both: kicked the first time, and banned if a save 5 minutes or more after the kick still has it. Someone who has already left can't be kicked, so with the ban on they're banned. FIA players only get the alert, never a kick or ban, since they pick kit up off the field; check whether they hand it in for supplies. Admins are never kicked or banned automatically. Each one is posted in the staff channel, the live feed and the audit log.</p>
   </section>
   {% if recent %}
   <section class="card">

@@ -387,7 +387,7 @@ class ServerManager:
                          "title": loadouts.title(items), "loadout": json.dumps(items)})
         for identity, body in holding.items():
             stacked.append((identity, loadouts.stacked_carried(body["items"], names), self.spawn_kit(
-                people.get(identity), body["prefab"], names)))
+                people.get(identity), body["prefab"], names), "/FIA/" in names.get(body["prefab"], "")))
         online = {p.get("identity") for p in state.players if p.get("identity")}
         self.db.add_loadouts(state.config.id, found[1], rows, online)
         await self.stacked_loadouts(state, found[1], found[2], stacked, online)
@@ -408,12 +408,13 @@ class ServerManager:
         one staff alert per player per game, then the automatic kick and/or ban if switched on.
         With both on, the first time is a kick, and a save made STACK_RETRY after it that still has them over
         is a ban. Someone who has left can't be kicked, so with the ban on they're banned.
-        `counted` is [(identity, (carried scopes, morphine), (spawn loadout scopes, morphine))]."""
+        FIA pick their kit up off the field, so they only get the alert, never the kick or ban.
+        `counted` is [(identity, (carried scopes, morphine), (spawn loadout scopes, morphine), playing FIA)]."""
         settings = self.staff_alert_settings()
         if state.loadout_game != game:
             state.loadout_game, state.loadout_flags = game, {}
         scope_limit, morphine_limit = settings["loadout_scopes"], settings["loadout_morphine"]
-        for identity, holding, kit in counted:
+        for identity, holding, kit, fia in counted:
             scopes, morphine = max(holding[0], kit[0]), max(holding[1], kit[1])
             if scopes <= scope_limit and morphine <= morphine_limit:
                 continue
@@ -430,10 +431,12 @@ class ServerManager:
                 flag["alerted"] = True
                 text = (f"**{name}** {what} on {state.config.name} (limits {scope_limit} scopes, "
                         f"{morphine_limit} morphine). Most likely the supplies refund glitch.")
+                if fia:
+                    text += " Playing FIA, so alert only: check whether they hand it in for supplies."
                 if settings["loadout_on"]:
                     self.db.add_staff_alert(state.config.id, now(), f"Stacked loadout on {state.config.name}", text)
                 self.db.add_feed(state.config.id, "sus", text.replace("**", ""))
-            if flag["banned"] or identity in self.staff_ids() or self.db.active_ban(identity):
+            if fia or flag["banned"] or identity in self.staff_ids() or self.db.active_ban(identity):
                 continue
             kick_on, ban_on, here = settings["loadout_kick"], settings["loadout_ban"], player is not None
             if ban_on and (not kick_on or not here or (flag["kicked"] and saved - flag["kicked"] >= STACK_RETRY)):

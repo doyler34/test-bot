@@ -81,9 +81,9 @@ class StackedLoadouts(unittest.IsolatedAsyncioTestCase):
     def settings(self, **extra):
         self.db.publish_discord_doc("staffalerts", json.dumps({"on": True, "count": 3, "seconds": 60, **extra}), "gaz")
 
-    async def save(self, scopes=31, morphine=100, saved=None, game=GAME, kit=(0, 0)):
+    async def save(self, scopes=31, morphine=100, saved=None, game=GAME, kit=(0, 0), fia=False):
         online = {p["identity"] for p in self.state.players}
-        await self.manager.stacked_loadouts(self.state, saved or now(), game, [(BUFORD, (scopes, morphine), kit)],
+        await self.manager.stacked_loadouts(self.state, saved or now(), game, [(BUFORD, (scopes, morphine), kit, fia)],
                                             online)
 
     def titles(self):
@@ -149,6 +149,15 @@ class StackedLoadouts(unittest.IsolatedAsyncioTestCase):
         self.state.players = []
         await self.save()
         self.assertIsNotNone(self.db.active_ban(BUFORD))
+
+    async def test_fia_only_get_the_alert(self):
+        self.settings(loadout_kick=True, loadout_ban=True)
+        await self.save(fia=True)
+        await self.save(fia=True, saved=now() + STACK_RETRY + 1)
+        self.assertEqual(self.kicked, [])
+        self.assertIsNone(self.db.active_ban(BUFORD))
+        self.assertEqual(self.titles(), ["Stacked loadout on Server 1"])
+        self.assertIn("Playing FIA, so alert only", self.db.staff_alerts()[0]["text"])
 
     async def test_admins_are_never_kicked_or_banned(self):
         self.settings(loadout_kick=True, loadout_ban=True)
