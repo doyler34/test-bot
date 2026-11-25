@@ -9,7 +9,8 @@ import logging
 import discord
 
 from bot.config import member_role_name, unverified_role_name
-from bot.discord.factions import apply_faction, current_faction, ensure_faction_roles, factions, label
+from bot.discord.factions import (STAYED_RENEGADE, apply_faction, current_faction, ensure_faction_roles, factions,
+                                  label)
 from bot.discord.interactions import ack, say
 from bot.discord.join_oyb import LinkModal
 
@@ -17,7 +18,7 @@ LOG = logging.getLogger('reforger.onboarding')
 MARKER = 'OYB • Start here'
 # Recorded when somebody chooses to stay Renegade, so the checklist can tell a
 # deliberate choice apart from a step nobody has got round to yet.
-NO_FACTION = 'NONE'
+NO_FACTION = STAYED_RENEGADE
 
 
 def by_name(guild, name):

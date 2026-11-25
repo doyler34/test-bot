@@ -7,7 +7,7 @@ import time
 import discord
 
 LOG = logging.getLogger("reforger.ranks")
-from bot.discord.factions import held_faction
+from bot.discord.factions import ranked_faction
 from bot.ranks.rank_rules import RANKS as DEFINITIONS, XP_PER_TEAMKILL, rank_for_xp
 from bot.storage.rank_persistence import XPStore
 RANKS = tuple(rank.role_name for rank in DEFINITIONS)
@@ -77,10 +77,10 @@ class RankSync:
         return self.wallet.played(self.bot.config.guild_id, member)
 
     def status(self, member):
-        from bot.discord.factions import held_faction
+        from bot.discord.factions import ranked_faction
         xp = self.wallet.cached(self.bot.config.guild_id, member)
         guild = self.bot.get_guild(self.bot.config.guild_id)
-        faction = held_faction(self.bot, guild, member) if guild else None
+        faction, _ = ranked_faction(self.bot, guild, member) if guild else (None, False)
         progress = rank_for_xp(xp, faction)
         if not faction:
             return (f"Rank: **{progress.current.role_name}** · **{xp} XP**. "
@@ -120,9 +120,9 @@ class RankSync:
                 await asyncio.sleep(0)
                 try:
                     xp = self.progress(member_id, identity, snapshot)
-                    # Renegade is the no-faction rank, so a member's side decides
-                    # whether the XP ladder applies to them at all.
-                    tier = rank_for_xp(xp, held_faction(self.bot, guild, member_id)).tier
+                    # Renegade is the no-faction rank, so a member's side decides whether the XP
+                    # ladder applies to them at all: their faction role, or the side they play.
+                    tier = rank_for_xp(xp, ranked_faction(self.bot, guild, member_id)[0]).tier
                     target = self.roles[tier]
                     previous = self.applied.get(member_id)
                     if previous and previous[0] == target.id and time.monotonic() - previous[1] < 300:

@@ -7,8 +7,8 @@ import time
 
 import discord
 from bot.config import staging_enabled, leaderboard_channel_id
-from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, standings
-from bot.storage.combat_store import week_start
+from bot.discord.leaderboard_command import PAGE_SIZE, leaderboard_embed, side_of, standings
+from bot.storage.combat_store import week_start, window_sides
 from bot.discord.server_layout import guild_channels
 
 LOG = logging.getLogger('reforger.leaderboard')
@@ -138,9 +138,12 @@ class LeaderboardDisplay:
 
     def rows(self, guild):
         result = []
-        for member_id, kills, deaths, name in standings(self.bot.account_links.db, guild.id):
+        db = self.bot.account_links.db
+        sides = window_sides(db, guild.id, week_start())
+        for member_id, kills, deaths, name in standings(db, guild.id):
             member = guild.get_member(member_id)
-            result.append((name or (member.display_name if member else f'Member {member_id}'), kills, deaths))
+            result.append((name or (member.display_name if member else f'Member {member_id}'), kills, deaths,
+                           side_of(sides, member_id)))
         return result
 
     async def _lock(self, channel, guild, set_topic=False):

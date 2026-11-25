@@ -17,6 +17,7 @@ from bot.discord.leaderboard_display import retry_delay
 from bot.mortar import heights
 from bot.storage.combat_store import killer_spots, linked_names, week_start
 from bot.tracking.combat_ingestor import backfill_spots
+from bot.storage.panel_saves import heli_check
 from bot.tracking.heli import heli_kills
 
 LOG = logging.getLogger('reforger.heliboard')
@@ -29,7 +30,8 @@ COLOUR = 0x5B8DB8
 def standings(db, guild, ground, start, end=None):
     """[(name, heli kills)] for linked players, most first. `guild` is the Discord guild, so a member
     with no approved name shows under their Discord name, the same as on the main board."""
-    counted = heli_kills(killer_spots(db, start, end), ground)
+    spots = killer_spots(db, start, end)
+    counted = heli_kills(spots, ground, heli_check(spots))
     names = linked_names(db, guild.id)
     members = {}
     for identity, kills in counted.items():

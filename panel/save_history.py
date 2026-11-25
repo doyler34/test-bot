@@ -21,6 +21,8 @@ BASE_REACH = 300
 # A base HQ this close to a named base on the map takes its name.
 NAME_REACH = 150
 BUILT = {"Structure": "structure", "Vehicle": "vehicle", "Turret": "emplacement"}
+# Vehicle prefabs that are helicopters, so the bot can tell a heli kill by the killer's seat.
+HELIS = ("UH1H", "Mi8")
 WANTED = {"Player", "Character", "MilitaryBase", "Storage", "Item", *BUILT}
 
 
@@ -94,7 +96,7 @@ def read(path):
         data = Path(path).read_bytes()
     except OSError:
         return None
-    players, bodies, bases, storages, builds, mines, cargo, where = [], {}, [], [], [], [], [], {}
+    players, bodies, bases, storages, builds, mines, cargo, helis, where = [], {}, [], [], [], [], [], [], {}
     try:
         for section, record in records(data):
             if section not in WANTED:
@@ -122,6 +124,8 @@ def read(path):
                 name = short(got.get("prefab"))
                 if section == "Vehicle" and got.get("supplies"):
                     cargo.append({"id": rid, "supplies": round(got["supplies"])})
+                if section == "Vehicle" and name.startswith(HELIS):
+                    helis.append({"id": rid, "name": name})
                 if got.get("author") and got["author"] != NO_ONE:
                     build = {"id": rid, "kind": BUILT[section], "name": name, "author": got["author"], **spot(got.get("pos"))}
                     if section == "Vehicle":
@@ -139,7 +143,7 @@ def read(path):
         pos = where.get(b.pop("building"))
         b["x"], b["z"] = (round(pos[0], 1), round(pos[2], 1)) if pos else (None, None)
     return {"players": joined(players, bodies), "bases": bases, "storages": storages, "builds": builds, "mines": mines,
-            "cargo": cargo}
+            "cargo": cargo, "helis": helis}
 
 
 def base_names(bases):
@@ -163,7 +167,8 @@ def snapshot(read):
     bases = [{**b, "name": names.get(b["id"], ""), "supplies": totals[b["id"]]} for b in read["bases"]]
     return loose, {"player": keyed(read["players"], "identity"), "base": keyed(bases, "id"),
                    "storage": keyed(read["storages"], "id"), "build": keyed(read["builds"], "id"),
-                   "mine": keyed(read["mines"], "id"), "cargo": keyed(read.get("cargo", []), "id")}
+                   "mine": keyed(read["mines"], "id"), "cargo": keyed(read.get("cargo", []), "id"),
+                   "heli": keyed(read.get("helis", []), "id")}
 
 
 def base_supplies(bases, storages):

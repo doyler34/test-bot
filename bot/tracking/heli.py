@@ -27,8 +27,11 @@ def _moment(occurred):
     return datetime.fromisoformat(occurred).timestamp()
 
 
-def heli_kills(spots, ground):
-    """{killer identity: heli kills} from killer_spots() rows, using the Everon heights."""
+def heli_kills(spots, ground, confirm=None):
+    """{killer identity: heli kills} from killer_spots() rows, using the Everon heights.
+
+    `confirm(killer, occurred)` can check a kill against the autosaves: False (they were on foot or in
+    something else) leaves it off, None (no save near it) leaves the height guess to decide."""
     by_killer = {}
     for server, occurred, killer, damage, x, y, z in spots:
         by_killer.setdefault((server, killer), []).append((_moment(occurred), damage, x, y, z))
@@ -39,7 +42,7 @@ def heli_kills(spots, ground):
                 continue
             if y - ground.at(x, z) <= AIRBORNE:
                 continue
-            if damage in BLAST or _moving(kills, index):
+            if (damage in BLAST or _moving(kills, index)) and (confirm is None or confirm(killer, at) is not False):
                 counted[killer] += 1
     return counted
 

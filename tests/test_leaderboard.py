@@ -36,8 +36,11 @@ class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
         sql=("INSERT INTO combat_events (server,event_key,occurred,victim,killer,relation)"
              " VALUES ('s',?,?,?,?,'ENEMY')")
         with self.links.db:
-            for victim,killer in [(other,identity)]*kills + [(identity,other)]*deaths:
+            # A different opponent each time: the board counts the same victim only a few times a match.
+            for n,(victim,killer) in enumerate([(other,identity)]*kills + [(identity,other)]*deaths):
                 self.seq+=1
+                other_n=f'{other[:-6]}{n:06d}'
+                victim,killer=(other_n,killer) if victim==other else (victim,other_n)
                 self.links.db.execute(sql,(f'e{self.seq}',when,victim,killer))
 
     async def test_sort_scope_and_read_only(self):

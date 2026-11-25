@@ -5,8 +5,8 @@ import logging
 import discord
 
 from bot.config import game_leaderboard_channel_id, live_board_channel_id
-from bot.discord.leaderboard_command import table
-from bot.storage.combat_store import match_number, record_match, window_standings
+from bot.discord.leaderboard_command import bases_line, match_bases, match_rows, table
+from bot.storage.combat_store import match_number, record_match, record_match_players
 
 LOG = logging.getLogger('reforger.match')
 # The log ingestor polls every 15s, so wait a few cycles for the closing kills
@@ -52,7 +52,7 @@ def pages(rows):
     return result
 
 
-def match_embeds(server_name, rows, start, end, tag=None):
+def match_embeds(server_name, rows, start, end, tag=None, bases=None):
     blocks = pages(rows)
     closed = f'{end:%H:%M}' if start.date() == end.date() else f'{end:%d %b %H:%M}'
     embeds = []
@@ -60,10 +60,12 @@ def match_embeds(server_name, rows, start, end, tag=None):
         embed = discord.Embed(colour=0xA9BC8C, description=block)
         if index == 0:
             embed.title = titled('🏁 Match results', tag, server_name)
+            if bases_line(bases):
+                embed.description = bases_line(bases) + '\n' + block
         if index == len(blocks) - 1:
             embed.set_footer(text=f'{len(rows)} players • {duration(start, end)} • '
                                   f'{start:%d %b %H:%M}–{closed}\n'
-                                  'Player kills only • Counts toward the weekly board')
+                                  'K = kills minus teamkills • * switched sides • Counts toward the weekly board')
         embeds.append(embed)
     return embeds
 
@@ -94,12 +96,7 @@ class MatchResults:
             return None
 
     def rows(self, guild, start, end, server_id):
-        result = []
-        for member_id, kills, deaths, name in window_standings(
-                self.bot.account_links.db, guild.id, start, end, server=server_id):
-            member = guild.get_member(member_id)
-            result.append((name or (member.display_name if member else f'Member {member_id}'), kills, deaths))
-        return result
+        return match_rows(self.bot.account_links, guild, start=start, end=end, server_id=server_id)
 
     async def channel(self, guild):
         pinned = game_leaderboard_channel_id()
@@ -119,6 +116,14 @@ class MatchResults:
     async def publish(self, server_id, server_name, start, end):
         try:
             await asyncio.sleep(SETTLE)
+            bases = {}
+            try:
+                # Everyone who gained game XP played the match, kills or not, so it pays them match XP.
+                bases, gains = match_bases(self.bot.account_links, server_id, start, end)
+                record_match_players(self.bot.account_links.db, server_id, start,
+                                     [identity for identity, gained in gains.items() if gained > 0])
+            except Exception:
+                LOG.exception('Could not read the autosaves for the %s match', server_name)
             guild = self.bot.get_guild(self.bot.config.guild_id)
             if guild is None:
                 return
@@ -137,7 +142,7 @@ class MatchResults:
                 return
             # One message per block: several embeds in a single message share a
             # 6000-character budget that a full server would blow through.
-            for embed in match_embeds(server_name, rows, start, end, self.tag(server_id, start)):
+            for embed in match_embeds(server_name, rows, start, end, self.tag(server_id, start), bases):
                 await channel.send(embed=embed, silent=True,
                                    allowed_mentions=discord.AllowedMentions.none())
             LOG.info('Posted match results for %s (%s players)', server_name, len(rows))

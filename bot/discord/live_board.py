@@ -12,10 +12,10 @@ import time
 import discord
 
 from bot.config import game_leaderboard_channel_id, live_board_channel_id
-from bot.discord.leaderboard_command import side_code, table
+from bot.discord.leaderboard_command import bases_line, match_bases, match_rows, table
 from bot.discord.leaderboard_display import retry_delay
 from bot.discord.match_results import CHUNK, duration, match_tag, server_letter, titled
-from bot.storage.combat_store import match_number, window_factions, window_standings
+from bot.storage.combat_store import match_number
 
 LOG = logging.getLogger('reforger.liveboard')
 POLL = 30
@@ -31,7 +31,7 @@ MARKER = 'OYB-LIVE'
 # fits inside two embeds in a single message with room to spare.
 
 
-def board_embeds(server_name, rows, start, end=None, tag=None):
+def board_embeds(server_name, rows, start, end=None, tag=None, bases=None):
     """The board as embeds for one message: live while `end` is None."""
     blocks, position = [], 0
     while position < len(rows):
@@ -46,13 +46,15 @@ def board_embeds(server_name, rows, start, end=None, tag=None):
         if index == 0:
             embed.title = titled('🏁 Match results' if end else '🔴 LIVE',
                                  tag, server_name)
+            if end and bases_line(bases):
+                embed.description = bases_line(bases) + '\n' + block
         embeds.append(embed)
     closed = end or start
     span = duration(start, end or datetime.now())
     embeds[-1].set_footer(text=(
         f'{MARKER}\n{len(rows)} players • {span} • '
         f'{start:%d %b %H:%M}' + (f'–{closed:%H:%M}' if end else ' • updates every 30s') + '\n'
-        'Player kills only • Counts toward the weekly board'))
+        'K = kills minus teamkills • * switched sides • Counts toward the weekly board'))
     return embeds
 
 
@@ -119,9 +121,11 @@ class LiveBoard:
                 if guild is None:
                     return
                 rows = self.rows(guild, server_id, match['started'], datetime.fromtimestamp(ended))
+                bases, _ = match_bases(self.bot.account_links, server_id, match['started'],
+                                       datetime.fromtimestamp(ended))
                 await match['message'].edit(
                     embeds=board_embeds(match['name'], rows, match['started'],
-                                        datetime.fromtimestamp(ended), match['tag']),
+                                        datetime.fromtimestamp(ended), match['tag'], bases),
                     allowed_mentions=discord.AllowedMentions.none())
             LOG.info('Live board finalised for %s (%s players)', match['name'], len(rows))
         except asyncio.CancelledError:
@@ -130,14 +134,7 @@ class LiveBoard:
             LOG.exception('Could not finalise the live board for %s', server_id)
 
     def rows(self, guild, server_id, started, ended=None):
-        result = []
-        db = self.bot.account_links.db
-        sides = window_factions(db, guild.id, started, ended, server_id)
-        for member_id, kills, deaths, name in window_standings(db, guild.id, started, ended, server=server_id):
-            member = guild.get_member(member_id)
-            result.append((name or (member.display_name if member else f'Member {member_id}'),
-                           kills, deaths, side_code(sides.get(member_id))))
-        return result
+        return match_rows(self.bot.account_links, guild, server_id, started, ended)
 
     async def channel(self, guild):
         pinned = live_board_channel_id()

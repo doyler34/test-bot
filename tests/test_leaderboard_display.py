@@ -372,7 +372,9 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
             sql=("INSERT INTO combat_events (server,event_key,occurred,victim,killer,relation)"
                  " VALUES ('s',?,?,?,?,'ENEMY')")
             def scored(tag, victim, killer):
-                links.db.execute(sql,(tag,when,victim,killer))
+                # A different opponent for each kill: the board counts the same victim only a few times.
+                other_n=f'{other[:-4]}{len(tag):02d}{tag[-2:]:>2}'.replace(' ','0')
+                links.db.execute(sql,(tag,when,other_n if victim==other else victim,other_n if killer==other else killer))
             with links.db:
                 links.db.execute('CREATE TABLE rank_wallet_v2 (credit, milliseconds)')
                 links.db.execute('INSERT INTO rank_wallet_v2 VALUES (123,456)')

@@ -7,7 +7,7 @@ import logging
 import discord
 from discord import app_commands
 from bot.config import linking_channel, command_auto_clear_seconds
-from bot.discord.factions import current_faction, label
+from bot.discord.factions import label, ranked_faction
 from bot.ranks.rank_card import render_card
 
 LOG = logging.getLogger("reforger.rank_command")
@@ -71,11 +71,11 @@ class RankCommand:
                         avatar = await interaction.user.display_avatar.replace(format="png", size=256).read()
                 except (discord.HTTPException, OSError, TimeoutError):
                     LOG.debug("Avatar unavailable; using local portrait")
-                faction = current_faction(self.bot, interaction.guild, interaction.user)
+                faction, by_play = ranked_faction(self.bot, interaction.guild, interaction.user.id, interaction.user)
                 played = self.bot.rank_sync.playtime(interaction.user.id)
+                shown = (f'{label(faction)} (played)' if by_play else label(faction)) if faction else None
                 data = await asyncio.to_thread(render_card, interaction.user.display_name, xp, avatar,
-                                               faction=faction, playtime_ms=played,
-                                               faction_label=label(faction) if faction else None)
+                                               faction=faction, playtime_ms=played, faction_label=shown)
                 with BytesIO(data) as buffer:
                     with closing(discord.File(buffer, filename="oyb-rank.png")) as attachment:
                         sent = await interaction.followup.send(file=attachment, allowed_mentions=discord.AllowedMentions.none())
