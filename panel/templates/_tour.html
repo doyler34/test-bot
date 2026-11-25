@@ -2,7 +2,7 @@
 {# The pages the tour walks through. Data and Settings only for whoever can use them. #}
 {% set chapters = [("/", "Dashboard"), ("/server/", "Server page"), ("/players", "Players"), ("/bans", "Bans")] %}
 {% if can("box") or can("ips") or can("audit") %}{% set _ = chapters.append(("/data", "Data")) %}{% endif %}
-{% if can("sus") or can("game_admins") or can("users") or can("cards") or can("website") %}{% set _ = chapters.append(("/settings", "Settings")) %}{% endif %}
+{% if can("game_admins") or can("users") or can("cards") or can("website") %}{% set _ = chapters.append(("/settings", "Admin")) %}{% endif %}
 {% set ns = namespace(here=0) %}
 {% for url, _ in chapters %}{% if path == url or (url == "/server/" and path.startswith(url)) %}{% set ns.here = loop.index0 %}{% endif %}{% endfor %}
 {% set last = ns.here == chapters|length - 1 %}
@@ -44,7 +44,8 @@
   </section>
   <section data-step data-chapter="0" data-target="aside.side .side-nav" data-phone-target="nav.dock">
     <h3>Getting around</h3>
-    <p><span class="only-desk">The menu on the left has Players, Bans and everything else you have access to. The <b>Servers</b> list jumps straight to a server.</span><span class="only-phone">The bar at the bottom has the dashboard, Players and Bans. <b>More</b> has everything else, your account and Log out.</span></p>
+    <p>The menu has four parts: <b>Servers</b>, <b>Players</b>, <b>Discord</b> and <b>Admin</b> (you only see the ones you can use). Each part's pages have tabs along the top: Players has Bans, Alerts and Rules.</p>
+    <p><span class="only-desk">The list under Servers jumps straight to a server.</span><span class="only-phone">The bar at the bottom has the same four. Your account, Support and Log out are under your name at the top.</span></p>
   </section>
   <section data-step data-chapter="0" data-target=".top-search">
     <h3>Search</h3>
@@ -131,21 +132,17 @@
   </section>
   <section data-step data-chapter="{{ ns.here }}" data-target="aside.side .side-nav" data-phone-target="nav.dock"{{ onward() }}>
     <h3>Always here</h3>
-    <p>Data stays <span class="only-desk">in the menu on the left</span><span class="only-phone">under <b>More</b></span>.</p>
+    <p>Data is a tab under <b>Admin</b>.</p>
     {{ hint() }}
   </section>
 {% elif path == "/settings" %}
   <section data-step data-chapter="{{ ns.here }}" data-target="main .cards">
-    <h3>Settings</h3>
-    <p>A card for each thing you can change. Each one goes in the audit log with your name.</p>
+    <h3>Admin</h3>
+    <p>A card for each thing you can change. Each one goes in the audit log with your name. The cheat checks moved to <b>Players → Rules</b>.</p>
   </section>
   <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/settings/pictures"]'>
     <h3>Server cards</h3>
     <p>The picture, description and join address on each server's card. The join address is what gives everyone the copy and <b>Join</b> buttons.</p>
-  </section>
-  <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/sus-settings"]'>
-    <h3>Sus settings</h3>
-    <p>How touchy the cheat checks are. Higher numbers mean fewer flags; <b>Reset to defaults</b> puts them back.</p>
   </section>
   <section data-step data-chapter="{{ ns.here }}" data-target='a.card[href="/game-admins"]'>
     <h3>In-game admins</h3>

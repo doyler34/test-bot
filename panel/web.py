@@ -166,6 +166,7 @@ def render(request, template, **context):
         can=(lambda perm: bool(user) and allowed(request, perm)),
         can_on=(lambda perm, server: bool(user) and allowed_on(request, perm, server)),
         can_manage=bool(user) and manager_servers(request) != set(),
+        is_owner=bool(user) and named(request),
         servers=request.app[CONFIG].servers,
         nav_servers=[{"id": st.config.id, "name": st.config.name, "online": st.online, "map": st.query.get("map") or ""}
                      for st in request.app[MANAGER].states.values()],
@@ -1148,6 +1149,34 @@ def save_view(state, db):
 async def save_part(request):
     state = server_or_404(request, request.match_info["id"])
     return render(request, "_save.html", s=server_view(state), save=save_view(state, request.app[DB]))
+
+
+# The kinds of staff alert the Alerts page can show on their own, by the start of their titles.
+ALERT_GROUPS = (("all", "All", ()), ("teamkills", "Teamkills", ("Mass teamkill",)),
+                ("mines", "Mines", ("AP mine spam", "Mines in own base")),
+                ("loadouts", "Loadouts", ("Stacked loadout",)),
+                ("exploits", "Exploits", ("XP farming", "Supply jump", "Supply transfer", "Base griefing",
+                                          "Vehicle griefing", "Teleport", "Under the map")),
+                ("evasion", "Ban evasion", ("Ban evasion", "Warned player banned")),
+                ("actions", "Kicks and bans", ("Auto-kicked", "Auto-banned")))
+ALERTS_SHOWN = 300
+
+
+async def alerts_page(request):
+    show = request.query.get("show", "all")
+    starts = dict((key, prefixes) for key, _, prefixes in ALERT_GROUPS).get(show)
+    if starts is None:
+        show, starts = "all", ()
+    names = {s.id: s.name for s in request.app[CONFIG].servers}
+    rows = []
+    for r in request.app[DB].staff_alerts(limit=ALERTS_SHOWN * 4 if starts else ALERTS_SHOWN):
+        if starts and not r["title"].startswith(starts):
+            continue
+        kind, _, where = r["title"].partition(" on ")
+        rows.append({"at": r["at"], "kind": kind, "text": r["text"],
+                     "server_name": names.get(r["server"]) or where})
+    return render(request, "alerts.html", alerts=rows[:ALERTS_SHOWN], show=show,
+                  groups=[(key, label) for key, label, _ in ALERT_GROUPS])
 
 
 async def feed_part(request):
@@ -2611,7 +2640,6 @@ DISCORD_GROUPS = (
         ("matchping", "\"Match started\" alerts, and who gets pinged for which server."),
         ("weekly", "The top 3 when the weekly leaderboard resets on Monday."),
         ("bans", "The DM a banned player gets, and the card in their ban ticket."),
-        ("staffalerts", "Alerts, kicks and bans for mass teamkills, AP mine spam and stacked loadouts."),
     )),
     ("Posting yourself", (
         ("posts", "Your own messages: announcements, events, FAQs, with buttons if you want."),
@@ -4982,6 +5010,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/website/preview", website_preview)
     app.router.add_post("/server/{id}/kick", kick)
     app.router.add_get("/bans", bans_page)
+    app.router.add_get("/alerts", alerts_page)
     app.router.add_post("/bans", add_ban)
     app.router.add_post("/bans/{ban_id:\\d+}/remove", remove_ban)
     app.router.add_post("/bans/{ban_id:\\d+}/edit", edit_ban)

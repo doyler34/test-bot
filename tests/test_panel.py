@@ -1960,7 +1960,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.db.write("UPDATE users SET toured = 1 WHERE username = 'boss'")      # took the first, shorter tour
         await self.login("boss", "boss-password")
         home = await (await self.client.get("/")).text()
-        self.assertIn('data-chapters="Dashboard,Server page,Players,Bans,Data,Settings"', home)
+        self.assertIn('data-chapters="Dashboard,Server page,Players,Bans,Data,Admin"', home)
         self.assertIn("You run the place", home)
         bans = await (await self.client.get("/bans?tour=1")).text()
         self.assertIn('data-next="/data?tour=1"', bans)
@@ -2071,9 +2071,10 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.db.add_connections("server-1", [{"identity": HAVOC, "ip": "99.102.29.3", "guid": "", "name": "Havoc", "at": now()}], {})
         await self.login("boss", "boss-password")
         home = await (await self.client.get("/")).text()
-        self.assertIn('href="/data"', home)
+        self.assertIn('<span>Admin</span>', home)
         self.assertNotIn('href="/ip-lookup"', home)
         data = await (await self.client.get("/data")).text()
+        self.assertIn('<a href="/data" class="on" aria-current="page">Data</a>', data)
         self.assertIn('href="/ip-lookup"', data)
         self.assertIn('href="/bot/data"', data)
         with unittest.mock.patch("panel.whois.lookup", new=unittest.mock.AsyncMock(return_value={**whois.read(ARIN), "reverse": "x.att.net"})):
@@ -2292,11 +2293,34 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
     async def test_discord_home_groups_every_page(self):
         await self.login("boss", "boss-password")
         home = await (await self.client.get("/discord")).text()
-        for key in ("welcome", "greeting", "serverinfo", "factions", "matchping", "weekly", "bans", "staffalerts",
+        for key in ("welcome", "greeting", "serverinfo", "factions", "matchping", "weekly", "bans",
                     "posts", "links", "channels", "names", "feedback"):
             self.assertIn(f'href="/discord/{key}"', home)
+        # Staff alerts moved to Players → Rules, beside the Sus checks.
+        self.assertNotIn('href="/discord/staffalerts"', home)
+        rules = await (await self.client.get("/discord/staffalerts")).text()
+        self.assertIn('<a href="/discord/staffalerts" class="on" aria-current="page">Rules</a>', rules)
+        self.assertIn('href="/sus-settings"', rules)
         self.assertIn("What new members see", home)
         self.assertIn("Bot&#39;s default", home)
+
+    async def test_four_part_menu_and_alerts_page(self):
+        await self.login("boss", "boss-password")
+        self.db.add_staff_alert("server-1", now(), "Base griefing on Server 1", "**Rook** nearby.")
+        self.db.add_staff_alert("server-1", now(), "Mass teamkill on Server 1", "**Buford** teamkilled 3.")
+        home = await (await self.client.get("/")).text()
+        side = home.split('<nav class="side-nav">')[1].split("</nav>")[0]
+        self.assertEqual([label for label in ("Servers", "Players", "Discord", "Admin", "Bans", "Settings", "Support")
+                          if f"<span>{label}</span>" in side], ["Servers", "Players", "Discord", "Admin"])
+        page = await (await self.client.get("/alerts")).text()
+        self.assertIn('<a href="/alerts" class="on" aria-current="page">Alerts</a>', page)
+        self.assertIn("Rook nearby.", page)
+        self.assertIn("Buford teamkilled 3.", page)
+        exploits = await (await self.client.get("/alerts?show=exploits")).text()
+        self.assertIn("Rook nearby.", exploits)
+        self.assertNotIn("Buford teamkilled 3.", exploits)
+        server = await (await self.client.get("/server/server-1")).text()
+        self.assertIn('data-tab="game"', server)
 
     async def test_sus_settings_page(self):
         await self.login("boss", "boss-password")

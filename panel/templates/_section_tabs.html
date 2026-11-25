@@ -1,0 +1,25 @@
+{#- The tab bar at the top of each part's pages. A single server's page has its own tabs, so it gets none. -#}
+{% set tabs = [] %}
+{% if section == "servers" and can_manage and not path.startswith("/server/") %}
+  {% set tabs = [("/", "Dashboard", path == "/"), ("/manage", "Server manager", path != "/")] %}
+{% elif section == "players" %}
+  {% set rules = "/discord/staffalerts" if can("discord") else ("/sus-settings" if can("sus") else "") %}
+  {% set tabs = [("/players", "Players", path.startswith("/player")), ("/bans", "Bans", path == "/bans"),
+                 ("/alerts", "Alerts", path == "/alerts")] + ([("" ~ rules, "Rules", path in rule_pages)] if rules else []) %}
+{% elif section == "admin" %}
+  {% set show_settings = can("game_admins") or can("users") or can("cards") or can("website") or can("mortar") or is_owner %}
+  {% set show_data = can("box") or can("ips") or can("audit") or can("console") %}
+  {% set tabs = ([("/settings", "Settings", path not in data_pages)] if show_settings else [])
+                + ([("/data", "Data", path in data_pages)] if show_data else []) %}
+{% endif %}
+{% if tabs|length > 1 %}
+<nav class="tabs section-tabs" aria-label="This part of the panel">
+  {% for href, label, on in tabs %}<a href="{{ href }}"{% if on %} class="on" aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>
+{% endif %}
+{% if section == "players" and path in rule_pages and can("discord") and can("sus") %}
+<nav class="section-pills" aria-label="Rules">
+  <a href="/discord/staffalerts"{% if path == "/discord/staffalerts" %} class="on"{% endif %}>Staff alerts</a>
+  <a href="/sus-settings"{% if path == "/sus-settings" %} class="on"{% endif %}>Sus checks</a>
+</nav>
+{% endif %}

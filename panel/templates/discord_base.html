@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Discord · OYB Control{% endblock %}
 {% block body %}
-<p class="kicker"><a href="/discord">← Discord</a></p>
+{% if path != "/discord/staffalerts" %}<p class="kicker"><a href="/discord">← Discord</a></p>{% endif %}
 <h1>{{ heading or dict(pages)[page] }}</h1>
 {% if about %}<p class="muted dc-about">{{ about }}</p>{% endif %}
 <div class="dc-shell">

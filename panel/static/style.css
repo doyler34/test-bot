@@ -1855,3 +1855,15 @@ form.rename input[name=name] { display: inline-block; width: 12em; margin: 0; pa
 .kit > li { break-inside: avoid; margin-bottom: 6px; }
 .kit ul li { color: var(--muted, #9aa3ad); font-size: .92em; }
 .kit-count { font-weight: 600; }
+
+/* ---- Four-part menu: each part's pages share a tab bar ---------------- */
+.section-tabs { overflow-x: auto; scrollbar-width: none; margin: 0 0 16px; }
+.section-tabs a { white-space: nowrap; font: 500 .98rem var(--body); text-transform: none; letter-spacing: 0; padding: 8px 14px; }
+.section-pills { display: flex; gap: 8px; flex-wrap: wrap; margin: -6px 0 16px; }
+.section-pills a { padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .9rem; }
+.section-pills a:hover { color: #fff; text-decoration: none; }
+.section-pills a.on { color: #fff; border-color: var(--gold); }
+@media (max-width: 720px) {
+  .dock { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
+  .section-tabs a { padding: 6px 10px; font-size: .95rem; }
+}

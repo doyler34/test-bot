@@ -31,6 +31,7 @@
 <nav class="tabs srv-tabs">
   <a href="#overview" data-tab="overview">Overview</a>
   <a href="#live" data-tab="live">Live feed</a>
+  <a href="#game" data-tab="game">This game</a>
   <a href="#history" data-tab="history">History</a>
   <a href="#health" data-tab="health">Health</a>
   <a href="/server/{{ s.id }}/monitor">Monitor</a>
@@ -79,19 +80,21 @@
     </section>
 
     <section class="card pane wide" data-expand>
-      <h2>This game, from the autosave</h2>
-      <div class="body" data-refresh="/server/{{ s.id }}/save.part" data-every="60000">
-      {% include "_save.html" %}
-      </div>
-    </section>
-
-    <section class="card pane wide" data-expand>
       <h2>Recent actions here</h2>
       <div class="body">
       {% include "_audit_rows.html" %}
       </div>
     </section>
   </div>
+</div>
+
+<div data-tab-panel="game" hidden>
+  <section class="card">
+    <h2>This game, from the autosave</h2>
+    <div data-refresh="/server/{{ s.id }}/save.part" data-every="60000">
+    {% include "_save.html" %}
+    </div>
+  </section>
 </div>
 
 <div data-tab-panel="history" hidden>

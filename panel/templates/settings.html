@@ -1,14 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Settings · OYB Control{% endblock %}
 {% block body %}
-<h1>Settings</h1>
+<h1>Admin</h1>
 <div class="cards menu-cards">
-  {% if can("sus") %}
-  <a class="card" href="/sus-settings">
-    <h2>Sus settings</h2>
-    <p class="muted">When a kill pattern gets flagged as suspicious, and when it's posted to Discord.</p>
-  </a>
-  {% endif %}
   {% if can("game_admins") %}
   <a class="card" href="/game-admins">
     <h2>In-game admins</h2>

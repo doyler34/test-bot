@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Alerts · OYB Control{% endblock %}
+{% block body %}
+<h1>Alerts</h1>
+<p class="muted">Everything sent to the staff channel, newest first: teamkills, mines, stacked loadouts, exploit checks, ban evasion, and automatic kicks and bans. Kept for 90 days.</p>
+<div class="section-pills" style="margin-top: 0">
+  {% for key, label in groups %}<a href="/alerts{{ '?show=' ~ key if key != 'all' }}"{% if key == show %} class="on"{% endif %}>{{ label }}</a>{% endfor %}
+</div>
+{% if alerts %}
+<div class="scroll"><table class="alerts-table">
+  <thead><tr><th>When</th><th>Alert</th><th>Server</th><th>What happened</th></tr></thead>
+  <tbody>
+  {% for a in alerts %}
+  <tr><td class="mono">{{ a.at|ts }}</td><td><b>{{ a.kind }}</b></td><td>{{ a.server_name or "—" }}</td><td>{{ a.text|replace("**", "") }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="muted">No alerts{{ " of this kind" if show != "all" }} yet.</p>
+{% endif %}
+{% endblock %}
