@@ -16,6 +16,10 @@ class RconError(Exception):
     pass
 
 
+class RconReply(RconError):
+    """The server answered, but refused the command: the connection is fine."""
+
+
 def packet(kind: int, body: bytes) -> bytes:
     payload = b"\xff" + bytes([kind]) + body
     return b"BE" + struct.pack("<I", zlib.crc32(payload) & 0xFFFFFFFF) + payload
@@ -124,7 +128,7 @@ class RconClient:
                 self._pending.pop(seq, None)
                 self._parts.pop(seq, None)
         if reply.lower().startswith("unknown command"):
-            raise RconError(reply)
+            raise RconReply(reply)
         return reply
 
     def _received(self, data: bytes):

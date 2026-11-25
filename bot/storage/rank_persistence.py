@@ -129,8 +129,9 @@ class XPStore:
             one, milliseconds = self.wallet(guild, member, identity, path, ready, snapshot)
             credit += one
             earned += milliseconds
+        # All accounts at once, so a match played on two of them pays out once.
         return (credit + xp_from_seconds(earned / 1000) + self.post_xp(guild, member)
-                + sum(self.combat_xp(i) for i in identities))
+                + self.combat_xp(tuple(sorted(identities))))
 
     def read(self, guild, member, identity, path, ready, snapshot=_UNSET):
         """One identity's XP. total() is what the rank loop uses."""
@@ -181,7 +182,7 @@ class XPStore:
     def cached(self, guild, member):
         rows = self.db.execute("SELECT credit,milliseconds,identity FROM rank_wallet_v2 WHERE guild=? AND member=?", (guild,member)).fetchall()
         banked = (sum(r[0] for r in rows) + xp_from_seconds(sum(r[1] for r in rows) / 1000)
-                  + sum(self.combat_xp(r[2]) for r in rows))
+                  + (self.combat_xp(tuple(sorted(r[2] for r in rows))) if rows else 0))
         return banked + self.post_xp(guild, member)
 
     def combat_generation(self):
@@ -243,15 +244,15 @@ class XPStore:
         """Credit a newly observed post once, in the existing account-links DB."""
         with self.db:
             self.db.execute('BEGIN IMMEDIATE')
-            link = self.db.execute('SELECT identity,linked_at FROM account_links WHERE guild=? AND discord_id=?',
-                                   (guild,member)).fetchone()
-            if not link or created < link[1]:
+            links = self.db.execute('''SELECT identity,linked_at FROM account_links WHERE guild=? AND discord_id=?
+                                       ORDER BY linked_at, identity''', (guild,member)).fetchall()
+            if not links or created < links[0][1]:
                 return 0
-            identity = link[0]
+            # Post XP belongs to the member, not one account, so linking a second account
+            # keeps crediting the one already used.
             previous = self.db.execute('SELECT identity FROM discord_post_totals WHERE guild=? AND member=?',
                                        (guild,member)).fetchone()
-            if previous and previous[0] != identity:
-                raise ValueError('Linked identity changed; admin review required')
+            identity = previous[0] if previous else links[0][0]
             if self.posts_on_day(guild, member, created) >= POSTS_PER_DAY:
                 return 0
             inserted = self.db.execute('INSERT OR IGNORE INTO discord_post_events VALUES (?,?,?,?,?,?)',

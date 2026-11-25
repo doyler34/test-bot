@@ -33,14 +33,12 @@ class Maintenance:
             try:
                 with closing(sqlite3.connect(self.links_path, timeout=30)) as db:
                     configure_connection(db)
+                    # Kills and matches are kept for good: rank XP, /lifetime and every board are
+                    # worked out from them, so pruning them took XP away and demoted people.
                     posts = retention.prune_post_events(
                         db, now - retention._days("POST_EVENT_RETENTION_DAYS") * 86400)
-                    cutoff = retention.combat_cutoff_iso(now, retention._days("COMBAT_EVENT_RETENTION_DAYS"))
-                    combat = retention.prune_combat_events(db, cutoff)
-                    matches = retention.prune_matches(db, cutoff)
-                if posts or combat or matches:
-                    LOG.info("Pruned %s post-XP, %s combat dedup and %s match rows (totals unchanged)",
-                             posts, combat, matches)
+                if posts:
+                    LOG.info("Pruned %s post-XP rows (totals unchanged)", posts)
             except sqlite3.Error:
                 LOG.exception("Account-links retention sweep failed; will retry")
         if self.notif_path:

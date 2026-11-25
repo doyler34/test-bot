@@ -56,6 +56,23 @@ class CombatRetentionTests(unittest.TestCase):
         self.assertEqual(retention.prune_matches(self.db, "2026-06-01T00:00:00.000"), 1)
         self.assertEqual([r[0] for r in self.db.execute("SELECT name FROM combat_matches")], ["Recent"])
 
+    def test_the_sweep_keeps_kills_and_matches_for_good(self):
+        # Rank XP and /lifetime are worked out from these rows, so pruning them demoted people.
+        from datetime import datetime
+        from unittest.mock import patch as env
+        from bot.storage.combat_store import record_match
+        from bot.storage.maintenance import Maintenance
+        with self.db:
+            record(self.db, "server-1", "2020-01-01T10:00:00.000", kill())
+        record_match(self.db, "server-1", "Old", datetime(2020,1,1,10,0), datetime(2020,1,1,11,0))
+        XPStore(self.db)   # the post tables the sweep prunes first
+        store = sqlite3.connect(":memory:")
+        self.addCleanup(store.close)
+        with env.dict("os.environ", {"PLAYTIME_DB": str(Path(self.tmp.name) / "none.sqlite3")}):
+            Maintenance(SimpleNamespace(account_links=self.links, store=SimpleNamespace(db=store))).sweep()
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM combat_events").fetchone()[0], 1)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM combat_matches").fetchone()[0], 1)
+
     def test_duplicate_event_after_restart_counts_once(self):
         with self.db:
             self.assertTrue(record(self.db, "server-1", "2026-09-01T10:00:00.000", kill()))

@@ -204,6 +204,16 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual((rows[0][0], rows[0][1], rows[0][2]), (10, 1, 1))
 
+    def test_the_rank_wallet_pays_a_match_once_across_accounts(self):
+        self.links.verified_link(1, 10, KILLER, "admin:20")
+        self.db.execute('INSERT INTO rank_wallet_v2 VALUES (1,10,?,0,0,0)',(KILLER,))
+        base = datetime(2026,9,7,15,0)
+        record_match(self.db,'one','Server 0',base,base+timedelta(minutes=50))
+        # Both accounts fought in the same match: one match payout, not two.
+        self.process(event('15:01:00.000',killer=KILLER))
+        wallet = XPStore(self.db)
+        self.assertEqual(wallet.cached(1,10), 80+XP_PER_KILL+XP_PER_MATCH)
+
     def test_kill_xp_reaches_the_wallet_with_nothing_to_recompute(self):
         wallet = XPStore(self.db)
         self.assertEqual(wallet.cached(1,10), 80)

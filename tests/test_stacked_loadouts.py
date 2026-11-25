@@ -69,6 +69,7 @@ class StackedLoadouts(unittest.IsolatedAsyncioTestCase):
                                      alerts=FakeAlerts())
         self.state = self.manager.states["one"]
         self.state.players = [{"id": "7", "identity": BUFORD, "name": "Buford"}]
+        self.state.online = True
         self.kicked = []
 
         async def kick(server_id, player_id):
@@ -116,6 +117,21 @@ class StackedLoadouts(unittest.IsolatedAsyncioTestCase):
         texts = " | ".join(a["text"] for a in self.db.staff_alerts())
         self.assertIn("**Buford** spawned with a loadout of 31 scopes and 100 morphine on Server 1", texts)
         self.assertIn("was kicked for spawning with a loadout of 31 scopes and 100 morphine", texts)
+
+    async def test_each_count_is_named_with_where_it_came_from(self):
+        self.settings(loadout_kick=True)
+        await self.save(scopes=9, morphine=0, kit=(0, 40))
+        texts = " | ".join(a["text"] for a in self.db.staff_alerts())
+        self.assertIn("**Buford** is carrying 9 scopes and spawned with a loadout of 40 morphine", texts)
+        self.assertIn("was kicked for carrying 9 scopes and spawning with a loadout of 40 morphine", texts)
+
+    async def test_nothing_is_done_while_rcon_is_down(self):
+        # RCON down empties the player list; that mustn't read as "they left" and ban them.
+        self.settings(loadout_kick=True, loadout_ban=True)
+        self.state.online, self.state.players = False, []
+        await self.save()
+        self.assertIsNone(self.db.active_ban(BUFORD))
+        self.assertEqual(self.titles(), ["Stacked loadout on Server 1"])
 
     async def test_kick_only(self):
         self.settings(loadout_kick=True)

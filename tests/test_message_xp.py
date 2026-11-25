@@ -55,6 +55,12 @@ class MessageXPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.wallet.cached(1,10),0)
         self.assertEqual(self.links.db.execute('SELECT COUNT(*) FROM discord_post_events').fetchone()[0],0)
 
+    async def test_linking_a_second_account_keeps_post_xp_coming(self):
+        self.assertEqual(self.wallet.award_post(1,10,100,self.created),XP_PER_POST)
+        self.links.verified_link(1,10,'00000000-2222-3333-4444-555555555555','admin:22')
+        self.assertEqual(self.wallet.award_post(1,10,101,self.created),XP_PER_POST)
+        self.assertEqual(self.wallet.post_xp(1,10),2*XP_PER_POST)
+
     async def test_old_preapproval_message_not_replayed_for_credit(self):
         self.assertEqual(self.wallet.award_post(1,10,100,0),0)
         self.assertEqual(self.wallet.post_xp(1,10),0)

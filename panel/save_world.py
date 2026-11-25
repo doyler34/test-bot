@@ -304,6 +304,9 @@ def players(path):
     return cached(path, read, _cache)
 
 
+CACHED_SAVES = 4
+
+
 def cached(path, reader, cache):
     try:
         stamp = Path(path).stat().st_mtime_ns
@@ -313,6 +316,10 @@ def cached(path, reader, cache):
     if hit and hit[0] == stamp:
         return hit[1]
     got = reader(path)
-    cache.clear()
+    # Each autosave is a new path, so only the newest few are kept; one per server, so a
+    # map with two servers on it doesn't read both saves again on every request.
+    cache.pop(str(path), None)
+    while len(cache) >= CACHED_SAVES:
+        cache.pop(next(iter(cache)))
     cache[str(path)] = (stamp, got)
     return got

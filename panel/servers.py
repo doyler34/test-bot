@@ -16,7 +16,7 @@ from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
 from .db import PanelDB, now
-from .rcon import RconClient, RconError
+from .rcon import RconClient, RconError, RconReply
 from bot.discord import welcome_doc
 from bot.discord.ban_roles import length_text
 from .suspicion import DEFAULTS, Detector, check_settings
@@ -421,11 +421,18 @@ class ServerManager:
             player = next((p for p in state.players if p.get("identity") == identity), None)
             known = self.db.player_names(identity)
             name = (player or {}).get("name") or (known[0]["name"] if known else identity)
-            over = " and ".join(o for o in (f"{scopes} scopes" if scopes > scope_limit else "",
-                                            f"{morphine} morphine" if morphine > morphine_limit else "") if o)
-            on_them = holding >= kit
-            what = f"is carrying {over}" if on_them else f"spawned with a loadout of {over}"
-            why = f"carrying {over}" if on_them else f"spawning with a loadout of {over}"
+            # Each count over its limit is named with where it came from, carried or the spawn loadout.
+            carried_over, kit_over = [], []
+            for label, carried, spawned, limit in (("scopes", holding[0], kit[0], scope_limit),
+                                                   ("morphine", holding[1], kit[1], morphine_limit)):
+                if max(carried, spawned) > limit:
+                    (carried_over if carried >= spawned else kit_over).append(f"{max(carried, spawned)} {label}")
+            what = " and ".join(p for p in (f"is carrying {' and '.join(carried_over)}" if carried_over else "",
+                                            f"spawned with a loadout of {' and '.join(kit_over)}" if kit_over else "")
+                                if p)
+            why = " and ".join(p for p in (f"carrying {' and '.join(carried_over)}" if carried_over else "",
+                                           f"spawning with a loadout of {' and '.join(kit_over)}" if kit_over else "")
+                               if p)
             flag = state.loadout_flags.setdefault(identity, {"alerted": False, "kicked": 0, "banned": False})
             if not flag["alerted"]:
                 flag["alerted"] = True
@@ -437,6 +444,9 @@ class ServerManager:
                     self.db.add_staff_alert(state.config.id, now(), f"Stacked loadout on {state.config.name}", text)
                 self.db.add_feed(state.config.id, "sus", text.replace("**", ""))
             if fia or flag["banned"] or identity in self.staff_ids() or self.db.active_ban(identity):
+                continue
+            # With RCON down the player list is empty, so everyone would look like they'd left and be banned.
+            if not state.online:
                 continue
             kick_on, ban_on, here = settings["loadout_kick"], settings["loadout_ban"], player is not None
             if ban_on and (not kick_on or not here or (flag["kicked"] and saved - flag["kicked"] >= STACK_RETRY)):
@@ -530,7 +540,11 @@ class ServerManager:
         Returns who's reached an automatic kick or ban."""
         settings = self.staff_alert_settings()
         state.detector.s.update(self.sus_settings(), mine_kills=settings["mines"])
+        before = state.detector.game
         flags = [f for event in events for f in state.detector.feed(event)]
+        if state.detector.game != before:
+            # The tallies start again each game, so last game's running lines mustn't swallow this game's first flag.
+            state.running.clear()
         actions = []
         for flag in flags + state.detector.flush(now()):
             self.suspicious(state, flag)
@@ -839,6 +853,8 @@ class ServerManager:
             raise RconError(state.error or "server is offline")
         try:
             return await state.client.command(text)
+        except RconReply:
+            raise
         except RconError as exc:
             self._offline(state, exc)
             raise
