@@ -402,7 +402,7 @@ def check_staffalerts(raw):
         except (TypeError, ValueError):
             value = 86400
         return value if value in AUTO_BAN_LENGTHS else 86400
-    for kind, low, what in (("tk", 2, "teamkills"), ("mines", doc["mines"], "AP mine kills")):
+    for kind, low, what in (("tk", 2, "teamkills"), ("mines", 2, "teammates killed by AP mines")):
         kick, ban = action(f"{kind}_kick", low, f"Kick at ({what})"), action(f"{kind}_ban", low, f"Ban at ({what})")
         if kick and ban and ban <= kick:
             problems.append(f"The ban for {what} has to be at more than the kick, or there'd be no kick first.")

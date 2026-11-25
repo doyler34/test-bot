@@ -106,6 +106,8 @@ class ServerState:
     recent: dict = field(default_factory=dict)
     running: dict = field(default_factory=dict)
     tk_burst: TkBurst = field(default_factory=TkBurst)
+    # Gunfire teamkills only, for the automatic kick and ban.
+    tk_gunfire: TkBurst = field(default_factory=TkBurst)
     punished: dict = field(default_factory=dict)
     # Stacked saved loadouts this game: {identity: {'alerted', 'kicked', 'banned'}}, cleared when the game changes.
     loadout_game: int = 0
@@ -553,8 +555,16 @@ class ServerManager:
             if flag.get("first") and settings["mines_on"]:
                 self.db.add_staff_alert(state.config.id, flag["at"], f"AP mine spam on {state.config.name}",
                                         flag["text"].replace(flag["name"], f"**{flag['name']}**", 1))
-            if flag["identity"] and now() - flag["at"] < AUTO_FRESH:
-                actions.append(("mines", flag["identity"], flag["name"], flag["count"], settings))
+        # The alert counts every mine kill, so staff see who's laying loads of them. The automatic kick
+        # and ban count only teammates killed, since mining the enemy is fair play.
+        for event in events:
+            key = state.detector.mine_owner(event)
+            if (event.get("relation") != "TK" or key is None or key.startswith("name:")
+                    or now() - event["at"] >= AUTO_FRESH):
+                continue
+            tally = state.detector.mines.get(key)
+            if tally:
+                actions.append(("mines", key, event.get("killer_label") or key, tally["tk"], settings))
         return actions
 
     def sus_settings(self) -> dict:
@@ -594,8 +604,13 @@ class ServerManager:
                         f"{victims}.")
                 self.db.add_staff_alert(state.config.id, burst["at"], f"Mass teamkill on {state.config.name}", text)
             killer = event.get("killer")
+            # A mortar or grenade landing on teammates can be an accident, so only gunfire teamkills
+            # count towards the automatic kick and ban; the alert still counts them all.
+            if event.get("damage") != "KINETIC":
+                continue
+            state.tk_gunfire.feed(event, 0, settings["seconds"], now())
             if acting and event["kind"] == "teamkill" and killer and now() - event["at"] < AUTO_FRESH:
-                actions.append(("tk", killer, event.get("killer_name") or killer, state.tk_burst.in_window(killer),
+                actions.append(("tk", killer, event.get("killer_name") or killer, state.tk_gunfire.in_window(killer),
                                 settings))
         return actions
 
@@ -631,7 +646,7 @@ class ServerManager:
             return
         state.punished[(kind, identity)] = (action, now())
         what = (f"teamkilling {count} players in {settings['seconds']} seconds" if kind == "tk"
-                else f"killing {count} players with AP mines this game")
+                else f"killing {count} teammates with AP mines this game")
         if action == "ban":
             seconds = settings[f"{kind}_ban_length"]
             reason = "Mass teamkilling (automatic ban)" if kind == "tk" else "AP mine spam (automatic ban)"

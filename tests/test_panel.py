@@ -821,8 +821,9 @@ class AutoPunishTests(unittest.IsolatedAsyncioTestCase):
     def settings(self, **extra):
         self.db.publish_discord_doc("staffalerts", json.dumps({"on": True, "count": 3, "seconds": 60, **extra}), "gaz")
 
-    async def teamkill(self, n):
-        event = {"kind": "teamkill", "at": now(), "killer": BUFORD, "killer_name": "Buford", "victim_name": f"V{n}"}
+    async def teamkill(self, n, damage="KINETIC"):
+        event = {"kind": "teamkill", "at": now(), "killer": BUFORD, "killer_name": "Buford", "victim_name": f"V{n}",
+                 "damage": damage}
         for action in self.manager.mass_teamkills(self.state, [event]):
             await self.manager.auto_punish(self.state, *action)
 
@@ -933,7 +934,35 @@ class AutoPunishTests(unittest.IsolatedAsyncioTestCase):
             await self.manager.auto_punish(self.state, *action)
         ban = self.db.active_ban(BUFORD)
         self.assertEqual((ban["reason"], ban["expires_at"]), ("AP mine spam (automatic ban)", None))
-        self.assertIn("banned permanently for killing 4 players with AP mines", self.db.staff_alerts()[0]["text"])
+        self.assertIn("banned permanently for killing 4 teammates with AP mines", self.db.staff_alerts()[0]["text"])
+
+    def mine_kill(self, n, relation):
+        return {"kind": "kill", "at": now() + n, "relation": relation, "killer": BUFORD, "killer_name": "Buford",
+                "killer_label": "Buford", "victim": person(n), "victim_name": f"V{n}", "damage": "EXPLOSIVE",
+                "zone": "LFoot", "distance": 300.0}
+
+    async def test_mines_on_enemies_are_alerted_but_never_punished(self):
+        self.settings(mines=3, mines_kick=2, mines_ban=4)
+        events = [self.mine_kill(n, "ENEMY") for n in range(6)]
+        for action in self.manager.check(self.state, events):
+            await self.manager.auto_punish(self.state, *action)
+        self.assertEqual((self.kicked, self.db.active_ban(BUFORD)), ([], None))
+        self.assertEqual([a["title"] for a in self.db.staff_alerts()], ["AP mine spam on Server 1"])
+
+    async def test_mine_kick_counts_teammates_even_below_the_alert(self):
+        self.settings(mines=10, mines_kick=2)
+        events = [self.mine_kill(0, "ENEMY"), self.mine_kill(1, "TK"), self.mine_kill(2, "TK")]
+        for action in self.manager.check(self.state, events):
+            await self.manager.auto_punish(self.state, *action)
+        self.assertEqual(self.kicked, ["7"])
+        self.assertIn("was kicked for killing 2 teammates with AP mines", self.db.staff_alerts()[0]["text"])
+
+    async def test_explosive_teamkills_are_alerted_but_never_punished(self):
+        self.settings(tk_kick=2, tk_ban=3)
+        for n in range(4):
+            await self.teamkill(n, damage="EXPLOSIVE")
+        self.assertEqual((self.kicked, self.db.active_ban(BUFORD)), ([], None))
+        self.assertEqual([a["title"] for a in self.db.staff_alerts()], ["Mass teamkill on Server 1"])
 
 
 class IncidentTests(unittest.TestCase):

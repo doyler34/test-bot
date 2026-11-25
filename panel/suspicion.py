@@ -178,15 +178,21 @@ class Detector:
         # Mines are counted before the distance filter: their owner is often kilometres away.
         return self._mine(e) + self._kill_checks(e)
 
+    def mine_owner(self, e):
+        """Whose AP mine this kill was, as the key their tally is kept under; None if it wasn't a mine kill."""
+        owner = e.get("killer_label")
+        if e.get("zone") not in FEET or e.get("damage") not in EXPLOSIVE:
+            return None
+        if not owner or e.get("by_ai") or owner == e.get("victim_name"):
+            return None
+        return e.get("killer") or self.names.get(owner) or f"name:{owner}"
+
     def _mine(self, e):
         """Explosive kills to the feet by one player, all game: most likely AP mines.
         Once it flags, one running line keeps the count and who they killed."""
-        limit, owner = self.s["mine_kills"], e.get("killer_label")
-        if not limit or e.get("zone") not in FEET or e.get("damage") not in EXPLOSIVE:
+        limit, owner, key = self.s["mine_kills"], e.get("killer_label"), self.mine_owner(e)
+        if not limit or key is None:
             return []
-        if not owner or e.get("by_ai") or owner == e.get("victim_name"):
-            return []
-        key = e.get("killer") or self.names.get(owner) or f"name:{owner}"
         tally = self.mines.setdefault(key, {"victims": Counter(), "tk": 0, "enemy": 0, "after": 0, "flagged": False})
         tally["victims"][e.get("victim_name") or "someone"] += 1
         side = {"TK": "tk", "ENEMY": "enemy"}.get(e.get("relation"), "after")
