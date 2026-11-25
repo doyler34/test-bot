@@ -74,7 +74,11 @@ if (form && form.dataset.kind === "staffalerts") {
       loadout_on: field("loadout_on").checked, loadout_scopes: field("loadout_scopes").value,
       loadout_morphine: field("loadout_morphine").value, loadout_ping_role: field("loadout_ping_role").value,
       loadout_kick: field("loadout_kick").checked, loadout_ban: field("loadout_ban").checked,
-      loadout_ban_length: field("loadout_ban_length").value });
+      loadout_ban_length: field("loadout_ban_length").value,
+      ...Object.fromEntries(["xp", "supply", "grief", "vehicle", "ownmines", "teleport", "evasion"].flatMap((kind) => [
+        [`${kind}_on`, field(`${kind}_on`).checked], [`${kind}_ping_role`, field(`${kind}_ping_role`).value]])),
+      ...Object.fromEntries(["xp_gain", "supply_gain", "grief_count", "vehicle_roadkills", "vehicle_wrecks",
+        "vehicle_spawns", "ownmines", "teleport_km"].map((key) => [key, field(key).value])) });
   });
 }
 if (form && form.dataset.kind === "feedback") {

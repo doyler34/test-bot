@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
 from . import alerts as alert_colours, archive, attacks, campaign_save, carried, loadouts, memory, monitor, netcheck
-from . import save_history
+from . import save_checks, save_history
 from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
@@ -113,6 +113,13 @@ class ServerState:
     # Stacked saved loadouts this game: {identity: {'alerted', 'kicked', 'banned'}}, cleared when the game changes.
     loadout_game: int = 0
     loadout_flags: dict = field(default_factory=dict)
+    # Live kills for the autosave checks, (at, killer identity, kind, damage), the last 12 hours.
+    kill_log: list = field(default_factory=list)
+    # Autosave check alerts already sent this game, and the vehicles wrecked at their own main base.
+    save_game: int = 0
+    save_alerted: set = field(default_factory=set)
+    home_wrecks: list = field(default_factory=list)
+    evasion_alerted: dict = field(default_factory=dict)
     admins: list = field(default_factory=list)
     # Since the last Monitor reading: disconnects by reason, and script errors.
     disconnects: Counter = field(default_factory=Counter)
@@ -139,6 +146,7 @@ ATTACK_LOGINS = 10
 ATTACK_WINDOW = 600
 # A saved game log is deleted after this long, as kills are; the game stays listed with its numbers.
 ARCHIVE_DAYS = 180
+KILL_LOG_SECONDS = 12 * 3600
 
 
 class ServerManager:
@@ -410,7 +418,36 @@ class ServerManager:
         read = await asyncio.to_thread(save_history.read, found[0])
         if read is None:
             return
-        self.db.add_save(state.config.id, found[2] or found[1], found[1], *save_history.snapshot(read))
+        game = found[2] or found[1]
+        loose, snapshot = save_history.snapshot(read)
+        before = self.db.save_state(state.config.id, game, last["saved"]) if last and last["game"] == game else None
+        self.db.add_save(state.config.id, game, found[1], loose, snapshot)
+        if before:
+            self.save_checks(state, game, last["saved"], found[1], before, snapshot)
+
+    def save_checks(self, state: ServerState, game: int, was: int, saved: int, before: dict, after: dict):
+        """The exploit checks over two autosaves in a row. Each finding goes to the staff channel and the
+        live feed once a game; none of them kicks or bans."""
+        settings = self.staff_alert_settings()
+        if state.save_game != game:
+            state.save_game, state.save_alerted, state.home_wrecks = game, set(), []
+        kills = Counter(k for at, k, kind, _ in state.kill_log if was - 30 <= at <= saved + 30)
+        roadkills = Counter(k for at, k, kind, damage in state.kill_log
+                            if kind == "teamkill" and damage == "COLLISION" and at >= game)
+        online = {p["identity"]: p["name"] for p in state.players if p.get("identity")}
+
+        def name(identity):
+            known = None if identity in online else self.db.player(identity)
+            return online.get(identity) or (known["name"] if known else identity[:8])
+        found = save_checks.run(before, after, saved - was, settings, name, kills,
+                                self.db.game_vehicles(state.config.id, game) if settings["vehicle_on"] else {},
+                                roadkills, state.home_wrecks)
+        for title, once, text in found:
+            if once in state.save_alerted:
+                continue
+            state.save_alerted.add(once)
+            self.db.add_staff_alert(state.config.id, saved, f"{title} on {state.config.name}", text)
+            self.db.add_feed(state.config.id, "sus", text.replace("**", ""))
 
     @staticmethod
     def spawn_kit(person, character_prefab, names):
@@ -561,6 +598,9 @@ class ServerManager:
         Returns who's reached an automatic kick or ban."""
         settings = self.staff_alert_settings()
         state.detector.s.update(self.sus_settings(), mine_kills=settings["mines"])
+        state.kill_log = [k for k in state.kill_log if now() - k[0] < KILL_LOG_SECONDS]
+        state.kill_log += [(e["at"], e["killer"], e["kind"], e.get("damage") or "") for e in events
+                           if e.get("kind") in ("kill", "teamkill") and e.get("killer")]
         before = state.detector.game
         flags = [f for event in events for f in state.detector.feed(event)]
         if state.detector.game != before:
@@ -943,7 +983,10 @@ class ServerManager:
     async def enforce_ip_bans(self, state: ServerState):
         """Kick banned accounts that are still connected, and ban any other
         account that joins from an IP-banned address."""
+        evasion = self.staff_alert_settings()["evasion_on"] if state.players else False
         for player in state.players:
+            if evasion and player["identity"]:
+                self.ban_evasion(state, player["identity"], player["name"])
             identity = player["identity"]
             if not identity or now() - self._ip_kicked.get(identity, 0) < 30:
                 continue
@@ -959,6 +1002,21 @@ class ServerManager:
                             f"still connected while banned ({own['reason']})")
                 continue
             await self.ban_for_banned_ip(state, identity, player["name"])
+
+    def ban_evasion(self, state: ServerState, identity: str, name: str):
+        """A staff alert, at most once a day per account, when someone joins with the Steam ID or BattlEye GUID
+        of an account that's banned. Alert only: it doesn't ban them."""
+        if now() - state.evasion_alerted.get(identity, 0) < 86400 or self.db.active_ban(identity):
+            return
+        hit = self.db.id_ban_hit(identity)
+        if hit is None:
+            return
+        state.evasion_alerted[identity] = now()
+        source = hit["name"] or hit["identity"]
+        text = (f"**{name}** joined with the same {hit['shared']} as **{source}**, who is banned"
+                f" ({hit['reason'] or 'no reason given'}).")
+        self.db.add_staff_alert(state.config.id, now(), f"Ban evasion on {state.config.name}", text)
+        self.db.add_feed(state.config.id, "sus", text.replace("**", ""))
 
     async def ban_for_banned_ip(self, state: ServerState, identity: str, name: str):
         """Ban an account that has connected from an IP-banned address, and kick it if it's on."""

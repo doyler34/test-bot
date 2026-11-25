@@ -74,6 +74,71 @@
     </div>
     <p class="muted">Kick only: kicked each time a save still shows the loadout (at most every 5 minutes). Ban only: banned straight away. Both: kicked the first time, and banned if a save 5 minutes or more after the kick still has it. Someone who has already left can't be kicked, so with the ban on they're banned. FIA players only get the alert, never a kick or ban, since they pick kit up off the field; check whether they hand it in for supplies. Admins are never kicked or banned automatically. Each one is posted in the staff channel, the live feed and the audit log.</p>
   </section>
+  <section class="card">
+    <h2>Exploit checks</h2>
+    <p class="muted">After each autosave the panel compares it with the one before. Each check posts in the staff channel and the live feed once a game per player, storage or base. They only alert for now: nothing here kicks or bans, so check before acting. Saves come anywhere from under a minute to ten minutes apart.</p>
+    <h3>XP farming</h3>
+    <p class="muted">A player whose game XP goes up by at least this much between two autosaves without a single kill. Capturing a base gives a lot at once, so keep this high.</p>
+    <label class="check"><input type="checkbox" name="xp_on" {% if doc.xp_on %}checked{% endif %}> Post XP farming alerts</label>
+    <div class="grid">
+      <label>Game XP between two saves <input name="xp_gain" type="number" min="100" max="100000" value="{{ doc.xp_gain }}" inputmode="numeric"></label>
+      <label class="span">Role to ping <span class="muted">(optional; blank pings nobody)</span>
+        <input name="xp_ping_role" value="{{ doc.xp_ping_role }}" maxlength="100" placeholder="Admin"></label>
+    </div>
+    <h3>Supply jumps and transfers</h3>
+    <p class="muted">One storage gaining at least this many supplies between two autosaves. A jump is when the supplies on the map went up by that much overall, so they came from nowhere. A transfer is when another storage lost about the same amount and no truck's load changed.</p>
+    <label class="check"><input type="checkbox" name="supply_on" {% if doc.supply_on %}checked{% endif %}> Post supply alerts</label>
+    <div class="grid">
+      <label>Supplies between two saves <input name="supply_gain" type="number" min="100" max="100000" value="{{ doc.supply_gain }}" inputmode="numeric"></label>
+      <label class="span">Role to ping <span class="muted">(optional; blank pings nobody)</span>
+        <input name="supply_ping_role" value="{{ doc.supply_ping_role }}" maxlength="100" placeholder="Admin"></label>
+    </div>
+    <p class="muted">The map's own depots don't have a position in the save, so those alerts can't say which base.</p>
+    <h3>Base griefing</h3>
+    <p class="muted">At least this many structures built by their own side disappearing between two autosaves with the same player nearby (within 75 m). The builder taking down their own doesn't count.</p>
+    <label class="check"><input type="checkbox" name="grief_on" {% if doc.grief_on %}checked{% endif %}> Post base griefing alerts</label>
+    <div class="grid">
+      <label>Structures removed <input name="grief_count" type="number" min="1" max="50" value="{{ doc.grief_count }}" inputmode="numeric"></label>
+      <label class="span">Role to ping <span class="muted">(optional; blank pings nobody)</span>
+        <input name="grief_ping_role" value="{{ doc.grief_ping_role }}" maxlength="100" placeholder="Admin"></label>
+    </div>
+    <p class="muted">Enemies blowing things up won't trigger it, since they're on the other side. Check the GM log for who deleted them.</p>
+    <h3>Vehicle griefing</h3>
+    <p class="muted">A player running over this many teammates in one game, vehicles wrecked at their own side's main base, or one player taking out this many vehicles in a game.</p>
+    <label class="check"><input type="checkbox" name="vehicle_on" {% if doc.vehicle_on %}checked{% endif %}> Post vehicle griefing alerts</label>
+    <div class="grid">
+      <label>Teammates run over <input name="vehicle_roadkills" type="number" min="1" max="50" value="{{ doc.vehicle_roadkills }}" inputmode="numeric"></label>
+      <label>Wrecks at a main base <input name="vehicle_wrecks" type="number" min="1" max="50" value="{{ doc.vehicle_wrecks }}" inputmode="numeric"></label>
+      <label>Vehicles taken out <input name="vehicle_spawns" type="number" min="2" max="100" value="{{ doc.vehicle_spawns }}" inputmode="numeric"></label>
+      <label class="span">Role to ping <span class="muted">(optional; blank pings nobody)</span>
+        <input name="vehicle_ping_role" value="{{ doc.vehicle_ping_role }}" maxlength="100" placeholder="Admin"></label>
+    </div>
+    <h3>Mines in own base</h3>
+    <p class="muted">At least this many mines of a side inside a base that side holds (within 75 m of its HQ), where its own players walk. Mines further out may be defending it.</p>
+    <label class="check"><input type="checkbox" name="ownmines_on" {% if doc.ownmines_on %}checked{% endif %}> Post own-base mine alerts</label>
+    <div class="grid">
+      <label>Mines in one base <input name="ownmines" type="number" min="1" max="50" value="{{ doc.ownmines }}" inputmode="numeric"></label>
+      <label class="span">Role to ping <span class="muted">(optional; blank pings nobody)</span>
+        <input name="ownmines_ping_role" value="{{ doc.ownmines_ping_role }}" maxlength="100" placeholder="Admin"></label>
+    </div>
+    <p class="muted">The save doesn't say who placed a mine, so this names the base, not a player.</p>
+    <h3>Teleporting and under the map</h3>
+    <p class="muted">A player on foot in both autosaves, on the same life, who moved at least this far between them, or a player on foot below sea level.</p>
+    <label class="check"><input type="checkbox" name="teleport_on" {% if doc.teleport_on %}checked{% endif %}> Post teleport and under-the-map alerts</label>
+    <div class="grid">
+      <label>Kilometres between two saves <input name="teleport_km" type="number" min="1" max="15" value="{{ doc.teleport_km }}" inputmode="numeric"></label>
+      <label class="span">Role to ping <span class="muted">(optional; blank pings nobody)</span>
+        <input name="teleport_ping_role" value="{{ doc.teleport_ping_role }}" maxlength="100" placeholder="Admin"></label>
+    </div>
+    <p class="muted">A vehicle ride in between can look like a teleport, so this one needs checking.</p>
+    <h3>Ban evasion</h3>
+    <p class="muted">Someone joining with the same Steam ID or BattlEye GUID as an account that's banned. Same-IP accounts are already banned automatically.</p>
+    <label class="check"><input type="checkbox" name="evasion_on" {% if doc.evasion_on %}checked{% endif %}> Post ban evasion alerts</label>
+    <div class="grid">
+      <label class="span">Role to ping <span class="muted">(optional; blank pings nobody)</span>
+        <input name="evasion_ping_role" value="{{ doc.evasion_ping_role }}" maxlength="100" placeholder="Admin"></label>
+    </div>
+  </section>
   {% if recent %}
   <section class="card">
     <h2>Recent alerts</h2>

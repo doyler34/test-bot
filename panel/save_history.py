@@ -2,7 +2,7 @@
 
 From one save: every player (side, game XP, where they are with height, alive or a body, the seat they're in),
 every base (side, and where its HQ stands), every supply storage, everything a player built or brought out
-(structures and vehicles, with whoever placed it) and the mines.
+(structures and vehicles, with whoever placed it), the supplies trucks carry, and the mines.
 
 A base record holds its side and the ID of its HQ building; the building's record has the position. Supply
 storages built during the game (crates) have a position too, so their supplies go to the nearest base. The map's
@@ -12,8 +12,8 @@ import struct
 from pathlib import Path
 
 from . import mobs
-from .save_world import (Bad, Bits, components, entity, exactly, faction, joined, records, split,
-                         character_record, player_record, prefab_name)
+from .save_world import (Bad, Bits, components, entity, exactly, faction, hit_zones, joined, records, side_of,
+                         split, character_record, player_record, prefab_name)
 
 NO_ONE = "00000000-0000-0000-0000-000000000000"
 # A crate further than this from every base HQ isn't counted towards one.
@@ -54,12 +54,12 @@ def author(r):
 
 def military_base(r):
     r.int()
-    r.flag()
+    hq = bool(r.flag())
     building = r.uuid()
     r.int()
     r.flag()
     r.text()
-    return {"building": building}
+    return {"building": building, "hq": hq}
 
 
 def parse(value, parts, readers):
@@ -94,7 +94,7 @@ def read(path):
         data = Path(path).read_bytes()
     except OSError:
         return None
-    players, bodies, bases, storages, builds, mines, where = [], {}, [], [], [], [], {}
+    players, bodies, bases, storages, builds, mines, cargo, where = [], {}, [], [], [], [], [], {}
     try:
         for section, record in records(data):
             if section not in WANTED:
@@ -109,18 +109,25 @@ def read(path):
             elif section == "MilitaryBase":
                 got = parse(value, parts, (faction, military_base))
                 if got.get("building"):
-                    bases.append({"id": rid, "faction": got.get("faction") or "", "building": got["building"]})
+                    bases.append({"id": rid, "faction": got.get("faction") or "", "building": got["building"],
+                                  "hq": got["hq"]})
             elif section == "Storage":
                 got = parse(value, parts, (supplies,))
                 if "supplies" in got:
                     storages.append({"id": rid, **spot(got.get("pos")), "supplies": round(got["supplies"])})
             elif section in BUILT:
-                got = parse(value, parts, (author,))
+                got = parse(value, parts, (author, hit_zones, supplies) if section == "Vehicle" else (author,))
                 if got.get("pos"):
                     where[rid] = got["pos"]
+                name = short(got.get("prefab"))
+                if section == "Vehicle" and got.get("supplies"):
+                    cargo.append({"id": rid, "supplies": round(got["supplies"])})
                 if got.get("author") and got["author"] != NO_ONE:
-                    builds.append({"id": rid, "kind": BUILT[section], "name": short(got.get("prefab")),
-                                   "author": got["author"], **spot(got.get("pos"))})
+                    build = {"id": rid, "kind": BUILT[section], "name": name, "author": got["author"], **spot(got.get("pos"))}
+                    if section == "Vehicle":
+                        build.update(faction=side_of(name) if name else "",
+                                     wreck=(got.get("zones") or {}).get("Hull", 1) <= 0)
+                    builds.append(build)
             elif section == "Item":
                 got = parse(value, parts, ())
                 name = short(got.get("prefab"))
@@ -131,7 +138,8 @@ def read(path):
     for b in bases:
         pos = where.get(b.pop("building"))
         b["x"], b["z"] = (round(pos[0], 1), round(pos[2], 1)) if pos else (None, None)
-    return {"players": joined(players, bodies), "bases": bases, "storages": storages, "builds": builds, "mines": mines}
+    return {"players": joined(players, bodies), "bases": bases, "storages": storages, "builds": builds, "mines": mines,
+            "cargo": cargo}
 
 
 def base_names(bases):
@@ -155,7 +163,7 @@ def snapshot(read):
     bases = [{**b, "name": names.get(b["id"], ""), "supplies": totals[b["id"]]} for b in read["bases"]]
     return loose, {"player": keyed(read["players"], "identity"), "base": keyed(bases, "id"),
                    "storage": keyed(read["storages"], "id"), "build": keyed(read["builds"], "id"),
-                   "mine": keyed(read["mines"], "id")}
+                   "mine": keyed(read["mines"], "id"), "cargo": keyed(read.get("cargo", []), "id")}
 
 
 def base_supplies(bases, storages):

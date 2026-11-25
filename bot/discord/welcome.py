@@ -348,9 +348,8 @@ class Welcome:
             return
         settings = (self.docs.get("staffalerts") or (welcome_doc.default_staffalerts(), 0))[0]
         for alert_id, server, at, title, text in rows:
-            # AP mine and stacked loadout alerts can each ping a different role from mass teamkills.
-            wanted = settings.get("mines_ping_role" if title.startswith("AP mine spam")
-                                  else "loadout_ping_role" if title.startswith("Stacked loadout") else "ping_role", "")
+            # Each part of the Staff alerts page can ping its own role.
+            wanted = welcome_doc.alert_role(settings, title)
             role = by_name(guild, wanted) if wanted else None
             embed = discord.Embed(title=f"🚨 {title}", description=text, colour=0xD0574C)
             embed.set_footer(text="OYB Control · staff alert")

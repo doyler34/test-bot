@@ -129,8 +129,9 @@ class Reading(unittest.TestCase):
     def test_reads_everything_the_history_keeps(self):
         got = self.read(a_save())
         self.assertEqual(got["players"], [{"identity": PLAYER, "faction": "US", "xp": 7627, "x": 3796.3, "y": 120.5,
-                                           "z": 8669.6, "dead": False, "kind": "", "vehicle": TRUCK, "seat": "Passenger_r01"}])
-        self.assertEqual(got["bases"], [{"id": BASE, "faction": "US", "x": 4980.0, "z": 11947.7}])
+                                           "z": 8669.6, "dead": False, "kind": "", "vehicle": TRUCK, "seat": "Passenger_r01",
+                                           "body": BODY}])
+        self.assertEqual(got["bases"], [{"id": BASE, "faction": "US", "hq": False, "x": 4980.0, "z": 11947.7}])
         self.assertEqual([(s["id"], s["x"], s["supplies"]) for s in got["storages"]], [(DEPOT, None, 590), (CRATE, 4990.0, 150)])
         self.assertEqual([(b["id"], b["kind"], b["author"]) for b in got["builds"]],
                          [(TRUCK, "vehicle", OTHER), (BUNKER, "structure", PLAYER)])

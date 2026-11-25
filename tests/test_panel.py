@@ -2343,10 +2343,10 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(doc, {"on": True, "count": 4, "seconds": 90, "ping_role": "Admin", "mines_on": False,
                                "mines": 8, "mines_ping_role": "Ticket Manager", "tk_kick": 5, "tk_ban": 8,
                                "tk_ban_length": 0, "mines_kick": 0, "mines_ban": 10, "mines_ban_length": 604800,
-                               # Not sent by this form, so the stacked loadout part keeps its defaults.
+                               # Not sent by this form, so the stacked loadout and exploit parts keep their defaults.
                                "loadout_on": True, "loadout_scopes": 5, "loadout_morphine": 20,
                                "loadout_ping_role": "", "loadout_kick": False, "loadout_ban": False,
-                               "loadout_ban_length": 86400})
+                               "loadout_ban_length": 86400, **welcome_doc.EXPLOIT_DEFAULTS})
         page = await (await self.client.get("/discord/staffalerts")).text()
         self.assertIn("In use now", page)
         self.assertNotIn("hasn't reported in", page.split("In use now")[0].split("dc-status")[-1])
@@ -2354,6 +2354,8 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('name="tk_kick_on" checked', page)
         self.assertIn('name="tk_ban_on" checked', page)
         self.assertNotIn('name="mines_kick_on" checked', page)
+        self.assertIn('name="xp_gain" type="number" min="100" max="100000" value="1000"', page)
+        self.assertIn('name="evasion_on" checked', page)
         self.assertIn('name="mines_ban_on" checked', page)
         self.assertIn('<option value="0" selected>Permanent</option>', page)
         await self.client.post("/discord/staffalerts", data={"csrf": token, "action": "publish",

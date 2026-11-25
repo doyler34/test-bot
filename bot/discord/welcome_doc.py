@@ -362,7 +362,35 @@ def default_staffalerts():
     return {"on": True, "count": 3, "seconds": 60, "ping_role": "", "mines_on": True, "mines": 5, "mines_ping_role": "",
             "tk_kick": 0, "tk_ban": 0, "tk_ban_length": 86400, "mines_kick": 0, "mines_ban": 0, "mines_ban_length": 86400,
             "loadout_on": True, "loadout_scopes": 5, "loadout_morphine": 20, "loadout_ping_role": "",
-            "loadout_kick": False, "loadout_ban": False, "loadout_ban_length": 86400}
+            "loadout_kick": False, "loadout_ban": False, "loadout_ban_length": 86400, **EXPLOIT_DEFAULTS}
+
+
+# The autosave exploit checks: each has a switch, its limits and a role to ping. They only alert for now.
+EXPLOIT_DEFAULTS = {"xp_on": True, "xp_gain": 1000, "xp_ping_role": "",
+                    "supply_on": True, "supply_gain": 1500, "supply_ping_role": "",
+                    "grief_on": True, "grief_count": 3, "grief_ping_role": "",
+                    "vehicle_on": True, "vehicle_roadkills": 3, "vehicle_wrecks": 3, "vehicle_spawns": 10,
+                    "vehicle_ping_role": "",
+                    "ownmines_on": True, "ownmines": 3, "ownmines_ping_role": "",
+                    "teleport_on": True, "teleport_km": 4, "teleport_ping_role": "",
+                    "evasion_on": True, "evasion_ping_role": ""}
+EXPLOIT_LIMITS = (("xp_gain", 100, 100000, "Game XP"), ("supply_gain", 100, 100000, "Supplies"),
+                  ("grief_count", 1, 50, "Structures"), ("vehicle_roadkills", 1, 50, "Teammates run over"),
+                  ("vehicle_wrecks", 1, 50, "Wrecks at a main base"), ("vehicle_spawns", 2, 100, "Vehicles taken out"),
+                  ("ownmines", 1, 50, "Mines in a base"), ("teleport_km", 1, 15, "Distance"))
+# Which part of the page an alert belongs to, by the start of its title, for the role it pings.
+ALERT_ROLES = (("AP mine spam", "mines_ping_role"), ("Stacked loadout", "loadout_ping_role"),
+               ("XP farming", "xp_ping_role"), ("Supply jump", "supply_ping_role"),
+               ("Supply transfer", "supply_ping_role"), ("Base griefing", "grief_ping_role"),
+               ("Vehicle griefing", "vehicle_ping_role"), ("Mines in own base", "ownmines_ping_role"),
+               ("Teleport", "teleport_ping_role"), ("Under the map", "teleport_ping_role"),
+               ("Ban evasion", "evasion_ping_role"))
+
+
+def alert_role(settings, title):
+    """The role an alert with this title pings, by the part of the page it belongs to; blank pings nobody."""
+    key = next((key for start, key in ALERT_ROLES if title.startswith(start)), "ping_role")
+    return settings.get(key, "")
 
 
 def check_staffalerts(raw):
@@ -415,6 +443,12 @@ def check_staffalerts(raw):
                loadout_ping_role=str(raw.get("loadout_ping_role", "") or "").strip()[:100],
                loadout_kick=bool(raw.get("loadout_kick")), loadout_ban=bool(raw.get("loadout_ban")),
                loadout_ban_length=length("loadout_ban_length"))
+    # Pages saved before the exploit checks existed leave them on with these limits.
+    for kind in ("xp", "supply", "grief", "vehicle", "ownmines", "teleport", "evasion"):
+        doc[f"{kind}_on"] = bool(raw.get(f"{kind}_on", True))
+        doc[f"{kind}_ping_role"] = str(raw.get(f"{kind}_ping_role", "") or "").strip()[:100]
+    for key, low, high, label in EXPLOIT_LIMITS:
+        doc[key] = number(key, low, high, label)
     return doc, problems
 
 

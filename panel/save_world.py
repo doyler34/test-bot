@@ -210,7 +210,7 @@ def read(path):
                     bodies[rid] = body
     except (struct.error, IndexError, Bad, ValueError):
         return None
-    return [{k: v for k, v in p.items() if k not in ("y", "vehicle", "seat")} for p in joined(players, bodies)]
+    return [{k: v for k, v in p.items() if k not in ("y", "vehicle", "seat", "body")} for p in joined(players, bodies)]
 
 
 def player_record(rid, value, parts):
@@ -258,7 +258,8 @@ def joined(players, bodies):
     """Each player with the character they're playing (or their last body): where, alive, and any seat."""
     out = []
     for p in players:
-        body = bodies.get(p.get("current")) or bodies.get(p.get("body"))
+        body_id = p.get("current") if p.get("current") in bodies else p.get("body")
+        body = bodies.get(body_id)
         if not body:
             continue
         x, y, z = body["pos"]
@@ -266,7 +267,7 @@ def joined(players, bodies):
         out.append({"identity": p["identity"], "faction": p.get("faction") or body.get("faction") or "",
                     "xp": p.get("xp"), "x": round(x, 1), "y": round(y, 1), "z": round(z, 1),
                     "dead": zones.get("Health", 1) <= 0, "kind": prefab_name(body.get("prefab", "")).rsplit("/", 1)[-1][:-3],
-                    "vehicle": body.get("vehicle"), "seat": body.get("seat")})
+                    "vehicle": body.get("vehicle"), "seat": body.get("seat"), "body": body_id})
     return out
 
 

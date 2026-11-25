@@ -629,6 +629,19 @@ class PanelDB:
             "SELECT i.ip FROM ip_bans i JOIN bans b ON b.id = i.ban_id WHERE b.removed_at IS NULL"
             " AND (b.expires_at IS NULL OR b.expires_at > ?)", now())}
 
+    def id_ban_hit(self, identity: str):
+        """An active ban on another account that shares this one's Steam ID or BattlEye GUID, with which it shares."""
+        t = now()
+        for shared, table, column in (("Steam ID", "platforms", "steam_id"), ("BattlEye GUID", "connections", "guid")):
+            row = self.one(
+                f"SELECT b.*, '{shared}' AS shared FROM {table} mine JOIN {table} other ON other.{column} = mine.{column}"
+                f" AND other.identity != mine.identity JOIN bans b ON b.identity = other.identity"
+                f" WHERE mine.identity = ? AND mine.{column} != '' AND b.removed_at IS NULL"
+                f" AND (b.expires_at IS NULL OR b.expires_at > ?) ORDER BY b.id DESC LIMIT 1", identity, t)
+            if row:
+                return row
+        return None
+
     def ip_ban_hit(self, identity: str, within=12 * 3600):
         """Another player's active IP ban on an address this identity connected from recently."""
         t = now()
@@ -1151,6 +1164,16 @@ class PanelDB:
             self.db.execute("INSERT OR REPLACE INTO save_points VALUES (?, ?, ?, ?)", (server, game, saved, loose_supplies))
             self.db.executemany("INSERT OR REPLACE INTO save_rows VALUES (?, ?, ?, ?, ?, ?)", rows)
         return len(rows)
+
+    def game_vehicles(self, server, game):
+        """{player: {vehicle id}} for every vehicle a player took out this game, from the kept autosaves."""
+        out = {}
+        for r in self.all("SELECT DISTINCT key, data FROM save_rows WHERE server = ? AND game = ? AND kind = 'build'"
+                          " AND data LIKE '%\"kind\": \"vehicle\"%'", server, game):
+            author = json.loads(r["data"]).get("author")
+            if author:
+                out.setdefault(author, set()).add(r["key"])
+        return out
 
     def prune_save_history(self, days=30):
         with self.db:
