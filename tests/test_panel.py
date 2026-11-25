@@ -2816,6 +2816,20 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         page = await (await self.client.get("/server/server-1")).text()
         self.assertIn('data-tab-panel="health"', page)
 
+    async def test_the_server_page_shows_base_supplies_and_game_xp_from_the_autosave(self):
+        await self.login("boss", "boss-password")
+        self.assertIn("for this server to read its autosaves", await (await self.client.get("/server/server-1/save.part")).text())
+        self.db.add_save("server-1", 100, now(), 590, {
+            "base": {"b1": {"name": "Figari", "faction": "US", "x": 1.0, "z": 1.0, "supplies": 150}},
+            "player": {HAVOC: {"faction": "USSR", "xp": 900, "dead": False, "seat": "Commander"},
+                       BUFORD: {"faction": "US", "xp": 4000, "dead": True, "seat": None}}})
+        html = await (await self.client.get("/server/server-1/save.part")).text()
+        self.assertIn("<td>Figari</td><td>US</td><td class=\"num\">150</td>", html)
+        self.assertIn("Not at a base: 590 supplies", html)
+        self.assertLess(html.index(BUFORD), html.index(HAVOC))
+        self.assertIn("In a vehicle (Commander)", html)
+        self.assertIn("This game, from the autosave", await (await self.client.get("/server/server-1")).text())
+
     async def test_the_public_site_has_a_server_network_and_a_page_per_server(self):
         self.config.site_hosts = ["oybgaming.com"]
         host = {"Host": "oybgaming.com"}

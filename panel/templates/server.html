@@ -79,6 +79,13 @@
     </section>
 
     <section class="card pane wide" data-expand>
+      <h2>This game, from the autosave</h2>
+      <div class="body" data-refresh="/server/{{ s.id }}/save.part" data-every="60000">
+      {% include "_save.html" %}
+      </div>
+    </section>
+
+    <section class="card pane wide" data-expand>
       <h2>Recent actions here</h2>
       <div class="body">
       {% include "_audit_rows.html" %}

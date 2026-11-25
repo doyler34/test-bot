@@ -555,7 +555,7 @@ async def server_page(request):
     recent = db.audit(server=state.config.id, limit=15)
     overview = server_overview(request, state)
     return render(request, "server.html", s=server_view(state), card=control_card(state, request.app[PICTURES], card_details(db)), recent=recent,
-                  health=health_data(db, state), alts=alt_flags(request, state),
+                  health=health_data(db, state), alts=alt_flags(request, state), save=save_view(state, db),
                   played=played(request, [p["identity"] for p in state.players]), amp=bool(request.app[AMP]),
                   gb=GB, csp=MAP_CSP, feed=overview["live_feed"], **overview, **history(request, state))
 
@@ -1123,6 +1123,31 @@ async def monitor_page(request):
 async def summary_part(request):
     state = server_or_404(request, request.match_info["id"])
     return render(request, "_summary.html", s=server_view(state), health=health_data(request.app[DB], state))
+
+
+def save_view(state, db):
+    """The current game as its newest kept autosave has it: bases with their supplies, players by game XP.
+    None when no save of this game has been kept."""
+    point = db.last_save_point(state.config.id)
+    start = game_start(state)
+    # A save left from the game before this one doesn't count.
+    if not point or (start and point["saved"] < start - 60):
+        return None
+    got = db.save_state(state.config.id, point["game"], point["saved"])
+    online = {p["identity"]: p["name"] for p in state.players if p.get("identity")} if state.online else {}
+    players = []
+    for identity, p in got.get("player", {}).items():
+        known = None if identity in online else db.player(identity)
+        players.append({**p, "identity": identity, "online": identity in online,
+                        "name": online.get(identity) or (known["name"] if known else "")})
+    players.sort(key=lambda p: (-(p["xp"] or 0), p["name"].lower()))
+    bases = sorted(got.get("base", {}).values(), key=lambda b: (not b["name"], b["name"]))
+    return {"saved": point["saved"], "loose": point["loose_supplies"], "bases": bases, "players": players}
+
+
+async def save_part(request):
+    state = server_or_404(request, request.match_info["id"])
+    return render(request, "_save.html", s=server_view(state), save=save_view(state, request.app[DB]))
 
 
 async def feed_part(request):
@@ -4943,6 +4968,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/server/{id}/feed.part", feed_part)
     app.router.add_get("/server/{id}/joiners.part", joiners_part)
     app.router.add_get("/server/{id}/summary.part", summary_part)
+    app.router.add_get("/server/{id}/save.part", save_part)
     app.router.add_get("/server/{id}/game/{folder}", game_page)
     app.router.add_get("/server/{id}/game/{folder}/log", game_log)
     app.router.add_post("/server/{id}/history/upload", upload_log)

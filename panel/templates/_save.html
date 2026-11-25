@@ -1,0 +1,27 @@
+{% if not save %}
+<p class="muted">{% if not s.log_dir %}Set <code>log_dir</code> for this server to read its autosaves.{% else %}No autosave of this game kept yet. One is read a minute or so after the game saves.{% endif %}</p>
+{% else %}
+<p class="muted">From the autosave at {{ save.saved|ts }}.</p>
+<h3>Bases</h3>
+<div class="scroll"><table>
+  <thead><tr><th>Base</th><th>Side</th><th class="num">Supplies</th></tr></thead>
+  <tbody>
+  {% for b in save.bases %}
+  <tr><td>{{ b.name or "Unnamed base" }}</td><td>{{ b.faction or "—" }}</td><td class="num">{{ b.supplies }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="muted">Not at a base: {{ save.loose }} supplies. The map's own supply depots don't have a position in the save, so their supplies are counted here with crates out in the field.</p>
+<h3>Players</h3>
+<div class="scroll"><table>
+  <thead><tr><th>Name</th><th>Side</th><th class="num">Game XP</th><th>Now</th></tr></thead>
+  <tbody>
+  {% for p in save.players %}
+  <tr><td>{% if p.name %}<a href="/player/{{ p.identity }}">{{ p.name }}</a>{% else %}<span class="mono">{{ p.identity }}</span>{% endif %}
+        {% if p.online %}<span class="pill on">On</span>{% endif %}</td>
+      <td>{{ p.faction or "—" }}</td><td class="num">{{ p.xp if p.xp is not none else "—" }}</td>
+      <td>{{ "Dead" if p.dead else ("In a vehicle (" ~ p.seat ~ ")" if p.seat else "On foot") }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endif %}

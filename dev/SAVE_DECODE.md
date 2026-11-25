@@ -10,6 +10,7 @@ The panel reads the save with three modules, each using part of what's below:
 |---|---|
 | `panel/save_world.py` | Full bit reader: players, characters (position, hit zones), vehicles, mines, MGs for the live map |
 | `panel/campaign_save.py` | Byte search of the `MilitaryBase` section for who holds each base, and `Seize` tasks for base names |
+| `panel/save_history.py` | Same reader for the save history: players with height and seat, bases (side, HQ position), supply storages, builds with their author, mines |
 | `panel/save_edit.py` | Splits the file into sections and records and writes it back; swaps a player's loadout JSON |
 
 ## Coverage (savepoint 191)

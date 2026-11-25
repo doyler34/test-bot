@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
 from . import alerts as alert_colours, archive, attacks, campaign_save, carried, loadouts, memory, monitor, netcheck
+from . import save_history
 from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
@@ -369,6 +370,12 @@ class ServerManager:
                 raise
             except Exception:
                 log.exception("reading loadouts failed for %s", state.config.id)
+            try:
+                await self.record_save(state)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("keeping the autosave failed for %s", state.config.id)
             await asyncio.sleep(LOADOUT_POLL)
 
     async def read_loadouts(self, state: ServerState):
@@ -393,6 +400,17 @@ class ServerManager:
         online = {p.get("identity") for p in state.players if p.get("identity")}
         self.db.add_loadouts(state.config.id, found[1], rows, online)
         await self.stacked_loadouts(state, found[1], found[2], stacked, online)
+
+    async def record_save(self, state: ServerState):
+        """Keep what a new autosave says about the game, so later checks can compare one save with the next."""
+        found = campaign_save.newest(state.config.log_dir) if state.config.log_dir else None
+        last = self.db.last_save_point(state.config.id)
+        if not found or (last and found[1] <= last["saved"]):
+            return
+        read = await asyncio.to_thread(save_history.read, found[0])
+        if read is None:
+            return
+        self.db.add_save(state.config.id, found[2] or found[1], found[1], *save_history.snapshot(read))
 
     @staticmethod
     def spawn_kit(person, character_prefab, names):
@@ -496,6 +514,7 @@ class ServerManager:
         self.db.prune_memory()
         self.db.prune_events()
         self.db.prune_staff_alerts()
+        self.db.prune_save_history()
         for row in self.db.old_archives(now() - ARCHIVE_DAYS * 86400):
             try:
                 Path(row["path"]).unlink(missing_ok=True)
