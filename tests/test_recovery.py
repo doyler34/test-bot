@@ -71,6 +71,27 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         await monitor._tick()
         monitor.on_session_start.assert_awaited_once()
 
+    async def test_heartbeatless_open_match_on_a_dead_log_is_offline(self):
+        # A server that crashed mid-match and never came back: the log has an
+        # open match but hasn't been written for days. It must read offline,
+        # not live with an uptime that keeps counting.
+        self.write(game("10:00:00"), age=10 * 86400)
+        monitor = self.monitor()
+        await monitor._tick()
+        monitor.on_session_start.assert_not_awaited()
+        self.assertFalse(monitor.online)
+
+    async def test_heartbeatless_live_match_ends_once_the_log_is_dead(self):
+        monitor = self.monitor()
+        monitor._live = True
+        monitor._started_at = time.monotonic() - 100
+        monitor._seen_heartbeat = False
+        monitor._log_mtime = time.time() - 7 * 3600
+        monitor._last_heartbeat = time.monotonic() - 7 * 3600
+        await monitor._check_staleness()
+        monitor.on_session_end.assert_awaited_once()
+        self.assertFalse(monitor._live)
+
     async def test_heartbeat_build_open_match_on_stale_log_waits_then_recovers(self):
         # This build DOES write heartbeats, so a stale log means the server is
         # down: don't resume until it writes again.

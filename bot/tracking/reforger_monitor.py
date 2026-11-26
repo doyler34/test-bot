@@ -98,6 +98,9 @@ def resolve_session_file(log_dir: str) -> Optional[str]:
 Callback = Callable[[], Awaitable[None]]
 StartCallback = Callable[[float], Awaitable[None]]
 TIMESTAMP_RE = re.compile(r"^(\d{2}):(\d{2}):(\d{2})\.(\d{3})")
+# On builds without a heartbeat an idle match can leave the log quiet for a
+# while, but not for this long: past it the server is down, not idle.
+QUIET_MATCH_LIMIT = 6 * 3600
 
 
 @dataclass
@@ -109,6 +112,7 @@ class ReforgerMonitor:
     poll_interval: float = 2.0
     a2s_host: Optional[str] = None
     a2s_port: Optional[int] = None
+    quiet_limit: float = QUIET_MATCH_LIMIT
 
     # internal state
     session_key: str = field(default="", init=False)
@@ -124,6 +128,7 @@ class ReforgerMonitor:
     _log_clock: float = field(default=0.0, init=False)
     _log_mtime: float = field(default=0.0, init=False)
     _open_start: Optional[float] = field(default=None, init=False)
+    _started_at: Optional[float] = field(default=None, init=False)
 
     def _advance_clock(self, line: str) -> float:
         """Unwrap time-of-day stamps using every log line, including midnight."""
@@ -274,7 +279,7 @@ class ReforgerMonitor:
                     if not fresh_beat:
                         self._last_heartbeat = now
                     await self._start(age(live_start), f"{path}:{live_start:.3f}")
-                elif not self._seen_heartbeat:
+                elif not self._seen_heartbeat and not self._log_dead():
                     # This build never writes a heartbeat, so a quiet log is just an
                     # idle match, not a finished one. Resume it; only POSTGAME ends it.
                     await self._start(age(live_start), f"{path}:{live_start:.3f}")
@@ -326,6 +331,13 @@ class ReforgerMonitor:
             # Builds that never write a heartbeat also go quiet when a live match
             # empties out. We can't tell 'quiet' from 'down', so keep the match
             # live and let POSTGAME (or a log rotation) end it, not a stall.
+            if not self._log_dead():
+                return
+            logger.warning("Server log silent for over %ds; ending session", self.quiet_limit)
+            started = self._started_at
+            await self._end()
+            # If the log comes back to life it was the same match after all.
+            self._open_start = started
             return
 
         logger.warning("Server log went stale (threshold %ds)", self.stale_seconds)
@@ -336,6 +348,9 @@ class ReforgerMonitor:
             return
         logger.warning("Server appears down; ending session")
         await self._end()
+
+    def _log_dead(self) -> bool:
+        return bool(self._log_mtime) and (time.time() - self._log_mtime) >= self.quiet_limit
 
     async def _server_alive_via_a2s(self) -> bool:
         if not (self.a2s_host and self.a2s_port):
@@ -355,6 +370,7 @@ class ReforgerMonitor:
     async def _start(self, elapsed_seconds: float = 0.0, session_key: str = "") -> None:
         self.session_key = session_key
         self._live = True
+        self._started_at = time.monotonic() - elapsed_seconds
         logger.info("Session START detected (recovered elapsed: %.0fs)", elapsed_seconds)
         await self.on_session_start(elapsed_seconds)
 
