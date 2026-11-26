@@ -390,6 +390,20 @@ def window_standings(db, guild, start, end=None, server=None, ground=None):
     return without_heli_kills(db, guild, rows, start, end, server, ground)
 
 
+def games_played(db, identities):
+    """How many recorded matches these accounts took the field in."""
+    who = held(identities)
+    if not who:
+        return 0
+    marks = ",".join("?" * len(who))
+    try:
+        return db.execute(f'''SELECT COUNT(*) FROM combat_matches m WHERE EXISTS (
+            SELECT 1 FROM combat_presence p WHERE p.server=m.server AND p.occurred>=m.started
+              AND p.occurred<=m.ended AND p.identity IN ({marks}))''', who).fetchone()[0]
+    except sqlite3.OperationalError:
+        return 0  # combat tracking was never set up on this database
+
+
 def played_faction(db, identities):
     """The side these accounts have taken the field on most, or None if they haven't played."""
     who = held(identities)

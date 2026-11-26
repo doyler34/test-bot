@@ -14,7 +14,6 @@ TYPES = {
     "link": "Link Reforger account",
     "progress": "My progress",
     "faction": "Pick a faction (US / USSR / FIA)",
-    "no_faction": "No faction",
     "role": "Give or take a role",
     "pick": "Pick one role from a group",
     "url": "Open a web link",
@@ -47,13 +46,12 @@ def default_welcome():
                 "Name yours and unclaimed? You are in straight away. Otherwise an admin checks it.\n\n"
                 "Linking opens up the rest of the server and starts your kills, deaths and playtime "
                 "counting towards your rank.")},
-            {"heading": "2 — Pick your side (optional)", "text": (
+            {"heading": "2 — Pick your side", "text": (
                 "⚠️ **THIS DOES NOT LOCK YOUR FACTION IN GAME.** Play US, USSR or FIA on the "
-                "servers whenever you like. It is a Discord role and nothing else, and you can "
-                "skip it entirely.\n\n"
-                "If you want one: it colours your name, opens that side's channels and drops "
-                "**OYB Renegade**. You cannot swap it yourself on Discord after, so go with your "
-                "mates. Not fussed? Press **No faction**.")},
+                "servers whenever you like. It is a Discord role and nothing else.\n\n"
+                "It colours your name, opens that side's channels and drops **OYB Renegade**. You "
+                "cannot swap it yourself on Discord after, so go with your mates. Don't pick one and "
+                "after 10 games you're put on the side you play most.")},
             {"heading": "", "text": "Stuck? **My progress** shows what you are missing."},
         ],
         "buttons": [
@@ -62,7 +60,6 @@ def default_welcome():
             {"id": "us", "type": "faction", "faction": "US", "label": "US", "emoji": "🇺🇸", "style": "grey", "line": 2},
             {"id": "ussr", "type": "faction", "faction": "USSR", "label": "USSR", "emoji": "🇷🇺", "style": "grey", "line": 2},
             {"id": "fia", "type": "faction", "faction": "FIA", "label": "FIA", "emoji": "🏳️", "style": "grey", "line": 2},
-            {"id": "nofaction", "type": "no_faction", "label": "No faction", "emoji": "", "style": "grey", "line": 2},
         ],
     }
 
@@ -127,7 +124,8 @@ def check_welcome(raw):
     doc["buttons"] = []
     seen = set()
     for n, button in enumerate(raw.get("buttons", []) if isinstance(raw.get("buttons"), list) else [], 1):
-        if not isinstance(button, dict):
+        # There's no "No faction" choice any more; a page saved with one just loses it.
+        if not isinstance(button, dict) or button.get("type") == "no_faction":
             continue
         clean, issues = _check_button(button, n)
         problems += issues

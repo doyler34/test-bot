@@ -7,7 +7,7 @@ import time
 import discord
 
 LOG = logging.getLogger("reforger.ranks")
-from bot.discord.factions import ranked_faction
+from bot.discord.factions import apply_faction, label, ranked_faction
 from bot.ranks.rank_rules import RANKS as DEFINITIONS, XP_PER_TEAMKILL, rank_for_xp
 from bot.storage.rank_persistence import XPStore
 RANKS = tuple(rank.role_name for rank in DEFINITIONS)
@@ -121,8 +121,12 @@ class RankSync:
                 try:
                     xp = self.progress(member_id, identity, snapshot)
                     # Renegade is the no-faction rank, so a member's side decides whether the XP
-                    # ladder applies to them at all: their faction role, or the side they play.
-                    tier = rank_for_xp(xp, ranked_faction(self.bot, guild, member_id)[0]).tier
+                    # ladder applies to them at all: their faction role, or after 10 games the side
+                    # they play most, which they're then given.
+                    faction, matched = ranked_faction(self.bot, guild, member_id)
+                    if matched:
+                        await self.match_side(guild, member_id, faction)
+                    tier = rank_for_xp(xp, faction).tier
                     target = self.roles[tier]
                     previous = self.applied.get(member_id)
                     if previous and previous[0] == target.id and time.monotonic() - previous[1] < 300:
@@ -160,6 +164,18 @@ class RankSync:
                 with self.db:
                     self.db.execute("INSERT OR REPLACE INTO rank_ladder_v2 VALUES (?,?)", (guild.id, ladder))
             await self.announcements.flush(guild)
+
+    async def match_side(self, guild, member_id, faction):
+        """Give a member with no side the faction role of the side they've played most."""
+        try:
+            member = await guild.fetch_member(member_id)
+            if await apply_faction(self.bot, guild, member, faction):
+                LOG.info("Put Discord %s on %s: the side they play most", member_id, label(faction))
+        except discord.NotFound:
+            pass
+        except discord.Forbidden:
+            LOG.warning("Couldn't give %s the %s role; the bot needs Manage Roles above the faction roles",
+                        member_id, faction)
 
     async def run(self):
         while not self.bot.is_closed():

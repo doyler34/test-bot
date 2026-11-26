@@ -152,7 +152,10 @@ class DocTests(unittest.TestCase):
         self.assertTrue(text.startswith("**1 — Link your Reforger account**\nPlay a round"))
         self.assertTrue(text.endswith("Stuck? **My progress** shows what you are missing."))
         self.assertEqual([b["type"] for b in doc["buttons"]],
-                         ["link", "progress", "faction", "faction", "faction", "no_faction"])
+                         ["link", "progress", "faction", "faction", "faction"])
+        # A page saved before the "No faction" choice went just loses that button.
+        old = {**doc, "buttons": doc["buttons"] + [{"id": "nofaction", "type": "no_faction", "label": "No faction"}]}
+        self.assertNotIn("no_faction", [b["type"] for b in welcome_doc.check_welcome(old)[0]["buttons"]])
 
     def test_problems_an_owner_can_fix(self):
         raw = {"title": "", "sections": [], "colour": "blue", "buttons": [
@@ -576,7 +579,7 @@ class WelcomeTests(unittest.IsolatedAsyncioTestCase):
     def test_view_lines(self):
         doc, _ = welcome_doc.check_welcome(welcome_doc.default_welcome())
         rows = [item.row for item in build_view(doc).children]
-        self.assertEqual(rows, [0, 0, 1, 1, 1, 1])
+        self.assertEqual(rows, [0, 0, 1, 1, 1])
 
 
 if __name__ == "__main__":

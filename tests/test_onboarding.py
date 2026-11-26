@@ -89,7 +89,7 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
         text = progress(self.bot, self.guild, self.member)
         self.assertIn('⬜ **1.** Reforger account', text)
         self.assertIn('⬜ **2.** Side', text)
-        self.assertIn('stay **OYB Renegade**', text)
+        self.assertIn("**OYB Renegade** until you pick a side or play 10 games", text)
 
     def test_progress_ticks_what_is_done(self):
         self.member.roles = [self.member_role, self.us]
@@ -102,13 +102,12 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('OYB Recruit', text)
         self.assertNotIn('Renegade', text)
 
-    def test_choosing_no_side_counts_as_done(self):
-        # Staying Renegade on purpose is a decision, not an unfinished step.
+    def test_an_old_no_side_choice_is_just_not_picked(self):
+        # There's no opting out any more: after 10 games they're put on the side they play most.
         self.links.verified_link(1, 5, IDENTITY, 'auto:tracker')
         self.links.set_faction(1, 5, NO_FACTION)
         text = progress(self.bot, self.guild, self.member)
-        self.assertIn('✅ **2.** Side — none, by choice', text)
-        self.assertIn('stay **OYB Renegade**', text)
+        self.assertIn("⬜ **2.** Side — not picked (after 10 games you're put on the side you play most)", text)
 
     def test_a_link_waiting_on_an_admin_says_so(self):
         self.links.verified_link(1, 5, IDENTITY, 'admin:9')
@@ -119,9 +118,10 @@ class OnboardingTests(unittest.IsolatedAsyncioTestCase):
     def test_the_panel_leads_with_the_link_because_that_is_the_gate(self):
         embed = panel_embed()
         self.assertEqual(embed.footer.text, MARKER)
-        for step in ('**1 — Link your Reforger account**', '**2 — Pick your side (optional)**',
-                     '**No faction**'):
+        for step in ('**1 — Link your Reforger account**', '**2 — Pick your side**',
+                     "after 10 games you're put on the side you play most"):
             self.assertIn(step, embed.description)
+        self.assertNotIn('No faction', embed.description)
         self.assertIn('opens up the rest of the server', embed.description)
         # Picking a side here has never changed which faction you play in game,
         # and people kept reading it as if it did.

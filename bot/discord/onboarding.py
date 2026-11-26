@@ -9,8 +9,8 @@ import logging
 import discord
 
 from bot.config import member_role_name, unverified_role_name
-from bot.discord.factions import (STAYED_RENEGADE, apply_faction, current_faction, ensure_faction_roles, factions,
-                                  label)
+from bot.discord.factions import (GAMES_TO_MATCH, STAYED_RENEGADE, apply_faction, current_faction,
+                                  ensure_faction_roles, factions, label)
 from bot.discord.interactions import ack, say
 from bot.discord.join_oyb import LinkModal
 
@@ -128,7 +128,6 @@ def progress(bot, guild, member):
     verified = member_role is not None and member_role in member.roles
     faction = current_faction(bot, guild, member)
     identities = links.identities(guild.id, member.id)
-    chose = links.faction(guild.id, member.id) == NO_FACTION
     if identities:
         lines = [f'✅ **1.** Reforger account linked ({len(identities)})']
     else:
@@ -136,16 +135,14 @@ def progress(bot, guild, member):
                  links.status(guild.id, member.id).split('.')[0].lower()]
     if faction:
         lines.append(f'✅ **2.** Side — **{label(faction)}**')
-    elif chose:
-        lines.append('✅ **2.** Side — none, by choice')
     else:
-        lines.append('⬜ **2.** Side — not picked')
+        lines.append(f'⬜ **2.** Side — not picked (after {GAMES_TO_MATCH} games you\'re put on the side you play most)')
     if identities and verified:
         lines.append('\nYou are in. ' + bot.rank_sync.status(member.id))
     elif identities and not verified:
         lines.append('\nYour link is in and waiting on an admin.')
     if not faction:
-        lines.append('You stay **OYB Renegade** without a side.')
+        lines.append(f'You\'re **OYB Renegade** until you pick a side or play {GAMES_TO_MATCH} games.')
     return '\n'.join(lines)
 
 
@@ -168,15 +165,10 @@ async def pick_faction(bot, interaction, name):
 
 
 async def skip_faction(bot, interaction):
-    """Staying Renegade on purpose is a choice, not an unfinished step."""
+    """An old "No faction" button still on a posted message: there's no opting out any more."""
     await ack(interaction)
-    held = current_faction(bot, interaction.guild, interaction.user)
-    if held is not None:
-        await say(interaction, f"You're already **{label(held)}**. Ask an admin if you want that removed.")
-        return
-    bot.account_links.set_faction(interaction.guild_id, interaction.user.id, NO_FACTION)
-    await say(interaction, 'No side for you then. You stay **OYB Renegade** — press a '
-                           'faction any time you change your mind.')
+    await say(interaction, f"There's no \"no side\" any more. Pick one, or after {GAMES_TO_MATCH} games "
+                           "you're put on the side you play most.")
 
 
 class OnboardingView(discord.ui.View):
@@ -185,7 +177,6 @@ class OnboardingView(discord.ui.View):
         self.bot = bot
         for name, _, emoji in factions():
             self.add_item(self._faction(name, emoji))
-        self.add_item(self._no_faction())
 
     async def interaction_check(self, interaction):
         if interaction.guild_id == self.bot.config.guild_id:
@@ -202,17 +193,6 @@ class OnboardingView(discord.ui.View):
             await pick_faction(self.bot, interaction, name)
 
         button.callback = pick
-        return button
-
-    def _no_faction(self):
-        button = discord.ui.Button(label='No faction', row=1,
-                                   style=discord.ButtonStyle.secondary,
-                                   custom_id='oyb:onboard:faction:none')
-
-        async def skip(interaction):
-            await skip_faction(self.bot, interaction)
-
-        button.callback = skip
         return button
 
     @discord.ui.button(label='1. Link Reforger account', row=0, style=discord.ButtonStyle.success,
@@ -234,13 +214,12 @@ def panel_embed():
         'Name yours and unclaimed? You are in straight away. Otherwise an admin checks it.\n\n'
         'Linking opens up the rest of the server and starts your kills, deaths and playtime '
         'counting towards your rank.\n\n'
-        '**2 — Pick your side (optional)**\n'
+        '**2 — Pick your side**\n'
         '⚠️ **THIS DOES NOT LOCK YOUR FACTION IN GAME.** Play US, USSR or FIA on the '
-        'servers whenever you like. It is a Discord role and nothing else, and you can '
-        'skip it entirely.\n\n'
-        'If you want one: it colours your name, opens that side\'s channels and drops '
-        '**OYB Renegade**. You cannot swap it yourself on Discord after, so go with your '
-        'mates. Not fussed? Press **No faction**.\n\n'
+        'servers whenever you like. It is a Discord role and nothing else.\n\n'
+        'It colours your name, opens that side\'s channels and drops **OYB Renegade**. You '
+        'cannot swap it yourself on Discord after, so go with your mates. Don\'t pick one and '
+        'after 10 games you\'re put on the side you play most.\n\n'
         'Stuck? **My progress** shows what you are missing.')
     ).set_footer(text=MARKER)
 

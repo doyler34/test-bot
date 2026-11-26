@@ -44,9 +44,13 @@ def read_doc(path, key):
     if not row or not row[0]:
         return None
     try:
-        return json.loads(row[0]), row[1]
+        doc = json.loads(row[0])
     except ValueError:
         return None
+    if key == "welcome" and isinstance(doc, dict) and isinstance(doc.get("buttons"), list):
+        # There's no "No faction" choice any more, even on a message published before.
+        doc["buttons"] = [b for b in doc["buttons"] if not (isinstance(b, dict) and b.get("type") == "no_faction")]
+    return doc, row[1]
 
 
 def read_posts(path):

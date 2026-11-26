@@ -49,21 +49,25 @@ def current_faction(bot, guild, member):
     return None
 
 
-# What onboarding saves for a member who chose to stay Renegade.
+# What onboarding used to save for a member who chose to stay Renegade. There's no opting out now.
 STAYED_RENEGADE = 'NONE'
+# A member who hasn't picked a side is put on the one they play most once they've played this many games.
+GAMES_TO_MATCH = 10
 
 
 def ranked_faction(bot, guild, member_id, member=None):
-    """(side, played) for the side a member's rank goes by: their faction role, or with none, the side
-    they've played most in game (played=True). Someone who chose to stay Renegade stays Renegade."""
+    """(side, matched) for the side a member's rank goes by: their faction role, or with none, once
+    they've played GAMES_TO_MATCH games, the side they've picked most in game (matched=True, and the bot
+    gives them that role). Before that they're Renegade."""
     faction = current_faction(bot, guild, member) if member is not None else held_faction(bot, guild, member_id)
     if faction:
         return faction, False
+    from bot.storage.combat_store import games_played, played_faction
     links = bot.account_links
-    if links.faction(guild.id, member_id) == STAYED_RENEGADE:
+    held = links.identities(guild.id, member_id)
+    if games_played(links.db, held) < GAMES_TO_MATCH:
         return None, False
-    from bot.storage.combat_store import played_faction
-    side = played_faction(links.db, links.identities(guild.id, member_id))
+    side = played_faction(links.db, held)
     return side, bool(side)
 
 

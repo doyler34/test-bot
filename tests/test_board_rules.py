@@ -139,16 +139,50 @@ class RankSide(unittest.TestCase):
                 self.links.db.execute('INSERT INTO combat_presence VALUES (?,?,?,?)',
                                       ('one', stamp(START + timedelta(minutes=n)), ALPHA, faction))
 
-    def test_no_role_ranks_by_the_side_played_most(self):
+    def test_no_role_is_matched_to_the_side_played_most_after_ten_games(self):
         from bot.discord.factions import ranked_faction
         self.assertEqual(ranked_faction(self.bot, self.guild, 10), (None, False))
-        self.played('US', 'USSR', 'USSR')
+        self.games(9, ['US', 'USSR', 'USSR'])
+        self.assertEqual(ranked_faction(self.bot, self.guild, 10), (None, False))
+        self.games(1, ['USSR'], offset=9)
         self.assertEqual(ranked_faction(self.bot, self.guild, 10), ('USSR', True))
 
-    def test_a_faction_pick_wins_and_choosing_renegade_stays_renegade(self):
+    def games(self, count, sides, offset=0):
+        """`count` matches, each one played on the next side in `sides`, round and round."""
+        with self.links.db:
+            for n in range(offset, offset + count):
+                begin = START + timedelta(hours=n)
+                record_match(self.links.db, 'one', 'Server 1', begin, begin + timedelta(minutes=50))
+                self.links.db.execute('INSERT INTO combat_presence VALUES (?,?,?,?)',
+                                      ('one', stamp(begin + timedelta(minutes=5)), ALPHA, sides[n % len(sides)]))
+
+    def test_a_faction_pick_wins_and_an_old_renegade_choice_is_matched_too(self):
         from bot.discord.factions import STAYED_RENEGADE, ranked_faction
-        self.played('USSR')
+        self.games(10, ['USSR'])
         self.links.set_faction(1, 10, 'US')
         self.assertEqual(ranked_faction(self.bot, self.guild, 10), ('US', False))
         self.links.set_faction(1, 10, STAYED_RENEGADE)
-        self.assertEqual(ranked_faction(self.bot, self.guild, 10), (None, False))
+        self.assertEqual(ranked_faction(self.bot, self.guild, 10), ('USSR', True))
+
+
+class GivesTheRole(unittest.IsolatedAsyncioTestCase):
+    async def test_ten_games_in_the_member_gets_the_faction_role(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+        from bot.ranks.rank_sync import RankSync
+        tmp = tempfile.TemporaryDirectory()
+        links = AccountLinks(Path(tmp.name) / 'links.db')
+        try:
+            links.save_faction_role(1, 'USSR', 77)
+            role = SimpleNamespace(id=77)
+            member = SimpleNamespace(id=10, roles=[], add_roles=AsyncMock(), remove_roles=AsyncMock())
+            guild = SimpleNamespace(id=1, get_role=lambda role_id: role if role_id == 77 else None,
+                                    fetch_member=AsyncMock(return_value=member))
+            sync = RankSync.__new__(RankSync)
+            sync.bot = SimpleNamespace(account_links=links)
+            await sync.match_side(guild, 10, 'USSR')
+            member.add_roles.assert_awaited_once()
+            self.assertEqual(links.faction(1, 10), 'USSR')
+        finally:
+            links.close()
+            tmp.cleanup()
