@@ -54,6 +54,15 @@ def author(r):
     return {"author": who}
 
 
+def building(r):
+    """How far a structure is built, 0 to 1."""
+    r.int()
+    done = r.float()
+    if not 0 <= done <= 1.001:
+        raise Bad()
+    return {"progress": round(done, 2)}
+
+
 def military_base(r):
     r.int()
     hq = bool(r.flag())
@@ -118,7 +127,8 @@ def read(path):
                 if "supplies" in got:
                     storages.append({"id": rid, **spot(got.get("pos")), "supplies": round(got["supplies"])})
             elif section in BUILT:
-                got = parse(value, parts, (author, hit_zones, supplies) if section == "Vehicle" else (author,))
+                got = parse(value, parts, (author, hit_zones, supplies) if section == "Vehicle"
+                            else (author, building) if section == "Structure" else (author,))
                 if got.get("pos"):
                     where[rid] = got["pos"]
                 name = short(got.get("prefab"))
@@ -131,6 +141,8 @@ def read(path):
                     if section == "Vehicle":
                         build.update(faction=side_of(name) if name else "",
                                      wreck=(got.get("zones") or {}).get("Hull", 1) <= 0)
+                    elif section == "Structure":
+                        build["progress"] = got.get("progress")
                     builds.append(build)
             elif section == "Item":
                 got = parse(value, parts, ())

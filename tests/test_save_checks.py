@@ -63,17 +63,32 @@ class Checks(unittest.TestCase):
         after = {"storage": {"s1": {"x": None, "z": None, "supplies": 3000}}}
         self.assertEqual(self.run_checks(before, after), [])
 
-    def test_friendly_structures_gone_near_a_teammate_is_griefing(self):
-        walls = {f"w{n}": {"kind": "structure", "name": "Wall", "author": A, "x": 1000.0 + n, "z": 1000.0} for n in range(3)}
-        before = {"build": walls, "player": {A: player(x=5000), B: player(x=1010)}}
-        after = {"build": {}, "player": {A: player(x=5000), B: player(x=1010)}}
-        found = self.run_checks(before, after)
+    def walls(self, progress=1.0, at=1000.0):
+        return {f"w{n}": {"kind": "structure", "name": "E_SandbagWall_S_US_01", "author": A, "x": at + 10 * n,
+                          "z": 1000.0, "progress": progress} for n in range(3)}
+
+    def test_finished_friendly_structures_gone_near_teammates_is_one_alert(self):
+        people = {A: player(x=5000), B: player(x=1010), C: player(x=1020)}
+        found = self.run_checks({"build": self.walls(), "player": people}, {"build": {}, "player": people})
         self.assertEqual(titles(found), ["Base griefing"])
-        self.assertEqual(found[0][1], ("grief", B))
-        self.assertIn("**Bravo** nearby: Wall by Alpha", found[0][2])
+        self.assertIn("3 finished structures built by their own side went between two autosaves: "
+                      "SandbagWall by Alpha", found[0][2])
+        self.assertIn("Their own side nearby: **Bravo**, **Charlie**.", found[0][2])
+
+    def test_unfinished_or_replaced_structures_are_not_griefing(self):
+        people = {A: player(x=5000), B: player(x=1010)}
+        # Placed but never built: the game clears those away.
+        self.assertEqual(self.run_checks({"build": self.walls(progress=0.4), "player": people},
+                                         {"build": {}, "player": people}), [])
+        self.assertEqual(self.run_checks({"build": self.walls(progress=None), "player": people},
+                                         {"build": {}, "player": people}), [])
+        # Swapped for a new one in the same spot once built.
+        swapped = {f"n{k}": {**w, "progress": 1.0} for k, w in self.walls().items()}
+        self.assertEqual(self.run_checks({"build": self.walls(), "player": people},
+                                         {"build": swapped, "player": people}), [])
 
     def test_enemies_and_the_builder_do_not_count_as_griefing(self):
-        walls = {f"w{n}": {"kind": "structure", "name": "Wall", "author": A, "x": 1000.0, "z": 1000.0} for n in range(3)}
+        walls = self.walls()
         before = {"build": walls, "player": {A: player(x=1000), C: player(side="USSR", x=1000)}}
         after = {"build": {}, "player": {A: player(x=1000), C: player(side="USSR", x=1000)}}
         self.assertEqual(self.run_checks(before, after), [])

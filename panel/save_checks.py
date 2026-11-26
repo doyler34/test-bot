@@ -6,6 +6,8 @@ from math import hypot
 
 # A friendly player this close to a structure when it went is "near" it.
 GRIEF_REACH = 75
+# A new structure this close to one that went is the same one rebuilt or swapped, not griefing.
+REPLACED = 5
 # A wreck this close to its own side's main base counts as wrecked at home.
 HOME_REACH = 300
 # A mine this close to a base HQ is inside the base, where its own side walks; further out it may be defending it.
@@ -86,9 +88,21 @@ def supplies(before, after, gap, s):
                    f"lost {-changes[source]} in {minutes(gap)} between two autosaves, and no truck's load changed.")
 
 
+def build_name(name):
+    """'E_SandbagWallSolidBurlap_S_USSR_01' -> 'SandbagWallSolidBurlap'."""
+    name = name[2:] if name.startswith("E_") else name
+    return name.split("_S_")[0] or "a structure"
+
+
 def griefing(before, after, s, name):
-    gone = [(k, b) for k, b in before.get("build", {}).items()
-            if b.get("kind") == "structure" and k not in after.get("build", {}) and placed(b)]
+    """Finished structures built by their own side that are gone, with a teammate other than the builder
+    nearby: one alert for the lot. A structure only placed and never finished building is cleared away by
+    the game, and one swapped for a new one in the same spot (a finished build) hasn't gone."""
+    old, new = before.get("build", {}), after.get("build", {})
+    appeared = [b for k, b in new.items() if b.get("kind") == "structure" and k not in old and placed(b)]
+    gone = [b for k, b in old.items()
+            if b.get("kind") == "structure" and k not in new and placed(b) and (b.get("progress") or 0) >= 1
+            and not any(far(a, b) <= REPLACED for a in appeared)]
     if not gone:
         return
     people = {}
@@ -97,21 +111,21 @@ def griefing(before, after, s, name):
             if placed(p) and not p.get("dead"):
                 people.setdefault(identity, []).append(p)
     sides = {i: p.get("faction") for i, p in before.get("player", {}).items()}
-    near = {}
-    for key, b in gone:
+    hit, near = [], set()
+    for b in gone:
         side = sides.get(b["author"])
-        if not side:
-            continue
-        for identity, spots in people.items():
-            if identity != b["author"] and sides.get(identity) == side and any(far(p, b) <= GRIEF_REACH for p in spots):
-                near.setdefault(identity, []).append(b)
-    for identity, builds in near.items():
-        if len(builds) >= s["grief_count"]:
-            listed = ", ".join(f"{b['name'] or 'a structure'} by {name(b['author'])}" for b in builds[:8])
-            more = f" and {len(builds) - 8} more" if len(builds) > 8 else ""
-            yield ("Base griefing", ("grief", identity),
-                   f"{len(builds)} structures built by their own side went between two autosaves with "
-                   f"**{name(identity)}** nearby: {listed}{more}. Check the GM log for who deleted them.")
+        here = {i for i, spots in people.items() if side and i != b["author"] and sides.get(i) == side
+                and any(far(p, b) <= GRIEF_REACH for p in spots)}
+        if here:
+            hit.append(b)
+            near |= here
+    if len(hit) >= s["grief_count"]:
+        listed = ", ".join(f"{build_name(b['name'])} by {name(b['author'])}" for b in hit[:8])
+        more = f" and {len(hit) - 8} more" if len(hit) > 8 else ""
+        who = ", ".join(f"**{name(i)}**" for i in sorted(near, key=name)[:10])
+        yield ("Base griefing", ("grief", min(b["author"] + str(b["x"]) for b in hit)),
+               f"{len(hit)} finished structures built by their own side went between two autosaves: {listed}{more}. "
+               f"Their own side nearby: {who}. Check the GM log for who deleted them.")
 
 
 def vehicles(before, after, s, name, game_vehicles, roadkills, home_wrecks):
