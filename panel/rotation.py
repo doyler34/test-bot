@@ -6,6 +6,7 @@ starts, so loading a rotation is: stop the server, leave that copy as the only s
 
 The game deletes every save of a game when it ends, so the copies live in the panel's own folder."""
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -29,6 +30,20 @@ def game_folder(log_dir):
 def stage_folder(log_dir):
     """Where the reset script picks up the next rotation: rotation-next beside the save folder, laid out like it."""
     return Path(log_dir).parent / STAGE
+
+
+def give_to_game(folder, owner):
+    """Hand a copied-in folder and everything in it to whoever owns `owner`, so the game, which runs as its own
+    user, can read the save and write its next ones beside it. The panel runs as root, so the copy starts as root's."""
+    if not hasattr(os, "chown"):
+        return
+    who = Path(owner).stat()
+    for top, dirs, names in os.walk(folder):
+        for name in [top, *(os.path.join(top, n) for n in dirs + names)]:
+            try:
+                os.chown(name, who.st_uid, who.st_gid)
+            except PermissionError:
+                return
 
 
 def reset_script(path=None):
@@ -58,6 +73,7 @@ def stage(log_dir, rotation_id, folder, mission):
     unstage(log_dir)
     shutil.copytree(points[0], target / "game" / mission / "playthrough000" / points[0].name)
     (target / "rotation.json").write_text(json.dumps({"id": rotation_id}), encoding="utf-8")
+    give_to_game(target, Path(log_dir).parent)
 
 
 def unstage(log_dir):
@@ -140,4 +156,5 @@ def install(log_dir, folder, mission):
     if target.exists():
         shutil.rmtree(target)
     shutil.copytree(points[0], target / "playthrough000" / points[0].name)
+    give_to_game(game_folder(log_dir).parent, Path(log_dir).parent)
 
