@@ -93,13 +93,10 @@ class BoardRules(unittest.TestCase):
 
 
 class Table(unittest.TestCase):
-    def test_a_row_with_score_still_fits_a_phone(self):
-        rows = [('A very long player name', 120, 45, 'FIA*', 12345), ('Short', 3, 1, 'US', None)]
-        lines = table(rows).splitlines()[1:-1]
-        self.assertEqual(lines[0].split(), ['#', 'Name', 'K', 'D', 'Score', 'Side'])
+    def test_a_row_with_a_side_still_fits_a_phone(self):
+        lines = table([('A very long player name', 120, 45, 'FIA*'), ('Short', 3, 1, '-')]).splitlines()[1:-1]
+        self.assertEqual(lines[0].split(), ['#', 'Name', 'K', 'D', 'Side'])
         self.assertTrue(all(len(line) <= 37 for line in lines), lines)
-        self.assertIn('12345', lines[1])
-        self.assertIn(' - ', lines[2])
 
     def test_the_weekly_table_without_score(self):
         lines = table([('Rook', 9, 2, 'US')]).splitlines()[1:-1]

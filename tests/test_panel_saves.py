@@ -75,23 +75,16 @@ class Boards(unittest.TestCase):
         self.links.close()
         self.tmp.cleanup()
 
-    def test_the_match_board_shows_the_games_score(self):
-        with patch('bot.discord.leaderboard_command.match_summary', return_value=({MEDIC: 700, GUNNER: 40}, {})):
-            rows = match_rows(self.links, self.guild, 'one', START, END)
-        by_name = {r[0]: r for r in rows}
+    def test_the_match_board_has_no_score_column(self):
+        rows = match_rows(self.links, self.guild, 'one', START, END)
         self.assertEqual(len(rows), 2)
-        self.assertEqual([r[4] for r in rows], [40, 700])
-        self.assertIn('Score', table(rows))
-
-    def test_no_save_means_no_score_column(self):
-        with patch('bot.discord.leaderboard_command.match_summary', return_value=({}, {})):
-            rows = match_rows(self.links, self.guild, 'one', START, END)
+        self.assertTrue(all(len(r) == 4 for r in rows))
         self.assertNotIn('Score', table(rows))
 
     def test_the_finished_board_says_who_held_the_bases(self):
-        embeds = board_embeds('Server 1', [('Rook', 3, 1, 'US', 120)], START, END, '#0001A', {'US': 24, 'USSR': 16})
+        embeds = board_embeds('Server 1', [('Rook', 3, 1, 'US')], START, END, '#0001A', {'US': 24, 'USSR': 16})
         self.assertTrue(embeds[0].description.startswith('🏳️ Bases at the end: US 24 · RU 16\n'))
-        live = board_embeds('Server 1', [('Rook', 3, 1, 'US', 120)], START, None, '#0001A', {'US': 24})
+        live = board_embeds('Server 1', [('Rook', 3, 1, 'US')], START, None, '#0001A', {'US': 24})
         self.assertNotIn('Bases at the end', live[0].description)
 
     def test_no_kill_and_no_death_means_no_match_xp(self):

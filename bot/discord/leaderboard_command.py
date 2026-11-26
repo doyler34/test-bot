@@ -3,8 +3,6 @@ import unicodedata
 
 import discord
 
-from datetime import datetime
-
 from bot.config import linking_channel
 from bot.storage.combat_store import week_start, window_present, window_sides, window_standings
 from bot.storage.panel_saves import match_summary
@@ -50,49 +48,31 @@ def side_of(sides, member_id):
     return side_code(*side) if side else '-'
 
 
-# With a Score column the name gives up room so a row still fits a phone.
-SCORED_NAME = 10
-SCORED_PLACE = 3
-SCORE_WIDTH = 5
-
-
 def table(selected, offset=0):
     """Fixed-width standings block shared by the weekly and per-match boards. A row is (name, kills,
-    deaths), then optionally the side tag, then optionally the game's own score (None for no score)."""
+    deaths), then optionally the side tag, which adds a Side column."""
     sided = any(len(row) > 3 and row[3] for row in selected)
-    scored = any(len(row) > 4 and row[4] is not None for row in selected)
-    width, place = (SCORED_NAME, SCORED_PLACE) if scored else (NAME, PLACE)
-    head = f"{'#':>{place}}  {'Name':{width}} {'K':>{SCORE}} {'D':>{SCORE}}"
-    head += f" {'Score':>{SCORE_WIDTH}}" if scored else ''
-    lines = [head + ('  Side' if sided else '')]
-    for position, (name, kills, deaths, *extra) in enumerate(selected, offset + 1):
-        line = f'{position:>{place}}  {clean_name(name, width):{width}} {kills:>{SCORE}} {deaths:>{SCORE}}'
-        if scored:
-            score = extra[1] if len(extra) > 1 else None
-            line += f' {"-" if score is None else score:>{SCORE_WIDTH}}'
-        if sided:
-            line += f'  {extra[0] if extra and extra[0] else "-"}'
-        lines.append(line)
+    lines = [f"{'#':>{PLACE}}  {'Name':{NAME}} {'K':>{SCORE}} {'D':>{SCORE}}" + ('  Side' if sided else '')]
+    for position, (name, kills, deaths, *side) in enumerate(selected, offset + 1):
+        line = f'{position:>{PLACE}}  {clean_name(name):{NAME}} {kills:>{SCORE}} {deaths:>{SCORE}}'
+        lines.append(f'{line}  {side[0] or "-"}' if sided and side else line)
     return '```text\n' + '\n'.join(lines) + '\n```'
 
 
 def match_rows(links, guild, server_id, start, end=None):
-    """One match's board rows: (name, net kills, deaths, side, game score). The score is the game's own
-    XP from OYB Control's autosaves (captures, supplies, healing, transport), None without a save."""
+    """One match's board rows: (name, kills, deaths, side)."""
     db = links.db
     sides = window_sides(db, guild.id, start, end, server_id)
-    gains, _ = match_summary(window_present(db, start, end, server_id), start, end or datetime.now())
     rows = []
     for member_id, kills, deaths, name in window_standings(db, guild.id, start, end, server=server_id):
         member = guild.get_member(member_id)
-        score = sum(gains.get(i, 0) for i in links.identities(guild.id, member_id)) if gains else None
         rows.append((name or (member.display_name if member else f'Member {member_id}'), kills, deaths,
-                     side_of(sides, member_id), score))
+                     side_of(sides, member_id)))
     return rows
 
 
 def match_bases(links, server_id, start, end):
-    """{side: bases held at the end} from the autosaves, and {identity: game XP gained}."""
+    """{side: bases held at the end} from OYB Control's autosaves, and {identity: game XP gained}."""
     gains, bases = match_summary(window_present(links.db, start, end, server_id), start, end)
     return bases, gains
 
