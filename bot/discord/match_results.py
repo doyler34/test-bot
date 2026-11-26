@@ -65,7 +65,7 @@ def match_embeds(server_name, rows, start, end, tag=None, bases=None):
         if index == len(blocks) - 1:
             embed.set_footer(text=f'{len(rows)} players • {duration(start, end)} • '
                                   f'{start:%d %b %H:%M}–{closed}\n'
-                                  'K = kills minus teamkills • * switched sides • Counts toward the weekly board')
+                                  'Player kills only • * switched sides • Counts toward the weekly board')
         embeds.append(embed)
     return embeds
 

@@ -338,8 +338,8 @@ BOARD = f"{SCORED} AND COALESCE(e.damage_type,'')<>'COLLISION' AND COALESCE(e.di
 
 
 def window_standings(db, guild, start, end=None, server=None, ground=None):
-    """One row per linked player, (Discord id, net kills, deaths, name), best first. Net kills are
-    enemy kills minus teamkills. Heli kills are left out (they have their own board).
+    """One row per linked player, (Discord id, enemy kills, deaths, name), best first. Teamkills aren't
+    taken off. Heli kills are left out (they have their own board).
 
     A kill counts only from under 2 km, not by running someone over, never on one of the killer's own
     accounts, and at most REPEAT_CAP times on the same victim in a match. Without `server` (the weekly
@@ -388,11 +388,11 @@ def window_standings(db, guild, start, end=None, server=None, ground=None):
                 {present}
             ) GROUP BY identity
         )
-        SELECT a.discord_id, SUM(t.kills) - SUM(t.teamkills), SUM(t.deaths), MIN({NAME})
+        SELECT a.discord_id, SUM(t.kills), SUM(t.deaths), MIN({NAME})
         FROM account_links a JOIN tallied t ON t.identity=a.identity
         WHERE a.guild=?
         GROUP BY a.discord_id
-        ORDER BY SUM(t.kills) - SUM(t.teamkills) DESC, SUM(t.deaths) ASC, a.discord_id ASC''',
+        ORDER BY SUM(t.kills) DESC, SUM(t.deaths) ASC, a.discord_id ASC''',
         (*where, guild, *(where if server is not None else ()), guild)).fetchall()
     return without_heli_kills(db, guild, rows, start, end, server, ground)
 

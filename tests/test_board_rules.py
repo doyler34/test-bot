@@ -47,11 +47,11 @@ class BoardRules(unittest.TestCase):
         return {r[0]: (r[1], r[2]) for r in window_standings(self.db, 1, START - timedelta(hours=1),
                                                               START + timedelta(hours=5), ground=False, **kw)}
 
-    def test_net_kills_take_teamkills_off(self):
+    def test_teamkills_are_not_taken_off_kills(self):
         for n in range(4):
             self.kill(n, ALPHA, foe(n))
         self.kill(5, ALPHA, BRAVO, relation='TK')
-        self.assertEqual(self.board()[10], (3, 0))
+        self.assertEqual(self.board()[10], (4, 0))
         self.assertEqual(self.board()[20], (0, 1))
 
     def test_crash_and_long_range_kills_are_left_off(self):

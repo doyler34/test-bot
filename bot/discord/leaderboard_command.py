@@ -117,5 +117,5 @@ def leaderboard_embed(rows, page, start=None):
                              'and get stuck in — the board resets every Monday.')
     week = f'Week of {start:%d %b}' if start else 'This week'
     embed.set_footer(text=f'Page {page + 1}/{pages} • {len(rows)} players • {week}\n'
-                          'K = kills minus teamkills ↓ · deaths ↑ • * switched sides • Resets Monday')
+                          'Player kills ↓ · deaths ↑ • * switched sides • Resets Monday')
     return embed

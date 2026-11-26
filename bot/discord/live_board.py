@@ -54,7 +54,7 @@ def board_embeds(server_name, rows, start, end=None, tag=None, bases=None):
     embeds[-1].set_footer(text=(
         f'{MARKER}\n{len(rows)} players • {span} • '
         f'{start:%d %b %H:%M}' + (f'–{closed:%H:%M}' if end else ' • updates every 30s') + '\n'
-        'K = kills minus teamkills • * switched sides • Counts toward the weekly board'))
+        'Player kills only • * switched sides • Counts toward the weekly board'))
     return embeds
 
 
