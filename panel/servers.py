@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .config import PanelConfig, ServerConfig
 from . import alerts as alert_colours, archive, attacks, campaign_save, carried, loadouts, memory, monitor, netcheck
-from . import save_checks, save_history
+from . import rotation as rotations, save_checks, save_history
 from collections import Counter
 from .alerts import Alerts
 from .connections import LogReader
@@ -159,6 +159,8 @@ class ServerState:
     query: dict = field(default_factory=dict)
     # When each player now on was first seen.
     joined: dict = field(default_factory=dict)
+    # A rotation is being loaded: the server is stopping, swapping saves or starting.
+    rotating: bool = False
 
 
 # How often the Monitor page gets a reading.
@@ -174,6 +176,11 @@ ATTACK_WINDOW = 600
 # A saved game log is deleted after this long, as kills are; the game stays listed with its numbers.
 ARCHIVE_DAYS = 180
 KILL_LOG_SECONDS = 12 * 3600
+# After game over the end screen shows for a while, then the game loads a fresh map by itself; a rotation is loaded
+# in between.
+ROTATE_AFTER = 40
+# How long a stopping server gets to write its last save and close.
+STOP_WAIT = 180
 
 
 class ServerManager:
@@ -194,6 +201,8 @@ class ServerManager:
         self._refused_at: dict[tuple[int, str], int] = {}
         self._ban_lock = asyncio.Lock()
         self._config_admins: dict[str, tuple] = {}
+        # Starts or stops a server through AMP: async (state, "start" | "stop"), set by the web app.
+        self.amp_power = None
 
     def start(self):
         for state in self.states.values():
@@ -619,6 +628,8 @@ class ServerManager:
                     await self.ban_for_banned_ip(state, event["identity"], event["name"])
         for action in self.check(state, events) + self.mass_teamkills(state, events):
             await self.auto_punish(state, *action)
+        if any(e["kind"] == "gameover" and now() - e["at"] < AUTO_FRESH for e in events):
+            self.game_over(state)
         for event in events:
             if warned_teamkill(event) and now() - event["at"] < AUTO_FRESH:
                 await self.ban_warned(state, event)
@@ -1171,6 +1182,96 @@ class ServerManager:
                 if now() - self._refused_at.get((ban["id"], state.config.id), 0) < REFUSED_RETRY:
                     continue
                 await self._send_ban(state, ban, "ban" if not ban["removed_at"] else "unban")
+
+    def game_over(self, state: ServerState):
+        """A game just ended: load the next rotation once the end screen has shown, if rotations are on."""
+        if state.rotating or not self.db.rotation_state(state.config.id)["enabled"]:
+            return
+        if not self.db.next_rotation(state.config.id):
+            return
+        state.rotating = True
+        self._tasks.append(asyncio.create_task(self._rotate_after_game(state)))
+
+    async def _rotate_after_game(self, state: ServerState):
+        try:
+            await asyncio.sleep(ROTATE_AFTER)
+            rotation = self.db.next_rotation(state.config.id)
+            if rotation:
+                await self._load_rotation(state, rotation, "game over", "Automatic")
+        finally:
+            state.rotating = False
+
+    async def load_rotation(self, server_id: str, rotation_id: int, by: str) -> str:
+        """Load one rotation now, from the panel. Returns what went wrong, or "" when it loaded."""
+        state = self.states[server_id]
+        rotation = self.db.rotation(rotation_id)
+        if not rotation or rotation["server"] != server_id:
+            return "That rotation isn't on this server."
+        if state.rotating:
+            return "A rotation is already loading on this server."
+        state.rotating = True
+        try:
+            return await self._load_rotation(state, rotation, "loaded from the panel", by)
+        finally:
+            state.rotating = False
+
+    async def _load_rotation(self, state: ServerState, rotation: dict, why: str, by: str) -> str:
+        server, name = state.config.id, rotation["name"]
+        stopped = False
+        try:
+            self.expect_restart(server)
+            await self.server_power(state, "stop")
+            stopped = True
+            await self.wait_stopped(state)
+            await asyncio.to_thread(rotations.install, state.config.log_dir, rotation["folder"], rotation["mission"])
+            await self.server_power(state, "start")
+            stopped = False
+        except Exception as exc:
+            log.exception("loading rotation %s on %s failed", name, server)
+            error = str(exc) or type(exc).__name__
+            if stopped:
+                try:
+                    await self.server_power(state, "start")
+                    after = "The server was started without it, so this game is a normal one."
+                except Exception as again:
+                    after = f"Starting the server again failed too: {again}. Start it from the panel."
+            else:
+                after = "The server wasn't stopped, so the game carries on as normal."
+            self.db.rotated(server, None, error)
+            self.db.log(by, "rotation failed", server, detail=f"{name}: {error}", ok=False)
+            self.db.add_staff_alert(server, now(), f"Rotation failed on {state.config.name}",
+                                    f"Couldn't load **{name}**: {error}\n{after}")
+            return error
+        about = rotation["about"]
+        self.db.rotated(server, rotation["id"])
+        self.db.log(by, "rotation loaded", server, detail=f"{name} ({why})")
+        self.db.add_feed(server, "server", f"Rotation: now {name}")
+        self.db.add_staff_alert(server, now(), f"Rotation on {state.config.name}",
+                                f"Now playing **{name}** ({why}).\nMOBs: {', '.join(about.get('mobs') or []) or '-'}"
+                                f"\nPoints moved: {', '.join(about.get('moved') or []) or 'none'}")
+        return ""
+
+    async def server_power(self, state: ServerState, action: str):
+        if state.config.service:
+            await systemctl(action, state.config.service)
+        elif self.amp_power:
+            await self.amp_power(state, action)
+        else:
+            raise RconError("the panel can't start or stop this server: it has no service and no AMP login")
+
+    async def wait_stopped(self, state: ServerState, pause=3):
+        """Wait for the game program to close after a stop, so its last save is written before the swap."""
+        for _ in range(int(STOP_WAIT / pause)):
+            if state.config.service:
+                running = await self.sampler(state.config.service) is not None
+            else:
+                await self.find_programs()
+                running = bool(state.found_pid)
+            if not running:
+                await asyncio.sleep(pause)
+                return
+            await asyncio.sleep(pause)
+        raise RconError(f"the server was still running {STOP_WAIT} seconds after being stopped")
 
     async def power(self, server_id: str, action: str) -> str:
         state = self.states[server_id]

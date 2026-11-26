@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import shutil
+import struct
 import sys
 import time
 import warnings
@@ -26,7 +27,7 @@ from bot.mortar.solution import OUT_OF_RANGE, apply_wind, bearing, parse_grid, p
 from bot.mortar.wind import Wind
 
 from bot.ranks.rank_rules import RANKS, SECONDS_PER_XP, XP_PER_TEAMKILL
-from . import archive, attacks, auth, ballistics, campaign_save, console, files, investigate, joiners, loadouts, maptiles, memory, mobs, monitor, netcheck, outliers, save_world, site, steamage, whois, workshop, xlsx
+from . import archive, attacks, auth, ballistics, campaign_save, rotation, console, files, investigate, joiners, loadouts, maptiles, memory, mobs, monitor, netcheck, outliers, save_world, site, steamage, whois, workshop, xlsx
 from .amp import GAME_NODE, MAX_ADMINS, Amp, AmpError, instance_name as amp_instance_name, parse_ids
 from .alerts import GOLD, GREEN, RED
 from .config import PanelConfig
@@ -2180,6 +2181,97 @@ async def remove_picture(request):
         audit(request, "removed card picture", None if target == "default" else target)
     flash(request, "Picture removed.")
     raise web.HTTPFound("/settings/pictures")
+
+
+ROTATION_NAME = 60
+
+
+def rotation_folder(request, server_id):
+    return Path(request.app[CONFIG].database).resolve().parent / "rotations" / server_id / str(time.time_ns())
+
+
+async def rotations_page(request):
+    require(request, "rotations")
+    db = request.app[DB]
+    rows = []
+    for st in request.app[MANAGER].states.values():
+        if not st.config.log_dir:
+            continue
+        found = await asyncio.to_thread(rotation.newest_savepoint, st.config.log_dir)
+        nxt = db.next_rotation(st.config.id)
+        rows.append({"state": st, "rotations": db.rotations(st.config.id), "status": db.rotation_state(st.config.id),
+                     "next": nxt["id"] if nxt else None, "loading": st.rotating, "has_save": bool(found)})
+    return render(request, "rotations.html", rows=rows, name_limit=ROTATION_NAME)
+
+
+def rotation_server(request):
+    server_id = request.match_info["id"]
+    state = request.app[MANAGER].states.get(server_id)
+    if not state or not state.config.log_dir:
+        raise web.HTTPNotFound(text="No such server.")
+    return state
+
+
+def rotation_row(request, state):
+    row = request.app[DB].rotation(int(request.match_info["rid"]))
+    if not row or row["server"] != state.config.id:
+        raise web.HTTPNotFound(text="No such rotation.")
+    return row
+
+
+async def capture_rotation(request):
+    require(request, "rotations")
+    state = rotation_server(request)
+    name = " ".join(str((await request.post()).get("name", "")).split())[:ROTATION_NAME]
+    if not name:
+        flash(request, "Give the rotation a name.", "error")
+        raise web.HTTPFound("/settings/rotations")
+    folder = rotation_folder(request, state.config.id)
+    try:
+        mission, about = await asyncio.to_thread(rotation.capture, state.config.log_dir, folder)
+    except (OSError, ValueError, IndexError, struct.error) as exc:
+        shutil.rmtree(folder, ignore_errors=True)
+        audit(request, "rotation save failed", state.config.id, detail=str(exc), ok=False)
+        flash(request, f"Couldn't save it: {exc}", "error")
+        raise web.HTTPFound("/settings/rotations")
+    request.app[DB].add_rotation(state.config.id, name, str(folder), mission, about, request[USER]["username"])
+    audit(request, "rotation saved", state.config.id, target=name)
+    flash(request, f"Saved {name}.")
+    raise web.HTTPFound("/settings/rotations")
+
+
+async def change_rotation(request):
+    require(request, "rotations")
+    state = rotation_server(request)
+    row = rotation_row(request, state)
+    db, what = request.app[DB], request.match_info["what"]
+    if what in ("up", "down"):
+        db.move_rotation(row["id"], -1 if what == "up" else 1)
+    elif what in ("on", "off"):
+        db.set_rotation_active(row["id"], what == "on")
+        audit(request, f"rotation switched {what}", state.config.id, target=row["name"])
+    elif what == "delete":
+        db.delete_rotation(row["id"])
+        shutil.rmtree(row["folder"], ignore_errors=True)
+        audit(request, "rotation deleted", state.config.id, target=row["name"])
+        flash(request, f"Deleted {row['name']}.")
+    elif what == "load":
+        require(request, "power")
+        error = await request.app[MANAGER].load_rotation(state.config.id, row["id"], request[USER]["username"])
+        flash(request, f"Couldn't load it: {error}" if error else f"Loaded {row['name']}. The server is starting.",
+              "error" if error else "ok")
+    else:
+        raise web.HTTPNotFound()
+    raise web.HTTPFound("/settings/rotations")
+
+
+async def switch_rotations(request):
+    require(request, "rotations")
+    state = rotation_server(request)
+    on = request.match_info["what"] == "on"
+    request.app[DB].set_rotation_enabled(state.config.id, on)
+    audit(request, f"rotations switched {'on' if on else 'off'}", state.config.id)
+    raise web.HTTPFound("/settings/rotations")
 
 
 async def picture_serve(request):
@@ -4968,6 +5060,16 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app[BM] = BanSync(app[DB], config.battlemetrics_token, config.battlemetrics_ban_list) \
         if config.battlemetrics_token else None
     app[AMP] = Amp(**config.amp) if config.amp else None
+
+    async def amp_power(state, action):
+        if not app[AMP]:
+            raise AmpError("the panel isn't connected to AMP")
+        name = state.config.amp_instance or amp_instance_name(state.config.log_dir)
+        instance = (await app[AMP].instances()).get(name)
+        if not instance:
+            raise AmpError(f"AMP has no instance called {name or '(unknown)'}")
+        await app[AMP].power(instance, action)
+    app[MANAGER].amp_power = amp_power
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"),
                              autoescape=True, trim_blocks=True, lstrip_blocks=True)
     env.filters.update(axis=_axis, rolename=lambda role: auth.ROLE_NAMES.get(role, role), ts=_ts, ago=_ago, clock=_clock, hms=_hms, until=_until, span=_span, gb=memory.gb,
@@ -5067,6 +5169,10 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_post("/settings/pictures/{id}/remove", remove_picture)
     app.router.add_post("/settings/pictures/{id}/details", save_card_details)
     app.router.add_get("/server-picture/{name}", picture_serve)
+    app.router.add_get("/settings/rotations", rotations_page)
+    app.router.add_post("/settings/rotations/{id}/save", capture_rotation)
+    app.router.add_post("/settings/rotations/{id}/turn/{what:on|off}", switch_rotations)
+    app.router.add_post("/settings/rotations/{id}/{rid:\d+}/{what}", change_rotation)
     app.router.add_get("/control", control_redirect)
     app.router.add_post("/server/{id}/power/{action}", control_power)
     app.router.add_get("/server/{id}/kills.json", control_kills)

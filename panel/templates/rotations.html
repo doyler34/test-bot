@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Rotations · OYB Control{% endblock %}
+{% block body %}
+<p class="kicker"><a href="/settings">← Admin</a></p>
+<h1>Rotations</h1>
+<p class="muted">A rotation is a game set up once and kept: points moved with GM, the kill feed and other GM settings, and the MOBs the game picked. When rotations are on, each game over loads the next one (the server restarts, about a minute). To make one: start a game, set it up with GM, wait for the next autosave (every 10 minutes), then save it here. Do it at the start of a game with nobody else on, as everything in the save comes back.</p>
+
+{% for row in rows %}
+{% set sid = row.state.config.id %}
+<section class="card">
+  <div class="row">
+    <h2>{{ row.state.config.name }}</h2>
+    {% if row.loading %}<span class="badge off">Loading a rotation</span>
+    {% elif row.status.enabled %}<span class="badge on">On</span>{% else %}<span class="badge off">Off</span>{% endif %}
+  </div>
+  {% if row.status.last_at %}
+  <p class="muted">
+    {% if row.status.last_error %}<span class="warn">Last try failed {{ row.status.last_at|ago }}: {{ row.status.last_error }}</span>
+    {% else %}Last loaded {{ row.status.last_at|ago }}.{% endif %}
+  </p>
+  {% endif %}
+
+  {% if row.rotations %}
+  <div class="scroll"><table class="stack">
+    <thead><tr><th>Rotation</th><th>MOBs</th><th>Points moved</th><th></th></tr></thead>
+    <tbody>
+    {% for r in row.rotations %}
+    <tr>
+      <td>{{ r.name }}{% if r.id == row.next %} <span class="pill gold">Next</span>{% endif %}{% if not r.active %} <span class="pill">Off</span>{% endif %}</td>
+      <td data-label="MOBs">{{ r.about.mobs|join(", ") or "-" }}</td>
+      <td data-label="Points moved">{{ r.about.moved|join(", ") or "none" }}</td>
+      <td class="actions row-actions">
+        {% for what, label in (("up", "↑"), ("down", "↓")) %}
+        <form method="post" action="/settings/rotations/{{ sid }}/{{ r.id }}/{{ what }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="small ghost" aria-label="Move {{ what }}">{{ label }}</button>
+        </form>
+        {% endfor %}
+        <form method="post" action="/settings/rotations/{{ sid }}/{{ r.id }}/{{ 'off' if r.active else 'on' }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="small ghost">{{ "Switch off" if r.active else "Switch on" }}</button>
+        </form>
+        {% if can("power") %}
+        <form method="post" action="/settings/rotations/{{ sid }}/{{ r.id }}/load" data-confirm="Load {{ r.name }} on {{ row.state.config.name }} now? The server restarts and everyone on it gets kicked.">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="small">Load now</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/settings/rotations/{{ sid }}/{{ r.id }}/delete" data-confirm="Delete {{ r.name }}? It can't be got back.">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="small danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">No rotations saved yet.</p>
+  {% endif %}
+
+  <form method="post" action="/settings/rotations/{{ sid }}/save" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Name <input name="name" maxlength="{{ name_limit }}" placeholder="Black Lake vs Le Moule, west points" required></label>
+    <button class="small"{% if not row.has_save %} disabled title="No autosave yet"{% endif %}>Save the newest autosave as a rotation</button>
+  </form>
+
+  <form method="post" action="/settings/rotations/{{ sid }}/turn/{{ 'off' if row.status.enabled else 'on' }}"
+    {% if not row.status.enabled %}data-confirm="Turn rotations on for {{ row.state.config.name }}? From the next game over, the server restarts onto the next rotation."{% endif %}>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="small{{ ' ghost' if row.status.enabled else '' }}"{% if not row.rotations and not row.status.enabled %} disabled{% endif %}>{{ "Turn rotations off" if row.status.enabled else "Turn rotations on" }}</button>
+  </form>
+</section>
+{% else %}
+<p class="muted">No server has its log folder set, so there's nothing to rotate.</p>
+{% endfor %}
+{% endblock %}

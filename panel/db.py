@@ -407,6 +407,25 @@ CREATE TABLE IF NOT EXISTS save_latest (
     data TEXT,
     PRIMARY KEY (server, game, kind, key)
 );
+CREATE TABLE IF NOT EXISTS rotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    server TEXT NOT NULL,
+    name TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    mission TEXT NOT NULL,
+    about TEXT NOT NULL DEFAULT '{}',
+    position INTEGER NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_by TEXT,
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rotation_state (
+    server TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    last_id INTEGER,
+    last_at INTEGER,
+    last_error TEXT
+);
 """
 
 
@@ -1216,6 +1235,73 @@ class PanelDB:
             if author:
                 out.setdefault(author, set()).add(r["key"])
         return out
+
+    def rotations(self, server):
+        rows = self.all("SELECT * FROM rotations WHERE server = ? ORDER BY position, id", server)
+        return [{**dict(r), "about": json.loads(r["about"] or "{}")} for r in rows]
+
+    def rotation(self, rotation_id):
+        row = self.one("SELECT * FROM rotations WHERE id = ?", rotation_id)
+        return {**dict(row), "about": json.loads(row["about"] or "{}")} if row else None
+
+    def add_rotation(self, server, name, folder, mission, about, by) -> int:
+        last = self.one("SELECT MAX(position) AS p FROM rotations WHERE server = ?", server)["p"]
+        return self.write("INSERT INTO rotations (server, name, folder, mission, about, position, created_by, created_at)"
+                          " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", server, name, folder, mission, json.dumps(about),
+                          (last or 0) + 1, by, now())
+
+    def move_rotation(self, rotation_id, step):
+        """Swap a rotation with the one before (step -1) or after (step 1) it."""
+        row = self.rotation(rotation_id)
+        if not row:
+            return
+        order = self.rotations(row["server"])
+        at = next(i for i, r in enumerate(order) if r["id"] == rotation_id)
+        other = at + step
+        if not 0 <= other < len(order):
+            return
+        order[at], order[other] = order[other], order[at]
+        with self.db:
+            for position, r in enumerate(order, 1):
+                self.db.execute("UPDATE rotations SET position = ? WHERE id = ?", (position, r["id"]))
+
+    def set_rotation_active(self, rotation_id, active):
+        self.write("UPDATE rotations SET active = ? WHERE id = ?", 1 if active else 0, rotation_id)
+
+    def delete_rotation(self, rotation_id):
+        row = self.rotation(rotation_id)
+        if not row:
+            return
+        order = [r["id"] for r in self.rotations(row["server"])]
+        # The one before takes its place as "loaded last", so the next game over still loads the one after it.
+        before = order[order.index(rotation_id) - 1] if len(order) > 1 else None
+        with self.db:
+            self.db.execute("DELETE FROM rotations WHERE id = ?", (rotation_id,))
+            self.db.execute("UPDATE rotation_state SET last_id = ? WHERE server = ? AND last_id = ?",
+                            (before, row["server"], rotation_id))
+
+    def rotation_state(self, server):
+        row = self.one("SELECT * FROM rotation_state WHERE server = ?", server)
+        return dict(row) if row else {"server": server, "enabled": 0, "last_id": None, "last_at": None, "last_error": None}
+
+    def set_rotation_enabled(self, server, enabled):
+        self.write("INSERT INTO rotation_state (server, enabled) VALUES (?, ?)"
+                   " ON CONFLICT(server) DO UPDATE SET enabled = excluded.enabled", server, 1 if enabled else 0)
+
+    def next_rotation(self, server):
+        """The switched-on rotation after the one loaded last, going back to the first after the end."""
+        on = [r for r in self.rotations(server) if r["active"]]
+        if not on:
+            return None
+        last = self.rotation(self.rotation_state(server)["last_id"] or 0)
+        later = [r for r in on if last and (r["position"], r["id"]) > (last["position"], last["id"])]
+        return later[0] if later else on[0]
+
+    def rotated(self, server, rotation_id, error=""):
+        self.write("INSERT INTO rotation_state (server, last_id, last_at, last_error) VALUES (?, ?, ?, ?)"
+                   " ON CONFLICT(server) DO UPDATE SET last_id = COALESCE(excluded.last_id, last_id),"
+                   " last_at = excluded.last_at, last_error = excluded.last_error",
+                   server, rotation_id, now(), error or None)
 
     def prune_save_history(self, days=7):
         """A game's autosaves are only compared while it runs and for its boards, so a week is plenty."""

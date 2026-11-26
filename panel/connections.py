@@ -37,6 +37,7 @@ SCRIPT_ERROR = re.compile(r"SCRIPT\s*\(E\).*(NULL pointer|INSTIGATOR_OTHER)")
 # The game's own lines for a vote to kick: who started it against whom, then whether it passed.
 VOTE_START = re.compile(r"VOTING SYSTEM - Player '(.*)' \(with player id = \d+\) started a vote to kick player "
                         r"'(.*)' \(with player id = \d+\)")
+GAME_OVER = "SCR_BaseGameMode::OnGameStateChanged = POSTGAME"
 VOTE_END = re.compile(r"VOTING SYSTEM - Vote to kick player '(.*)' \(with player id = \d+\) (failed|succeeded)")
 PENDING_SECONDS = 600
 
@@ -149,6 +150,8 @@ class LogReader:
         elif "VOTING SYSTEM" in line and (match := VOTE_END.search(line)):
             outcome = "passed: they were kicked" if match[2] == "succeeded" else "failed"
             return {"kind": "vote", "at": at, "text": f"Vote to kick {match[1]} {outcome}", "ip": ""}
+        elif GAME_OVER in line:
+            return {"kind": "gameover", "at": at}
         elif match := FPS.search(line):
             return {"kind": "fps", "at": at, "fps": float(match[1])}
         elif match := DISCONNECT.search(line):
