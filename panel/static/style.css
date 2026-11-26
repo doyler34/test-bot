@@ -1867,3 +1867,10 @@ form.rename input[name=name] { display: inline-block; width: 12em; margin: 0; pa
   .dock { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
   .section-tabs a { padding: 6px 10px; font-size: .95rem; }
 }
+
+/* Automatic bans to check: the buttons come first, so nothing needs scrolling to reach them. */
+.review-list { list-style: none; margin: 0; padding: 0; }
+.review-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.review-list li:first-child { border-top: 0; }
+.review-buttons { display: flex; gap: 6px; flex: none; }
+.review-buttons form { margin: 0; }

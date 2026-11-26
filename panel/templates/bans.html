@@ -46,25 +46,24 @@
 <section class="card">
   <h2>Automatic bans to check <span class="muted">{{ to_review|length }}</span></h2>
   <p class="muted">Bans the panel made by itself (teamkills, mines, stacked loadouts, IP matches). Check each one: <b>Keep</b> takes it off this list, <b>Lift</b> unbans them on every server.</p>
-  <div class="scroll"><table>
-    <thead><tr><th>Player</th><th>Why</th><th>Until</th><th></th></tr></thead>
-    <tbody>
+  <ul class="review-list">
     {% for b in to_review %}
-    <tr><td><a href="/player/{{ b.identity }}">{{ b.name or b.identity }}</a></td><td>{{ b.reason }}</td>
-        <td>{{ b.expires_at|ts if b.expires_at else "Permanent" }}</td>
-        <td class="actions">
-          <form method="post" action="/bans/{{ b.id }}/keep" class="inline">
-            <input type="hidden" name="csrf" value="{{ csrf }}"><button class="small">Keep</button>
-          </form>
-          {% if can("unban") %}
-          <form method="post" action="/bans/{{ b.id }}/remove" class="inline" data-confirm="Lift the ban on {{ b.name or b.identity }} on every server?">
-            <input type="hidden" name="csrf" value="{{ csrf }}"><button class="small danger">Lift</button>
-          </form>
-          {% endif %}
-        </td></tr>
+    <li>
+      <span class="review-buttons">
+        <form method="post" action="/bans/{{ b.id }}/keep">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="small">Keep</button>
+        </form>
+        {% if can("unban") %}
+        <form method="post" action="/bans/{{ b.id }}/remove" data-confirm="Lift the ban on {{ b.name or b.identity }} on every server?">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="small danger">Lift</button>
+        </form>
+        {% endif %}
+      </span>
+      <a href="/player/{{ b.identity }}">{{ b.name or b.identity }}</a>
+      <span class="muted">{{ b.reason }} · {{ "until " ~ b.expires_at|ts if b.expires_at else "permanent" }}</span>
+    </li>
     {% endfor %}
-    </tbody>
-  </table></div>
+  </ul>
 </section>
 {% endif %}
 
