@@ -4,7 +4,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from panel.feedsides import feed_parts, sides_from
+from panel.feedsides import SidesAt, feed_parts, picks_from, sides_from
 
 FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"), "tks": ("teamkill",), "sus": ("sus",),
               "votes": ("vote",), "rcon": ("rcon", "server"), "admin": ()}
@@ -920,8 +920,10 @@ class PanelDB:
             parts, args = [events, actions], [server, limit, server, limit]
         rows = self.all(f"SELECT at, kind, text, ip FROM ({' UNION ALL '.join(parts)})"
                         " ORDER BY at DESC, src, id DESC LIMIT ?", *args, limit)
-        sides = self.sides(server) if any(r["kind"] in MARKED_KINDS for r in rows) else {}
-        shown = [{**row, "parts": feed_parts(row["kind"], row["text"], sides)} for row in map(dict, rows)]
+        picks = self.side_picks(server) if any(r["kind"] in MARKED_KINDS for r in rows) else {}
+        # Each line shows the side the player was on at the time, not the one they're on now.
+        shown = [{**row, "parts": feed_parts(row["kind"], row["text"], SidesAt(picks, row["at"]))}
+                 for row in map(dict, rows)]
         ids = self.identities({name for row in shown for chip, name in row["parts"] if chip})
         for row in shown:
             row["ids"] = ids
@@ -937,6 +939,11 @@ class PanelDB:
                               " ORDER BY last_seen", *chunk):
                 found[r["name"]] = r["identity"]
         return found
+
+    def side_picks(self, server):
+        """Every side pick on this server in the feed, by name, oldest first."""
+        return picks_from((r["at"], r["text"]) for r in self.all(
+            "SELECT at, text FROM feed WHERE server = ? AND kind = 'side' ORDER BY at DESC, id DESC LIMIT 2000", server))
 
     def sides(self, server):
         """The side each player last picked on this server, from the feed's join rows."""

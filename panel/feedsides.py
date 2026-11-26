@@ -20,6 +20,32 @@ def sides_from(texts):
     return picked
 
 
+class SidesAt:
+    """The side each player was on at one moment, from their side picks over time, so a line from before
+    someone switched still shows the side they were on then."""
+
+    def __init__(self, picks, at):
+        self.picks, self.at = picks, at
+
+    def get(self, name):
+        side = None
+        for when, picked in self.picks.get(name, ()):
+            if when > self.at:
+                break
+            side = picked
+        return side
+
+
+def picks_from(rows):
+    """{name: [(at, side), ...] oldest first} from the feed's "<name> joined <side>" rows."""
+    picks = {}
+    for at, text in sorted(rows):
+        match = JOINED.fullmatch(text)
+        if match:
+            picks.setdefault(match[1], []).append((at, match[2]))
+    return picks
+
+
 def player(name, side):
     """A name with its chip; the AI has no side to show."""
     if name == "AI":

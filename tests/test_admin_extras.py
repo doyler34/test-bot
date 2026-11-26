@@ -98,3 +98,15 @@ class AutoBans(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FeedSides(unittest.TestCase):
+    def test_a_line_shows_the_side_the_player_was_on_then(self):
+        db = PanelDB(":memory:")
+        self.addCleanup(db.close)
+        for at, text, kind in ((100, "GazLagom joined USSR", "side"), (200, "GazLagom killed Rook (40 m)", "kill"),
+                               (300, "GazLagom joined US", "side"), (400, "GazLagom killed Brix (50 m)", "kill")):
+            db.db.execute("INSERT INTO feed (server, at, kind, text, ip) VALUES ('one', ?, ?, ?, '')", (at, kind, text))
+        db.db.commit()
+        chips = {row["text"]: row["parts"][0][0] for row in db.feed("one") if row["kind"] == "kill"}
+        self.assertEqual(chips, {"GazLagom killed Rook (40 m)": "ussr", "GazLagom killed Brix (50 m)": "us"})
