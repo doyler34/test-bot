@@ -174,6 +174,15 @@ class GameOver(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await self.manager.load_rotation("one", 999, "boss"), "That rotation isn't on this server.")
         self.assertEqual(self.calls, ["stop", "start"])
 
+    def test_new_game_starts_on_the_next_rotation(self):
+        self.assertIsNone(self.manager.new_game_rotation("one", "boss"))
+        shutil.rmtree(rotation.game_folder(self.logs))
+        self.db.set_rotation_enabled("one", True)
+        self.assertEqual(self.manager.new_game_rotation("one", "boss")["id"], self.rid)
+        points = [p.name for p in (rotation.game_folder(self.logs) / MISSION).rglob("savepoint*")]
+        self.assertEqual(points, ["savepoint1"])
+        self.assertEqual(self.db.rotation_state("one")["last_id"], self.rid)
+
 
 if __name__ == "__main__":
     unittest.main()

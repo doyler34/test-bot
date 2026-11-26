@@ -3255,6 +3255,15 @@ async def manage_newgame(request):
         flash(request, f"{inst} wasn't reset: {exc}", "error")
         raise web.HTTPFound(back)
     problem = ""
+    manager = request.app[MANAGER]
+    state = next((st for st in manager.states.values()
+                  if (st.config.amp_instance or amp_instance_name(st.config.log_dir)) == inst), None)
+    rotation = None
+    if state:
+        try:
+            rotation = manager.new_game_rotation(state.config.id, request[USER]["username"])
+        except OSError as exc:
+            problem = f" Its next rotation couldn't be put in ({exc}), so it's a normal new game."
     if was_running:
         try:
             await request.app[AMP].instance_power(inst, "start")
@@ -3262,7 +3271,9 @@ async def manage_newgame(request):
             problem = f" It didn't start again ({exc}). Start it from here."
     audit(request, "new game", inst, detail=f"old save kept at {kept}", ok=not problem)
     alert(request, f"New game: {inst}", f"By {request[USER]['username']}. The old save is kept at {kept}.", colour=GOLD)
-    flash(request, f"{inst} is on a new game. Its old save is kept at {kept}." + problem, "error" if problem else "ok")
+    on = f" It starts on the rotation {rotation['name']}." if rotation else ""
+    flash(request, f"{inst} is on a new game.{on} Its old save is kept at {kept}." + problem,
+          "error" if problem else "ok")
     raise web.HTTPFound(back)
 
 
@@ -5188,7 +5199,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/settings/rotations", rotations_page)
     app.router.add_post("/settings/rotations/{id}/save", capture_rotation)
     app.router.add_post("/settings/rotations/{id}/turn/{what:on|off}", switch_rotations)
-    app.router.add_post("/settings/rotations/{id}/{rid:\d+}/{what}", change_rotation)
+    app.router.add_post(r"/settings/rotations/{id}/{rid:\d+}/{what}", change_rotation)
     app.router.add_get("/control", control_redirect)
     app.router.add_post("/server/{id}/power/{action}", control_power)
     app.router.add_get("/server/{id}/kills.json", control_kills)

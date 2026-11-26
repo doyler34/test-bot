@@ -1262,6 +1262,23 @@ class ServerManager:
         finally:
             state.rotating = False
 
+    def new_game_rotation(self, server_id: str, by: str):
+        """New game was pressed and the old save is gone: put the next rotation in as the save, if rotations are on,
+        so the server starts on it. Only call this with the server stopped. Returns the rotation, or None."""
+        state = self.states[server_id]
+        if not state.config.log_dir or not self.db.rotation_state(server_id)["enabled"]:
+            return None
+        rotation = self.db.next_rotation(server_id)
+        if not rotation:
+            return None
+        rotations.install(state.config.log_dir, rotation["folder"], rotation["mission"])
+        self.rotation_done(state, rotation, "new game", by)
+        try:
+            self.restage(server_id)
+        except OSError:
+            log.exception("readying the next rotation on %s failed", server_id)
+        return rotation
+
     async def _load_rotation(self, state: ServerState, rotation: dict, why: str, by: str) -> str:
         server, name = state.config.id, rotation["name"]
         stopped = False
