@@ -324,9 +324,6 @@ def window_factions(db, guild, start, end, server):
 
 # What a board counts. A kill credited from further than this is the log blaming the wrong player.
 MAX_DISTANCE = 2000
-# Kills of the same victim by the same killer in one match past this many are left off: an alt on the
-# other side feeding kills shows up as one name over and over.
-REPEAT_CAP = 3
 BOARD = f"{SCORED} AND COALESCE(e.damage_type,'')<>'COLLISION' AND COALESCE(e.distance,0)<={MAX_DISTANCE}"
 
 
@@ -335,7 +332,7 @@ def window_standings(db, guild, start, end=None, server=None, ground=None):
     taken off. Heli kills are left out (they have their own board).
 
     A kill counts only from under 2 km, not by running someone over, never on one of the killer's own
-    accounts, and at most REPEAT_CAP times on the same victim in a match. Without `server` (the weekly
+    accounts. Without `server` (the weekly
     board) only kills inside a recorded match, or in the match running now, count, so kills in the
     gaps between matches don't.
 
@@ -368,16 +365,12 @@ def window_standings(db, guild, start, end=None, server=None, ground=None):
               AND NOT EXISTS (SELECT 1 FROM account_links k JOIN account_links v
                               ON v.guild=k.guild AND v.discord_id=k.discord_id
                               WHERE k.guild=? AND k.identity=e.killer AND v.identity=e.victim)
-        ), ranked AS (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY game, killer, victim, relation ORDER BY occurred) AS n
-            FROM scored
         ), tallied AS (
             SELECT identity, SUM(kills) AS kills, SUM(teamkills) AS teamkills, SUM(deaths) AS deaths FROM (
-                SELECT killer AS identity, CASE WHEN relation='ENEMY' AND n<={REPEAT_CAP} THEN 1 ELSE 0 END AS kills,
-                       CASE WHEN relation='TK' THEN 1 ELSE 0 END AS teamkills, 0 AS deaths FROM ranked
+                SELECT killer AS identity, CASE WHEN relation='ENEMY' THEN 1 ELSE 0 END AS kills,
+                       CASE WHEN relation='TK' THEN 1 ELSE 0 END AS teamkills, 0 AS deaths FROM scored
                 UNION ALL
-                SELECT victim AS identity, 0, 0, CASE WHEN relation<>'ENEMY' OR n<={REPEAT_CAP} THEN 1 ELSE 0 END
-                FROM ranked
+                SELECT victim AS identity, 0, 0, 1 FROM scored
                 {present}
             ) GROUP BY identity
         )

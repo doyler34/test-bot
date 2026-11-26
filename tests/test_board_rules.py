@@ -7,7 +7,7 @@ import unittest
 
 from bot.discord.leaderboard_command import side_of, table
 from bot.storage.account_links import AccountLinks
-from bot.storage.combat_store import (MAX_DISTANCE, REPEAT_CAP, migrate, record_match, stamp, window_sides,
+from bot.storage.combat_store import (MAX_DISTANCE, migrate, record_match, stamp, window_sides,
                                       window_standings)
 
 ALPHA = '11111111-0000-4000-8000-000000000001'
@@ -60,19 +60,11 @@ class BoardRules(unittest.TestCase):
         self.kill(3, ALPHA, foe(3), distance=MAX_DISTANCE)
         self.assertEqual(self.board()[10], (1, 0))
 
-    def test_the_same_victim_counts_a_few_times_a_match(self):
-        for n in range(REPEAT_CAP + 3):
+    def test_every_kill_on_the_same_victim_counts(self):
+        for n in range(6):
             self.kill(n, ALPHA, BRAVO)
-        self.assertEqual(self.board(server='one')[10], (REPEAT_CAP, 0))
-        self.assertEqual(self.board(server='one')[20], (0, REPEAT_CAP))
-
-    def test_the_cap_starts_again_each_match(self):
-        record_match(self.db, 'one', 'Server 1', START, START + timedelta(minutes=30))
-        record_match(self.db, 'one', 'Server 1', START + timedelta(minutes=40), START + timedelta(minutes=90))
-        for n in range(REPEAT_CAP + 1):
-            self.kill(n, ALPHA, BRAVO)
-            self.kill(45 + n, ALPHA, BRAVO)
-        self.assertEqual(self.board()[10], (2 * REPEAT_CAP, 0))
+        self.assertEqual(self.board(server='one')[10], (6, 0))
+        self.assertEqual(self.board(server='one')[20], (0, 6))
 
     def test_killing_your_own_other_account_does_not_count(self):
         self.kill(1, ALPHA, ALPHA_XBOX)
