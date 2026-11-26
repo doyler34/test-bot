@@ -184,6 +184,42 @@ class GameOver(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.rotation_state("one")["last_id"], self.rid)
 
 
+class CopyToAnotherServer(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        import re
+        from aiohttp.test_utils import TestClient, TestServer
+        from panel import auth
+        from panel.web import create_app
+        self.re = re
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.db = PanelDB(":memory:")
+        self.db.add_user("boss", auth.hash_password("boss-password"), "owner")
+        logs = {n: self.tmp / n / "profile" / "logs" for n in ("one", "two")}
+        config = PanelConfig(database=str(self.tmp / "panel.db"), cookie_secure=False,
+                             servers=[ServerConfig(n, f"Server {n}", log_dir=str(d)) for n, d in logs.items()])
+        self.manager = ServerManager(config, self.db, alerts=Alerts(""))
+        put_save(logs["one"], 1, 100, a_setup())
+        kept = self.tmp / "kept"
+        mission, about = rotation.capture(logs["one"], kept)
+        self.rid = self.db.add_rotation("one", "West", str(kept), mission, about, "boss")
+        self.client = TestClient(TestServer(create_app(config, self.db, self.manager, start_manager=False)))
+        await self.client.start_server()
+        self.addAsyncCleanup(self.client.close)
+        await self.client.post("/login", data={"username": "boss", "password": "boss-password"})
+
+    async def test_a_rotation_copies_to_another_server(self):
+        page = await (await self.client.get("/settings/rotations")).text()
+        self.assertIn('<option value="two">Server two</option>', page)
+        token = self.re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+        await self.client.post(f"/settings/rotations/one/{self.rid}/copy", data={"csrf": token, "to": "two"})
+        copied = self.db.rotations("two")
+        self.assertEqual([r["name"] for r in copied], ["West"])
+        self.assertNotEqual(copied[0]["folder"], self.db.rotation(self.rid)["folder"])
+        self.assertTrue(any(Path(copied[0]["folder"]).glob("savepoint*")))
+        self.assertEqual(len(self.db.rotations("one")), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
 

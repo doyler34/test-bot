@@ -2214,6 +2214,7 @@ async def rotations_page(request):
                      "next": nxt["id"] if nxt else None, "loading": st.rotating, "has_save": bool(found),
                      "mode": request.app[MANAGER].rotation_mode(st)})
     return render(request, "rotations.html", rows=rows, name_limit=ROTATION_NAME, script=rotation.RESET_SCRIPT,
+                  copy_targets=[(r["state"].config.id, r["state"].config.name) for r in rows],
                   script_line=ROTATION_SCRIPT_LINE)
 
 
@@ -2269,6 +2270,8 @@ async def change_rotation(request):
         shutil.rmtree(row["folder"], ignore_errors=True)
         audit(request, "rotation deleted", state.config.id, target=row["name"])
         flash(request, f"Deleted {row['name']}.")
+    elif what == "copy":
+        await copy_rotation(request, state, row)
     elif what == "load":
         require(request, "power")
         error = await request.app[MANAGER].load_rotation(state.config.id, row["id"], request[USER]["username"])
@@ -2278,6 +2281,30 @@ async def change_rotation(request):
         raise web.HTTPNotFound()
     await restage(request, state)
     raise web.HTTPFound("/settings/rotations")
+
+
+async def copy_rotation(request, state, row):
+    """Copy a rotation to another server, which starts its own copy at the end of its list."""
+    target = request.app[MANAGER].states.get(str((await request.post()).get("to", "")))
+    if not target or not target.config.log_dir or target is state:
+        flash(request, "Pick another server to copy it to.", "error")
+        return
+    found = await asyncio.to_thread(rotation.newest_savepoint, target.config.log_dir)
+    if found and found[1] != row["mission"]:
+        flash(request, f"{target.config.name} is on a different scenario, so {row['name']} can't load there.", "error")
+        return
+    folder = rotation_folder(request, target.config.id)
+    try:
+        await asyncio.to_thread(shutil.copytree, row["folder"], folder)
+    except OSError as exc:
+        shutil.rmtree(folder, ignore_errors=True)
+        flash(request, f"Couldn't copy it: {exc}", "error")
+        return
+    request.app[DB].add_rotation(target.config.id, row["name"], str(folder), row["mission"], row["about"],
+                                 request[USER]["username"])
+    audit(request, "rotation copied", target.config.id, target=row["name"], detail=f"from {state.config.name}")
+    flash(request, f"Copied {row['name']} to {target.config.name}.")
+    await restage(request, target)
 
 
 async def switch_rotations(request):
