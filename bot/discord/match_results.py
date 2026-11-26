@@ -6,7 +6,7 @@ import discord
 
 from bot.config import game_leaderboard_channel_id, live_board_channel_id
 from bot.discord.leaderboard_command import bases_line, match_bases, match_rows, table
-from bot.storage.combat_store import match_number, record_match, record_match_players
+from bot.storage.combat_store import match_number, record_match
 
 LOG = logging.getLogger('reforger.match')
 # The log ingestor polls every 15s, so wait a few cycles for the closing kills
@@ -118,10 +118,7 @@ class MatchResults:
             await asyncio.sleep(SETTLE)
             bases = {}
             try:
-                # Everyone who gained game XP played the match, kills or not, so it pays them match XP.
-                bases, gains = match_bases(self.bot.account_links, server_id, start, end)
-                record_match_players(self.bot.account_links.db, server_id, start,
-                                     [identity for identity, gained in gains.items() if gained > 0])
+                bases, _ = match_bases(self.bot.account_links, server_id, start, end)
             except Exception:
                 LOG.exception('Could not read the autosaves for the %s match', server_name)
             guild = self.bot.get_guild(self.bot.config.guild_id)

@@ -79,10 +79,6 @@ def migrate(db):
             server TEXT NOT NULL, occurred TEXT NOT NULL, identity TEXT NOT NULL,
             PRIMARY KEY(server, occurred, identity))''')
         db.execute('CREATE INDEX IF NOT EXISTS combat_presence_seen ON combat_presence(server,occurred)')
-        # Who gained game XP in a match (medics, drivers, builders): they played it, so it pays match XP.
-        db.execute('''CREATE TABLE IF NOT EXISTS combat_match_players (
-            server TEXT NOT NULL, started TEXT NOT NULL, identity TEXT NOT NULL,
-            PRIMARY KEY(server, started, identity))''')
         # The side each player picked, so a board can show it. Rows from before this keep NULL.
         if 'faction' not in {row[1] for row in db.execute('PRAGMA table_info(combat_presence)')}:
             db.execute('ALTER TABLE combat_presence ADD COLUMN faction TEXT')
@@ -253,16 +249,13 @@ def combat_xp(db, identity):
         COALESCE(SUM(CASE WHEN relation='ENEMY' THEN 1 END),0),
         COALESCE(SUM(CASE WHEN relation='TK' THEN 1 END),0)
         FROM combat_events WHERE killer IN ({marks}) AND {SCORED}''', who).fetchone()
-    # A match only pays out if they actually played it: fought in it, or gained game XP (healing,
-    # driving, building, capturing), so idling in the lobby earns nothing. One match, one payout,
-    # however many accounts played.
+    # A match only pays out if they actually fought in it, so idling in the
+    # lobby earns nothing. One match, one payout, however many accounts played.
     matches = db.execute(f'''SELECT COUNT(*) FROM combat_matches m
         WHERE EXISTS (SELECT 1 FROM combat_events e
             WHERE e.server=m.server AND e.occurred>=m.started AND e.occurred<=m.ended
-              AND (e.killer IN ({marks}) OR e.victim IN ({marks})) AND {SCORED})
-           OR EXISTS (SELECT 1 FROM combat_match_players p
-            WHERE p.server=m.server AND p.started=m.started AND p.identity IN ({marks}))''',
-        (*who, *who, *who)).fetchone()[0]
+              AND (e.killer IN ({marks}) OR e.victim IN ({marks})) AND {SCORED})''',
+        (*who, *who)).fetchone()[0]
     return kills*XP_PER_KILL + teamkills*XP_PER_TEAMKILL + matches*XP_PER_MATCH
 
 
@@ -420,13 +413,6 @@ def window_present(db, start, end, server):
             UNION SELECT killer FROM combat_events e WHERE server=? AND occurred>=? AND occurred<? AND {SCORED}
             UNION SELECT victim FROM combat_events e WHERE server=? AND occurred>=? AND occurred<? AND {SCORED}''',
         (server, low, high) * 3) if row[0]}
-
-
-def record_match_players(db, server, start, identities):
-    """The accounts that gained game XP in a finished match: they played it, kills or not, so it pays."""
-    with db:
-        db.executemany('INSERT OR IGNORE INTO combat_match_players VALUES (?,?,?)',
-                       [(server, stamp(start), identity) for identity in identities])
 
 
 def window_sides(db, guild, start, end=None, server=None):

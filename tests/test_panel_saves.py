@@ -1,5 +1,4 @@
-"""Game XP and bases from OYB Control's kept autosaves on the match boards, and match XP for players who
-gained game XP without a kill."""
+"""Game XP and bases from OYB Control's kept autosaves on the match boards."""
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,10 +8,9 @@ from unittest.mock import patch
 
 from bot.discord.leaderboard_command import bases_line, match_rows, table
 from bot.discord.live_board import board_embeds
-from bot.ranks.rank_rules import XP_PER_MATCH
 from bot.storage import panel_saves
 from bot.storage.account_links import AccountLinks
-from bot.storage.combat_store import combat_xp, migrate, record_match, record_match_players, stamp
+from bot.storage.combat_store import combat_xp, migrate, record_match, stamp
 from panel.db import PanelDB
 
 MEDIC = '11111111-0000-4000-8000-000000000001'
@@ -96,13 +94,9 @@ class Boards(unittest.TestCase):
         live = board_embeds('Server 1', [('Rook', 3, 1, 'US', 120)], START, None, '#0001A', {'US': 24})
         self.assertNotIn('Bases at the end', live[0].description)
 
-    def test_a_medic_with_no_kills_still_gets_match_xp(self):
+    def test_no_kill_and_no_death_means_no_match_xp(self):
         record_match(self.links.db, 'one', 'Server 1', START, END)
         self.assertEqual(combat_xp(self.links.db, MEDIC), 0)
-        record_match_players(self.links.db, 'one', START, [MEDIC])
-        self.assertEqual(combat_xp(self.links.db, MEDIC), XP_PER_MATCH)
-        record_match_players(self.links.db, 'one', START, [MEDIC])
-        self.assertEqual(combat_xp(self.links.db, MEDIC), XP_PER_MATCH)
 
 
 if __name__ == '__main__':
