@@ -181,6 +181,9 @@ KILL_LOG_SECONDS = 12 * 3600
 ROTATE_AFTER = 40
 # How long a stopping server gets to write its last save and close.
 STOP_WAIT = 180
+# The postgame reset script restarts the server within a couple of minutes of game over; after this long the
+# rotation it copied in should be the game's save.
+RESET_SETTLE = 180
 
 
 class ServerManager:
@@ -1183,14 +1186,58 @@ class ServerManager:
                     continue
                 await self._send_ban(state, ban, "ban" if not ban["removed_at"] else "unban")
 
+    def rotation_mode(self, state: ServerState) -> str:
+        """How a rotation gets loaded at game over: "panel" stops, swaps and starts the server itself; "script" leaves
+        it to the postgame reset script, which copies rotation-next in; "old" is a reset script without that line,
+        which would delete whatever the panel put in, so nothing is loaded at game over."""
+        if state.config.service:
+            return "panel"
+        return {"ready": "script", "old": "old"}.get(rotations.reset_script(), "panel")
+
+    def restage(self, server_id: str):
+        """Keep rotation-next holding the rotation the reset script should load next, or empty when there's none."""
+        state = self.states[server_id]
+        if not state.config.log_dir or self.rotation_mode(state) != "script":
+            return
+        nxt = self.db.next_rotation(server_id) if self.db.rotation_state(server_id)["enabled"] else None
+        if not nxt:
+            rotations.unstage(state.config.log_dir)
+        elif rotations.staged(state.config.log_dir) != nxt["id"]:
+            rotations.stage(state.config.log_dir, nxt["id"], nxt["folder"], nxt["mission"])
+
     def game_over(self, state: ServerState):
         """A game just ended: load the next rotation once the end screen has shown, if rotations are on."""
         if state.rotating or not self.db.rotation_state(state.config.id)["enabled"]:
             return
-        if not self.db.next_rotation(state.config.id):
+        mode = self.rotation_mode(state)
+        if mode == "old" or not self.db.next_rotation(state.config.id):
             return
         state.rotating = True
-        self._tasks.append(asyncio.create_task(self._rotate_after_game(state)))
+        self._tasks.append(asyncio.create_task(
+            self._after_reset(state) if mode == "script" else self._rotate_after_game(state)))
+
+    async def _after_reset(self, state: ServerState):
+        """The reset script is restarting the server with rotation-next as its save: once it's back, say which
+        rotation is on, and ready the one after it."""
+        server = state.config.id
+        try:
+            rotation = self.db.rotation(rotations.staged(state.config.log_dir) or 0)
+            if not rotation:
+                return
+            await asyncio.sleep(RESET_SETTLE)
+            if await asyncio.to_thread(rotations.loaded, state.config.log_dir, rotation["folder"], rotation["mission"]):
+                self.rotation_done(state, rotation, "game over", "Automatic")
+            else:
+                error = "the reset script didn't put the rotation in"
+                self.db.rotated(server, None, error)
+                self.db.add_staff_alert(server, now(), f"Rotation failed on {state.config.name}",
+                                        f"Couldn't load **{rotation['name']}**: {error}, so this game is a normal "
+                                        "one. Check the rotation line is in the reset script.")
+            self.restage(server)
+        except Exception:
+            log.exception("after the postgame reset on %s", server)
+        finally:
+            state.rotating = False
 
     async def _rotate_after_game(self, state: ServerState):
         try:
@@ -1242,14 +1289,21 @@ class ServerManager:
             self.db.add_staff_alert(server, now(), f"Rotation failed on {state.config.name}",
                                     f"Couldn't load **{name}**: {error}\n{after}")
             return error
-        about = rotation["about"]
+        self.rotation_done(state, rotation, why, by)
+        try:
+            self.restage(server)
+        except OSError:
+            log.exception("readying the next rotation on %s failed", server)
+        return ""
+
+    def rotation_done(self, state: ServerState, rotation: dict, why: str, by: str):
+        server, name, about = state.config.id, rotation["name"], rotation["about"]
         self.db.rotated(server, rotation["id"])
         self.db.log(by, "rotation loaded", server, detail=f"{name} ({why})")
         self.db.add_feed(server, "server", f"Rotation: now {name}")
         self.db.add_staff_alert(server, now(), f"Rotation on {state.config.name}",
                                 f"Now playing **{name}** ({why}).\nMOBs: {', '.join(about.get('mobs') or []) or '-'}"
                                 f"\nPoints moved: {', '.join(about.get('moved') or []) or 'none'}")
-        return ""
 
     async def server_power(self, state: ServerState, action: str):
         if state.config.service:

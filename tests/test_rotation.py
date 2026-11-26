@@ -177,3 +177,87 @@ class GameOver(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResetScript(unittest.IsolatedAsyncioTestCase):
+    """The live box's postgame reset script restarts the server itself; the panel only readies rotation-next."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.logs = self.tmp / "profile" / "logs"
+        self.script = self.tmp / "reset.sh"
+        patcher = mock.patch.object(rotation, "RESET_SCRIPT", self.script)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.db = PanelDB(":memory:")
+        self.addCleanup(self.db.close)
+        self.manager = ServerManager(PanelConfig(servers=[ServerConfig("one", "Server 1", log_dir=str(self.logs))]),
+                                     self.db, alerts=Alerts(""))
+        self.state = self.manager.states["one"]
+        self.calls = []
+
+        async def power(state, action):
+            self.calls.append(action)
+        self.manager.amp_power = power
+        put_save(self.logs, 1, 100, a_setup())
+        self.ids = []
+        for name in ("West", "East"):
+            kept = self.tmp / name
+            mission, about = rotation.capture(self.logs, kept)
+            self.ids.append(self.db.add_rotation("one", name, str(kept), mission, about, "boss"))
+        self.db.set_rotation_enabled("one", True)
+
+    def write_script(self, with_line):
+        self.script.write_text('rm -rf -- "$save_dir"\n' + ('cp -a "$profile_dir/rotation-next" "$save_dir"\n'
+                                                            if with_line else ""))
+
+    def reset_like_the_script(self):
+        """What the script does at game over: delete the save folder and copy rotation-next in."""
+        save = rotation.game_folder(self.logs).parent
+        shutil.rmtree(save)
+        shutil.copytree(rotation.stage_folder(self.logs), save)
+
+    def test_which_way_a_server_rotates(self):
+        self.assertEqual(self.manager.rotation_mode(self.state), "panel")
+        self.write_script(False)
+        self.assertEqual(self.manager.rotation_mode(self.state), "old")
+        self.write_script(True)
+        self.assertEqual(self.manager.rotation_mode(self.state), "script")
+
+    def test_the_next_rotation_waits_in_rotation_next(self):
+        self.write_script(True)
+        self.manager.restage("one")
+        self.assertEqual(rotation.staged(self.logs), self.ids[0])
+        self.db.set_rotation_enabled("one", False)
+        self.manager.restage("one")
+        self.assertFalse(rotation.stage_folder(self.logs).exists())
+
+    async def test_after_the_reset_the_rotation_is_on_and_the_next_one_waits(self):
+        self.write_script(True)
+        self.manager.restage("one")
+        self.reset_like_the_script()
+        with mock.patch.object(servers, "RESET_SETTLE", 0):
+            self.manager.game_over(self.state)
+            for task in self.manager._tasks:
+                await task
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.db.rotation_state("one")["last_id"], self.ids[0])
+        self.assertEqual(self.db.staff_alerts()[0]["title"], "Rotation on Server 1")
+        self.assertEqual(rotation.staged(self.logs), self.ids[1])
+
+    async def test_a_reset_that_didnt_copy_it_in_tells_staff(self):
+        self.write_script(True)
+        self.manager.restage("one")
+        shutil.rmtree(rotation.game_folder(self.logs).parent)
+        with mock.patch.object(servers, "RESET_SETTLE", 0):
+            self.manager.game_over(self.state)
+            for task in self.manager._tasks:
+                await task
+        self.assertEqual(self.db.staff_alerts()[0]["title"], "Rotation failed on Server 1")
+        self.assertEqual(rotation.staged(self.logs), self.ids[0])
+
+    async def test_nothing_runs_at_game_over_while_the_script_lacks_the_line(self):
+        self.write_script(False)
+        self.manager.game_over(self.state)
+        self.assertEqual((self.manager._tasks, self.calls), ([], []))

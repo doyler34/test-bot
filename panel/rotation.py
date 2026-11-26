@@ -15,11 +15,59 @@ from .save_world import faction, records, split
 
 # A place this far from a spot is still named as near it.
 NEAR = 1500
+# The postgame reset script on the live box: at game over it stops the server and starts it again. With the rotation
+# line added it puts the profile's rotation-next folder in as the game's save folder first.
+RESET_SCRIPT = Path("/usr/local/sbin/reforger-postgame-reset.sh")
+STAGE = "rotation-next"
 
 
 def game_folder(log_dir):
     """The game's own save folder for a server: .save/game, one folder per mission inside."""
     return Path(log_dir).parent / "profile" / ".save" / "game"
+
+
+def stage_folder(log_dir):
+    """Where the reset script picks up the next rotation: rotation-next beside the save folder, laid out like it."""
+    return Path(log_dir).parent / STAGE
+
+
+def reset_script(path=None):
+    """"" when there's no postgame reset script, "ready" when it copies rotation-next in, "old" when it doesn't yet."""
+    path = Path(path or RESET_SCRIPT)
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    return "ready" if STAGE in text else "old"
+
+
+def staged(log_dir):
+    """The id of the rotation waiting in rotation-next, or None."""
+    try:
+        return int(json.loads((stage_folder(log_dir) / "rotation.json").read_text(encoding="utf-8"))["id"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def stage(log_dir, rotation_id, folder, mission):
+    """Put a rotation in rotation-next, for the reset script to copy in at the next game over."""
+    points = [p for p in Path(folder).iterdir() if p.is_dir() and p.name.startswith("savepoint")]
+    if not points:
+        raise FileNotFoundError(f"The rotation's copy is missing from {folder}.")
+    target = stage_folder(log_dir)
+    unstage(log_dir)
+    shutil.copytree(points[0], target / "game" / mission / "playthrough000" / points[0].name)
+    (target / "rotation.json").write_text(json.dumps({"id": rotation_id}), encoding="utf-8")
+
+
+def unstage(log_dir):
+    shutil.rmtree(stage_folder(log_dir), ignore_errors=True)
+
+
+def loaded(log_dir, folder, mission):
+    """Whether the game's save folder now holds the rotation's save, so the reset script copied it in."""
+    points = [p.name for p in Path(folder).iterdir() if p.is_dir() and p.name.startswith("savepoint")]
+    return bool(points) and (game_folder(log_dir) / mission / "playthrough000" / points[0]).is_dir()
 
 
 def newest_savepoint(log_dir):

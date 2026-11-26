@@ -13,6 +13,12 @@
     {% if row.loading %}<span class="badge off">Loading a rotation</span>
     {% elif row.status.enabled %}<span class="badge on">On</span>{% else %}<span class="badge off">Off</span>{% endif %}
   </div>
+  {% if row.mode == "old" %}
+  <p class="warn">This server's postgame reset ({{ script }}) restarts it at game over but doesn't put a rotation in. Rotations won't load at game over until this line is added to it, just before the line <code>sync</code>:</p>
+  <pre class="mono">{{ script_line }}</pre>
+  {% elif row.mode == "script" %}
+  <p class="muted">The postgame reset restarts this server at game over and copies the next rotation in.</p>
+  {% endif %}
   {% if row.status.last_at %}
   <p class="muted">
     {% if row.status.last_error %}<span class="warn">Last try failed {{ row.status.last_at|ago }}: {{ row.status.last_error }}</span>

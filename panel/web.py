@@ -2184,6 +2184,17 @@ async def remove_picture(request):
 
 
 ROTATION_NAME = 60
+# What the postgame reset script needs after it deletes the save folder, so it copies the next rotation in.
+ROTATION_SCRIPT_LINE = ('[ -d "$profile_dir/rotation-next" ] && rm -rf -- "$profile_dir/profile/.save" && cp -a'
+                        ' "$profile_dir/rotation-next" "$profile_dir/profile/.save" && chown -R amp:amp'
+                        ' "$profile_dir/profile/.save"')
+
+
+async def restage(request, state):
+    try:
+        request.app[MANAGER].restage(state.config.id)
+    except OSError as exc:
+        flash(request, f"Couldn't ready the next rotation for the reset script: {exc}", "error")
 
 
 def rotation_folder(request, server_id):
@@ -2200,8 +2211,10 @@ async def rotations_page(request):
         found = await asyncio.to_thread(rotation.newest_savepoint, st.config.log_dir)
         nxt = db.next_rotation(st.config.id)
         rows.append({"state": st, "rotations": db.rotations(st.config.id), "status": db.rotation_state(st.config.id),
-                     "next": nxt["id"] if nxt else None, "loading": st.rotating, "has_save": bool(found)})
-    return render(request, "rotations.html", rows=rows, name_limit=ROTATION_NAME)
+                     "next": nxt["id"] if nxt else None, "loading": st.rotating, "has_save": bool(found),
+                     "mode": request.app[MANAGER].rotation_mode(st)})
+    return render(request, "rotations.html", rows=rows, name_limit=ROTATION_NAME, script=rotation.RESET_SCRIPT,
+                  script_line=ROTATION_SCRIPT_LINE)
 
 
 def rotation_server(request):
@@ -2237,6 +2250,7 @@ async def capture_rotation(request):
     request.app[DB].add_rotation(state.config.id, name, str(folder), mission, about, request[USER]["username"])
     audit(request, "rotation saved", state.config.id, target=name)
     flash(request, f"Saved {name}.")
+    await restage(request, state)
     raise web.HTTPFound("/settings/rotations")
 
 
@@ -2262,6 +2276,7 @@ async def change_rotation(request):
               "error" if error else "ok")
     else:
         raise web.HTTPNotFound()
+    await restage(request, state)
     raise web.HTTPFound("/settings/rotations")
 
 
@@ -2271,6 +2286,7 @@ async def switch_rotations(request):
     on = request.match_info["what"] == "on"
     request.app[DB].set_rotation_enabled(state.config.id, on)
     audit(request, f"rotations switched {'on' if on else 'off'}", state.config.id)
+    await restage(request, state)
     raise web.HTTPFound("/settings/rotations")
 
 
