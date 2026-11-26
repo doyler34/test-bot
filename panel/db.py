@@ -7,12 +7,13 @@ from pathlib import Path
 from panel.feedsides import feed_parts, sides_from
 
 FEED_SHOWS = {"joins": ("join", "leave", "side"), "kills": ("kill", "teamkill"), "tks": ("teamkill",), "sus": ("sus",),
-              "rcon": ("rcon", "server"), "admin": ()}
+              "votes": ("vote",), "rcon": ("rcon", "server"), "admin": ()}
 # The rows that name a player, so the ones that get a side chip beside the name.
 MARKED_KINDS = ("join", "leave", "side", "kill", "teamkill")
 
 # Columns added after their table first shipped: older databases get them on start.
-ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("notes", "edited_by", "TEXT"), ("notes", "edited_at", "INTEGER"), ("warnings", "used_ban", "INTEGER"), ("warnings", "edited_by", "TEXT"), ("warnings", "edited_at", "INTEGER"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
+ADDED_COLUMNS = (("server_samples", "sock_drops", "REAL"), ("bans", "reviewed_by", "TEXT"), ("bans", "reviewed_at", "INTEGER"),
+                 *(("server_samples", c, "INTEGER") for c in ("side_us", "side_ussr", "side_fia")), ("notes", "edited_by", "TEXT"), ("notes", "edited_at", "INTEGER"), ("warnings", "used_ban", "INTEGER"), ("warnings", "edited_by", "TEXT"), ("warnings", "edited_at", "INTEGER"), ("users", "toured", "INTEGER NOT NULL DEFAULT 0"), ("users", "manage_toured", "INTEGER NOT NULL DEFAULT 0"),
                  *(("kills", c, "REAL") for c in ("victim_x", "victim_y", "killer_x", "killer_y")),
                  *(("box_samples", c, "REAL") for c in ("disk_pct", "disk_read", "disk_write", "temp", "conntrack",
                                                         "tcp_retrans", "softnet_drop", "nic_errors")))
@@ -531,6 +532,18 @@ class PanelDB:
             return self.all(sql + " ORDER BY id DESC", now())
         return self.all(sql + " ORDER BY id DESC")
 
+    # Who the panel bans as by itself: the automatic kicks and bans, and IP-ban matches.
+    AUTO_BANNERS = ("Automatic", "panel")
+
+    def auto_bans_to_review(self):
+        """Active bans the panel made by itself that no one has checked yet, newest first."""
+        marks = ", ".join("?" * len(self.AUTO_BANNERS))
+        return self.all(f"SELECT * FROM bans WHERE created_by IN ({marks}) AND reviewed_at IS NULL AND removed_at IS NULL"
+                        " AND (expires_at IS NULL OR expires_at > ?) ORDER BY id DESC", *self.AUTO_BANNERS, now())
+
+    def review_ban(self, ban_id, username):
+        self.write("UPDATE bans SET reviewed_by = ?, reviewed_at = ? WHERE id = ?", username, now(), ban_id)
+
     def active_ban(self, identity: str):
         return self.one("SELECT * FROM bans WHERE identity = ? AND removed_at IS NULL"
                         " AND (expires_at IS NULL OR expires_at > ?) ORDER BY id DESC", identity, now())
@@ -804,7 +817,7 @@ class PanelDB:
                 "rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf", "disk_pct", "disk_read", "disk_write", "temp",
                 "conntrack", "tcp_retrans", "softnet_drop", "nic_errors")
     SERVER_KEYS = ("players", "proc_cpu", "rss", "threads", "fps", "query_ok", "query_ms", "disconnects",
-                   "errors", "reasons", "sock_drops")
+                   "errors", "reasons", "sock_drops", "side_us", "side_ussr", "side_fia")
 
     def add_box_sample(self, row, at=None, keep_days=7):
         t = int(at or now())

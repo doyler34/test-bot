@@ -1086,11 +1086,14 @@ async def monitor_page(request):
                              peak=("rx_drop", "udp_errors", "udp_rcvbuf", "udp_sndbuf"))
     srv = monitor.downsample(server_rows, since, until,
                              ("players", "fps", "proc_cpu", "rss_gb", "query_ms", "query_down", "disconnects", "errors",
-                              "sock_drops"),
+                              "sock_drops", "side_us", "side_ussr", "side_fia"),
                              peak=("query_down", "disconnects", "errors", "query_ms", "sock_drops"))
     chart = lambda rows, series, floor=None: monitor.chart(rows, since, until, series, floor=floor)
     charts = [
         ("Players", chart(srv, [("players", "Players", "a")]), ""),
+        ("Players per side", chart(srv, [("side_us", "US", "a"), ("side_ussr", "USSR", "bad"), ("side_fia", "FIA", "c")]),
+         "" if any(r.get("side_us") is not None for r in server_rows) else
+         "Fills in from now on, from the side each player last joined in the log."),
         ("Server FPS", chart(srv, [("fps", "FPS", "a")], floor=60),
          "" if any(r["fps"] for r in server_rows) else "The server isn't logging its frame rate. Add -logStats 10000 "
          "to its start parameters and restart it; then this fills in every 10 seconds."),
@@ -1302,7 +1305,20 @@ async def bans_page(request):
     sync = request.app[BM]
     return render(request, "bans.html", bans=rows, show_old=show_old, durations=DURATIONS, ban_units=BAN_UNITS,
                   prefill=prefill, error="", bm=sync.status if sync else None, q=q, source=source,
-                  page=page, pages=pages, total=len(found), keep=keep, synced_on=bool(on_bm))
+                  page=page, pages=pages, total=len(found), keep=keep, synced_on=bool(on_bm),
+                  to_review=db.auto_bans_to_review())
+
+
+async def keep_ban(request):
+    """An automatic ban checked by staff and kept: it leaves the list to check."""
+    require(request, "ban")
+    db = request.app[DB]
+    ban = db.ban(int(request.match_info["ban_id"]))
+    if ban is not None and not ban["reviewed_at"]:
+        db.review_ban(ban["id"], request[USER]["username"])
+        audit(request, "kept automatic ban", target=ban["name"] or ban["identity"], detail=ban["reason"])
+        flash(request, f"Kept the ban on {ban['name'] or ban['identity']}.")
+    raise web.HTTPFound("/bans")
 
 
 async def add_ban(request):
@@ -5013,6 +5029,7 @@ def create_app(config: PanelConfig, db: PanelDB | None = None, manager: ServerMa
     app.router.add_get("/alerts", alerts_page)
     app.router.add_post("/bans", add_ban)
     app.router.add_post("/bans/{ban_id:\\d+}/remove", remove_ban)
+    app.router.add_post("/bans/{ban_id:\\d+}/keep", keep_ban)
     app.router.add_post("/bans/{ban_id:\\d+}/edit", edit_ban)
     app.router.add_get("/players", players_page)
     app.router.add_get("/players/unusual", unusual_page)

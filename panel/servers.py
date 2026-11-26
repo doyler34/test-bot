@@ -24,6 +24,29 @@ from .suspicion import DEFAULTS, Detector, check_settings
 from .resend_watch import ResendWatch
 from .tk_burst import IGNORED_DAMAGE, TkBurst
 
+# How much of the log end a crash report shows: enough to see what went wrong, short enough for Discord.
+CRASH_LINES = 25
+CRASH_CHARS = 3200
+
+
+def last_log_lines(log_dir, lines=CRASH_LINES):
+    """The end of the newest console.log under a server's log folder, trimmed to fit a staff alert."""
+    folders = LogReader(log_dir).folders()
+    if not folders:
+        return ""
+    try:
+        with open(folders[-1] / "console.log", "rb") as log:
+            log.seek(0, 2)
+            log.seek(max(log.tell() - 65536, 0))
+            text = log.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+    tail = [line.rstrip()[:160] for line in text.splitlines()[-lines:]]
+    while tail and len("\n".join(tail)) > CRASH_CHARS:
+        tail.pop(0)
+    return "\n".join(tail).replace("```", "'" * 3)
+
+
 PLAYER_ROW = re.compile(r"\d+\s*;\s*[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}\s*;")
 
 log = logging.getLogger("panel.servers")
@@ -120,6 +143,8 @@ class ServerState:
     save_alerted: set = field(default_factory=set)
     home_wrecks: list = field(default_factory=list)
     evasion_alerted: dict = field(default_factory=dict)
+    # The side each player last joined in the log, for the players-per-side chart.
+    sides: dict = field(default_factory=dict)
     admins: list = field(default_factory=list)
     # Since the last Monitor reading: disconnects by reason, and script errors.
     disconnects: Counter = field(default_factory=Counter)
@@ -312,6 +337,9 @@ class ServerManager:
                "disconnects": sum(state.disconnects.values()), "errors": state.errors,
                "reasons": json.dumps(dict(state.disconnects)) if state.disconnects else None}
         state.disconnects, state.errors = Counter(), 0
+        if state.online:
+            on = Counter(state.sides.get(p.get("identity")) for p in state.players if p.get("identity"))
+            row.update(side_us=on["US"], side_ussr=on["USSR"], side_fia=on["FIA"])
         pid = state.pid or state.found_pid
         ticks = monitor.read_process(pid, proc_root) if pid else None
         row["proc_cpu"] = monitor.process_cpu(state.cpu_ticks, ticks) \
@@ -601,6 +629,7 @@ class ServerManager:
         state.kill_log = [k for k in state.kill_log if now() - k[0] < KILL_LOG_SECONDS]
         state.kill_log += [(e["at"], e["killer"], e["kind"], e.get("damage") or "") for e in events
                            if e.get("kind") in ("kill", "teamkill") and e.get("killer")]
+        state.sides.update({e["identity"]: e["faction"] for e in events if e.get("kind") == "side" and e.get("identity")})
         before = state.detector.game
         flags = [f for event in events for f in state.detector.feed(event)]
         if state.detector.game != before:
@@ -841,6 +870,10 @@ class ServerManager:
         self.alerts.send(f"{state.config.name} crashed or restarted on its own",
                          f"The server program ended without anyone pressing a button. {detail}".strip(),
                          alert_colours.RED)
+        tail = last_log_lines(state.config.log_dir) if state.config.log_dir else ""
+        text = f"The server program ended without anyone pressing a button. {detail}".strip()
+        self.db.add_staff_alert(state.config.id, at or now(), f"Server crash on {state.config.name}",
+                                text + (f"\nThe last lines of its log:\n```\n{tail}\n```" if tail else ""))
 
     async def start_mission_check(self, server_id: str, username: str):
         state = self.states[server_id]

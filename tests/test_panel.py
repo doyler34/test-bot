@@ -2304,6 +2304,17 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("What new members see", home)
         self.assertIn("Bot&#39;s default", home)
 
+    async def test_automatic_bans_to_check_on_the_bans_page(self):
+        await self.login("boss", "boss-password")
+        ban = self.db.add_ban(HAVOC, "Sgt Havoc", "Teamkilling (automatic ban)", "Automatic")
+        token = await self.csrf("/bans")
+        page = await (await self.client.get("/bans")).text()
+        self.assertIn("Automatic bans to check", page)
+        self.assertIn(f'action="/bans/{ban}/keep"', page)
+        await self.client.post(f"/bans/{ban}/keep", data={"csrf": token})
+        self.assertNotIn("Automatic bans to check", await (await self.client.get("/bans")).text())
+        self.assertEqual(self.db.audit()[0]["action"], "kept automatic ban")
+
     async def test_four_part_menu_and_alerts_page(self):
         await self.login("boss", "boss-password")
         self.db.add_staff_alert("server-1", now(), "Base griefing on Server 1", "**Rook** nearby.")
