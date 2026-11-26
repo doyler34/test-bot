@@ -160,6 +160,19 @@ class Wiring(unittest.IsolatedAsyncioTestCase):
         self.db.add_save("one", 100, 1600, 0, {"build": {"w": {"kind": "structure", "author": A}}})
         self.assertEqual(self.db.game_vehicles("one", 100), {A: {"t1", "t2"}})
 
+    async def test_ban_evasion_is_checked_once_per_join(self):
+        from unittest.mock import patch as mock_patch
+        self.state.players = [{"identity": B, "name": "Bravo", "id": "2"}]
+        with mock_patch.object(self.db, "id_ban_hit", return_value=None) as lookup:
+            await self.manager.enforce_ip_bans(self.state)
+            await self.manager.enforce_ip_bans(self.state)
+            self.assertEqual(lookup.call_count, 1)
+            self.state.players = []
+            await self.manager.enforce_ip_bans(self.state)
+            self.state.players = [{"identity": B, "name": "Bravo", "id": "2"}]
+            await self.manager.enforce_ip_bans(self.state)
+            self.assertEqual(lookup.call_count, 2)
+
     def test_ban_evasion_by_steam_id_and_guid(self):
         ban = self.db.add_ban(A, "Alpha", "cheating", "staff")
         self.db.add_platforms([{"identity": A, "platform": "steam", "steam": "76561190000000001", "at": now()},

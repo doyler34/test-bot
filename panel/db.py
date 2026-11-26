@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS connections (
     PRIMARY KEY (identity, ip)
 );
 CREATE INDEX IF NOT EXISTS connections_ip ON connections(ip);
+CREATE INDEX IF NOT EXISTS connections_guid ON connections(guid);
 CREATE TABLE IF NOT EXISTS feed (
     id INTEGER PRIMARY KEY,
     server TEXT NOT NULL,
@@ -396,6 +397,16 @@ CREATE TABLE IF NOT EXISTS save_rows (
     data TEXT,
     PRIMARY KEY (server, game, kind, key, saved)
 );
+CREATE INDEX IF NOT EXISTS save_rows_by_key ON save_rows(kind, key, saved);
+CREATE TABLE IF NOT EXISTS save_latest (
+    server TEXT NOT NULL,
+    game INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    key TEXT NOT NULL,
+    saved INTEGER NOT NULL,
+    data TEXT,
+    PRIMARY KEY (server, game, kind, key)
+);
 """
 
 
@@ -419,6 +430,12 @@ class PanelDB:
         for table, column, kind in ADDED_COLUMNS:
             if column not in {r["name"] for r in self.db.execute(f"PRAGMA table_info({table})")}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
+        # The newest row of each thing, kept up by add_save; filled once from the history before it existed.
+        if not self.db.execute("SELECT 1 FROM save_latest LIMIT 1").fetchone():
+            self.db.execute(
+                "INSERT INTO save_latest SELECT server, game, kind, key, saved, data FROM save_rows r WHERE saved ="
+                " (SELECT MAX(saved) FROM save_rows WHERE server = r.server AND game = r.game AND kind = r.kind"
+                " AND key = r.key)")
         self.db.commit()
 
     def close(self):
@@ -1150,10 +1167,14 @@ class PanelDB:
         """{kind: {key: data}} as the game stood at the save made at `at` (the newest by default). Only what
         changed is kept per save, so each thing's row is its newest at or before then; a thing that's gone
         has a row with no data."""
-        rows = self.all(
-            "SELECT kind, key, data FROM save_rows r WHERE server = ? AND game = ? AND saved = (SELECT MAX(saved)"
-            " FROM save_rows WHERE server = r.server AND game = r.game AND kind = r.kind AND key = r.key AND saved <= ?)",
-            server, game, now() if at is None else at)
+        newest = self.one("SELECT MAX(saved) AS saved FROM save_points WHERE server = ? AND game = ?", server, game)
+        if at is None or newest is None or newest["saved"] is None or at >= newest["saved"]:
+            rows = self.all("SELECT kind, key, data FROM save_latest WHERE server = ? AND game = ?", server, game)
+        else:
+            rows = self.all(
+                "SELECT kind, key, data FROM save_rows r WHERE server = ? AND game = ? AND saved = (SELECT MAX(saved)"
+                " FROM save_rows WHERE server = r.server AND game = r.game AND kind = r.kind AND key = r.key"
+                " AND saved <= ?)", server, game, at)
         out = {}
         for r in rows:
             if r["data"] is not None:
@@ -1176,6 +1197,7 @@ class PanelDB:
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO save_points VALUES (?, ?, ?, ?)", (server, game, saved, loose_supplies))
             self.db.executemany("INSERT OR REPLACE INTO save_rows VALUES (?, ?, ?, ?, ?, ?)", rows)
+            self.db.executemany("INSERT OR REPLACE INTO save_latest VALUES (?, ?, ?, ?, ?, ?)", rows)
         return len(rows)
 
     def game_vehicles(self, server, game):
@@ -1188,10 +1210,11 @@ class PanelDB:
                 out.setdefault(author, set()).add(r["key"])
         return out
 
-    def prune_save_history(self, days=30):
+    def prune_save_history(self, days=7):
+        """A game's autosaves are only compared while it runs and for its boards, so a week is plenty."""
         with self.db:
-            self.db.execute("DELETE FROM save_rows WHERE game < ?", (now() - days * 86400,))
-            self.db.execute("DELETE FROM save_points WHERE game < ?", (now() - days * 86400,))
+            for table in ("save_rows", "save_latest", "save_points"):
+                self.db.execute(f"DELETE FROM {table} WHERE game < ?", (now() - days * 86400,))
 
     def loadouts(self, identity):
         """Every saved loadout a player has been on with, most used first, then newest."""

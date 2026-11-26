@@ -143,6 +143,8 @@ class ServerState:
     save_alerted: set = field(default_factory=set)
     home_wrecks: list = field(default_factory=list)
     evasion_alerted: dict = field(default_factory=dict)
+    # Players on now whose ban evasion check has run this time they're on.
+    evasion_checked: set = field(default_factory=set)
     # The side each player last joined in the log, for the players-per-side chart.
     sides: dict = field(default_factory=dict)
     admins: list = field(default_factory=list)
@@ -1016,10 +1018,16 @@ class ServerManager:
     async def enforce_ip_bans(self, state: ServerState):
         """Kick banned accounts that are still connected, and ban any other
         account that joins from an IP-banned address."""
-        evasion = self.staff_alert_settings()["evasion_on"] if state.players else False
+        # Ban evasion is checked once when someone joins, not on every poll.
+        online = {p["identity"] for p in state.players if p["identity"]}
+        state.evasion_checked &= online
+        joined = online - state.evasion_checked
+        if joined and self.staff_alert_settings()["evasion_on"]:
+            for player in state.players:
+                if player["identity"] in joined:
+                    self.ban_evasion(state, player["identity"], player["name"])
+        state.evasion_checked |= joined
         for player in state.players:
-            if evasion and player["identity"]:
-                self.ban_evasion(state, player["identity"], player["name"])
             identity = player["identity"]
             if not identity or now() - self._ip_kicked.get(identity, 0) < 30:
                 continue
